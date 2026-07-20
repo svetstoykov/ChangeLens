@@ -1,5 +1,7 @@
 using System.Diagnostics;
 using System.Text.Json;
+using System.Text.Json.Serialization;
+using ChangeLens.Core.Results.Models;
 using ChangeLens.Engine.EngineInformation.Services;
 using ChangeLens.Engine.Protocol.Models;
 using Microsoft.Extensions.Logging;
@@ -32,7 +34,7 @@ internal sealed class EngineProtocolHost(
     private readonly TextReader _input = input;
     private readonly ILogger<EngineProtocolHost> _logger = logger;
     private readonly TextWriter _output = output;
-    private readonly JsonSerializerOptions _serializerOptions = new(JsonSerializerDefaults.Web);
+    private readonly JsonSerializerOptions _serializerOptions = CreateSerializerOptions();
 
     /// <summary>
     ///     Asynchronously processes protocol requests until the input ends or cancellation is requested.
@@ -104,75 +106,59 @@ internal sealed class EngineProtocolHost(
         }
         catch (JsonException)
         {
-            return CreateError(null, "protocol.invalidJson", "The request is not valid JSON.");
+            return CreateError(
+                null,
+                OperationError.MalformedInput(
+                    "The request is not valid JSON.",
+                    "protocol.invalidJson"));
         }
 
         using (requestDocument)
         {
-            if (!TryCreateRequest(
-                    requestDocument.RootElement,
-                    out var validatedRequest,
-                    out var requestId))
+            var requestResult = CreateRequest(requestDocument.RootElement, out var requestId);
+
+            if (requestResult.IsFailure)
             {
-                return CreateError(
-                    requestId,
-                    "protocol.invalidRequest",
-                    "The request does not match the engine protocol schema.");
+                return CreateError(requestId, requestResult.Errors[0]);
             }
 
-            request = validatedRequest;
+            request = requestResult.Data!;
+            var operationResult = DispatchRequest(request);
 
-            if (request.ProtocolVersion != CurrentProtocolVersion)
+            if (operationResult.IsFailure)
             {
-                return CreateError(
-                    request.RequestId,
-                    "protocol.unsupportedVersion",
-                    $"Protocol version {request.ProtocolVersion} is not supported.");
-            }
-
-            if (!string.Equals(request.Method, "engine.getInfo", StringComparison.Ordinal))
-            {
-                return CreateError(
-                    request.RequestId,
-                    "protocol.unknownMethod",
-                    $"The method '{request.Method}' is not recognized.");
+                return CreateError(request.RequestId, operationResult.Errors[0]);
             }
 
             return new ProtocolResultResponse<EngineInformationModel>(
                 CurrentProtocolVersion,
                 "result",
                 request.RequestId,
-                _engineInformationProvider.GetInformation());
+                operationResult.Data!);
         }
     }
 
     /// <summary>
-    ///     Creates a request model when the JSON object exactly matches the required request shape.
+    ///     Creates a result for a JSON request after validating its required shape.
     /// </summary>
     /// <remarks>
     ///     Rejects missing, unknown, duplicate, and incorrectly typed properties before semantic dispatch.
     /// </remarks>
     /// <param name="root">The JSON value to validate.</param>
-    /// <param name="request">The validated request when this method returns <see langword="true" />.</param>
     /// <param name="requestId">
     ///     The valid request identifier when one can be recovered for error correlation; otherwise,
     ///     <see langword="null" />.
     /// </param>
-    /// <returns>
-    ///     <see langword="true" /> if the JSON object matches the request shape; otherwise,
-    ///     <see langword="false" />.
-    /// </returns>
-    private static bool TryCreateRequest(
+    /// <returns>The validated request, or a failure that describes why the request is invalid.</returns>
+    private static Result<ProtocolRequest> CreateRequest(
         JsonElement root,
-        out ProtocolRequest request,
         out string? requestId)
     {
-        request = null!;
         requestId = null;
 
         if (root.ValueKind != JsonValueKind.Object)
         {
-            return false;
+            return InvalidRequest();
         }
 
         var propertyNames = new HashSet<string>(StringComparer.Ordinal);
@@ -200,23 +186,79 @@ internal sealed class EngineProtocolHost(
             methodElement.ValueKind != JsonValueKind.String ||
             methodElement.GetString() is not { } method)
         {
-            return false;
+            return InvalidRequest();
         }
 
-        request = new ProtocolRequest(protocolVersion, requestId, method);
-        return true;
+        return Result.Success(new ProtocolRequest(protocolVersion, requestId, method));
     }
 
+    /// <summary>
+    ///     Dispatches a validated protocol request to its operation result.
+    /// </summary>
+    /// <param name="request">The validated request to dispatch. Cannot be <see langword="null" />.</param>
+    /// <returns>The requested engine information, or a known dispatch failure.</returns>
+    private Result<EngineInformationModel> DispatchRequest(ProtocolRequest request)
+    {
+        if (request.ProtocolVersion != CurrentProtocolVersion)
+        {
+            return Result.Fail<EngineInformationModel>(
+                OperationError.UnprocessableInput(
+                    $"Protocol version {request.ProtocolVersion} is not supported.",
+                    "protocol.unsupportedVersion"));
+        }
+
+        if (!string.Equals(request.Method, "engine.getInfo", StringComparison.Ordinal))
+        {
+            return Result.Fail<EngineInformationModel>(
+                OperationError.NotFound(
+                    $"The method '{request.Method}' is not recognized.",
+                    "protocol.unknownMethod"));
+        }
+
+        return Result.Success(_engineInformationProvider.GetInformation());
+    }
+
+    /// <summary>
+    ///     Creates the standard failure for a request that does not match the protocol schema.
+    /// </summary>
+    /// <returns>A validation failure with the stable invalid-request code.</returns>
+    private static Result<ProtocolRequest> InvalidRequest() =>
+        Result.Fail<ProtocolRequest>(
+            OperationError.Validation(
+                "The request does not match the engine protocol schema.",
+                "protocol.invalidRequest"));
+
+    /// <summary>
+    ///     Creates protocol serialization options for the current protocol version.
+    /// </summary>
+    /// <returns>Options that serialize error categories as their stable string names.</returns>
+    private static JsonSerializerOptions CreateSerializerOptions()
+    {
+        var options = new JsonSerializerOptions(JsonSerializerDefaults.Web);
+        options.Converters.Add(new JsonStringEnumConverter());
+        return options;
+    }
+
+    /// <summary>
+    ///     Creates an error response from a known operation failure.
+    /// </summary>
+    /// <param name="requestId">The request identifier, or <see langword="null" /> when it is unavailable.</param>
+    /// <param name="error">The operation error to expose through the protocol. Cannot be <see langword="null" />.</param>
+    /// <returns>An error response that preserves the error category, code, and message.</returns>
+    /// <exception cref="ArgumentNullException">
+    ///     <paramref name="error" /> is <see langword="null" />.
+    /// </exception>
     private static ProtocolErrorResponse CreateError(
         string? requestId,
-        string code,
-        string message)
+        OperationError error)
     {
+        ArgumentNullException.ThrowIfNull(error);
+
         return new ProtocolErrorResponse(
             CurrentProtocolVersion,
             "error",
             requestId,
-            new ProtocolError(code, message));
+            new ProtocolError(error.Type, error.Code!, error.Message));
     }
 
     /// <summary>

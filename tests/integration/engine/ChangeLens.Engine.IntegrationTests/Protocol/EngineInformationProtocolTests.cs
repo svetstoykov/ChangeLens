@@ -114,33 +114,42 @@ public sealed class EngineInformationProtocolTests
     ///     Verifies that known protocol failures return stable structured errors.
     /// </summary>
     /// <param name="request">The protocol request that produces the known failure.</param>
+    /// <param name="expectedType">The broad error category expected in the response.</param>
     /// <param name="expectedCode">The stable error code expected in the response.</param>
     /// <returns>A task that represents the asynchronous test.</returns>
     [Theory]
-    [InlineData("not-json", "protocol.invalidJson")]
+    [InlineData("not-json", "MalformedInput", "protocol.invalidJson")]
     [InlineData(
         "{\"protocolVersion\":1,\"requestId\":\"\",\"method\":\"engine.getInfo\"}",
+        "Validation",
         "protocol.invalidRequest")]
     [InlineData(
         "{\"requestId\":\"request-missing-version\",\"method\":\"engine.getInfo\"}",
+        "Validation",
         "protocol.invalidRequest")]
     [InlineData(
         "{\"protocolVersion\":1,\"method\":\"engine.getInfo\"}",
+        "Validation",
         "protocol.invalidRequest")]
     [InlineData(
         "{\"protocolVersion\":1,\"requestId\":\"request-missing-method\"}",
+        "Validation",
         "protocol.invalidRequest")]
     [InlineData(
         "{\"protocolVersion\":1,\"requestId\":\"request-extra\",\"method\":\"engine.getInfo\",\"extra\":true}",
+        "Validation",
         "protocol.invalidRequest")]
     [InlineData(
         "{\"protocolVersion\":2,\"requestId\":\"request-2\",\"method\":\"engine.getInfo\"}",
+        "UnprocessableInput",
         "protocol.unsupportedVersion")]
     [InlineData(
         "{\"protocolVersion\":1,\"requestId\":\"request-3\",\"method\":\"unknown\"}",
+        "NotFound",
         "protocol.unknownMethod")]
     public async Task EngineReturnsStructuredErrorForKnownProtocolFailure(
         string request,
+        string expectedType,
         string expectedCode)
     {
         using var engine = StartEngine();
@@ -159,6 +168,7 @@ public sealed class EngineInformationProtocolTests
 
         Assert.Equal(1, root.GetProperty("protocolVersion").GetInt32());
         Assert.Equal("error", root.GetProperty("type").GetString());
+        Assert.Equal(expectedType, root.GetProperty("error").GetProperty("type").GetString());
         Assert.Equal(expectedCode, root.GetProperty("error").GetProperty("code").GetString());
     }
 

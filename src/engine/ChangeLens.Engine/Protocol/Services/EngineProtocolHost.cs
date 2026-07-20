@@ -1,6 +1,8 @@
+using System.Diagnostics;
 using System.Text.Json;
 using ChangeLens.Engine.EngineInformation.Services;
 using ChangeLens.Engine.Protocol.Models;
+using Microsoft.Extensions.Logging;
 using EngineInformationModel = ChangeLens.Engine.EngineInformation.Models.EngineInformation;
 
 namespace ChangeLens.Engine.Protocol.Services;
@@ -9,17 +11,26 @@ namespace ChangeLens.Engine.Protocol.Services;
 ///     Provides the newline-delimited JSON protocol boundary for the engine process.
 /// </summary>
 /// <remarks>
-///     The host writes protocol messages only to its configured output. Diagnostics must use a separate stream.
+///     <para>
+///         The host writes protocol messages only to its configured output. Diagnostics use the injected logger.
+///     </para>
+///     <para>
+///         This service is registered as a singleton. It is not thread-safe and supports one active
+///         <see cref="RunAsync" /> operation at a time.
+///     </para>
 /// </remarks>
 /// <param name="input">The text stream that supplies protocol requests. Cannot be <see langword="null" />.</param>
 /// <param name="output">The text stream that receives protocol responses. Cannot be <see langword="null" />.</param>
+/// <param name="logger">The logger for protocol-boundary diagnostics. Cannot be <see langword="null" />.</param>
 internal sealed class EngineProtocolHost(
     TextReader input,
-    TextWriter output)
+    TextWriter output,
+    ILogger<EngineProtocolHost> logger)
 {
     private const int CurrentProtocolVersion = 1;
     private readonly EngineInformationProvider _engineInformationProvider = new();
     private readonly TextReader _input = input;
+    private readonly ILogger<EngineProtocolHost> _logger = logger;
     private readonly TextWriter _output = output;
     private readonly JsonSerializerOptions _serializerOptions = new(JsonSerializerDefaults.Web);
 
@@ -44,14 +55,29 @@ internal sealed class EngineProtocolHost(
     /// </exception>
     internal async Task RunAsync(CancellationToken cancellationToken)
     {
+        _logger.LogInformation("Engine protocol host started and is awaiting standard input.");
+
         while (await _input.ReadLineAsync(cancellationToken) is { } requestLine)
         {
-            var response = CreateResponse(requestLine);
+            var startedAt = Stopwatch.GetTimestamp();
+
+            _logger.LogDebug(
+                "Received protocol request from stdin: {ProtocolRequest}",
+                requestLine);
+
+            var response = CreateResponse(requestLine, out var request);
             var responseLine = JsonSerializer.Serialize(response, _serializerOptions);
 
             await _output.WriteLineAsync(responseLine.AsMemory(), cancellationToken);
             await _output.FlushAsync(cancellationToken);
+
+            _logger.LogDebug(
+                "Wrote protocol response to stdout: {ProtocolResponse}",
+                responseLine);
+            LogCompletedResponse(response, request, Stopwatch.GetElapsedTime(startedAt));
         }
+
+        _logger.LogInformation("Engine protocol host stopped after standard input closed.");
     }
 
     /// <summary>
@@ -61,9 +87,15 @@ internal sealed class EngineProtocolHost(
     ///     Valid JSON that does not match the request schema is reported separately from malformed JSON.
     /// </remarks>
     /// <param name="requestLine">The complete protocol request line. Cannot be <see langword="null" />.</param>
+    /// <param name="request">
+    ///     The validated request when validation succeeds; otherwise, <see langword="null" />.
+    /// </param>
     /// <returns>The result or error response to serialize for the request.</returns>
-    private object CreateResponse(string requestLine)
+    private object CreateResponse(
+        string requestLine,
+        out ProtocolRequest? request)
     {
+        request = null;
         JsonDocument requestDocument;
 
         try
@@ -79,7 +111,7 @@ internal sealed class EngineProtocolHost(
         {
             if (!TryCreateRequest(
                     requestDocument.RootElement,
-                    out var request,
+                    out var validatedRequest,
                     out var requestId))
             {
                 return CreateError(
@@ -87,6 +119,8 @@ internal sealed class EngineProtocolHost(
                     "protocol.invalidRequest",
                     "The request does not match the engine protocol schema.");
             }
+
+            request = validatedRequest;
 
             if (request.ProtocolVersion != CurrentProtocolVersion)
             {
@@ -183,5 +217,51 @@ internal sealed class EngineProtocolHost(
             "error",
             requestId,
             new ProtocolError(code, message));
+    }
+
+    /// <summary>
+    ///     Logs the request outcome with its identifier, method, error code, and elapsed time when available.
+    /// </summary>
+    /// <remarks>
+    ///     <paramref name="response" /> must be a protocol error or an engine-information result.
+    /// </remarks>
+    /// <param name="response">The response that was written to protocol output.</param>
+    /// <param name="request">
+    ///     The validated request, or <see langword="null" /> when the input could not be validated.
+    /// </param>
+    /// <param name="elapsed">The time spent processing and writing the response.</param>
+    private void LogCompletedResponse(
+        object response,
+        ProtocolRequest? request,
+        TimeSpan elapsed)
+    {
+        if (response is ProtocolErrorResponse errorResponse)
+        {
+            if (request is null)
+            {
+                _logger.LogInformation(
+                    "Rejected protocol input {RequestId} with error {ErrorCode} in {ElapsedMilliseconds:0.000} ms.",
+                    errorResponse.RequestId,
+                    errorResponse.Error.Code,
+                    elapsed.TotalMilliseconds);
+                return;
+            }
+
+            _logger.LogInformation(
+                "Processed protocol request {RequestId} for {Method} with error {ErrorCode} in {ElapsedMilliseconds:0.000} ms.",
+                errorResponse.RequestId,
+                request.Method,
+                errorResponse.Error.Code,
+                elapsed.TotalMilliseconds);
+            return;
+        }
+
+        var resultResponse = (ProtocolResultResponse<EngineInformationModel>)response;
+
+        _logger.LogInformation(
+            "Processed protocol request {RequestId} for {Method} with a result in {ElapsedMilliseconds:0.000} ms.",
+            resultResponse.RequestId,
+            request!.Method,
+            elapsed.TotalMilliseconds);
     }
 }

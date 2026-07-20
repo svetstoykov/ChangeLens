@@ -10,8 +10,76 @@ namespace ChangeLens.Engine.IntegrationTests.Protocol;
 public sealed class EngineInformationProtocolTests
 {
     /// <summary>
+    ///     Verifies that protocol traffic is logged without writing diagnostics to standard output.
+    /// </summary>
+    /// <returns>A task that represents the asynchronous test.</returns>
+    [Fact]
+    public async Task EngineLogsProtocolTrafficWithoutCorruptingStandardOutput()
+    {
+        const string request =
+            """
+            {"protocolVersion":1,"requestId":"logging-request","method":"engine.getInfo"}
+            """;
+        var logDirectory = Path.Combine(
+            Path.GetTempPath(),
+            "ChangeLens.Engine.IntegrationTests",
+            Guid.NewGuid().ToString("N"));
+
+        try
+        {
+            using var engine = StartEngine(logDirectory, redirectStandardError: true);
+
+            await engine.StandardInput.WriteLineAsync(request);
+            engine.StandardInput.Close();
+
+            var responseLine = await engine.StandardOutput
+                .ReadLineAsync(TestContext.Current.CancellationToken)
+                .AsTask()
+                .WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken);
+
+            Assert.False(string.IsNullOrWhiteSpace(responseLine));
+            using var response = JsonDocument.Parse(responseLine);
+
+            await engine.WaitForExitAsync(TestContext.Current.CancellationToken)
+                .WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken);
+
+            var remainingStandardOutput = await engine.StandardOutput.ReadToEndAsync(
+                TestContext.Current.CancellationToken);
+            var standardError = await engine.StandardError.ReadToEndAsync(
+                TestContext.Current.CancellationToken);
+
+            Assert.Equal(string.Empty, remainingStandardOutput);
+            Assert.Contains($"Received protocol request from stdin: {request}", standardError);
+            Assert.Contains($"Wrote protocol response to stdout: {responseLine}", standardError);
+            Assert.Contains(
+                "Processed protocol request logging-request for engine.getInfo with a result",
+                standardError);
+
+            var logFile = Assert.Single(
+                Directory.GetFiles(logDirectory, "changelens-engine-*.log"));
+            var fileLog = await File.ReadAllTextAsync(
+                logFile,
+                TestContext.Current.CancellationToken);
+
+            Assert.Contains($"Received protocol request from stdin: {request}", fileLog);
+            Assert.Contains($"Wrote protocol response to stdout: {responseLine}", fileLog);
+            Assert.Contains(
+                "Processed protocol request logging-request for engine.getInfo with a result",
+                fileLog);
+        }
+        finally
+        {
+            if (Directory.Exists(logDirectory))
+            {
+                Directory.Delete(logDirectory, recursive: true);
+            }
+        }
+    }
+
+    /// <summary>
     ///     Verifies that the engine returns version information correlated to a versioned request.
     /// </summary>
+    /// <returns>A task that represents the asynchronous test.</returns>
     [Fact]
     public async Task EngineReturnsInformationForVersionedRequest()
     {
@@ -47,6 +115,7 @@ public sealed class EngineInformationProtocolTests
     /// </summary>
     /// <param name="request">The protocol request that produces the known failure.</param>
     /// <param name="expectedCode">The stable error code expected in the response.</param>
+    /// <returns>A task that represents the asynchronous test.</returns>
     [Theory]
     [InlineData("not-json", "protocol.invalidJson")]
     [InlineData(
@@ -93,7 +162,20 @@ public sealed class EngineInformationProtocolTests
         Assert.Equal(expectedCode, root.GetProperty("error").GetProperty("code").GetString());
     }
 
-    private static Process StartEngine()
+    /// <summary>
+    ///     Starts the real engine process with redirected protocol streams for a test.
+    /// </summary>
+    /// <param name="logDirectory">
+    ///     The test log directory, or <see langword="null" /> to use the engine default.
+    /// </param>
+    /// <param name="redirectStandardError">
+    ///     <see langword="true" /> to capture engine diagnostics; otherwise, <see langword="false" />.
+    /// </param>
+    /// <returns>The running engine process.</returns>
+    /// <exception cref="InvalidOperationException">The engine process could not be started.</exception>
+    private static Process StartEngine(
+        string? logDirectory = null,
+        bool redirectStandardError = false)
     {
         var repositoryRoot = FindRepositoryRoot();
         var engineProject = Path.Combine(
@@ -107,8 +189,15 @@ public sealed class EngineInformationProtocolTests
         {
             RedirectStandardInput = true,
             RedirectStandardOutput = true,
+            RedirectStandardError = redirectStandardError,
             UseShellExecute = false,
         };
+
+        if (logDirectory is not null)
+        {
+            startInfo.Environment["ChangeLens__Logging__FileDirectory"] = logDirectory;
+            startInfo.Environment["Serilog__MinimumLevel__Default"] = "Debug";
+        }
 
         startInfo.ArgumentList.Add("run");
         startInfo.ArgumentList.Add("--no-build");
@@ -121,6 +210,11 @@ public sealed class EngineInformationProtocolTests
         return process;
     }
 
+    /// <summary>
+    ///     Finds the repository root by walking up from the test output directory.
+    /// </summary>
+    /// <returns>The full path to the repository root.</returns>
+    /// <exception cref="DirectoryNotFoundException">The repository root could not be found.</exception>
     private static string FindRepositoryRoot()
     {
         var directory = new DirectoryInfo(AppContext.BaseDirectory);

@@ -3,8 +3,15 @@ using EngineInformationModel = ChangeLens.Engine.EngineInformation.Models.Engine
 
 namespace ChangeLens.Engine.EngineInformation.Services;
 
+/// <summary>
+///     Provides identifying information about the running engine.
+/// </summary>
 internal sealed class EngineInformationProvider
 {
+    /// <summary>
+    ///     Gets the engine name, assembly version, and supported protocol version.
+    /// </summary>
+    /// <returns>The identifying information for the running engine.</returns>
     internal EngineInformationModel GetInformation()
     {
         var version = Assembly

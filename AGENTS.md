@@ -142,6 +142,19 @@ Follow these consistency rules when the Result types are implemented:
 - Put Result types, operation errors, error categories, and stable codes in Core.
 - Design and test the concrete Result API before implementing it. Do not infer unapproved member-level details from this architectural direction.
 
+## Logging
+
+Logging is an important part of ChangeLens correctness, supportability, and auditability. Preserve these practices whenever backend behavior is added or changed:
+
+- Inject `ILogger<T>` into engine services. Do not use `Console`, static loggers, or provider-specific logger types for application diagnostics.
+- Configure logging providers only at the Engine composition boundary. Engine and Infrastructure implementations use the Microsoft logging abstraction when logging is required; keep Core domain logic logging-free unless a concrete cross-boundary need is demonstrated.
+- Keep standard output reserved exclusively for versioned engine protocol messages. Console diagnostics must go to standard error, and rolling local-file logging must remain available.
+- Use structured message templates with stable, descriptive property names. Do not use string interpolation to build log messages.
+- At `Information`, record meaningful lifecycle and operation outcomes with available correlation identifiers, method or operation names, stable error codes, and elapsed time. Use `Debug` for detailed diagnostic payloads and `Warning` or higher for degraded or unexpected conditions.
+- Never log secrets, credentials, unrestricted source content, or other sensitive data. Raw protocol payloads may be logged only at `Debug`, only when their schema has been reviewed for sensitive fields, and must be removed or redacted when that assumption changes.
+- Log expected failures once at the outer boundary where sufficient context exists, without adding side effects to Result forwarding. Log unexpected exceptions once at the exception boundary and include the exception object.
+- Add or update tests for logging behavior that is part of a process or protocol contract, especially the rule that diagnostics cannot pollute standard output.
+
 ## Testing
 
 Unit tests and integration tests are required.
@@ -164,8 +177,8 @@ Unit tests and integration tests are required.
 
 ## Git Workflow
 
-- Never work or commit directly on the default branch.
-- Use purpose-specific branches such as `feature/{name}`, `bugfix/{name}`, and `hotfix/{name}`.
+- Work and commit directly on `main` until the user explicitly gives further notice.
+- Do not create or switch to a purpose-specific branch unless the user explicitly requests one.
 - Use Conventional Commit subjects, selecting the accurate type and optional scope.
 - Write each commit message as one concise subject sentence followed by two or three explanatory bullet points.
 - Never add `Co-authored-by` or other co-author attribution.
@@ -186,11 +199,13 @@ This section is the standard for writing, reviewing, and maintaining C# XML docu
 
 When asked to write documentation, produce comments that satisfy these rules. When asked to review documentation, identify the rule each comment violates and show the corrected version. If the requested scope is ambiguous, ask once and then proceed.
 
+The goal is quick understanding, not formal or exhaustive prose. Use plain, direct language and familiar words. A reader should normally understand a member after reading two or three short lines. Add more detail only when it explains behavior, context, or a constraint that matters.
+
 ### Tag taxonomy
 
 | Tag | Purpose | Required on |
 | --- | --- | --- |
-| `<summary>` | One-sentence “what” | Every public member; non-public members according to the policy below |
+| `<summary>` | One-sentence “what” | Every non-private member; private members according to the policy below |
 | `<remarks>` | “Why” and “how”; architectural context, side effects, and constraints | Types, complex methods, and non-obvious properties |
 | `<param name="...">` | What the parameter represents and its constraints | Every documented method or constructor parameter |
 | `<typeparam name="...">` | What the type parameter represents | Every generic type or method |
@@ -208,7 +223,7 @@ Documentation must be well-formed XML. Keep every `cref` and `name` attribute ac
 
 ### Canonical phrasing
 
-Use the established patterns below.
+Use the established patterns below. Keep the wording natural and replace stock phrases when a simpler explanation is clearer.
 
 #### Constructors
 
@@ -338,11 +353,11 @@ Use `<inheritdoc />` when the contract is unchanged. If the implementation adds 
 
 #### Summary
 
-Write one complete sentence answering “what does this do?”. End it with a period. Do not explain implementation details or repeat the member name. Indent summary text four spaces inside the tag unless the surrounding codebase has an established different style.
+Write one complete sentence answering “what does this do?”. End it with a period. Use plain words, keep it short, and say what would help a reader understand the member. Do not explain implementation details or repeat the member name. Indent summary text four spaces inside the tag unless the surrounding codebase has an established different style.
 
 #### Remarks
 
-Use remarks to answer why a member exists and how it behaves.
+Use remarks to answer why a member exists and how it behaves. Keep the explanation direct and include only context that helps someone use or maintain the code.
 
 - Use one `<para>` for each distinct idea.
 - Use the first paragraph for the system role or behavioral contract.
@@ -367,7 +382,7 @@ Use an XML link for conceptual documentation:
 
 #### Parameters
 
-Explain what each value represents and state its constraints. State null contracts explicitly:
+Explain what each value represents and state its constraints. Keep the description short and use the same words a developer would use in conversation. State null contracts explicitly:
 
 ```csharp
 /// <param name="key">The permission key. Cannot be <see langword="null" />.</param>
@@ -383,7 +398,7 @@ For optional null values, describe what null means:
 
 #### Return values
 
-Explain what the resolved value represents, not merely its type.
+Explain what the resolved value represents, not merely its type. Prefer one short sentence unless an important condition needs another line.
 
 ```csharp
 /// <returns>
@@ -393,7 +408,7 @@ Explain what the resolved value represents, not merely its type.
 
 #### Exceptions
 
-Use one `<exception>` element per exception type. Separate multiple conditions for the same exception with `-or-`.
+Use one `<exception>` element per exception type. State the condition in plain language. Separate multiple conditions for the same exception with `-or-`.
 
 ```csharp
 /// <exception cref="ArgumentException">
@@ -425,23 +440,23 @@ For public-for-technical-reasons members, use this warning as the entire summary
 /// </summary>
 ```
 
-### Non-public members
+### Required and private members
 
-Document private and internal code selectively rather than exhaustively.
+Document every non-private type and member. This includes `public`, `protected`, `internal`, `protected internal`, and `private protected` declarations. It applies to types, constructors, methods, properties, fields, constants, events, operators, delegates, and every enum member.
 
-Document a non-public member when:
+Private members are the only exception. Document a private member when:
 
+- It implements specific or important functionality worth explaining.
+- Its purpose or behavior is not obvious from its name and signature.
+- A reader needs context to understand why it exists or how it should be changed.
 - It implements a core algorithm or key invariant.
-- Its behavior cannot be inferred from the signature because of side effects, preconditions, recursion, reentrancy, caching, or shared-state mutation.
-- It exists because of a bug fix, workaround, or performance decision that a future maintainer might undo. A plain `//` comment explaining why may be more suitable.
-- It is an internal member consumed across assemblies through `InternalsVisibleTo`; treat this as public-grade documentation.
+- It has important side effects, preconditions, ordering rules, recursion, caching, reentrancy, or shared-state changes.
+- It exists because of a bug fix, workaround, security concern, compatibility rule, or performance decision that a future maintainer might undo. A plain `//` comment explaining why may be more suitable.
+- It is a field with a non-obvious purpose, ownership rule, lifetime, unit, format, or allowed value.
 
-Skip documentation when:
+Skip documentation when a private member is an obvious storage field, a trivial delegate-through, a small guard helper, or a self-explanatory expression-bodied member. Do not add documentation that merely restates the name or signature.
 
-- The member is a trivial delegate-through, guard helper, or self-explanatory expression-bodied member.
-- The documentation would merely restate the signature.
-
-For a documented private member, apply the same rules, but parameter and return coverage may omit obvious details. A summary and remarks explaining the invariant are usually sufficient.
+For a documented private member, apply the same XML structure and quality rules. Keep obvious parameter and return descriptions brief, but do not omit context that the reader needs.
 
 ```csharp
 /// <summary>
@@ -468,11 +483,12 @@ When reviewing documentation, report each issue as: **member → rule violated �
 
 Check each documented member in this order:
 
-1. The summary is one sentence, uses the correct verb form, ends with a period, and does not restate the name.
-2. Canonical phrasing is used for constructors, Boolean properties, async methods, builders, events, enums, and types.
-3. Every parameter and type parameter is documented with its null or empty contract; every non-void return explains what the value represents.
-4. Explicit exceptions are complete, their conditions are stated, and multiple conditions use `-or-`.
-5. Keywords use `<see langword="..." />`, types use `<see cref="..." />`, and literals use `<c>`.
-6. `<inheritdoc />` replaces copied base or interface documentation.
-7. Remarks use `<para>` for distinct ideas, and implementation details do not leak into summaries.
-8. Key non-public logic is documented while trivial non-public members remain undocumented.
+1. Every non-private member is documented, and private members that need explanation are documented.
+2. The summary is one sentence, uses plain language and the correct verb form, ends with a period, and does not restate the name.
+3. Canonical phrasing is used for constructors, Boolean properties, async methods, builders, events, enums, and types without making the wording needlessly formal.
+4. Every parameter and type parameter is documented with its null or empty contract; every non-void return explains what the value represents.
+5. Explicit exceptions are complete, their conditions are stated, and multiple conditions use `-or-`.
+6. Keywords use `<see langword="..." />`, types use `<see cref="..." />`, and literals use `<c>`.
+7. `<inheritdoc />` replaces copied base or interface documentation.
+8. Remarks use `<para>` for distinct ideas, and implementation details do not leak into summaries.
+9. Comments are short and easy to understand while still explaining the behavior and context that matter.

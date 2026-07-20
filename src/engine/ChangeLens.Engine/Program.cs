@@ -1,3 +1,4 @@
+using ChangeLens.Engine.Extensions;
 using ChangeLens.Engine.Protocol.Services;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -10,12 +11,23 @@ var builder = Host.CreateApplicationBuilder(
         ContentRootPath = AppContext.BaseDirectory,
     });
 
-builder.Logging.ClearProviders();
+builder.AddEngineLogging();
+
 builder.Services.AddSingleton<TextReader>(_ => Console.In);
 builder.Services.AddSingleton<TextWriter>(_ => Console.Out);
 builder.Services.AddSingleton<EngineProtocolHost>();
 
 using var host = builder.Build();
 var protocolHost = host.Services.GetRequiredService<EngineProtocolHost>();
+var logger = host.Services.GetRequiredService<ILoggerFactory>().CreateLogger("ChangeLens.Engine");
 
-await protocolHost.RunAsync(CancellationToken.None);
+try
+{
+    await protocolHost.RunAsync(CancellationToken.None);
+    return 0;
+}
+catch (Exception exception)
+{
+    logger.LogCritical(exception, "The engine terminated unexpectedly.");
+    return 1;
+}

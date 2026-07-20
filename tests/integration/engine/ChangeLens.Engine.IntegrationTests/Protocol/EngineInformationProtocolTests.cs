@@ -53,6 +53,18 @@ public sealed class EngineInformationProtocolTests
         "{\"protocolVersion\":1,\"requestId\":\"\",\"method\":\"engine.getInfo\"}",
         "protocol.invalidRequest")]
     [InlineData(
+        "{\"requestId\":\"request-missing-version\",\"method\":\"engine.getInfo\"}",
+        "protocol.invalidRequest")]
+    [InlineData(
+        "{\"protocolVersion\":1,\"method\":\"engine.getInfo\"}",
+        "protocol.invalidRequest")]
+    [InlineData(
+        "{\"protocolVersion\":1,\"requestId\":\"request-missing-method\"}",
+        "protocol.invalidRequest")]
+    [InlineData(
+        "{\"protocolVersion\":1,\"requestId\":\"request-extra\",\"method\":\"engine.getInfo\",\"extra\":true}",
+        "protocol.invalidRequest")]
+    [InlineData(
         "{\"protocolVersion\":2,\"requestId\":\"request-2\",\"method\":\"engine.getInfo\"}",
         "protocol.unsupportedVersion")]
     [InlineData(

@@ -10,6 +10,23 @@ namespace ChangeLens.Engine.IntegrationTests.Protocol;
 public sealed class EngineInformationProtocolTests
 {
     /// <summary>
+    ///     Verifies that the engine exits successfully when its protocol input closes.
+    /// </summary>
+    /// <returns>A task that represents the asynchronous test.</returns>
+    [Fact]
+    public async Task EngineExitsSuccessfullyWhenStandardInputCloses()
+    {
+        using var engine = StartEngine();
+
+        engine.StandardInput.Close();
+
+        await engine.WaitForExitAsync(TestContext.Current.CancellationToken)
+            .WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken);
+
+        Assert.Equal(0, engine.ExitCode);
+    }
+
+    /// <summary>
     ///     Verifies that protocol traffic is logged without writing diagnostics to standard output.
     /// </summary>
     /// <returns>A task that represents the asynchronous test.</returns>

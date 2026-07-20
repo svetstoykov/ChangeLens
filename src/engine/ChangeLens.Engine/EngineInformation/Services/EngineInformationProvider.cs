@@ -1,4 +1,5 @@
 using System.Reflection;
+using ChangeLens.Engine.EngineInformation.Constants;
 using EngineInformationModel = ChangeLens.Engine.EngineInformation.Models.EngineInformation;
 
 namespace ChangeLens.Engine.EngineInformation.Services;
@@ -9,17 +10,22 @@ namespace ChangeLens.Engine.EngineInformation.Services;
 internal sealed class EngineInformationProvider
 {
     /// <summary>
-    ///     Gets the engine name, assembly version, and supported protocol version.
+    ///     Gets the engine name, assembly version, and supplied protocol version.
     /// </summary>
+    /// <param name="protocolVersion">The protocol version supported by the running engine.</param>
     /// <returns>The identifying information for the running engine.</returns>
-    internal EngineInformationModel GetInformation()
+    internal EngineInformationModel GetInformation(int protocolVersion)
     {
         var version = Assembly
             .GetExecutingAssembly()
             .GetName()
             .Version?
-            .ToString(3) ?? "0.0.0";
+            .ToString(EngineInformationConstants.ReportedVersionComponentCount)
+            ?? EngineInformationConstants.UnavailableVersion;
 
-        return new EngineInformationModel("ChangeLens.Engine", version, 1);
+        return new EngineInformationModel(
+            EngineInformationConstants.EngineName,
+            version,
+            protocolVersion);
     }
 }

@@ -3,83 +3,94 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using ChangeLens.Core.Results.Models;
 using ChangeLens.Engine.EngineInformation.Services;
+using ChangeLens.Engine.Hosting.Constants;
+using ChangeLens.Engine.Protocol.Constants;
 using ChangeLens.Engine.Protocol.Models;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using EngineInformationModel = ChangeLens.Engine.EngineInformation.Models.EngineInformation;
 
 namespace ChangeLens.Engine.Protocol.Services;
 
 /// <summary>
-///     Provides the newline-delimited JSON protocol boundary for the engine process.
+///     Provides the hosted newline-delimited JSON protocol boundary for the engine process.
 /// </summary>
 /// <remarks>
 ///     <para>
 ///         The host writes protocol messages only to its configured output. Diagnostics use the injected logger.
 ///     </para>
 ///     <para>
-///         This service is registered as a singleton. It is not thread-safe and supports one active
-///         <see cref="RunAsync" /> operation at a time.
+///         The Generic Host manages this singleton service and stops it when application shutdown is requested.
 ///     </para>
 /// </remarks>
 /// <param name="input">The text stream that supplies protocol requests. Cannot be <see langword="null" />.</param>
 /// <param name="output">The text stream that receives protocol responses. Cannot be <see langword="null" />.</param>
 /// <param name="logger">The logger for protocol-boundary diagnostics. Cannot be <see langword="null" />.</param>
-internal sealed class EngineProtocolHost(
+/// <param name="applicationLifetime">
+///     The application lifetime used to stop the engine when protocol input closes. Cannot be
+///     <see langword="null" />.
+/// </param>
+internal sealed class EngineProtocolService(
     TextReader input,
     TextWriter output,
-    ILogger<EngineProtocolHost> logger)
+    ILogger<EngineProtocolService> logger,
+    IHostApplicationLifetime applicationLifetime) : BackgroundService
 {
-    private const int CurrentProtocolVersion = 1;
     private readonly EngineInformationProvider _engineInformationProvider = new();
-    private readonly TextReader _input = input;
-    private readonly ILogger<EngineProtocolHost> _logger = logger;
-    private readonly TextWriter _output = output;
     private readonly JsonSerializerOptions _serializerOptions = CreateSerializerOptions();
 
-    /// <summary>
-    ///     Asynchronously processes protocol requests until the input ends or cancellation is requested.
-    /// </summary>
+    /// <inheritdoc />
     /// <remarks>
     ///     <para>
     ///         Reads one newline-delimited JSON request at a time and writes and flushes exactly one protocol
     ///         response for each request.
     ///     </para>
     ///     <para>
-    ///         The configured output is reserved for protocol messages and is not used for diagnostics.
+    ///         Closing the configured input stops the application. Unexpected failures are logged once and set
+    ///         a nonzero process exit code before the application stops.
     ///     </para>
     /// </remarks>
-    /// <param name="cancellationToken">
-    ///     A <see cref="CancellationToken" /> to observe while waiting for the task to complete.
-    /// </param>
-    /// <returns>A task that represents the asynchronous operation.</returns>
-    /// <exception cref="OperationCanceledException">
-    ///     If the <see cref="CancellationToken" /> is canceled.
-    /// </exception>
-    internal async Task RunAsync(CancellationToken cancellationToken)
+    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        _logger.LogInformation("Engine protocol host started and is awaiting standard input.");
-
-        while (await _input.ReadLineAsync(cancellationToken) is { } requestLine)
+        try
         {
-            var startedAt = Stopwatch.GetTimestamp();
+            logger.LogInformation("Engine protocol service started and is awaiting standard input.");
 
-            _logger.LogDebug(
-                "Received protocol request from stdin: {ProtocolRequest}",
-                requestLine);
+            while (await input.ReadLineAsync(stoppingToken) is { } requestLine)
+            {
+                var startedAt = Stopwatch.GetTimestamp();
 
-            var response = CreateResponse(requestLine, out var request);
-            var responseLine = JsonSerializer.Serialize(response, _serializerOptions);
+                logger.LogDebug(
+                    "Received protocol request from stdin: {ProtocolRequest}",
+                    requestLine);
 
-            await _output.WriteLineAsync(responseLine.AsMemory(), cancellationToken);
-            await _output.FlushAsync(cancellationToken);
+                var response = CreateResponse(requestLine, out var request);
+                var responseLine = JsonSerializer.Serialize(response, _serializerOptions);
 
-            _logger.LogDebug(
-                "Wrote protocol response to stdout: {ProtocolResponse}",
-                responseLine);
-            LogCompletedResponse(response, request, Stopwatch.GetElapsedTime(startedAt));
+                await output.WriteLineAsync(responseLine.AsMemory(), stoppingToken);
+                await output.FlushAsync(stoppingToken);
+
+                logger.LogDebug(
+                    "Wrote protocol response to stdout: {ProtocolResponse}",
+                    responseLine);
+                LogCompletedResponse(response, request, Stopwatch.GetElapsedTime(startedAt));
+            }
+
+            logger.LogInformation("Engine protocol service stopped after standard input closed.");
         }
-
-        _logger.LogInformation("Engine protocol host stopped after standard input closed.");
+        catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+        {
+            logger.LogInformation("Engine protocol service stopped after application shutdown was requested.");
+        }
+        catch (Exception exception)
+        {
+            Environment.ExitCode = EngineProcessConstants.UnexpectedFailureExitCode;
+            logger.LogCritical(exception, EngineProcessConstants.UnexpectedTerminationLogMessage);
+        }
+        finally
+        {
+            applicationLifetime.StopApplication();
+        }
     }
 
     /// <summary>
@@ -110,7 +121,7 @@ internal sealed class EngineProtocolHost(
                 null,
                 OperationError.MalformedInput(
                     "The request is not valid JSON.",
-                    "protocol.invalidJson"));
+                    EngineProtocolConstants.InvalidJsonErrorCode));
         }
 
         using (requestDocument)
@@ -131,8 +142,8 @@ internal sealed class EngineProtocolHost(
             }
 
             return new ProtocolResultResponse<EngineInformationModel>(
-                CurrentProtocolVersion,
-                "result",
+                EngineProtocolConstants.CurrentVersion,
+                EngineProtocolConstants.ResultResponseType,
                 request.RequestId,
                 operationResult.Data!);
         }
@@ -166,11 +177,14 @@ internal sealed class EngineProtocolHost(
 
         foreach (var property in root.EnumerateObject())
         {
-            var isKnownProperty = property.Name is "protocolVersion" or "requestId" or "method";
+            var isKnownProperty = property.Name is
+                EngineProtocolConstants.ProtocolVersionPropertyName or
+                EngineProtocolConstants.RequestIdPropertyName or
+                EngineProtocolConstants.MethodPropertyName;
             hasValidProperties &= isKnownProperty && propertyNames.Add(property.Name);
         }
 
-        if (root.TryGetProperty("requestId", out var requestIdElement) &&
+        if (root.TryGetProperty(EngineProtocolConstants.RequestIdPropertyName, out var requestIdElement) &&
             requestIdElement.ValueKind == JsonValueKind.String &&
             !string.IsNullOrWhiteSpace(requestIdElement.GetString()))
         {
@@ -178,11 +192,13 @@ internal sealed class EngineProtocolHost(
         }
 
         if (!hasValidProperties ||
-            !root.TryGetProperty("protocolVersion", out var protocolVersionElement) ||
+            !root.TryGetProperty(
+                EngineProtocolConstants.ProtocolVersionPropertyName,
+                out var protocolVersionElement) ||
             protocolVersionElement.ValueKind != JsonValueKind.Number ||
             !protocolVersionElement.TryGetInt32(out var protocolVersion) ||
             requestId is null ||
-            !root.TryGetProperty("method", out var methodElement) ||
+            !root.TryGetProperty(EngineProtocolConstants.MethodPropertyName, out var methodElement) ||
             methodElement.ValueKind != JsonValueKind.String ||
             methodElement.GetString() is not { } method)
         {
@@ -199,23 +215,27 @@ internal sealed class EngineProtocolHost(
     /// <returns>The requested engine information, or a known dispatch failure.</returns>
     private Result<EngineInformationModel> DispatchRequest(ProtocolRequest request)
     {
-        if (request.ProtocolVersion != CurrentProtocolVersion)
+        if (request.ProtocolVersion != EngineProtocolConstants.CurrentVersion)
         {
             return Result.Fail<EngineInformationModel>(
                 OperationError.UnprocessableInput(
                     $"Protocol version {request.ProtocolVersion} is not supported.",
-                    "protocol.unsupportedVersion"));
+                    EngineProtocolConstants.UnsupportedVersionErrorCode));
         }
 
-        if (!string.Equals(request.Method, "engine.getInfo", StringComparison.Ordinal))
+        if (!string.Equals(
+                request.Method,
+                EngineProtocolConstants.GetInformationMethod,
+                StringComparison.Ordinal))
         {
             return Result.Fail<EngineInformationModel>(
                 OperationError.NotFound(
                     $"The method '{request.Method}' is not recognized.",
-                    "protocol.unknownMethod"));
+                    EngineProtocolConstants.UnknownMethodErrorCode));
         }
 
-        return Result.Success(_engineInformationProvider.GetInformation());
+        return Result.Success(
+            _engineInformationProvider.GetInformation(EngineProtocolConstants.CurrentVersion));
     }
 
     /// <summary>
@@ -226,7 +246,7 @@ internal sealed class EngineProtocolHost(
         Result.Fail<ProtocolRequest>(
             OperationError.Validation(
                 "The request does not match the engine protocol schema.",
-                "protocol.invalidRequest"));
+                EngineProtocolConstants.InvalidRequestErrorCode));
 
     /// <summary>
     ///     Creates protocol serialization options for the current protocol version.
@@ -255,8 +275,8 @@ internal sealed class EngineProtocolHost(
         ArgumentNullException.ThrowIfNull(error);
 
         return new ProtocolErrorResponse(
-            CurrentProtocolVersion,
-            "error",
+            EngineProtocolConstants.CurrentVersion,
+            EngineProtocolConstants.ErrorResponseType,
             requestId,
             new ProtocolError(error.Type, error.Code!, error.Message));
     }
@@ -281,7 +301,7 @@ internal sealed class EngineProtocolHost(
         {
             if (request is null)
             {
-                _logger.LogInformation(
+                logger.LogInformation(
                     "Rejected protocol input {RequestId} with error {ErrorCode} in {ElapsedMilliseconds:0.000} ms.",
                     errorResponse.RequestId,
                     errorResponse.Error.Code,
@@ -289,7 +309,7 @@ internal sealed class EngineProtocolHost(
                 return;
             }
 
-            _logger.LogInformation(
+            logger.LogInformation(
                 "Processed protocol request {RequestId} for {Method} with error {ErrorCode} in {ElapsedMilliseconds:0.000} ms.",
                 errorResponse.RequestId,
                 request.Method,
@@ -300,7 +320,7 @@ internal sealed class EngineProtocolHost(
 
         var resultResponse = (ProtocolResultResponse<EngineInformationModel>)response;
 
-        _logger.LogInformation(
+        logger.LogInformation(
             "Processed protocol request {RequestId} for {Method} with a result in {ElapsedMilliseconds:0.000} ms.",
             resultResponse.RequestId,
             request!.Method,

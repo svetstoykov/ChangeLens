@@ -1,19 +1,18 @@
+using ChangeLens.Engine.EngineInformation.Constants;
+using ChangeLens.Engine.Logging.Constants;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Serilog;
 using Serilog.Events;
 using Serilog.Sinks.SystemConsole.Themes;
 
-namespace ChangeLens.Engine.Extensions;
+namespace ChangeLens.Engine.Logging.Extensions;
 
 /// <summary>
 ///     Provides host-builder extensions for engine logging.
 /// </summary>
 internal static class LoggingExtensions
 {
-    private const long LogFileSizeLimitBytes = 10 * 1024 * 1024;
-    private const int RetainedLogFileCount = 14;
-
     /// <summary>
     ///     Configures injectable logging for standard error and rolling local files.
     /// </summary>
@@ -33,35 +32,35 @@ internal static class LoggingExtensions
 
         builder.Logging.ClearProviders();
 
-        var logDirectory = builder.Configuration["ChangeLens:Logging:FileDirectory"];
+        var logDirectory = builder.Configuration[EngineLoggingConstants.FileDirectoryConfigurationKey];
 
         if (string.IsNullOrWhiteSpace(logDirectory))
         {
             logDirectory = Path.Combine(
                 Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                "ChangeLens",
-                "Logs");
+                EngineLoggingConstants.DefaultApplicationDirectoryName,
+                EngineLoggingConstants.DefaultLogDirectoryName);
         }
 
         builder.Services.AddSerilog(
             (_, loggerConfiguration) => loggerConfiguration
                 .ReadFrom.Configuration(builder.Configuration)
                 .Enrich.FromLogContext()
-                .Enrich.WithProperty("Application", "ChangeLens.Engine")
+                .Enrich.WithProperty(
+                    EngineLoggingConstants.ApplicationPropertyName,
+                    EngineInformationConstants.EngineName)
                 .WriteTo.Console(
                     standardErrorFromLevel: LogEventLevel.Verbose,
                     theme: AnsiConsoleTheme.Code,
                     applyThemeToRedirectedOutput: true,
-                    outputTemplate:
-                    "[{Timestamp:HH:mm:ss.fff} {Level:u3}] [{SourceContext}] {Message:lj}{NewLine}{Exception}")
+                    outputTemplate: EngineLoggingConstants.ConsoleOutputTemplate)
                 .WriteTo.File(
-                    Path.Combine(logDirectory, "changelens-engine-.log"),
+                    Path.Combine(logDirectory, EngineLoggingConstants.LogFileNamePattern),
                     rollingInterval: RollingInterval.Day,
                     rollOnFileSizeLimit: true,
-                    fileSizeLimitBytes: LogFileSizeLimitBytes,
-                    retainedFileCountLimit: RetainedLogFileCount,
+                    fileSizeLimitBytes: EngineLoggingConstants.LogFileSizeLimitBytes,
+                    retainedFileCountLimit: EngineLoggingConstants.RetainedLogFileCount,
                     shared: true,
-                    outputTemplate:
-                    "[{Timestamp:yyyy-MM-dd HH:mm:ss.fff zzz} {Level:u3}] [{SourceContext}] {Message:lj}{NewLine}{Exception}"));
+                    outputTemplate: EngineLoggingConstants.FileOutputTemplate));
     }
 }

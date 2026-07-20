@@ -112,6 +112,14 @@ ChangeLens.Core/
 - Keep one primary type per file.
 - Do not use nested classes. Put each class in its own appropriately named file.
 - Do not use decorative region or comment separators such as `// --------`.
+- Put stable non-prose literals such as protocol identifiers, property names, error codes, configuration keys,
+  file-name patterns, and process exit codes in a capability-specific `Constants` folder. Use a static class named
+  for its scope, such as `EngineProtocolConstants`; do not create a project-wide constants dumping ground.
+- Keep one-off human-readable messages and structured logging message templates at their call sites unless they
+  are reused or form part of a stable external contract.
+- Keep production executable `Program.cs` files limited to host creation, one named composition extension call,
+  host construction and disposal, and one named run extension call. Put service registration, configuration, and
+  lifecycle or exception orchestration in capability-owned extension methods.
 - Prefer the smallest design that fully preserves correctness, consistency, and important behavior.
 
 ## Validation and Result Architecture

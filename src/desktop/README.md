@@ -2,6 +2,9 @@
 
 The desktop workspace combines the React/Vite interface in `ui` with the Tauri shell in `src-tauri`. During integrated development, Tauri loads the Vite server and communicates with the real .NET engine through a narrow native command and the versioned standard-input/output protocol.
 
+For full machine setup, configuration, Docker, ports, and troubleshooting, see
+[`run-locally.md`](../../run-locally.md).
+
 ## Prerequisites
 
 - Node.js 22.13 or later and npm

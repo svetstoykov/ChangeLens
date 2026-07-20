@@ -17,6 +17,10 @@ The initial technology stack is:
 
 Keep detailed and frequently changing product requirements in `docs/product` or feature-specific specifications. Keep this file focused on durable engineering direction.
 
+## Superpowers Skills
+
+Before invoking any `superpowers:*` skill, ask the user for permission and briefly explain why the skill applies. Invoke the skill only after the user explicitly approves its use. If approval is not granted, continue without that skill when possible.
+
 ## Repository Structure
 
 ```text

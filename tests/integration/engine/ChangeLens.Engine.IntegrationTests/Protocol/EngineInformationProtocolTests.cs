@@ -115,7 +115,7 @@ public sealed class EngineInformationProtocolTests
 
         while (directory is not null)
         {
-            if (File.Exists(Path.Combine(directory.FullName, "ChangeLens.slnx")))
+            if (File.Exists(Path.Combine(directory.FullName, "src", "engine", "ChangeLens.slnx")))
             {
                 return directory.FullName;
             }

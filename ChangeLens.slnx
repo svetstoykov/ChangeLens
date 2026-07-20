@@ -1,0 +1,8 @@
+<Solution>
+  <Folder Name="/src/" />
+  <Folder Name="/src/engine/">
+    <Project Path="src/engine/ChangeLens.Core/ChangeLens.Core.csproj" />
+    <Project Path="src/engine/ChangeLens.Engine/ChangeLens.Engine.csproj" />
+    <Project Path="src/engine/ChangeLens.Infrastructure/ChangeLens.Infrastructure.csproj" />
+  </Folder>
+</Solution>

@@ -4,7 +4,10 @@
 !.env.example
 !.env.sample
 !.env.template
+!src/desktop/ui/.env
+!src/desktop/ui/.env.development
 **/appsettings.Development.json
+!src/engine/ChangeLens.Engine/appsettings.Development.json
 **/appsettings.Local.json
 **/appsettings.*.local.json
 **/appsettings.*.Local.json

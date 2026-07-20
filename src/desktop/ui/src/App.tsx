@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import type { EngineClient } from "./EngineInformation/Interfaces/EngineClient";
 import type { EngineInformation } from "./EngineInformation/Models/EngineInformation";
 import "./styles.css";
@@ -52,26 +52,24 @@ interface EngineStatusProps {
 }
 
 function EngineStatus({ state }: EngineStatusProps) {
-  if (state.status === "connecting") {
-    return (
-      <p className="engine-status" data-state="connecting">
-        Connecting to ChangeLens.Engine…
-      </p>
-    );
-  }
+  let content: ReactNode;
 
-  if (state.status === "error") {
-    return (
-      <p className="engine-status" data-state="error">
-        Desktop engine unavailable
-      </p>
+  if (state.status === "connecting") {
+    content = "Connecting to ChangeLens.Engine…";
+  } else if (state.status === "error") {
+    content = "Desktop engine unavailable";
+  } else {
+    content = (
+      <>
+        {state.information.name} {state.information.version} · protocol v
+        {state.information.protocolVersion}
+      </>
     );
   }
 
   return (
-    <p className="engine-status" data-state="ready">
-      {state.information.name} {state.information.version} · protocol v
-      {state.information.protocolVersion}
+    <p className="engine-status" data-state={state.status} role="status">
+      {content}
     </p>
   );
 }

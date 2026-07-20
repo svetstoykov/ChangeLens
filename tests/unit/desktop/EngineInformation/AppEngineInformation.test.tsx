@@ -19,6 +19,10 @@ describe("engine information", () => {
     expect(
       screen.getByText("Connecting to ChangeLens.Engine…"),
     ).toBeInTheDocument();
+    expect(screen.getByRole("status")).toHaveAttribute(
+      "data-state",
+      "connecting",
+    );
   });
 
   it("shows information returned by the engine", async () => {
@@ -35,6 +39,7 @@ describe("engine information", () => {
     expect(
       await screen.findByText("ChangeLens.Engine 0.1.0 · protocol v1"),
     ).toBeInTheDocument();
+    expect(screen.getByRole("status")).toHaveAttribute("data-state", "ready");
   });
 
   it("reports when the desktop engine cannot be reached", async () => {
@@ -49,5 +54,6 @@ describe("engine information", () => {
     expect(
       await screen.findByText("Desktop engine unavailable"),
     ).toBeInTheDocument();
+    expect(screen.getByRole("status")).toHaveAttribute("data-state", "error");
   });
 });

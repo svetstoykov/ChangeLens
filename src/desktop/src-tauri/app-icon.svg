@@ -1,0 +1,45 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" role="img" aria-labelledby="title description">
+  <title id="title">ChangeLens application icon</title>
+  <desc id="description">A magnifying lens containing green addition and coral removal marks.</desc>
+  <defs>
+    <linearGradient id="background" x1="160" y1="112" x2="864" y2="912" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#252a35" />
+      <stop offset="0.52" stop-color="#171a21" />
+      <stop offset="1" stop-color="#0d0f13" />
+    </linearGradient>
+    <radialGradient id="glass" cx="0" cy="0" r="1" gradientTransform="translate(344 310) rotate(48) scale(470)">
+      <stop offset="0" stop-color="#303846" />
+      <stop offset="0.68" stop-color="#1a2029" />
+      <stop offset="1" stop-color="#12161d" />
+    </radialGradient>
+    <linearGradient id="rim" x1="248" y1="212" x2="650" y2="680" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#f4f6fa" />
+      <stop offset="0.45" stop-color="#c8ced9" />
+      <stop offset="1" stop-color="#8f98a8" />
+    </linearGradient>
+    <linearGradient id="handle" x1="608" y1="600" x2="822" y2="832" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#cbd1db" />
+      <stop offset="1" stop-color="#7f899a" />
+    </linearGradient>
+    <filter id="shadow" x="-30%" y="-30%" width="160%" height="160%">
+      <feDropShadow dx="0" dy="26" stdDeviation="28" flood-color="#000000" flood-opacity="0.42" />
+    </filter>
+  </defs>
+
+  <rect x="48" y="48" width="928" height="928" rx="208" fill="url(#background)" />
+  <path d="M188 220C304 112 498 82 650 140" fill="none" stroke="#ffffff" stroke-opacity="0.055" stroke-width="28" stroke-linecap="round" />
+
+  <g filter="url(#shadow)">
+    <path d="M610 606L806 802" fill="none" stroke="#515a69" stroke-width="132" stroke-linecap="round" />
+    <path d="M610 606L806 802" fill="none" stroke="url(#handle)" stroke-width="92" stroke-linecap="round" />
+    <circle cx="424" cy="416" r="270" fill="#0b0d11" stroke="#0b0d11" stroke-width="26" />
+    <circle cx="424" cy="416" r="242" fill="url(#glass)" stroke="url(#rim)" stroke-width="48" />
+  </g>
+
+  <g fill="none" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M300 350H380M340 310V390M428 350H544" stroke="#7ee2a8" stroke-width="42" />
+    <path d="M300 486H380M428 486H544" stroke="#ff9b9b" stroke-width="42" />
+  </g>
+
+  <path d="M284 264C334 216 410 190 480 202" fill="none" stroke="#ffffff" stroke-opacity="0.11" stroke-width="22" stroke-linecap="round" />
+</svg>

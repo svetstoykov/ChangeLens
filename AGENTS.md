@@ -134,6 +134,9 @@ Follow these consistency rules when the Result types are implemented:
 - Let `OperationError` carry a human-readable message, a broad transport-independent `ErrorType`, and an optional stable machine-readable code.
 - Select stable error codes where a failure originates and preserve them unchanged across layers.
 - Compose explicitly: call the operation, inspect `IsFailure`, then return or forward the error before using success data or performing later effects.
+- Return a failed Result directly when its return type is compatible. When the payload type changes, propagate the failure with `Result.ErrorFromResult` or `Result.ErrorFromResult<T>` instead of reconstructing, wrapping, translating, or dropping errors.
+- Treat the forwarding helpers as lossless failure propagation: they preserve the source errors' message, `ErrorType`, optional code, object identity, and order while discarding payload and success-message data. They do not log or otherwise cause side effects.
+- Keep callers independent from lower-layer error codes. Only the operation that detects a specific condition assigns a code; intermediate layers propagate it unchanged unless they deliberately translate to a different abstraction.
 - Keep forwarding transport-independent and free of logging or other side effects.
 - Let the outer application boundary translate error categories into its protocol-specific representation and add correlation information.
 - Keep the implementation deliberately small. Do not add `Bind`, `Map`, result builders, implicit failure conversion, or a result-specific extension-method framework.

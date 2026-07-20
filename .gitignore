@@ -110,6 +110,9 @@ _ReSharper*/
 .history/
 *.sublime-workspace
 
+# Local agent workflow material
+docs/superpowers/
+
 # Operating-system metadata
 .DS_Store
 .AppleDouble

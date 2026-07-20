@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "main-window",
+  "description": "The minimum core capabilities required by the main ChangeLens window.",
+  "windows": ["main"],
+  "permissions": ["core:default"]
+}

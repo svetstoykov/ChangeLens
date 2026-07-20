@@ -1,0 +1,38 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "ChangeLens",
+  "version": "0.1.0",
+  "identifier": "dev.changelens.desktop",
+  "build": {
+    "beforeDevCommand": {
+      "cwd": "..",
+      "script": "npm run dev"
+    },
+    "beforeBuildCommand": {
+      "cwd": "..",
+      "script": "npm run build"
+    },
+    "devUrl": "http://localhost:5173",
+    "frontendDist": "../ui/dist"
+  },
+  "app": {
+    "security": {
+      "capabilities": ["main-window"],
+      "csp": "default-src 'self'; connect-src 'self' ipc: http://ipc.localhost http://localhost:5173 ws://localhost:5173; img-src 'self' asset: http://asset.localhost data: blob:; style-src 'self' 'unsafe-inline'; font-src 'self' data:; worker-src 'self' blob:"
+    },
+    "windows": [
+      {
+        "label": "main",
+        "title": "ChangeLens",
+        "width": 1280,
+        "height": 800,
+        "minWidth": 960,
+        "minHeight": 640,
+        "resizable": true
+      }
+    ]
+  },
+  "bundle": {
+    "active": false
+  }
+}

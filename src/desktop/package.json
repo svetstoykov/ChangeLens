@@ -1,0 +1,30 @@
+{
+  "name": "@changelens/desktop",
+  "version": "0.1.0",
+  "private": true,
+  "workspaces": [
+    "ui"
+  ],
+  "scripts": {
+    "build": "npm run build --workspace @changelens/ui",
+    "desktop:dev": "tauri dev",
+    "dev": "npm run dev --workspace @changelens/ui",
+    "format": "npm run format --workspace @changelens/ui",
+    "format:check": "npm run format:check --workspace @changelens/ui",
+    "lint": "node scripts/lint.mjs",
+    "predesktop:dev": "dotnet build ../engine/ChangeLens.Engine/ChangeLens.Engine.csproj --nologo",
+    "test": "npm run test --workspace @changelens/ui",
+    "typecheck": "npm run typecheck --workspace @changelens/ui"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "2.11.4"
+  },
+  "overrides": {
+    "monaco-editor": {
+      "dompurify": "3.4.12"
+    }
+  },
+  "engines": {
+    "node": ">=22.13.0"
+  }
+}

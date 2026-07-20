@@ -1,0 +1,391 @@
+<!DOCTYPE html>
+
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>ChangeLens - Repository Setup</title>
+<!-- Material Symbols -->
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<style>
+        .material-symbols-outlined {
+            font-family: 'Material Symbols Outlined';
+            font-weight: normal;
+            font-style: normal;
+            font-size: 24px;
+            line-height: 1;
+            letter-spacing: normal;
+            text-transform: none;
+            display: inline-block;
+            white-space: nowrap;
+            word-wrap: normal;
+            direction: ltr;
+            -webkit-font-feature-settings: 'liga';
+            -webkit-font-smoothing: antialiased;
+        }
+    </style>
+<!-- Google Fonts -->
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&amp;family=IBM+Plex+Sans:wght@400;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<!-- Tailwind CSS -->
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+  tailwind.config = {
+    darkMode: "class",
+    theme: {
+      extend: {
+        "colors": {
+                "unknown": "#64717D",
+                "tertiary": "#46545f",
+                "primary-container": "#2f63d7",
+                "background": "#faf8ff",
+                "tertiary-fixed": "#d6e4f2",
+                "on-secondary-fixed": "#0d1d2a",
+                "surface-container-lowest": "#ffffff",
+                "surface-container-highest": "#e2e2ec",
+                "inference-container": "#EEE7FF",
+                "inverse-primary": "#b3c5ff",
+                "on-error": "#ffffff",
+                "tertiary-container": "#5e6c78",
+                "secondary-container": "#d4e4f6",
+                "secondary-fixed-dim": "#b9c8da",
+                "secondary-fixed": "#d4e4f6",
+                "inference": "#6D4CC5",
+                "on-primary-fixed-variant": "#003fa4",
+                "on-error-container": "#93000a",
+                "warning": "#9A5B00",
+                "outline-variant": "#c3c6d6",
+                "on-secondary-fixed-variant": "#394857",
+                "error": "#B42318",
+                "surface": "#faf8ff",
+                "on-tertiary": "#ffffff",
+                "primary": "#0049bc",
+                "surface-variant": "#e2e2ec",
+                "on-tertiary-container": "#dfedfc",
+                "surface-primary": "#F3F6F8",
+                "secondary": "#51606f",
+                "on-primary-fixed": "#001849",
+                "verified-container": "#D7F3EC",
+                "inverse-surface": "#2e3038",
+                "primary-fixed-dim": "#b3c5ff",
+                "canvas": "#F7F9FB",
+                "verified": "#087F70",
+                "on-background": "#191b22",
+                "surface-bright": "#faf8ff",
+                "on-surface-variant": "#434653",
+                "unknown-container": "#E5EAEF",
+                "surface-tint": "#1d56ca",
+                "surface-container-low": "#f3f3fd",
+                "on-surface": "#191b22",
+                "on-primary": "#ffffff",
+                "surface-container-high": "#e7e7f1",
+                "on-tertiary-fixed": "#0f1d27",
+                "on-primary-container": "#e7ebff",
+                "outline": "#737685",
+                "error-container": "#ffdad6",
+                "surface-elevated": "#FFFFFF",
+                "inverse-on-surface": "#f0f0fa",
+                "border-structural": "#C7D0D8",
+                "tertiary-fixed-dim": "#bac8d6",
+                "on-secondary-container": "#576675",
+                "surface-dim": "#d9d9e3",
+                "on-secondary": "#ffffff",
+                "warning-container": "#FFF1CF",
+                "surface-container": "#ededf7",
+                "primary-fixed": "#dbe1ff",
+                "on-tertiary-fixed-variant": "#3b4854"
+        },
+        "borderRadius": {
+                "DEFAULT": "0.25rem",
+                "lg": "0.5rem",
+                "xl": "0.75rem",
+                "full": "9999px"
+        },
+        "spacing": {
+                "base": "8px",
+                "lg": "24px",
+                "xl": "32px",
+                "gutter": "16px",
+                "xs": "4px",
+                "sm": "8px",
+                "md": "16px",
+                "margin": "24px"
+        },
+        "fontFamily": {
+                "headline-md": [
+                        "IBM Plex Sans"
+                ],
+                "code-sm": [
+                        "IBM Plex Mono"
+                ],
+                "body-sm": [
+                        "IBM Plex Sans"
+                ],
+                "body-base": [
+                        "IBM Plex Sans"
+                ],
+                "code-base": [
+                        "IBM Plex Mono"
+                ],
+                "label-caps": [
+                        "IBM Plex Mono"
+                ],
+                "display-lg": [
+                        "IBM Plex Sans"
+                ]
+        },
+        "fontSize": {
+                "headline-md": [
+                        "20px",
+                        {
+                                "lineHeight": "28px",
+                                "fontWeight": "600"
+                        }
+                ],
+                "code-sm": [
+                        "11px",
+                        {
+                                "lineHeight": "16px",
+                                "fontWeight": "400"
+                        }
+                ],
+                "body-sm": [
+                        "12px",
+                        {
+                                "lineHeight": "18px",
+                                "fontWeight": "400"
+                        }
+                ],
+                "body-base": [
+                        "14px",
+                        {
+                                "lineHeight": "20px",
+                                "fontWeight": "400"
+                        }
+                ],
+                "code-base": [
+                        "13px",
+                        {
+                                "lineHeight": "20px",
+                                "fontWeight": "400"
+                        }
+                ],
+                "label-caps": [
+                        "10px",
+                        {
+                                "lineHeight": "12px",
+                                "letterSpacing": "0.05em",
+                                "fontWeight": "600"
+                        }
+                ],
+                "display-lg": [
+                        "32px",
+                        {
+                                "lineHeight": "40px",
+                                "letterSpacing": "-0.02em",
+                                "fontWeight": "600"
+                        }
+                ]
+        }
+},
+    },
+  }
+</script>
+</head>
+<body class="bg-canvas text-on-surface font-body-base overflow-hidden">
+<!-- SideNavBar (from JSON) -->
+<nav class="bg-surface-primary text-primary font-body-base text-body-base fixed left-0 top-0 h-screen w-[240px] border-r border-border-structural flex flex-col h-full py-lg px-md z-20">
+<!-- Header -->
+<div class="mb-lg px-sm">
+<div class="flex items-center gap-2 mb-1">
+<span class="material-symbols-outlined text-primary" data-icon="lens">lens</span>
+<span class="font-headline-md text-headline-md font-bold text-on-surface">ChangeLens</span>
+</div>
+<div class="font-code-sm text-code-sm text-secondary">v1.0.4-beta</div>
+</div>
+<!-- CTA -->
+<div class="mb-lg px-sm">
+<button class="w-full bg-primary-container text-on-primary font-body-base font-semibold py-2 px-4 rounded-DEFAULT hover:opacity-90 transition-opacity">New Analysis</button>
+</div>
+<!-- Main Nav -->
+<ul class="flex-1 flex flex-col gap-1">
+<li>
+<a class="flex items-center gap-3 px-sm py-2 text-primary font-bold border-l-4 border-primary bg-surface-variant transition-colors duration-150 ease-in-out" href="#">
+<span class="material-symbols-outlined text-[20px]" data-icon="account_tree">account_tree</span>
+<span>Current Change</span>
+</a>
+</li>
+<li>
+<a class="flex items-center gap-3 px-sm py-2 ml-1 border-l-4 border-transparent text-secondary hover:bg-surface-variant transition-colors duration-150 ease-in-out" href="#">
+<span class="material-symbols-outlined text-[20px]" data-icon="database">database</span>
+<span>Repositories</span>
+</a>
+</li>
+<li>
+<a class="flex items-center gap-3 px-sm py-2 ml-1 border-l-4 border-transparent text-secondary hover:bg-surface-variant transition-colors duration-150 ease-in-out" href="#">
+<span class="material-symbols-outlined text-[20px]" data-icon="history">history</span>
+<span>History</span>
+</a>
+</li>
+<li>
+<a class="flex items-center gap-3 px-sm py-2 ml-1 border-l-4 border-transparent text-secondary hover:bg-surface-variant transition-colors duration-150 ease-in-out" href="#">
+<span class="material-symbols-outlined text-[20px]" data-icon="settings">settings</span>
+<span>Settings</span>
+</a>
+</li>
+</ul>
+<!-- Footer Nav -->
+<div class="mt-auto pt-4 border-t border-border-structural">
+<ul class="flex flex-col gap-1">
+<li>
+<a class="flex items-center gap-3 px-sm py-2 text-secondary hover:bg-surface-variant transition-colors duration-150 ease-in-out" href="#">
+<span class="material-symbols-outlined text-[20px]" data-icon="help">help</span>
+<span>Documentation</span>
+</a>
+</li>
+<li>
+<a class="flex items-center gap-3 px-sm py-2 text-secondary hover:bg-surface-variant transition-colors duration-150 ease-in-out" href="#">
+<span class="material-symbols-outlined text-[20px]" data-icon="contact_support">contact_support</span>
+<span>Support</span>
+</a>
+</li>
+</ul>
+</div>
+</nav>
+<!-- TopAppBar (from JSON) -->
+<header class="bg-surface-elevated text-primary font-code-sm text-code-sm fixed top-0 right-0 left-[240px] h-12 border-b border-border-structural flex items-center justify-between px-md w-full z-10 box-border" style="width: calc(100% - 240px);">
+<!-- Navigation Links / Breadcrumbs -->
+<div class="flex items-center gap-2 text-on-surface font-semibold cursor-pointer hover:text-primary transition-opacity duration-200">
+<span class="material-symbols-outlined text-[16px] text-secondary" data-icon="alt_route">alt_route</span>
+<span>feature/example-payment-service → main</span>
+</div>
+<!-- Trailing Actions -->
+<div class="flex items-center gap-4">
+<button class="flex items-center gap-1.5 text-secondary hover:text-primary transition-colors cursor-pointer">
+<span class="material-symbols-outlined text-[16px]" data-icon="sync">sync</span>
+<span>Sync Repository</span>
+</button>
+<div class="w-px h-4 bg-border-structural"></div>
+<div class="flex items-center gap-2">
+<button aria-label="Terminal" class="p-1 text-secondary hover:bg-surface-variant rounded-DEFAULT transition-colors cursor-pointer">
+<span class="material-symbols-outlined text-[18px]" data-icon="terminal">terminal</span>
+</button>
+<button aria-label="Analytics" class="p-1 text-secondary hover:bg-surface-variant rounded-DEFAULT transition-colors cursor-pointer">
+<span class="material-symbols-outlined text-[18px]" data-icon="analytics">analytics</span>
+</button>
+</div>
+</div>
+</header>
+<!-- Main Content Canvas -->
+<main class="ml-[240px] mt-12 p-margin h-[calc(100vh-48px)] overflow-y-auto">
+<div class="max-w-4xl mx-auto space-y-gutter">
+<!-- Setup Header Area -->
+<div class="flex items-end justify-between border-b border-border-structural pb-4 mb-lg">
+<div>
+<h1 class="font-display-lg text-display-lg text-on-surface mb-1">Analyze current change</h1>
+<div class="flex items-center gap-2 font-code-sm text-code-sm text-secondary">
+<span class="material-symbols-outlined text-[14px]">folder</span>
+<span>/projects/finance-api</span>
+</div>
+</div>
+</div>
+<!-- Main Working Area: Bento Grid -->
+<div class="grid grid-cols-1 md:grid-cols-3 gap-gutter">
+<!-- Left Column: Context & Action (col-span-2) -->
+<div class="md:col-span-2 space-y-gutter">
+<!-- Context Card -->
+<div class="bg-surface-elevated border border-border-structural rounded-DEFAULT p-md shadow-sm relative overflow-hidden">
+<div class="absolute left-0 top-0 bottom-0 w-1 bg-surface-dim"></div>
+<h2 class="font-headline-md text-headline-md text-on-surface mb-2 pl-2">Change context</h2>
+<p class="font-body-base text-body-base text-secondary mb-4 pl-2">Add the task description, acceptance criteria, implementation notes, or anything ChangeLens should consider.</p>
+<textarea class="w-full bg-surface-elevated border border-border-structural rounded-DEFAULT p-3 font-code-base text-code-base text-on-surface focus:ring-2 focus:ring-primary-container focus:border-primary-container focus:outline-none min-h-[200px] resize-y placeholder-on-surface-variant" placeholder="e.g. Implemented new payment gateway integration for Stripe. Acceptance criteria: all successful charges should write to the ledger table."></textarea>
+</div>
+<!-- Comparison & Analyze Action Card -->
+<div class="bg-surface-elevated border border-primary rounded-DEFAULT p-md shadow-sm relative overflow-hidden bg-[rgba(91,140,255,0.05)] transition-all">
+<div class="absolute left-0 top-0 bottom-0 w-1 bg-primary-container"></div>
+<div class="flex items-center justify-between mb-4 pl-2">
+<div>
+<h3 class="font-label-caps text-label-caps text-secondary mb-1 uppercase tracking-wider">Target Comparison</h3>
+<div class="flex items-center gap-2 font-code-base text-code-base text-on-surface bg-surface-primary border border-border-structural px-3 py-1.5 rounded-DEFAULT shadow-sm inline-flex">
+<span class="text-primary-container font-semibold">feature/example-payment-service</span>
+<span class="material-symbols-outlined text-[16px] text-secondary">arrow_forward</span>
+<span class="font-semibold">main</span>
+</div>
+</div>
+</div>
+<div class="pl-2 mt-6">
+<button class="bg-primary text-on-primary font-headline-md text-headline-md py-3 px-6 rounded-DEFAULT shadow-md hover:opacity-90 transition-opacity w-full flex justify-center items-center gap-2">
+<span class="material-symbols-outlined">troubleshoot</span>
+                                Analyze current change
+                            </button>
+</div>
+</div>
+</div>
+<!-- Right Column: Stats & History -->
+<div class="space-y-gutter">
+<!-- Stats Card -->
+<div class="bg-surface-elevated border border-border-structural rounded-DEFAULT p-md shadow-sm relative">
+<div class="absolute left-0 top-0 bottom-0 w-1 bg-surface-dim"></div>
+<h3 class="font-label-caps text-label-caps text-secondary mb-4 uppercase tracking-wider pl-2">Current Change Stats</h3>
+<div class="space-y-4 pl-2">
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-2 text-on-surface">
+<span class="material-symbols-outlined text-[18px] text-secondary">commit</span>
+<span class="font-body-base text-body-base">Commits</span>
+</div>
+<span class="font-code-base text-code-base font-bold">6</span>
+</div>
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-2 text-on-surface">
+<span class="material-symbols-outlined text-[18px] text-warning">pending_actions</span>
+<span class="font-body-base text-body-base">Uncommitted files</span>
+</div>
+<span class="font-code-base text-code-base font-bold text-warning">4</span>
+</div>
+<div class="flex items-center justify-between pt-3 border-t border-border-structural">
+<div class="flex items-center gap-2 text-on-surface">
+<span class="material-symbols-outlined text-[18px] text-primary-container">file_copy</span>
+<span class="font-body-base text-body-base">Changed files</span>
+</div>
+<span class="font-code-base text-code-base font-bold text-primary-container">34</span>
+</div>
+</div>
+</div>
+<!-- Recent Analysis List -->
+<div class="bg-surface-elevated border border-border-structural rounded-DEFAULT p-md shadow-sm relative">
+<div class="absolute left-0 top-0 bottom-0 w-1 bg-surface-dim"></div>
+<h3 class="font-label-caps text-label-caps text-secondary mb-4 uppercase tracking-wider pl-2">Recent Analysis</h3>
+<div class="pl-2">
+<div class="border border-border-structural rounded-DEFAULT p-3 hover:bg-surface-primary cursor-pointer transition-colors">
+<div class="flex justify-between items-start mb-2">
+<div class="font-code-sm text-code-sm text-on-surface font-semibold truncate max-w-[140px]">Finance API</div>
+<div class="font-body-sm text-body-sm text-secondary">2 hours ago</div>
+</div>
+<div class="font-code-sm text-code-sm text-secondary mb-3 flex items-center gap-1">
+<span class="material-symbols-outlined text-[14px]">call_split</span>
+                                    main
+                                </div>
+<div class="flex flex-wrap gap-2">
+<!-- Badges -->
+<span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-sm bg-verified-container border border-verified text-verified font-code-sm text-code-sm">
+<span class="material-symbols-outlined text-[12px]">check_circle</span> 0
+                                    </span>
+<span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-sm bg-warning-container border border-warning text-warning font-code-sm text-code-sm">
+<span class="material-symbols-outlined text-[12px]">warning</span> 2
+                                    </span>
+<span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-sm bg-inference-container border border-inference text-inference font-code-sm text-code-sm">
+<span class="material-symbols-outlined text-[12px]">help</span> 3
+                                    </span>
+</div>
+</div>
+</div>
+<div class="pl-2 mt-3 text-center">
+<button class="text-primary-container font-body-sm text-body-sm hover:underline">View all history</button>
+</div>
+</div>
+</div>
+</div>
+</div>
+</main>
+</body></html>

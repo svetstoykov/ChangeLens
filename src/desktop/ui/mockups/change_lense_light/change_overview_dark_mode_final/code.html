@@ -1,0 +1,388 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>ChangeLens - Change Overview</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;600&amp;family=IBM+Plex+Mono:wght@400;600&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "unknown": "#9CA3AF",
+                        "tertiary": "#9CA3AF",
+                        "primary-container": "#1E3A8A",
+                        "background": "#0B0F14",
+                        "tertiary-fixed": "#1F2937",
+                        "on-secondary-fixed": "#FFFFFF",
+                        "surface-container-lowest": "#0B0F14",
+                        "surface-container-highest": "#374151",
+                        "inference-container": "#2E1065",
+                        "inverse-primary": "#60A5FA",
+                        "on-error": "#FFFFFF",
+                        "tertiary-container": "#374151",
+                        "secondary-container": "#1F2937",
+                        "secondary-fixed-dim": "#374151",
+                        "secondary-fixed": "#1F2937",
+                        "inference": "#A78BFA",
+                        "on-primary-fixed-variant": "#93C5FD",
+                        "on-error-container": "#FCA5A5",
+                        "warning": "#FBBF24",
+                        "outline-variant": "#374151",
+                        "on-secondary-fixed-variant": "#D1D5DB",
+                        "error": "#F87171",
+                        "surface": "#111821",
+                        "on-tertiary": "#FFFFFF",
+                        "primary": "#3B82F6",
+                        "surface-variant": "#1F2937",
+                        "on-tertiary-container": "#E5E7EB",
+                        "surface-primary": "#111821",
+                        "secondary": "#9CA3AF",
+                        "on-primary-fixed": "#EFF6FF",
+                        "verified-container": "#064E3B",
+                        "inverse-surface": "#F3F4F6",
+                        "primary-fixed-dim": "#1E3A8A",
+                        "canvas": "#0B0F14",
+                        "verified": "#34D399",
+                        "on-background": "#F3F4F6",
+                        "surface-bright": "#16202B",
+                        "on-surface-variant": "#9CA3AF",
+                        "unknown-container": "#1F2937",
+                        "surface-tint": "#3B82F6",
+                        "surface-container-low": "#111821",
+                        "on-surface": "#F3F4F6",
+                        "on-primary": "#FFFFFF",
+                        "surface-container-high": "#1F2937",
+                        "on-tertiary-fixed": "#F3F4F6",
+                        "on-primary-container": "#DBEAFE",
+                        "outline": "#6B7280",
+                        "error-container": "#7F1D1D",
+                        "surface-elevated": "#16202B",
+                        "inverse-on-surface": "#111821",
+                        "border-structural": "#374151",
+                        "tertiary-fixed-dim": "#374151",
+                        "on-secondary-container": "#D1D5DB",
+                        "surface-dim": "#0B0F14",
+                        "on-secondary": "#FFFFFF",
+                        "warning-container": "#78350F",
+                        "surface-container": "#111821",
+                        "primary-fixed": "#1E3A8A",
+                        "on-tertiary-fixed-variant": "#D1D5DB"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "base": "8px",
+                        "lg": "24px",
+                        "xl": "32px",
+                        "gutter": "16px",
+                        "xs": "4px",
+                        "sm": "8px",
+                        "md": "16px",
+                        "margin": "24px"
+                    },
+                    "fontFamily": {
+                        "headline-md": ["IBM Plex Sans"],
+                        "code-sm": ["IBM Plex Mono"],
+                        "body-sm": ["IBM Plex Sans"],
+                        "body-base": ["IBM Plex Sans"],
+                        "code-base": ["IBM Plex Mono"],
+                        "label-caps": ["IBM Plex Mono"],
+                        "display-lg": ["IBM Plex Sans"]
+                    },
+                    "fontSize": {
+                        "headline-md": ["20px", { "lineHeight": "28px", "fontWeight": "600" }],
+                        "code-sm": ["11px", { "lineHeight": "16px", "fontWeight": "400" }],
+                        "body-sm": ["12px", { "lineHeight": "18px", "fontWeight": "400" }],
+                        "body-base": ["14px", { "lineHeight": "20px", "fontWeight": "400" }],
+                        "code-base": ["13px", { "lineHeight": "20px", "fontWeight": "400" }],
+                        "label-caps": ["10px", { "lineHeight": "12px", "letterSpacing": "0.05em", "fontWeight": "600" }],
+                        "display-lg": ["32px", { "lineHeight": "40px", "letterSpacing": "-0.02em", "fontWeight": "600" }]
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+<body class="bg-background text-on-background font-body-base h-screen flex overflow-hidden selection:bg-primary selection:text-on-primary">
+<!-- SideNavBar -->
+<nav class="bg-surface-elevated font-body-base text-body-base fixed left-0 top-0 h-screen w-[240px] border-r border-outline-variant flex flex-col h-full py-lg px-md z-20">
+<div class="mb-xl">
+<h1 class="font-headline-md text-headline-md font-bold text-on-background flex items-center gap-2">
+<span class="material-symbols-outlined text-primary" data-icon="lens" data-weight="fill">lens</span>
+            ChangeLens
+        </h1>
+<p class="font-code-sm text-code-sm text-on-surface-variant mt-1">v1.0.4-beta</p>
+</div>
+<button class="bg-primary text-on-primary w-full py-2 rounded font-headline-md text-body-base hover:bg-primary/90 transition-colors mb-lg flex items-center justify-center gap-2 shadow-sm">
+<span class="material-symbols-outlined" data-icon="add">add</span>
+        New Analysis
+    </button>
+<ul class="flex-grow space-y-1">
+<li>
+<a class="flex items-center gap-3 px-3 py-2 rounded text-primary font-bold border-l-4 border-primary bg-primary-fixed transition-colors duration-150 ease-in-out" href="#">
+<span class="material-symbols-outlined" data-icon="account_tree">account_tree</span>
+                Current Change
+            </a>
+</li>
+<li>
+<a class="flex items-center gap-3 px-3 py-2 rounded text-on-surface-variant hover:bg-surface-container hover:text-on-background transition-colors duration-150 ease-in-out border-l-4 border-transparent" href="#">
+<span class="material-symbols-outlined" data-icon="database">database</span>
+                Repositories
+            </a>
+</li>
+<li>
+<a class="flex items-center gap-3 px-3 py-2 rounded text-on-surface-variant hover:bg-surface-container hover:text-on-background transition-colors duration-150 ease-in-out border-l-4 border-transparent" href="#">
+<span class="material-symbols-outlined" data-icon="history">history</span>
+                History
+            </a>
+</li>
+<li>
+<a class="flex items-center gap-3 px-3 py-2 rounded text-on-surface-variant hover:bg-surface-container hover:text-on-background transition-colors duration-150 ease-in-out border-l-4 border-transparent" href="#">
+<span class="material-symbols-outlined" data-icon="settings">settings</span>
+                Settings
+            </a>
+</li>
+</ul>
+<div class="mt-auto pt-lg border-t border-outline-variant space-y-1">
+<a class="flex items-center gap-3 px-3 py-2 rounded text-on-surface-variant hover:bg-surface-container hover:text-on-background transition-colors duration-150 ease-in-out" href="#">
+<span class="material-symbols-outlined" data-icon="help">help</span>
+            Documentation
+        </a>
+<a class="flex items-center gap-3 px-3 py-2 rounded text-on-surface-variant hover:bg-surface-container hover:text-on-background transition-colors duration-150 ease-in-out" href="#">
+<span class="material-symbols-outlined" data-icon="contact_support">contact_support</span>
+            Support
+        </a>
+</div>
+</nav>
+<!-- Main Content Area -->
+<div class="flex-grow flex flex-col ml-[240px] relative w-full h-full overflow-hidden">
+<!-- TopAppBar -->
+<header class="bg-surface-elevated text-on-background font-code-sm text-code-sm fixed top-0 right-0 left-[240px] h-12 border-b border-outline-variant flex items-center justify-between px-md w-[calc(100%-240px)] z-10">
+<div class="flex items-center gap-4">
+<span class="font-headline-md text-headline-md text-transparent select-none">ChangeLens</span>
+<nav class="flex gap-4">
+<span class="text-on-background font-semibold cursor-pointer transition-opacity duration-200">feature/example-payment-service → main</span>
+</nav>
+</div>
+<div class="flex items-center gap-3">
+<div class="flex items-center gap-1 text-on-surface-variant">
+<button class="p-1.5 rounded hover:text-primary transition-opacity duration-200" title="terminal">
+<span class="material-symbols-outlined" data-icon="terminal">terminal</span>
+</button>
+<button class="p-1.5 rounded hover:text-primary transition-opacity duration-200" title="analytics">
+<span class="material-symbols-outlined" data-icon="analytics">analytics</span>
+</button>
+</div>
+<button class="bg-surface-elevated text-primary border border-outline-variant px-3 py-1 rounded hover:bg-surface-container hover:border-primary transition-colors font-body-base text-body-sm shadow-sm flex items-center gap-1">
+<span class="material-symbols-outlined text-[16px]" data-icon="sync">sync</span>
+                Sync Repository
+            </button>
+</div>
+</header>
+<!-- Scrollable Workspace -->
+<main class="flex-grow overflow-y-auto mt-12 p-margin pb-xl">
+<!-- Header Section -->
+<div class="flex flex-col md:flex-row md:items-start justify-between gap-6 mb-8 border-b border-outline-variant pb-6">
+<div class="flex-grow max-w-3xl pl-4 border-l-4 border-inference">
+<div class="flex items-center gap-2 mb-2">
+<span class="bg-inference-container text-inference border border-inference/30 px-2 py-0.5 rounded font-label-caps text-label-caps uppercase flex items-center gap-1">
+<span class="material-symbols-outlined text-[12px]" data-icon="auto_awesome">auto_awesome</span> Inferred Context
+                    </span>
+</div>
+<h2 class="font-display-lg text-display-lg text-on-background mb-3 tracking-tight">Adds ExamplePaymentService with asynchronous result processing</h2>
+<p class="font-body-base text-body-base text-on-surface-variant leading-relaxed">
+                    Introduces a new external payment provider and processes final payment results asynchronously through RabbitMQ.
+                </p>
+</div>
+<div class="flex-shrink-0 flex gap-2">
+<button class="bg-surface-elevated text-on-background border border-outline-variant px-4 py-2 rounded hover:bg-surface-container hover:text-primary transition-colors font-body-base text-body-base shadow-sm flex items-center gap-2">
+<span class="material-symbols-outlined" data-icon="file_copy">file_copy</span>
+                    Changed files (34)
+                </button>
+</div>
+</div>
+<!-- Summary Stats -->
+<div class="bg-surface-elevated border border-outline-variant rounded-lg p-5 mb-8 shadow-sm">
+<div class="flex items-start gap-4">
+<div class="bg-verified-container rounded-full p-2 flex-shrink-0">
+<span class="material-symbols-outlined text-verified" data-icon="check_circle">check_circle</span>
+</div>
+<div>
+<p class="font-headline-md text-headline-md text-on-background mb-2">No critical issues found in the examined change.</p>
+<p class="font-body-base text-body-base text-on-surface-variant mb-4 flex flex-wrap items-center gap-x-2 gap-y-1">
+<span>34 files organized into 5 behavioural areas</span>
+<span class="text-outline-variant">•</span>
+<span class="text-verified font-semibold">18 relevant tests passed</span>
+<span class="text-outline-variant">•</span>
+<span class="text-inference font-semibold">2 implementation details remain unverified</span>
+</p>
+<div class="flex gap-4">
+<div class="flex items-center gap-1.5">
+<span class="material-symbols-outlined text-on-surface-variant text-[18px]" data-icon="error">error</span>
+<span class="font-code-sm text-code-sm text-on-surface-variant">0 critical</span>
+</div>
+<div class="flex items-center gap-1.5">
+<span class="material-symbols-outlined text-warning text-[18px]" data-icon="warning">warning</span>
+<span class="font-code-sm text-code-sm text-on-surface-variant">2 warnings</span>
+</div>
+<div class="flex items-center gap-1.5">
+<span class="material-symbols-outlined text-inference text-[18px]" data-icon="help">help</span>
+<span class="font-code-sm text-code-sm text-on-surface-variant">3 questions</span>
+</div>
+</div>
+</div>
+</div>
+</div>
+<!-- Story Map Flow -->
+<div class="mb-6">
+<h3 class="font-headline-md text-headline-md text-on-background mb-6 flex items-center gap-2">
+<span class="material-symbols-outlined text-on-surface-variant" data-icon="account_tree">account_tree</span>
+                Behavioral Flow
+            </h3>
+<div class="flex flex-col gap-6">
+<!-- Top Flow Row -->
+<div class="flex flex-row items-center gap-4 min-w-max relative overflow-x-auto pb-2">
+<!-- Node 0: Request Start -->
+<div class="w-[180px] bg-surface-container border border-outline-variant rounded shadow-sm flex flex-col p-3 z-10 shrink-0">
+<div class="flex items-center gap-2 mb-2">
+<span class="bg-surface-elevated border border-outline-variant text-on-surface-variant px-1.5 py-0.5 rounded font-code-sm text-[10px]">API</span>
+<h4 class="font-body-sm text-body-sm font-semibold text-on-background">Payment request</h4>
+</div>
+<p class="font-code-sm text-code-sm text-on-surface-variant line-clamp-1">Incoming payload</p>
+</div>
+<!-- Connector -->
+<div class="flex items-center justify-center w-6 z-0 text-outline shrink-0">
+<span class="material-symbols-outlined text-[20px]" data-icon="arrow_right_alt">arrow_right_alt</span>
+</div>
+<!-- Node 1: ExamplePaymentService -->
+<div class="w-[280px] bg-surface-elevated border border-primary border-l-[4px] border-l-primary rounded shadow-sm hover:border-primary/80 transition-colors cursor-pointer group flex flex-col relative z-10 shrink-0">
+<div class="p-4 flex-grow">
+<div class="flex justify-between items-start mb-2">
+<h4 class="font-body-base text-body-base font-semibold text-on-background group-hover:text-primary transition-colors">1. ExamplePaymentService boundary</h4>
+<span class="bg-primary-fixed text-primary border border-primary/30 px-1.5 py-0.5 rounded font-code-sm text-[10px]">Provider</span>
+</div>
+<p class="font-body-sm text-body-sm text-on-surface-variant mb-4 line-clamp-2">The newly introduced external provider integration implementation.</p>
+<div class="grid grid-cols-2 gap-2 mt-auto">
+<div class="bg-surface-container border border-outline-variant p-2 rounded flex items-center justify-between">
+<span class="material-symbols-outlined text-primary text-[14px]" data-icon="description">description</span>
+<span class="font-code-sm text-code-sm text-on-background">12 files</span>
+</div>
+<div class="bg-verified-container border border-verified/20 p-2 rounded flex items-center justify-between">
+<span class="material-symbols-outlined text-verified text-[14px]" data-icon="fact_check">fact_check</span>
+<span class="font-code-sm text-code-sm text-verified">Partially verified</span>
+</div>
+</div>
+<div class="mt-2 bg-warning-container border border-warning/20 p-1.5 rounded flex items-center justify-center gap-1">
+<span class="material-symbols-outlined text-warning text-[12px]" data-icon="warning">warning</span>
+<span class="font-code-sm text-[10px] text-warning">2 warnings found</span>
+</div>
+</div>
+</div>
+<!-- Connector -->
+<div class="flex items-center justify-center w-6 z-0 text-outline shrink-0">
+<span class="material-symbols-outlined text-[20px]" data-icon="arrow_right_alt">arrow_right_alt</span>
+</div>
+<!-- Node 2: Orchestration -->
+<div class="w-[280px] bg-surface-elevated border border-outline-variant border-l-[4px] border-l-outline-variant rounded shadow-sm hover:border-primary/50 transition-colors cursor-pointer group flex flex-col relative z-10 shrink-0">
+<div class="p-4 flex-grow">
+<div class="flex justify-between items-start mb-2">
+<h4 class="font-body-base text-body-base font-semibold text-on-background group-hover:text-primary transition-colors">2. Payment orchestration</h4>
+<span class="bg-surface-container border border-outline-variant text-on-surface-variant px-1.5 py-0.5 rounded font-code-sm text-[10px]">Core</span>
+</div>
+<p class="font-body-sm text-body-sm text-on-surface-variant mb-4 line-clamp-2">Routing the request to the correct provider strategy based on payload.</p>
+<div class="grid grid-cols-2 gap-2 mt-auto">
+<div class="bg-surface-container border border-outline-variant p-2 rounded flex items-center justify-between">
+<span class="material-symbols-outlined text-on-surface-variant text-[14px]" data-icon="description">description</span>
+<span class="font-code-sm text-code-sm text-on-background">6 files</span>
+</div>
+<div class="bg-verified-container border border-verified/20 p-2 rounded flex items-center justify-between">
+<span class="material-symbols-outlined text-verified text-[14px]" data-icon="fact_check">fact_check</span>
+<span class="font-code-sm text-code-sm text-verified">Partially verified</span>
+</div>
+</div>
+<div class="mt-2 bg-inference-container border border-inference/20 p-1.5 rounded flex items-center justify-center gap-1">
+<span class="material-symbols-outlined text-inference text-[12px]" data-icon="help">help</span>
+<span class="font-code-sm text-[10px] text-inference">1 unverified detail</span>
+</div>
+</div>
+</div>
+<!-- Connector -->
+<div class="flex items-center justify-center w-6 z-0 text-outline shrink-0">
+<span class="material-symbols-outlined text-[20px]" data-icon="arrow_right_alt">arrow_right_alt</span>
+</div>
+<!-- Node 3: Async Processing -->
+<div class="w-[280px] bg-surface-elevated border border-outline-variant border-l-[4px] border-l-outline-variant rounded shadow-sm hover:border-primary/50 transition-colors cursor-pointer group flex flex-col relative z-10 shrink-0">
+<div class="p-4 flex-grow">
+<div class="flex justify-between items-start mb-2">
+<h4 class="font-body-base text-body-base font-semibold text-on-background group-hover:text-primary transition-colors">3. RabbitMQ result processing</h4>
+<span class="bg-surface-container border border-outline-variant text-on-surface-variant px-1.5 py-0.5 rounded font-code-sm text-[10px]">Worker</span>
+</div>
+<p class="font-body-sm text-body-sm text-on-surface-variant mb-4 line-clamp-2">Consumes final payment status from the external provider webhook queues.</p>
+<div class="grid grid-cols-2 gap-2 mt-auto">
+<div class="bg-surface-container border border-outline-variant p-2 rounded flex items-center justify-between">
+<span class="material-symbols-outlined text-on-surface-variant text-[14px]" data-icon="description">description</span>
+<span class="font-code-sm text-code-sm text-on-background">8 files</span>
+</div>
+<div class="bg-verified-container border border-verified/20 p-2 rounded flex items-center justify-between">
+<span class="material-symbols-outlined text-verified text-[14px]" data-icon="fact_check">fact_check</span>
+<span class="font-code-sm text-code-sm text-verified">Partially verified</span>
+</div>
+</div>
+<div class="mt-2 bg-inference-container border border-inference/20 p-1.5 rounded flex items-center justify-center gap-1">
+<span class="material-symbols-outlined text-inference text-[12px]" data-icon="help">help</span>
+<span class="font-code-sm text-[10px] text-inference">2 questions</span>
+</div>
+</div>
+</div>
+</div>
+<!-- Bottom Row: Supporting Nodes -->
+<div class="flex flex-col md:flex-row gap-4">
+<!-- Node 4: Configuration -->
+<div class="flex-1 bg-surface-elevated border border-outline-variant rounded shadow-sm p-4 hover:border-primary/50 transition-colors cursor-pointer group">
+<div class="flex items-start justify-between mb-3">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-on-surface-variant group-hover:text-primary transition-colors" data-icon="tune">tune</span>
+<h4 class="font-body-base text-body-base font-semibold text-on-background group-hover:text-primary transition-colors">4. Configuration and dependency registration</h4>
+</div>
+<span class="font-code-sm text-code-sm text-on-surface-variant bg-surface-container border border-outline-variant px-2 py-1 rounded">2 files</span>
+</div>
+<p class="font-body-sm text-body-sm text-on-surface-variant mb-3">Environment variables and service bindings for RabbitMQ and the new provider.</p>
+<div class="flex items-center gap-3 border-t border-outline-variant pt-3">
+<div class="flex items-center gap-1">
+<span class="material-symbols-outlined text-on-surface-variant text-[16px]" data-icon="error">error</span>
+<span class="font-code-sm text-[11px] text-on-surface-variant">0 issues</span>
+</div>
+</div>
+</div>
+<!-- Node 5: Tests -->
+<div class="flex-1 bg-surface-elevated border border-outline-variant rounded shadow-sm p-4 hover:border-verified/50 transition-colors cursor-pointer group">
+<div class="flex items-start justify-between mb-3">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-verified" data-icon="science">science</span>
+<h4 class="font-body-base text-body-base font-semibold text-on-background group-hover:text-verified transition-colors">5. Tests and verification</h4>
+</div>
+<span class="font-code-sm text-code-sm text-on-surface-variant bg-surface-container border border-outline-variant px-2 py-1 rounded">14 files</span>
+</div>
+<p class="font-body-sm text-body-sm text-on-surface-variant mb-3">Unit tests and integration mocks for the new payment flow.</p>
+<div class="flex items-center gap-3 border-t border-outline-variant pt-3">
+<div class="flex items-center gap-1">
+<span class="material-symbols-outlined text-verified text-[16px]" data-icon="check_circle">check_circle</span>
+<span class="font-code-sm text-[11px] text-verified">18 relevant tests</span>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</main>
+</div>
+</body></html>

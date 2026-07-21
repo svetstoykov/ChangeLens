@@ -13,6 +13,32 @@ namespace ChangeLens.Engine.UnitTests.Protocol;
 public sealed class ProtocolResponseFactoryTests
 {
     /// <summary>
+    ///     Verifies that payload-free mapping returns the shared protocol response abstraction.
+    /// </summary>
+    [Fact]
+    public void FromResultReturnsProtocolResponse()
+    {
+        ProtocolResponse response = ProtocolResponseFactory.FromResult(
+            "request-response",
+            Result.Success());
+
+        Assert.IsType<ProtocolResultResponse<object?>>(response);
+    }
+
+    /// <summary>
+    ///     Verifies that error mapping returns the shared protocol response abstraction.
+    /// </summary>
+    [Fact]
+    public void CreateErrorReturnsProtocolResponse()
+    {
+        ProtocolResponse response = ProtocolResponseFactory.CreateError(
+            "request-error",
+            [OperationError.Validation("Invalid.", "fixture.invalid")]);
+
+        Assert.IsType<ProtocolErrorResponse>(response);
+    }
+
+    /// <summary>
     ///     Verifies that a direct value remains a typed correlated result.
     /// </summary>
     [Fact]

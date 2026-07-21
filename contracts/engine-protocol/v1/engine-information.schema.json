@@ -17,7 +17,11 @@
       "properties": {
         "protocolVersion": { "const": 1 },
         "requestId": { "type": "string", "minLength": 1 },
-        "method": { "const": "engine.getInfo" }
+        "method": { "const": "engine.getInfo" },
+        "params": {
+          "type": ["object", "null"],
+          "additionalProperties": false
+        }
       }
     },
     "result": {

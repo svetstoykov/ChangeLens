@@ -36,7 +36,7 @@ public sealed class EngineInformationProtocolTests
     {
         const string request =
             """
-            {"protocolVersion":1,"requestId":"logging-request","method":"engine.getInfo"}
+            {"protocolVersion":2,"requestId":"logging-request","method":"engine.getInfo","params":{}}
             """;
         var logDirectory = Path.Combine(
             Path.GetTempPath(),
@@ -70,8 +70,9 @@ public sealed class EngineInformationProtocolTests
             Assert.Contains($"Received protocol request from stdin: {request}", standardError);
             Assert.Contains($"Wrote protocol response to stdout: {responseLine}", standardError);
             Assert.Contains(
-                "Processed protocol request logging-request for engine.getInfo with a result",
+                "Processed protocol request logging-request for engine.getInfo with errors",
                 standardError);
+            Assert.Contains("protocol.unsupportedVersion", standardError);
 
             var logFile = Assert.Single(
                 Directory.GetFiles(logDirectory, "changelens-engine-*.log"));
@@ -82,8 +83,9 @@ public sealed class EngineInformationProtocolTests
             Assert.Contains($"Received protocol request from stdin: {request}", fileLog);
             Assert.Contains($"Wrote protocol response to stdout: {responseLine}", fileLog);
             Assert.Contains(
-                "Processed protocol request logging-request for engine.getInfo with a result",
+                "Processed protocol request logging-request for engine.getInfo with errors",
                 fileLog);
+            Assert.Contains("protocol.unsupportedVersion", fileLog);
         }
         finally
         {
@@ -108,14 +110,7 @@ public sealed class EngineInformationProtocolTests
             {"protocolVersion":1,"requestId":"request-1","method":"engine.getInfo"}
             """);
 
-        var responseLine = await engine.StandardOutput
-            .ReadLineAsync(TestContext.Current.CancellationToken)
-            .AsTask()
-            .WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken);
-
-        Assert.False(string.IsNullOrWhiteSpace(responseLine));
-
-        using var response = JsonDocument.Parse(responseLine);
+        using var response = await ReadResponseAsync(engine);
         var root = response.RootElement;
 
         Assert.Equal(1, root.GetProperty("protocolVersion").GetInt32());
@@ -136,35 +131,61 @@ public sealed class EngineInformationProtocolTests
     /// <param name="expectedCode">The stable error code expected in the response.</param>
     /// <returns>A task that represents the asynchronous test.</returns>
     [Theory]
-    [InlineData("not-json", "MalformedInput", "protocol.invalidJson")]
+    [InlineData("not-json", "Validation", "protocol.invalidRequest")]
+    [InlineData("null", "Validation", "protocol.invalidRequest")]
+    [InlineData("[]", "Validation", "protocol.invalidRequest")]
     [InlineData(
-        "{\"protocolVersion\":1,\"requestId\":\"\",\"method\":\"engine.getInfo\"}",
+        "{\"protocolVersion\":\"1\",\"requestId\":\"request-type\",\"method\":\"engine.getInfo\",\"params\":{}}",
         "Validation",
         "protocol.invalidRequest")]
     [InlineData(
-        "{\"requestId\":\"request-missing-version\",\"method\":\"engine.getInfo\"}",
+        "{\"protocolVersion\":1,\"requestId\":\"request-duplicate\",\"requestId\":\"request-other\",\"method\":\"engine.getInfo\",\"params\":{}}",
         "Validation",
         "protocol.invalidRequest")]
     [InlineData(
-        "{\"protocolVersion\":1,\"method\":\"engine.getInfo\"}",
+        "{\"protocolVersion\":1,\"requestId\":\"\",\"method\":\"engine.getInfo\",\"params\":{}}",
         "Validation",
         "protocol.invalidRequest")]
     [InlineData(
-        "{\"protocolVersion\":1,\"requestId\":\"request-missing-method\"}",
+        "{\"requestId\":\"request-missing-version\",\"method\":\"engine.getInfo\",\"params\":{}}",
         "Validation",
         "protocol.invalidRequest")]
     [InlineData(
-        "{\"protocolVersion\":1,\"requestId\":\"request-extra\",\"method\":\"engine.getInfo\",\"extra\":true}",
+        "{\"protocolVersion\":1,\"method\":\"engine.getInfo\",\"params\":{}}",
         "Validation",
         "protocol.invalidRequest")]
     [InlineData(
-        "{\"protocolVersion\":2,\"requestId\":\"request-2\",\"method\":\"engine.getInfo\"}",
+        "{\"protocolVersion\":1,\"requestId\":\"request-missing-method\",\"params\":{}}",
+        "Validation",
+        "protocol.invalidRequest")]
+    [InlineData(
+        "{\"protocolVersion\":1,\"requestId\":\"request-extra\",\"method\":\"engine.getInfo\",\"params\":{},\"extra\":true}",
+        "Validation",
+        "protocol.invalidRequest")]
+    [InlineData(
+        "{\"protocolVersion\":1,\"requestId\":\"request-parameters\",\"method\":\"engine.getInfo\",\"params\":{},\"parameters\":{}}",
+        "Validation",
+        "protocol.invalidRequest")]
+    [InlineData(
+        "{\"protocolVersion\":1,\"requestId\":\"request-action-field\",\"method\":\"engine.getInfo\",\"params\":{},\"repositoryId\":\"repository-1\"}",
+        "Validation",
+        "protocol.invalidRequest")]
+    [InlineData(
+        "{\"protocolVersion\":2,\"requestId\":\"request-2\",\"method\":\"engine.getInfo\",\"params\":{}}",
         "UnprocessableInput",
         "protocol.unsupportedVersion")]
     [InlineData(
-        "{\"protocolVersion\":1,\"requestId\":\"request-3\",\"method\":\"unknown\"}",
+        "{\"protocolVersion\":1,\"requestId\":\"request-3\",\"method\":\"unknown\",\"params\":{}}",
         "NotFound",
         "protocol.unknownMethod")]
+    [InlineData(
+        "{\"protocolVersion\":1,\"requestId\":\"non-object-params\",\"method\":\"engine.getInfo\",\"params\":[]}",
+        "Validation",
+        "protocol.invalidRequest")]
+    [InlineData(
+        "{\"protocolVersion\":1,\"requestId\":\"unknown-param\",\"method\":\"engine.getInfo\",\"params\":{\"repositoryId\":\"repository-1\"}}",
+        "Validation",
+        "protocol.invalidRequest")]
     public async Task EngineReturnsStructuredErrorForKnownProtocolFailure(
         string request,
         string expectedType,
@@ -174,20 +195,62 @@ public sealed class EngineInformationProtocolTests
 
         await engine.StandardInput.WriteLineAsync(request);
 
+        using var response = await ReadResponseAsync(engine);
+        var root = response.RootElement;
+
+        Assert.Equal(1, root.GetProperty("protocolVersion").GetInt32());
+        Assert.Equal("error", root.GetProperty("type").GetString());
+        var errors = root.GetProperty("errors");
+        var error = Assert.Single(errors.EnumerateArray());
+        Assert.Equal(expectedType, error.GetProperty("type").GetString());
+        Assert.Equal(expectedCode, error.GetProperty("code").GetString());
+        Assert.False(string.IsNullOrWhiteSpace(error.GetProperty("message").GetString()));
+    }
+
+    /// <summary>
+    ///     Verifies that one engine process handles multiple actions sequentially.
+    /// </summary>
+    /// <returns>A task that represents the asynchronous test.</returns>
+    [Fact]
+    public async Task EngineProcessesMultipleSequentialRequests()
+    {
+        using var engine = StartEngine();
+
+        await engine.StandardInput.WriteLineAsync(
+            """{"protocolVersion":1,"requestId":"request-1","method":"engine.getInfo","params":{}}""");
+        await engine.StandardInput.WriteLineAsync(
+            """{"protocolVersion":1,"requestId":"request-2","method":"engine.getInfo","params":{}}""");
+        engine.StandardInput.Close();
+
+        using var first = await ReadResponseAsync(engine);
+        using var second = await ReadResponseAsync(engine);
+
+        Assert.Equal("request-1", first.RootElement.GetProperty("requestId").GetString());
+        Assert.Equal("request-2", second.RootElement.GetProperty("requestId").GetString());
+
+        await engine.WaitForExitAsync(TestContext.Current.CancellationToken)
+            .WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken);
+        Assert.Equal(0, engine.ExitCode);
+
+        var remainingStandardOutput = await engine.StandardOutput.ReadToEndAsync(
+            TestContext.Current.CancellationToken);
+        Assert.Equal(string.Empty, remainingStandardOutput);
+    }
+
+    /// <summary>
+    ///     Reads one protocol response from the engine process.
+    /// </summary>
+    /// <param name="engine">The engine process to read. Cannot be <see langword="null" />.</param>
+    /// <returns>A parsed response document that the caller must dispose.</returns>
+    private static async Task<JsonDocument> ReadResponseAsync(Process engine)
+    {
         var responseLine = await engine.StandardOutput
             .ReadLineAsync(TestContext.Current.CancellationToken)
             .AsTask()
             .WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken);
 
         Assert.False(string.IsNullOrWhiteSpace(responseLine));
-
-        using var response = JsonDocument.Parse(responseLine);
-        var root = response.RootElement;
-
-        Assert.Equal(1, root.GetProperty("protocolVersion").GetInt32());
-        Assert.Equal("error", root.GetProperty("type").GetString());
-        Assert.Equal(expectedType, root.GetProperty("error").GetProperty("type").GetString());
-        Assert.Equal(expectedCode, root.GetProperty("error").GetProperty("code").GetString());
+        return JsonDocument.Parse(responseLine);
     }
 
     /// <summary>

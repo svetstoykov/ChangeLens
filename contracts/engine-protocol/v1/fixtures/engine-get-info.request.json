@@ -1,5 +1,6 @@
 {
   "protocolVersion": 1,
   "requestId": "desktop-42",
-  "method": "engine.getInfo"
+  "method": "engine.getInfo",
+  "params": {}
 }

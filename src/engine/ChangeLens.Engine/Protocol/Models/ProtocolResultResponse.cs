@@ -12,4 +12,4 @@ internal sealed record ProtocolResultResponse<T>(
     int ProtocolVersion,
     string Type,
     string RequestId,
-    T Result);
+    T Result) : ProtocolResponse(ProtocolVersion, Type, RequestId);

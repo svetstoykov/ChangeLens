@@ -13,4 +13,4 @@ internal sealed record ProtocolErrorResponse(
     int ProtocolVersion,
     string Type,
     string? RequestId,
-    IReadOnlyList<ProtocolError> Errors);
+    IReadOnlyList<ProtocolError> Errors) : ProtocolResponse(ProtocolVersion, Type, RequestId);

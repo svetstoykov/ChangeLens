@@ -11,22 +11,7 @@ internal static class EngineProtocolConstants
     internal const int CurrentVersion = 1;
 
     /// <summary>
-    ///     The request property containing the protocol version.
-    /// </summary>
-    internal const string ProtocolVersionPropertyName = "protocolVersion";
-
-    /// <summary>
-    ///     The request property containing the correlation identifier.
-    /// </summary>
-    internal const string RequestIdPropertyName = "requestId";
-
-    /// <summary>
-    ///     The request property containing the operation name.
-    /// </summary>
-    internal const string MethodPropertyName = "method";
-
-    /// <summary>
-    ///     The operation that returns identifying information about the engine.
+    ///     The method that returns identifying information about the engine.
     /// </summary>
     internal const string GetInformationMethod = "engine.getInfo";
 
@@ -41,11 +26,6 @@ internal static class EngineProtocolConstants
     internal const string ErrorResponseType = "error";
 
     /// <summary>
-    ///     The stable error code for malformed JSON input.
-    /// </summary>
-    internal const string InvalidJsonErrorCode = "protocol.invalidJson";
-
-    /// <summary>
     ///     The stable error code for requests that do not match the protocol schema.
     /// </summary>
     internal const string InvalidRequestErrorCode = "protocol.invalidRequest";
@@ -56,7 +36,7 @@ internal static class EngineProtocolConstants
     internal const string UnsupportedVersionErrorCode = "protocol.unsupportedVersion";
 
     /// <summary>
-    ///     The stable error code for unrecognized protocol operations.
+    ///     The stable error code for unrecognized protocol methods.
     /// </summary>
     internal const string UnknownMethodErrorCode = "protocol.unknownMethod";
 

@@ -94,7 +94,7 @@ public class Result
         ArgumentNullException.ThrowIfNull(error);
 
         var result = new Result<T>(default);
-        ((Result)result).AddError(error);
+        result.AddError(error);
         return result;
     }
 
@@ -133,7 +133,7 @@ public class Result
 
         foreach (var error in input.Errors)
         {
-            ((Result)result).AddError(error);
+            result.AddError(error);
         }
 
         return result;

@@ -1,3 +1,4 @@
+using ChangeLens.Engine.EngineInformation.Services;
 using ChangeLens.Engine.Logging.Extensions;
 using ChangeLens.Engine.Protocol.Services;
 using Microsoft.Extensions.DependencyInjection;
@@ -24,6 +25,8 @@ internal static class EngineHostApplicationBuilderExtensions
         builder.AddEngineLogging();
         builder.Services.AddSingleton<TextReader>(_ => Console.In);
         builder.Services.AddSingleton<TextWriter>(_ => Console.Out);
-        builder.Services.AddHostedService<EngineProtocolService>();
+        builder.Services.AddSingleton<EngineProtocolRequestSerializer>();
+        builder.Services.AddSingleton<EngineInformationProvider>();
+        builder.Services.AddHostedService<EngineProtocolHost>();
     }
 }

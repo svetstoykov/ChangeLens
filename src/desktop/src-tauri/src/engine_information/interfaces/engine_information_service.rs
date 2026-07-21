@@ -1,5 +1,6 @@
-use crate::engine_information::{EngineCommandError, EngineInformation};
+use crate::engine_information::EngineInformation;
+use crate::engine_protocol::EngineActionError;
 
 pub trait EngineInformationService: Send + Sync {
-    fn get_information(&self) -> Result<EngineInformation, EngineCommandError>;
+    fn get_information(&self) -> Result<EngineInformation, EngineActionError>;
 }

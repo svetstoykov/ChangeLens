@@ -1,16 +1,15 @@
 pub mod engine_information;
 pub mod engine_protocol;
 
-use engine_information::{
-    EngineClient, EngineCommandError, EngineInformation, EngineState, report_engine_command_failure,
-};
+use engine_information::{EngineClient, EngineInformation, EngineState};
+use engine_protocol::{ActionErrorKind, EngineActionError, report_engine_action_failure};
 use std::sync::Arc;
 use tauri::State;
 
 #[tauri::command]
 async fn engine_get_info(
     state: State<'_, EngineState>,
-) -> Result<EngineInformation, EngineCommandError> {
+) -> Result<EngineInformation, EngineActionError> {
     let engine_information_service = state.service();
 
     let result = match tauri::async_runtime::spawn_blocking(move || {
@@ -19,14 +18,17 @@ async fn engine_get_info(
     .await
     {
         Ok(result) => result,
-        Err(error) => Err(EngineCommandError::new(
-            "engine.commandFailed",
-            format!("The engine command task failed: {error}"),
+        Err(_) => Err(EngineActionError::unexpected(
+            None,
+            "desktop.actionTaskFailed",
+            "The desktop could not complete the engine action task.",
         )),
     };
 
-    if let Err(error) = &result {
-        report_engine_command_failure(error);
+    if let Err(error) = &result
+        && error.kind != ActionErrorKind::Operation
+    {
+        report_engine_action_failure(error);
     }
 
     result

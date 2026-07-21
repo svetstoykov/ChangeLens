@@ -1,8 +1,8 @@
-use crate::engine_information::EngineCommandError;
+use crate::engine_protocol::{EngineActionError, OperationErrorType};
 use std::env;
 use std::path::{Path, PathBuf};
 
-pub(crate) fn resolve_engine_path() -> Result<PathBuf, EngineCommandError> {
+pub(crate) fn resolve_engine_path() -> Result<PathBuf, EngineActionError> {
     if let Some(configured_path) = env::var_os("CHANGELENS_ENGINE_PATH") {
         return Ok(PathBuf::from(configured_path));
     }
@@ -12,8 +12,10 @@ pub(crate) fn resolve_engine_path() -> Result<PathBuf, EngineCommandError> {
             .join("../../engine/ChangeLens.Engine/bin/Debug/net10.0/ChangeLens.Engine.dll"));
     }
 
-    Err(EngineCommandError::new(
+    Err(EngineActionError::transport(
+        None,
         "engine.pathUnavailable",
+        OperationErrorType::ExternalDependencyFailure,
         "CHANGELENS_ENGINE_PATH must point to the packaged engine in release builds.",
     ))
 }

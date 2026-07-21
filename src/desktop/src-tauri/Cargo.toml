@@ -21,9 +21,9 @@ tauri = { version = "=2.11.5", features = [] }
 tauri = { version = "=2.11.5", features = ["test"] }
 
 [[test]]
-name = "engine_information_command"
-path = "../../../tests/integration/desktop/EngineInformation/engine_information_command.rs"
+name = "engine_status_command"
+path = "../../../tests/integration/desktop/EngineStatus/engine_status_command.rs"
 
 [[test]]
-name = "engine_information_process"
-path = "../../../tests/integration/desktop/EngineInformation/engine_information_process.rs"
+name = "engine_status_process"
+path = "../../../tests/integration/desktop/EngineStatus/engine_status_process.rs"

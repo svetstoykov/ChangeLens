@@ -1,15 +1,9 @@
-use crate::engine_information::constants::{
-    CURRENT_PROTOCOL_VERSION, ENGINE_INFORMATION_METHOD, ENGINE_NAME,
-};
-use crate::engine_information::{
-    EngineInformation, EngineInformationParameters, EngineInformationService,
-};
-use crate::engine_protocol::{
-    EngineActionError, EngineExchangeError, EngineProcess, EngineProtocolRequest,
-};
+use crate::engine_protocol::{EngineActionError, EngineProcess, EngineProtocolRequest};
 use std::path::PathBuf;
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicU64, Ordering};
+
+const CURRENT_PROTOCOL_VERSION: u32 = 1;
 
 pub struct EngineClient {
     engine_path: Option<PathBuf>,
@@ -58,7 +52,15 @@ impl EngineClient {
         )
     }
 
-    pub fn get_information(&self) -> Result<EngineInformation, EngineActionError> {
+    pub(crate) fn execute_action<TParameters, TResult>(
+        &self,
+        action: &str,
+        parameters: Option<TParameters>,
+    ) -> Result<TResult, EngineActionError>
+    where
+        TParameters: serde::Serialize,
+        TResult: serde::de::DeserializeOwned,
+    {
         let request_number = self.next_request_id.fetch_add(1, Ordering::Relaxed);
         let request_id = format!("desktop-{request_number}");
         let mut process_guard = self.process.lock().map_err(|_| {
@@ -80,17 +82,16 @@ impl EngineClient {
         let request = EngineProtocolRequest {
             protocol_version: CURRENT_PROTOCOL_VERSION,
             request_id: &request_id,
-            method: ENGINE_INFORMATION_METHOD,
-            params: EngineInformationParameters {},
+            action,
+            parameters,
         };
         let exchange_result = process_guard
             .as_mut()
             .expect("the engine process was initialized")
-            .exchange::<_, EngineInformation>(&request, &request_id)
-            .and_then(|information| validate_information(information, &request_id));
+            .exchange::<_, TResult>(&request, &request_id);
 
         match exchange_result {
-            Ok(information) => Ok(information),
+            Ok(result) => Ok(result),
             Err(exchange_error) => {
                 if exchange_error.invalidates_process() {
                     *process_guard = None;
@@ -128,30 +129,4 @@ impl Default for EngineClient {
     fn default() -> Self {
         Self::new()
     }
-}
-
-impl EngineInformationService for EngineClient {
-    fn get_information(&self) -> Result<EngineInformation, EngineActionError> {
-        self.get_information()
-    }
-}
-
-fn validate_information(
-    information: EngineInformation,
-    request_id: &str,
-) -> Result<EngineInformation, EngineExchangeError> {
-    if information.name == ENGINE_NAME
-        && !information.version.trim().is_empty()
-        && information.protocol_version == CURRENT_PROTOCOL_VERSION
-    {
-        return Ok(information);
-    }
-
-    Err(EngineExchangeError::invalidating(
-        EngineActionError::protocol(
-            Some(request_id),
-            "protocol.invalidResponse",
-            "The engine information result does not match the protocol schema.",
-        ),
-    ))
 }

@@ -1,29 +1,28 @@
-pub mod engine_information;
 pub mod engine_protocol;
+pub mod engine_status;
 
-use engine_information::{EngineClient, EngineInformation, EngineState};
-use engine_protocol::{ActionErrorKind, EngineActionError, report_engine_action_failure};
+use engine_protocol::{
+    ActionErrorKind, EngineActionError, EngineClient, report_engine_action_failure,
+};
+use engine_status::EngineStatusState;
 use std::sync::Arc;
 use tauri::State;
 
 #[tauri::command]
-async fn engine_get_info(
-    state: State<'_, EngineState>,
-) -> Result<EngineInformation, EngineActionError> {
-    let engine_information_service = state.service();
+async fn engine_check_status(state: State<'_, EngineStatusState>) -> Result<(), EngineActionError> {
+    let engine_status_service = state.service();
 
-    let result = match tauri::async_runtime::spawn_blocking(move || {
-        engine_information_service.get_information()
-    })
-    .await
-    {
-        Ok(result) => result,
-        Err(_) => Err(EngineActionError::unexpected(
-            None,
-            "desktop.actionTaskFailed",
-            "The desktop could not complete the engine action task.",
-        )),
-    };
+    let result =
+        match tauri::async_runtime::spawn_blocking(move || engine_status_service.check_status())
+            .await
+        {
+            Ok(result) => result,
+            Err(_) => Err(EngineActionError::unexpected(
+                None,
+                "desktop.actionTaskFailed",
+                "The desktop could not complete the engine action task.",
+            )),
+        };
 
     if let Err(error) = &result
         && error.kind != ActionErrorKind::Operation
@@ -34,20 +33,20 @@ async fn engine_get_info(
     result
 }
 
-pub fn configure_engine_information<R: tauri::Runtime>(
+pub fn configure_engine_status<R: tauri::Runtime>(
     builder: tauri::Builder<R>,
-    state: EngineState,
+    state: EngineStatusState,
 ) -> tauri::Builder<R> {
     builder
         .manage(state)
-        .invoke_handler(tauri::generate_handler![engine_get_info])
+        .invoke_handler(tauri::generate_handler![engine_check_status])
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    configure_engine_information(
+    configure_engine_status(
         tauri::Builder::default(),
-        EngineState::new(Arc::new(EngineClient::new())),
+        EngineStatusState::new(Arc::new(EngineClient::new())),
     )
     .run(tauri::generate_context!())
     .expect("the ChangeLens desktop runtime could not be started");

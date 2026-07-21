@@ -1,45 +1,32 @@
-use changelens_desktop_lib::configure_engine_information;
-use changelens_desktop_lib::engine_information::{
-    EngineInformation, EngineInformationService, EngineState,
-};
+use changelens_desktop_lib::configure_engine_status;
 use changelens_desktop_lib::engine_protocol::{
     ActionErrorDetail, ActionErrorKind, EngineActionError, OperationErrorType,
 };
+use changelens_desktop_lib::engine_status::{EngineStatusService, EngineStatusState};
 use std::sync::Arc;
 use tauri::test::{INVOKE_KEY, get_ipc_response, mock_builder, mock_context, noop_assets};
 
-struct FixedEngineInformationService {
-    result: Result<EngineInformation, EngineActionError>,
+struct FixedEngineStatusService {
+    result: Result<(), EngineActionError>,
 }
 
-impl EngineInformationService for FixedEngineInformationService {
-    fn get_information(&self) -> Result<EngineInformation, EngineActionError> {
+impl EngineStatusService for FixedEngineStatusService {
+    fn check_status(&self) -> Result<(), EngineActionError> {
         self.result.clone()
     }
 }
 
 #[test]
-fn invokes_registered_engine_information_command_through_managed_state() {
-    let response = invoke_engine_information(Ok(EngineInformation {
-        name: "ChangeLens.Engine".into(),
-        version: "0.1.0".into(),
-        protocol_version: 1,
-    }))
-    .expect("the registered command should return a successful IPC response");
+fn invokes_registered_engine_status_command_through_managed_state() {
+    let response = invoke_engine_status(Ok(()))
+        .expect("the registered command should return a successful IPC response");
 
-    assert_eq!(
-        response,
-        serde_json::json!({
-            "name": "ChangeLens.Engine",
-            "version": "0.1.0",
-            "protocolVersion": 1,
-        })
-    );
+    assert_eq!(response, serde_json::Value::Null);
 }
 
 #[test]
-fn serializes_registered_engine_information_command_error() {
-    let response = invoke_engine_information(Err(EngineActionError {
+fn serializes_registered_engine_status_command_error() {
+    let response = invoke_engine_status(Err(EngineActionError {
         kind: ActionErrorKind::Operation,
         request_id: Some("desktop-43".into()),
         errors: vec![
@@ -78,18 +65,18 @@ fn serializes_registered_engine_information_command_error() {
     );
 }
 
-fn invoke_engine_information(
-    result: Result<EngineInformation, EngineActionError>,
+fn invoke_engine_status(
+    result: Result<(), EngineActionError>,
 ) -> Result<serde_json::Value, serde_json::Value> {
-    let state = EngineState::new(Arc::new(FixedEngineInformationService { result }));
-    let app = configure_engine_information(mock_builder(), state)
+    let state = EngineStatusState::new(Arc::new(FixedEngineStatusService { result }));
+    let app = configure_engine_status(mock_builder(), state)
         .build(mock_context(noop_assets()))
         .expect("the test desktop application should build");
     let webview = tauri::WebviewWindowBuilder::new(&app, "main", Default::default())
         .build()
         .expect("the test webview should build");
     let request = tauri::webview::InvokeRequest {
-        cmd: "engine_get_info".into(),
+        cmd: "engine_check_status".into(),
         callback: tauri::ipc::CallbackFn(0),
         error: tauri::ipc::CallbackFn(1),
         url: if cfg!(any(windows, target_os = "android")) {

@@ -114,10 +114,8 @@ mod tests {
 
     #[test]
     fn parses_shared_payload_free_result_fixture() {
-        let result = parse_response::<()>(STATUS_RESULT_FIXTURE, "desktop-42")
+        parse_response::<()>(STATUS_RESULT_FIXTURE, "desktop-42")
             .expect("the canonical payload-free result must parse");
-
-        assert_eq!(result, ());
     }
 
     #[test]

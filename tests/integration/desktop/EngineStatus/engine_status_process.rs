@@ -1,21 +1,17 @@
-use changelens_desktop_lib::engine_information::EngineClient;
-use changelens_desktop_lib::engine_protocol::ActionErrorKind;
+use changelens_desktop_lib::engine_protocol::{ActionErrorKind, EngineClient};
+use changelens_desktop_lib::engine_status::EngineStatusService;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::OnceLock;
 
 #[test]
-fn gets_information_from_the_real_dotnet_engine() {
+fn checks_status_with_the_real_dotnet_engine() {
     build_dotnet_project(&engine_project_path());
     let engine_client = EngineClient::new();
 
-    let information = engine_client
-        .get_information()
-        .expect("the controlled .NET engine should return its information");
-
-    assert_eq!(information.name, "ChangeLens.Engine");
-    assert_eq!(information.version, "0.1.0");
-    assert_eq!(information.protocol_version, 1);
+    engine_client
+        .check_status()
+        .expect("the controlled .NET engine should report ready status");
 }
 
 #[test]
@@ -27,7 +23,7 @@ fn reports_engine_start_failure() {
     );
 
     let error = client
-        .get_information()
+        .check_status()
         .expect_err("a missing runtime must prevent process startup");
 
     assert_eq!(error.kind, ActionErrorKind::Transport);
@@ -39,16 +35,15 @@ fn restarts_only_after_a_later_explicit_action() {
     let client = client_for_mode("timeout-once");
 
     let first = client
-        .get_information()
+        .check_status()
         .expect_err("the first request must time out without replay");
-    let second = client
-        .get_information()
+    client
+        .check_status()
         .expect("the later explicit action must start a fresh process");
 
     assert_eq!(first.kind, ActionErrorKind::Transport);
     assert_eq!(first.request_id.as_deref(), Some("desktop-1"));
     assert_eq!(first.errors[0].code, "engine.responseTimedOut");
-    assert_eq!(second.name, "ChangeLens.Engine");
 }
 
 #[test]
@@ -56,16 +51,15 @@ fn valid_engine_error_does_not_invalidate_process() {
     let client = client_for_mode("ordered-error-once");
 
     let first = client
-        .get_information()
+        .check_status()
         .expect_err("the fixture must return its ordered errors first");
-    let second = client
-        .get_information()
+    client
+        .check_status()
         .expect("the same fixture process must handle the second request");
 
     assert_eq!(first.kind, ActionErrorKind::Operation);
     assert_eq!(first.errors[0].code, "fixture.first");
     assert_eq!(first.errors[1].code, "fixture.second");
-    assert_eq!(second.protocol_version, 1);
 }
 
 #[test]
@@ -95,10 +89,10 @@ fn invalidates_process_for_unsafe_protocol_and_transport_failures() {
     ] {
         let client = client_for_mode(mode);
         let first = client
-            .get_information()
+            .check_status()
             .expect_err("the unsafe fixture response must fail");
         let second = client
-            .get_information()
+            .check_status()
             .expect_err("a later action must use a fresh fixture process and fail again");
 
         assert_eq!(first.kind, kind);
@@ -112,7 +106,7 @@ fn invalidates_process_for_unsafe_protocol_and_transport_failures() {
 fn dropping_client_cleans_up_child_process() {
     let client = client_for_mode("success");
     client
-        .get_information()
+        .check_status()
         .expect("the fixture process must start successfully");
     let process_id = client
         .process_id_for_testing()
@@ -150,7 +144,7 @@ fn engine_project_path() -> PathBuf {
 
 fn fixture_project_path() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join(
-        "../../../tests/integration/desktop/EngineInformation/Fixtures/ChangeLens.EngineProtocolFixture/ChangeLens.EngineProtocolFixture.csproj",
+        "../../../tests/integration/desktop/EngineStatus/Fixtures/ChangeLens.EngineProtocolFixture/ChangeLens.EngineProtocolFixture.csproj",
     )
 }
 

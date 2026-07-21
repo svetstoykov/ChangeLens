@@ -2,9 +2,33 @@ use serde::Serialize;
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
-pub(crate) struct EngineProtocolRequest<'a, TParams> {
+pub(crate) struct EngineProtocolRequest<'a, TParameters> {
     pub(crate) protocol_version: u32,
     pub(crate) request_id: &'a str,
-    pub(crate) method: &'a str,
-    pub(crate) params: TParams,
+    pub(crate) action: &'a str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) parameters: Option<TParameters>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::EngineProtocolRequest;
+
+    #[test]
+    fn serializes_payload_free_action_without_parameters() {
+        let request = EngineProtocolRequest {
+            protocol_version: 1,
+            request_id: "desktop-1",
+            action: "engine.checkStatus",
+            parameters: None::<()>,
+        };
+
+        let serialized =
+            serde_json::to_string(&request).expect("the protocol request should serialize");
+
+        assert_eq!(
+            serialized,
+            r#"{"protocolVersion":1,"requestId":"desktop-1","action":"engine.checkStatus"}"#
+        );
+    }
 }

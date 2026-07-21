@@ -8,6 +8,12 @@ while (await Console.In.ReadLineAsync() is { } requestLine)
     using var request = JsonDocument.Parse(requestLine);
     var requestId = request.RootElement.GetProperty("requestId").GetString()
         ?? throw new InvalidOperationException("The fixture request identifier is required.");
+    var action = request.RootElement.GetProperty("action").GetString();
+    if (action != "engine.checkStatus")
+    {
+        throw new InvalidOperationException("The fixture only accepts the engine.checkStatus action.");
+    }
+
     requestCount++;
 
     if (mode == "timeout-once" && requestId == "desktop-1")
@@ -56,7 +62,7 @@ while (await Console.In.ReadLineAsync() is { } requestLine)
             protocolVersion = 1,
             type = "error",
             requestId,
-            errors = new object[]
+            errors = new[]
             {
                 new
                 {
@@ -80,21 +86,17 @@ while (await Console.In.ReadLineAsync() is { } requestLine)
 
 async Task WriteResultAsync(string requestId)
 {
+    JsonElement? result = null;
     await WriteJsonAsync(new
     {
         protocolVersion = 1,
         type = "result",
         requestId,
-        result = new
-        {
-            name = "ChangeLens.Engine",
-            version = "0.1.0",
-            protocolVersion = 1,
-        },
+        result,
     });
 }
 
-async Task WriteJsonAsync(object value)
+async Task WriteJsonAsync<T>(T value)
 {
     await Console.Out.WriteLineAsync(JsonSerializer.Serialize(value));
     await Console.Out.FlushAsync();

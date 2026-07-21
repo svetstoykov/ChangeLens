@@ -1,3 +1,4 @@
+using System.Text.Json;
 using ChangeLens.Core.Results.Models;
 using ChangeLens.Engine.Protocol.Constants;
 using ChangeLens.Engine.Protocol.Models;
@@ -35,7 +36,7 @@ internal static class ProtocolResponseFactory
 
         return result.IsFailure
             ? CreateError(requestId, result.Errors)
-            : CreateWithValue<object?>(requestId!, null);
+            : CreateWithValue<JsonElement?>(requestId!, null);
     }
 
     /// <summary>

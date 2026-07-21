@@ -10,7 +10,8 @@ namespace ChangeLens.Engine.Protocol.Services;
 ///     Serializes and deserializes versioned engine protocol messages.
 /// </summary>
 /// <remarks>
-///     The host registers this stateless service as a singleton. It owns the protocol's JSON policy and is safe to use concurrently.
+///     The host registers this stateless service as a singleton. It owns the protocol's JSON policy and is safe to use
+///     concurrently.
 /// </remarks>
 internal sealed class EngineProtocolSerializer
 {
@@ -24,21 +25,52 @@ internal sealed class EngineProtocolSerializer
     /// <exception cref="ArgumentNullException">
     ///     <paramref name="requestLine" /> is <see langword="null" />.
     /// </exception>
-    internal Result<IEngineProtocolRequest> DeserializeRequest(string requestLine)
+    internal Result<EngineProtocolRequest> DeserializeRequest(string requestLine)
     {
         ArgumentNullException.ThrowIfNull(requestLine);
 
+        JsonDocument document;
+
         try
         {
-            var request = JsonSerializer.Deserialize<EngineProtocolRequest>(requestLine, SerializerOptions);
-
-            return request is null || string.IsNullOrWhiteSpace(request.RequestId)
-                ? InvalidRequest<IEngineProtocolRequest>()
-                : Result.Success<IEngineProtocolRequest>(request);
+            document = JsonDocument.Parse(requestLine);
         }
         catch (JsonException)
         {
-            return InvalidRequest<IEngineProtocolRequest>();
+            return Result.Fail<EngineProtocolRequest>(
+                OperationError.MalformedInput(
+                    "The request is not valid JSON.",
+                    EngineProtocolConstants.InvalidJsonErrorCode));
+        }
+
+        using (document)
+        {
+            try
+            {
+                var request = document.RootElement.Deserialize<EngineProtocolRequest>(SerializerOptions);
+
+                if (request is null ||
+                    string.IsNullOrWhiteSpace(request.RequestId) ||
+                    string.IsNullOrWhiteSpace(request.Action))
+                {
+                    return InvalidRequest<EngineProtocolRequest>();
+                }
+
+                return Result.Success(
+                    new EngineProtocolRequest
+                    {
+                        ProtocolVersion = request.ProtocolVersion,
+                        RequestId = request.RequestId,
+                        Action = request.Action,
+                        Parameters = request.Parameters.ValueKind == JsonValueKind.Undefined
+                            ? default
+                            : request.Parameters.Clone(),
+                    });
+            }
+            catch (JsonException)
+            {
+                return InvalidRequest<EngineProtocolRequest>();
+            }
         }
     }
 
@@ -47,23 +79,23 @@ internal sealed class EngineProtocolSerializer
     /// </summary>
     /// <typeparam name="TParameters">The action parameter type.</typeparam>
     /// <param name="parameters">The JSON object containing the action parameters.</param>
-    /// <param name="method">The fixed protocol method selected for the action. Cannot be <see langword="null" />.</param>
+    /// <param name="action">The fixed protocol action. Cannot be <see langword="null" />.</param>
     /// <returns>The typed parameters or a validation failure.</returns>
-    internal Result<TParameters> DeserializeParameters<TParameters>(JsonElement parameters, string method)
+    internal Result<TParameters> DeserializeParameters<TParameters>(JsonElement parameters, string action)
     {
-        ArgumentNullException.ThrowIfNull(method);
+        ArgumentNullException.ThrowIfNull(action);
 
         try
         {
             var value = parameters.Deserialize<TParameters>(SerializerOptions);
 
             return value is null
-                ? InvalidParameters<TParameters>(method)
+                ? InvalidParameters<TParameters>(action)
                 : Result.Success(value);
         }
         catch (JsonException)
         {
-            return InvalidParameters<TParameters>(method);
+            return InvalidParameters<TParameters>(action);
         }
     }
 
@@ -72,11 +104,22 @@ internal sealed class EngineProtocolSerializer
     /// </summary>
     /// <param name="response">The response to serialize. Cannot be <see langword="null" />.</param>
     /// <returns>The serialized protocol response.</returns>
-    internal string SerializeResponse(ProtocolResponse response)
+    internal Result<string> SerializeResponse(ProtocolResponse response)
     {
         ArgumentNullException.ThrowIfNull(response);
 
-        return JsonSerializer.Serialize(response, response.GetType(), SerializerOptions);
+        try
+        {
+            return Result.Success<string>(
+                JsonSerializer.Serialize(response, response.GetType(), SerializerOptions));
+        }
+        catch (Exception exception) when (exception is JsonException or NotSupportedException)
+        {
+            return Result.Fail<string>(
+                OperationError.InternalError(
+                    "The engine could not serialize the protocol response.",
+                    EngineProtocolConstants.SerializationFailedErrorCode));
+        }
     }
 
     /// <summary>
@@ -113,11 +156,11 @@ internal sealed class EngineProtocolSerializer
     ///     Creates the standard failure for parameters that do not match an action schema.
     /// </summary>
     /// <typeparam name="T">The expected parameter type.</typeparam>
-    /// <param name="method">The fixed protocol method selected for the action.</param>
+    /// <param name="action">The fixed protocol action.</param>
     /// <returns>A validation failure with the stable invalid-request code.</returns>
-    private static Result<T> InvalidParameters<T>(string method) =>
+    private static Result<T> InvalidParameters<T>(string action) =>
         Result.Fail<T>(
             OperationError.Validation(
-                $"The params do not match the {method} schema.",
+                $"The parameters do not match the {action} schema.",
                 EngineProtocolConstants.InvalidRequestErrorCode));
 }

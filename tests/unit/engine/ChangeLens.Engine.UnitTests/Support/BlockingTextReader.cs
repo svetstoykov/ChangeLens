@@ -6,9 +6,11 @@ namespace ChangeLens.Engine.UnitTests.Support;
 internal sealed class BlockingTextReader : TextReader
 {
     /// <inheritdoc />
-    public override async ValueTask<string?> ReadLineAsync(CancellationToken cancellationToken)
+    public override async ValueTask<int> ReadAsync(
+        Memory<char> buffer,
+        CancellationToken cancellationToken = default)
     {
         await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
-        return null;
+        return 0;
     }
 }

@@ -6,6 +6,11 @@ namespace ChangeLens.Engine.Hosting.Constants;
 internal static class EngineProcessConstants
 {
     /// <summary>
+    ///     The application name used by hosting and logging.
+    /// </summary>
+    internal const string ApplicationName = "ChangeLens.Engine";
+
+    /// <summary>
     ///     The process exit code used when the engine terminates unexpectedly.
     /// </summary>
     internal const int UnexpectedFailureExitCode = 1;

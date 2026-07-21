@@ -7,6 +7,9 @@ namespace ChangeLens.Engine.UnitTests.Support;
 /// </summary>
 internal sealed class TestHostApplicationLifetime : IHostApplicationLifetime
 {
+    private readonly TaskCompletionSource _stopRequested = new(
+        TaskCreationOptions.RunContinuationsAsynchronously);
+
     /// <inheritdoc />
     public CancellationToken ApplicationStarted => CancellationToken.None;
 
@@ -22,5 +25,17 @@ internal sealed class TestHostApplicationLifetime : IHostApplicationLifetime
     internal bool StopRequested { get; private set; }
 
     /// <inheritdoc />
-    public void StopApplication() => StopRequested = true;
+    public void StopApplication()
+    {
+        StopRequested = true;
+        _stopRequested.TrySetResult();
+    }
+
+    /// <summary>
+    ///     Waits until the host requests application shutdown.
+    /// </summary>
+    /// <param name="cancellationToken">A <see cref="CancellationToken" /> to observe while waiting.</param>
+    /// <returns>A task that represents the asynchronous wait.</returns>
+    internal Task WaitForStopAsync(CancellationToken cancellationToken) =>
+        _stopRequested.Task.WaitAsync(cancellationToken);
 }

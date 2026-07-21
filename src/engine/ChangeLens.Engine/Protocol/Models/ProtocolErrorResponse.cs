@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace ChangeLens.Engine.Protocol.Models;
 
 /// <summary>
@@ -13,4 +15,5 @@ internal sealed record ProtocolErrorResponse(
     int ProtocolVersion,
     string Type,
     string? RequestId,
-    IReadOnlyList<ProtocolError> Errors) : ProtocolResponse(ProtocolVersion, Type, RequestId);
+    [property: JsonPropertyOrder(3)] IReadOnlyList<ProtocolError> Errors)
+    : ProtocolResponse(ProtocolVersion, Type, RequestId);

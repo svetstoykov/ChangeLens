@@ -1,4 +1,3 @@
-using ChangeLens.Engine.EngineInformation.Constants;
 using ChangeLens.Engine.Hosting.Constants;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -27,7 +26,7 @@ internal static class EngineHostExtensions
 
         var logger = host.Services
             .GetRequiredService<ILoggerFactory>()
-            .CreateLogger(EngineInformationConstants.EngineName);
+            .CreateLogger(EngineProcessConstants.ApplicationName);
 
         try
         {

@@ -11,9 +11,14 @@ internal static class EngineProtocolConstants
     internal const int CurrentVersion = 1;
 
     /// <summary>
-    ///     The method that returns identifying information about the engine.
+    ///     The maximum number of content characters accepted in one request line.
     /// </summary>
-    internal const string GetInformationMethod = "engine.getInfo";
+    internal const int MaximumRequestCharacterCount = 65_536;
+
+    /// <summary>
+    ///     The fixed number of characters read from protocol input at once.
+    /// </summary>
+    internal const int ReadBufferCharacterCount = 4_096;
 
     /// <summary>
     ///     The message type used for successful responses.
@@ -26,9 +31,19 @@ internal static class EngineProtocolConstants
     internal const string ErrorResponseType = "error";
 
     /// <summary>
+    ///     The stable error code for syntactically invalid JSON.
+    /// </summary>
+    internal const string InvalidJsonErrorCode = "protocol.invalidJson";
+
+    /// <summary>
     ///     The stable error code for requests that do not match the protocol schema.
     /// </summary>
     internal const string InvalidRequestErrorCode = "protocol.invalidRequest";
+
+    /// <summary>
+    ///     The stable error code for request lines that exceed the transport bound.
+    /// </summary>
+    internal const string RequestTooLargeErrorCode = "protocol.requestTooLarge";
 
     /// <summary>
     ///     The stable error code for unsupported protocol versions.
@@ -36,9 +51,24 @@ internal static class EngineProtocolConstants
     internal const string UnsupportedVersionErrorCode = "protocol.unsupportedVersion";
 
     /// <summary>
-    ///     The stable error code for unrecognized protocol methods.
+    ///     The stable error code for unrecognized protocol actions.
     /// </summary>
-    internal const string UnknownMethodErrorCode = "protocol.unknownMethod";
+    internal const string UnknownActionErrorCode = "protocol.unknownAction";
+
+    /// <summary>
+    ///     The stable error code for response serialization failures.
+    /// </summary>
+    internal const string SerializationFailedErrorCode = "protocol.serializationFailed";
+
+    /// <summary>
+    ///     The stable error code for protocol input failures.
+    /// </summary>
+    internal const string ReadFailedErrorCode = "protocol.readFailed";
+
+    /// <summary>
+    ///     The stable error code for protocol output failures.
+    /// </summary>
+    internal const string WriteFailedErrorCode = "protocol.writeFailed";
 
     /// <summary>
     ///     The stable error code returned for an unexpected Engine action failure.

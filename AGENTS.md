@@ -21,6 +21,8 @@ Keep detailed and frequently changing product requirements in `docs/product` or 
 
 Before invoking any `superpowers:*` skill, ask the user for permission and briefly explain why the skill applies. Invoke the skill only after the user explicitly approves its use. If approval is not granted, continue without that skill when possible.
 
+Store every artifact created by a `superpowers:*` skill in `docs/superpowers/`. This directory is local workflow material and must remain untracked; never include its contents in a commit.
+
 ## Repository Structure
 
 ```text

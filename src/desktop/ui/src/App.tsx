@@ -1,4 +1,7 @@
 import { useEffect, useState, type ReactNode } from "react";
+import type { ActionError } from "./Actions/Models/ActionError";
+import { normalizeActionError } from "./Actions/Services/normalizeActionError";
+import { presentActionError } from "./Actions/Services/presentActionError";
 import type { EngineClient } from "./EngineInformation/Interfaces/EngineClient";
 import type { EngineInformation } from "./EngineInformation/Models/EngineInformation";
 import "./styles.css";
@@ -10,7 +13,7 @@ interface AppProps {
 type EngineState =
   | { status: "connecting" }
   | { status: "ready"; information: EngineInformation }
-  | { status: "error" };
+  | { status: "error"; error: ActionError };
 
 export function App({ engineClient }: AppProps) {
   const [engineState, setEngineState] = useState<EngineState>({
@@ -27,9 +30,12 @@ export function App({ engineClient }: AppProps) {
           setEngineState({ status: "ready", information });
         }
       })
-      .catch(() => {
+      .catch((error: unknown) => {
         if (isCurrent) {
-          setEngineState({ status: "error" });
+          setEngineState({
+            status: "error",
+            error: normalizeActionError(error),
+          });
         }
       });
 
@@ -57,7 +63,25 @@ function EngineStatus({ state }: EngineStatusProps) {
   if (state.status === "connecting") {
     content = "Connecting to ChangeLens.Engine…";
   } else if (state.status === "error") {
-    content = "Desktop engine unavailable";
+    const presentation = presentActionError(state.error, {
+      "engine.responseTimedOut": "Engine response timed out",
+    });
+
+    content = (
+      <>
+        <strong>{presentation.title}</strong>
+        <ul className="action-errors">
+          {presentation.messages.map((message, index) => (
+            <li key={`${state.error.errors[index]!.code}-${index}`}>
+              {message}
+            </li>
+          ))}
+        </ul>
+        {presentation.requestId ? (
+          <small>Request {presentation.requestId}</small>
+        ) : null}
+      </>
+    );
   } else {
     content = (
       <>
@@ -68,8 +92,8 @@ function EngineStatus({ state }: EngineStatusProps) {
   }
 
   return (
-    <p className="engine-status" data-state={state.status} role="status">
+    <div className="engine-status" data-state={state.status} role="status">
       {content}
-    </p>
+    </div>
   );
 }

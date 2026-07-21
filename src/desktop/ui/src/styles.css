@@ -61,3 +61,12 @@ select {
 .engine-status[data-state="error"] {
   color: #ff9b9b;
 }
+
+.action-errors {
+  margin: 0.5rem 0;
+  padding-left: 1.25rem;
+}
+
+.action-errors li + li {
+  margin-top: 0.25rem;
+}

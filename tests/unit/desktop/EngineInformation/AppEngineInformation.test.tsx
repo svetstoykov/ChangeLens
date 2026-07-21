@@ -42,18 +42,60 @@ describe("engine information", () => {
     expect(screen.getByRole("status")).toHaveAttribute("data-state", "ready");
   });
 
-  it("reports when the desktop engine cannot be reached", async () => {
+  it("renders ordered structured action errors and correlation", async () => {
     const engineClient: EngineClient = {
-      getInformation: async () => {
-        throw new Error("Tauri IPC is unavailable");
-      },
+      getInformation: () =>
+        Promise.reject({
+          kind: "operation",
+          requestId: "desktop-43",
+          errors: [
+            {
+              type: "Validation",
+              code: "fixture.first",
+              message: "The first fixture value is invalid.",
+            },
+            {
+              type: "Conflict",
+              code: "fixture.second",
+              message: "The second fixture value conflicts with current state.",
+            },
+          ],
+        }),
     };
 
     render(<App engineClient={engineClient} />);
 
     expect(
-      await screen.findByText("Desktop engine unavailable"),
+      await screen.findByText("Check the supplied values"),
     ).toBeInTheDocument();
+    const messages = screen.getAllByRole("listitem");
+    expect(messages).toHaveLength(2);
+    expect(messages[0]!).toHaveTextContent(
+      "The first fixture value is invalid.",
+    );
+    expect(messages[1]!).toHaveTextContent(
+      "The second fixture value conflicts with current state.",
+    );
+    expect(screen.getByText("Request desktop-43")).toBeInTheDocument();
+    expect(screen.getByRole("status")).toHaveAttribute("data-state", "error");
+  });
+
+  it("sanitizes an unknown client rejection", async () => {
+    const engineClient: EngineClient = {
+      getInformation: async () => {
+        throw new Error("sensitive raw rejection");
+      },
+    };
+
+    render(<App engineClient={engineClient} />);
+
+    expect(await screen.findByText("Unexpected failure")).toBeInTheDocument();
+    expect(
+      screen.getByText("The desktop action failed unexpectedly."),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText(/sensitive raw rejection/i),
+    ).not.toBeInTheDocument();
     expect(screen.getByRole("status")).toHaveAttribute("data-state", "error");
   });
 });

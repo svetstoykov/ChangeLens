@@ -1,4 +1,5 @@
 pub mod engine_information;
+pub mod engine_protocol;
 
 use engine_information::{
     EngineClient, EngineCommandError, EngineInformation, EngineState, report_engine_command_failure,

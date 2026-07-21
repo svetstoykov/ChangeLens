@@ -18,11 +18,11 @@ public sealed class EngineProtocolContractTests
     /// <param name="schemaFileName">The schema file used to validate the fixture.</param>
     /// <param name="fixtureFileName">The fixture file relative to the v1 fixtures directory.</param>
     [Theory]
-    [InlineData("engine-information.schema.json", "engine-get-info.request.json")]
-    [InlineData("engine-information.schema.json", "engine-get-info.result.json")]
-    [InlineData("engine-information.schema.json", "ordered-errors.response.json")]
+    [InlineData("engine-status.schema.json", "engine-check-status.request.json")]
+    [InlineData("engine-status.schema.json", "engine-check-status.result.json")]
+    [InlineData("engine-status.schema.json", "ordered-errors.response.json")]
     [InlineData("error-response.schema.json", "ordered-errors.response.json")]
-    [InlineData("payload-free-result.schema.json", "payload-free.result.json")]
+    [InlineData("payload-free-result.schema.json", "engine-check-status.result.json")]
     public void SharedFixtureMatchesSchema(string schemaFileName, string fixtureFileName)
     {
         using var fixture = JsonDocument.Parse(File.ReadAllText(FixturePath(fixtureFileName)));
@@ -53,9 +53,9 @@ public sealed class EngineProtocolContractTests
     {
         var names = new[]
         {
+            "engine-status.schema.json",
             "error-response.schema.json",
             "payload-free-result.schema.json",
-            "engine-information.schema.json",
         };
 
         return names.ToDictionary(

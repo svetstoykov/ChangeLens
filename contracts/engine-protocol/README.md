@@ -2,12 +2,15 @@
 
 This directory is the source of truth for implemented ChangeLens.Engine wire shapes.
 
-Each version directory contains:
+Version 1 requests use an action envelope containing `protocolVersion`, `requestId`, and `action`. Rust owns the
+protocol version, request identifier, and fixed action name; React does not create protocol messages directly.
 
-- shared response and error schemas used by more than one action shape;
-- one strict request/result schema per implemented engine-backed action;
-- canonical fixtures reused by .NET and Rust tests.
+Version 1 currently implements `engine.checkStatus`. The action takes no input, so its request has no `parameters`
+property. Add `parameters` to an action request only when that action has real input.
 
-Version 1 currently implements `engine.getInfo`. React never creates these messages directly: Rust assigns the protocol version, request identifier, and fixed method. Every request receives exactly one correlated typed result, payload-free `result: null`, or non-empty ordered error response.
+Every request receives exactly one correlated response. Successful actions return either a typed result or the
+canonical payload-free `result: null`. Expected failures return a non-empty, ordered `errors` collection so error
+identity and precedence remain stable across boundaries.
 
-When a wire shape changes, update its schema, fixtures, .NET models, Rust models, TypeScript normalization, and boundary tests together. Do not add placeholder parameters or speculative action schemas.
+Each version directory contains strict action schemas, shared response schemas, and canonical fixtures reused by
+.NET and Rust tests. When a wire shape changes, update its schema, fixtures, boundary models, and tests together.

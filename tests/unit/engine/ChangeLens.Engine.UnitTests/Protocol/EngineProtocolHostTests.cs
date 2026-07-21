@@ -29,9 +29,9 @@ public sealed class EngineProtocolHostTests
             Params = JsonDocument.Parse("{}").RootElement.Clone(),
         };
 
-        var result = service.DispatchRequest(request);
+        var response = Assert.IsType<ProtocolErrorResponse>(service.DispatchRequest(request));
 
-        var error = Assert.Single(result.Errors);
+        var error = Assert.Single(response.Errors);
         Assert.Equal(ErrorType.NotFound, error.Type);
         Assert.Equal(EngineProtocolConstants.UnknownMethodErrorCode, error.Code);
     }
@@ -46,9 +46,9 @@ public sealed class EngineProtocolHostTests
         var service = CreateService(logger: logger);
         var request = new ThrowingProtocolRequest();
 
-        var result = service.DispatchSafely(request);
+        var response = Assert.IsType<ProtocolErrorResponse>(service.DispatchSafely(request));
 
-        var error = Assert.Single(result.Errors);
+        var error = Assert.Single(response.Errors);
         Assert.Equal(EngineProtocolConstants.UnexpectedFailureErrorCode, error.Code);
         Assert.DoesNotContain("sensitive", error.Message, StringComparison.OrdinalIgnoreCase);
         Assert.Equal(1, logger.ErrorCount);
@@ -67,7 +67,7 @@ public sealed class EngineProtocolHostTests
         var service = new EngineProtocolHost(
             new BlockingTextReader(),
             TextWriter.Null,
-            new EngineProtocolRequestSerializer(),
+            new EngineProtocolSerializer(),
             new EngineInformationProvider(),
             logger,
             lifetime);
@@ -89,7 +89,7 @@ public sealed class EngineProtocolHostTests
         new(
             TextReader.Null,
             TextWriter.Null,
-            new EngineProtocolRequestSerializer(),
+            new EngineProtocolSerializer(),
             new EngineInformationProvider(),
             logger ?? new TestLogger<EngineProtocolHost>(),
             new TestHostApplicationLifetime());

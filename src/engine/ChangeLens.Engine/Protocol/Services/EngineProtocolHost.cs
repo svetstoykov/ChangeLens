@@ -1,6 +1,5 @@
 using System.Diagnostics;
 using System.Text.Json;
-using System.Text.Json.Serialization;
 using ChangeLens.Core.Results.Models;
 using ChangeLens.Engine.EngineInformation.Models;
 using ChangeLens.Engine.EngineInformation.Services;
@@ -27,8 +26,8 @@ namespace ChangeLens.Engine.Protocol.Services;
 /// </remarks>
 /// <param name="input">The text stream that supplies protocol requests. Cannot be <see langword="null" />.</param>
 /// <param name="output">The text stream that receives protocol responses. Cannot be <see langword="null" />.</param>
-/// <param name="requestSerializer">
-///     The deserializer that maps protocol requests to actions. Cannot be <see langword="null" />.
+/// <param name="protocolSerializer">
+///     The serializer for versioned protocol messages. Cannot be <see langword="null" />.
 /// </param>
 /// <param name="engineInformationProvider">
 ///     The provider for the engine-information action. Cannot be <see langword="null" />.
@@ -40,13 +39,11 @@ namespace ChangeLens.Engine.Protocol.Services;
 internal sealed class EngineProtocolHost(
     TextReader input,
     TextWriter output,
-    EngineProtocolRequestSerializer requestSerializer,
+    EngineProtocolSerializer protocolSerializer,
     EngineInformationProvider engineInformationProvider,
     ILogger<EngineProtocolHost> logger,
     IHostApplicationLifetime applicationLifetime) : BackgroundService
 {
-    private static readonly JsonSerializerOptions SerializerOptions = CreateSerializerOptions();
-
     /// <inheritdoc />
     /// <remarks>
     ///     Reads one request per line and writes and flushes exactly one response for each line. Closing the input stops the application. A
@@ -95,15 +92,13 @@ internal sealed class EngineProtocolHost(
 
         logger.LogDebug("Received protocol request from stdin: {ProtocolRequest}", requestLine);
 
-        var requestResult = requestSerializer.Deserialize(requestLine);
+        var requestResult = protocolSerializer.DeserializeRequest(requestLine);
         var request = requestResult.Data;
-        var actionResult = requestResult.IsFailure
-            ? Result.ErrorFromResult<object?>(requestResult)
+        var response = requestResult.IsFailure
+            ? ProtocolResponseFactory.CreateError(null, requestResult.Errors)
             : DispatchSafely(request!);
-        var requestId = request?.RequestId;
-        var response = ProtocolResponseFactory.FromResult(requestId, actionResult);
 
-        var responseLine = JsonSerializer.Serialize(response, response.GetType(), SerializerOptions);
+        var responseLine = protocolSerializer.SerializeResponse(response);
 
         await output.WriteLineAsync(responseLine.AsMemory(), cancellationToken);
         await output.FlushAsync(cancellationToken);
@@ -117,11 +112,11 @@ internal sealed class EngineProtocolHost(
     ///     Dispatches one validated request and sanitizes an unexpected exception from the selected action.
     /// </summary>
     /// <param name="request">The validated request to dispatch. Cannot be <see langword="null" />.</param>
-    /// <returns>The action result or a sanitized unexpected-failure result.</returns>
+    /// <returns>The action response or a sanitized unexpected-failure response.</returns>
     /// <exception cref="ArgumentNullException">
     ///     <paramref name="request" /> is <see langword="null" />.
     /// </exception>
-    internal Result<object?> DispatchSafely(IEngineProtocolRequest request)
+    internal ProtocolResponse DispatchSafely(IEngineProtocolRequest request)
     {
         ArgumentNullException.ThrowIfNull(request);
 
@@ -142,10 +137,7 @@ internal sealed class EngineProtocolHost(
                 EngineProtocolConstants.UnexpectedFailureErrorCode,
                 Stopwatch.GetElapsedTime(startedAt).TotalMilliseconds);
 
-            return Result.Fail<object?>(
-                OperationError.InternalError(
-                    EngineProtocolConstants.UnexpectedFailureMessage,
-                    EngineProtocolConstants.UnexpectedFailureErrorCode));
+            return ProtocolResponseFactory.CreateUnexpectedFailure(request.RequestId);
         }
     }
 
@@ -153,30 +145,36 @@ internal sealed class EngineProtocolHost(
     ///     Dispatches a concrete request to its approved capability entry point.
     /// </summary>
     /// <param name="request">The validated request to dispatch. Cannot be <see langword="null" />.</param>
-    /// <returns>The action result or its known failure.</returns>
+    /// <returns>The action response.</returns>
     /// <exception cref="ArgumentNullException">
     ///     <paramref name="request" /> is <see langword="null" />.
     /// </exception>
-    internal Result<object?> DispatchRequest(IEngineProtocolRequest request)
+    internal ProtocolResponse DispatchRequest(IEngineProtocolRequest request)
     {
         ArgumentNullException.ThrowIfNull(request);
 
         if (request.ProtocolVersion != EngineProtocolConstants.CurrentVersion)
         {
-            return Result.Fail<object?>(
-                OperationError.UnprocessableInput(
-                    $"Protocol version {request.ProtocolVersion} is not supported.",
-                    EngineProtocolConstants.UnsupportedVersionErrorCode));
+            return ProtocolResponseFactory.CreateError(
+                request.RequestId,
+                [
+                    OperationError.UnprocessableInput(
+                        $"Protocol version {request.ProtocolVersion} is not supported.",
+                        EngineProtocolConstants.UnsupportedVersionErrorCode),
+                ]);
         }
 
         return request.Method switch
         {
             EngineProtocolConstants.GetInformationMethod => ExecuteGetInformation(request),
 
-            _ => Result.Fail<object?>(
-                OperationError.NotFound(
-                    $"The method '{request.Method}' is not recognized.",
-                    EngineProtocolConstants.UnknownMethodErrorCode)),
+            _ => ProtocolResponseFactory.CreateError(
+                request.RequestId,
+                [
+                    OperationError.NotFound(
+                        $"The method '{request.Method}' is not recognized.",
+                        EngineProtocolConstants.UnknownMethodErrorCode),
+                ]),
         };
     }
 
@@ -184,12 +182,13 @@ internal sealed class EngineProtocolHost(
     ///     Deserializes and executes the engine-information action parameters.
     /// </summary>
     /// <param name="request">The common request envelope. Cannot be <see langword="null" />.</param>
-    /// <returns>The engine-information result or parameter-validation error.</returns>
-    private Result<object?> ExecuteGetInformation(IEngineProtocolRequest request)
+    /// <returns>The engine-information response or parameter-validation error response.</returns>
+    private ProtocolResponse ExecuteGetInformation(IEngineProtocolRequest request)
     {
         if (request.Params is null || request.Params.Value.ValueKind == JsonValueKind.Null)
         {
-            return Result.Success<object?>(
+            return ProtocolResponseFactory.CreateWithValue(
+                request.RequestId,
                 engineInformationProvider.GetInformation(
                     new EngineInformationParameters(),
                     EngineProtocolConstants.CurrentVersion));
@@ -197,46 +196,28 @@ internal sealed class EngineProtocolHost(
 
         if (request.Params.Value.ValueKind != JsonValueKind.Object)
         {
-            return Result.Fail<object?>(
-                OperationError.Validation(
-                    "The request params must be a JSON object.",
-                    EngineProtocolConstants.InvalidRequestErrorCode));
+            return ProtocolResponseFactory.CreateError(
+                request.RequestId,
+                [
+                    OperationError.Validation(
+                        "The request params must be a JSON object.",
+                        EngineProtocolConstants.InvalidRequestErrorCode),
+                ]);
         }
 
-        EngineInformationParameters parameters;
-
-        try
+        var parametersResult = protocolSerializer.DeserializeParameters<EngineInformationParameters>(
+            request.Params.Value,
+            request.Method);
+        if (parametersResult.IsFailure)
         {
-            parameters = request.Params.Value.Deserialize<EngineInformationParameters>(SerializerOptions)
-                ?? throw new JsonException();
-        }
-        catch (JsonException)
-        {
-            return Result.Fail<object?>(
-                OperationError.Validation(
-                    "The params do not match the engine.getInfo schema.",
-                    EngineProtocolConstants.InvalidRequestErrorCode));
+            return ProtocolResponseFactory.CreateError(request.RequestId, parametersResult.Errors);
         }
 
-        return Result.Success<object?>(
-            engineInformationProvider.GetInformation(parameters, EngineProtocolConstants.CurrentVersion));
-    }
+        var information = engineInformationProvider.GetInformation(
+            parametersResult.Data!,
+            EngineProtocolConstants.CurrentVersion);
 
-    /// <summary>
-    ///     Creates protocol serialization options for the current protocol version.
-    /// </summary>
-    /// <returns>Options that serialize error categories as their stable string names.</returns>
-    private static JsonSerializerOptions CreateSerializerOptions()
-    {
-        var options = new JsonSerializerOptions(JsonSerializerDefaults.Web);
-        options.Converters.Add(new JsonStringEnumConverter());
-        options.AllowDuplicateProperties = false;
-        options.NumberHandling = JsonNumberHandling.Strict;
-        options.PropertyNameCaseInsensitive = false;
-        options.RespectNullableAnnotations = true;
-        options.RespectRequiredConstructorParameters = true;
-        options.UnmappedMemberHandling = JsonUnmappedMemberHandling.Disallow;
-        return options;
+        return ProtocolResponseFactory.CreateWithValue(request.RequestId, information);
     }
 
     /// <summary>

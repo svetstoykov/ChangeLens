@@ -16,7 +16,7 @@ internal static class ProtocolResponseFactory
     /// <param name="requestId">The request identifier, or <see langword="null" /> when the input was rejected.</param>
     /// <param name="value">The result payload.</param>
     /// <returns>A typed protocol result response.</returns>
-    internal static ProtocolResultResponse<T> CreateValue<T>(string requestId, T value) =>
+    internal static ProtocolResultResponse<T> CreateWithValue<T>(string requestId, T value) =>
         new(
             EngineProtocolConstants.CurrentVersion,
             EngineProtocolConstants.ResultResponseType,
@@ -35,7 +35,7 @@ internal static class ProtocolResponseFactory
 
         return result.IsFailure
             ? CreateError(requestId, result.Errors)
-            : CreateValue<object?>(requestId!, null);
+            : CreateWithValue<object?>(requestId!, null);
     }
 
     /// <summary>
@@ -51,7 +51,7 @@ internal static class ProtocolResponseFactory
 
         return result.IsFailure
             ? CreateError(requestId, result.Errors)
-            : CreateValue(requestId!, result.Data);
+            : CreateWithValue(requestId!, result.Data);
     }
 
     /// <summary>

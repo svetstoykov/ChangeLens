@@ -44,7 +44,7 @@ public sealed class ProtocolResponseFactoryTests
     [Fact]
     public void CreateValueReturnsTypedResult()
     {
-        var response = ProtocolResponseFactory.CreateValue("request-1", new FixturePayload("value"));
+        var response = ProtocolResponseFactory.CreateWithValue("request-1", new FixturePayload("value"));
 
         Assert.Equal(EngineProtocolConstants.CurrentVersion, response.ProtocolVersion);
         Assert.Equal(EngineProtocolConstants.ResultResponseType, response.Type);

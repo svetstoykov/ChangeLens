@@ -1,5 +1,6 @@
 using System.Text.Json;
 using ChangeLens.Core.Results.Models;
+using ChangeLens.Engine.EngineInformation.Models;
 using ChangeLens.Engine.Protocol.Constants;
 using ChangeLens.Engine.Protocol.Models;
 using ChangeLens.Engine.Protocol.Services;
@@ -8,19 +9,19 @@ using Xunit;
 namespace ChangeLens.Engine.UnitTests.Protocol;
 
 /// <summary>
-///     Verifies strict deserialization and common-envelope binding for the engine protocol.
+///     Verifies strict serialization and deserialization for the engine protocol.
 /// </summary>
-public sealed class EngineProtocolRequestSerializerTests
+public sealed class EngineProtocolSerializerTests
 {
-    private readonly EngineProtocolRequestSerializer _serializer = new();
+    private readonly EngineProtocolSerializer _serializer = new();
 
     /// <summary>
     ///     Verifies that a valid engine-information request is bound to the common request envelope.
     /// </summary>
     [Fact]
-    public void DeserializeBindsEngineProtocolRequest()
+    public void DeserializeRequestBindsEngineProtocolRequest()
     {
-        var result = this._serializer.Deserialize(
+        var result = this._serializer.DeserializeRequest(
             """{"protocolVersion":1,"requestId":"request-bind","method":"engine.getInfo","params":{}}""");
 
         Assert.True(result.IsSuccess);
@@ -35,9 +36,9 @@ public sealed class EngineProtocolRequestSerializerTests
     ///     Verifies that syntactically malformed JSON returns the stable invalid-request failure.
     /// </summary>
     [Fact]
-    public void DeserializeReturnsInvalidRequestForInvalidJson()
+    public void DeserializeRequestReturnsInvalidRequestForInvalidJson()
     {
-        var result = this._serializer.Deserialize("not-json");
+        var result = this._serializer.DeserializeRequest("not-json");
 
         var error = Assert.Single(result.Errors);
         Assert.Equal(ErrorType.Validation, error.Type);
@@ -61,9 +62,9 @@ public sealed class EngineProtocolRequestSerializerTests
         "{\"protocolVersion\":\"1\",\"requestId\":\"request-version\",\"method\":\"engine.getInfo\",\"params\":{}}")]
     [InlineData(
         "{\"protocolVersion\":1,\"requestId\":\"\",\"method\":\"engine.getInfo\",\"params\":{}}")]
-    public void DeserializeRejectsInvalidRequestShape(string requestLine)
+    public void DeserializeRequestRejectsInvalidRequestShape(string requestLine)
     {
-        var result = this._serializer.Deserialize(requestLine);
+        var result = this._serializer.DeserializeRequest(requestLine);
 
         var error = Assert.Single(result.Errors);
         Assert.Equal(ErrorType.Validation, error.Type);
@@ -74,9 +75,9 @@ public sealed class EngineProtocolRequestSerializerTests
     ///     Verifies that a parameter-free action can omit the params property.
     /// </summary>
     [Fact]
-    public void DeserializeAllowsMissingParams()
+    public void DeserializeRequestAllowsMissingParams()
     {
-        var result = this._serializer.Deserialize(
+        var result = this._serializer.DeserializeRequest(
             """{"protocolVersion":1,"requestId":"request-without-params","method":"engine.getInfo"}""");
 
         Assert.True(result.IsSuccess);
@@ -87,12 +88,44 @@ public sealed class EngineProtocolRequestSerializerTests
     ///     Verifies that an unrecognized method remains a valid common request envelope.
     /// </summary>
     [Fact]
-    public void DeserializeBindsUnrecognizedMethod()
+    public void DeserializeRequestBindsUnrecognizedMethod()
     {
-        var result = this._serializer.Deserialize(
+        var result = this._serializer.DeserializeRequest(
             """{"protocolVersion":1,"requestId":"request-method","method":"analysis.run","params":{}}""");
 
         Assert.True(result.IsSuccess);
         Assert.Equal("analysis.run", result.Data!.Method);
+    }
+
+    /// <summary>
+    ///     Verifies that action parameters use the same strict JSON policy as the common request envelope.
+    /// </summary>
+    [Fact]
+    public void DeserializeParametersRejectsUnknownProperties()
+    {
+        using var document = JsonDocument.Parse("""{"repositoryId":"repository-1"}""");
+
+        var result = this._serializer.DeserializeParameters<EngineInformationParameters>(
+            document.RootElement,
+            EngineProtocolConstants.GetInformationMethod);
+
+        var error = Assert.Single(result.Errors);
+        Assert.Equal(ErrorType.Validation, error.Type);
+        Assert.Equal(EngineProtocolConstants.InvalidRequestErrorCode, error.Code);
+    }
+
+    /// <summary>
+    ///     Verifies that response serialization uses the shared protocol enum representation.
+    /// </summary>
+    [Fact]
+    public void SerializeResponseUsesSharedProtocolOptions()
+    {
+        var response = ProtocolResponseFactory.CreateError(
+            "request-error",
+            [OperationError.Validation("Invalid.", "fixture.invalid")]);
+
+        var json = this._serializer.SerializeResponse(response);
+
+        Assert.Contains("\"type\":\"Validation\"", json, StringComparison.Ordinal);
     }
 }

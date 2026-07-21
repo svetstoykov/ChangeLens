@@ -25,7 +25,7 @@ internal static class EngineHostApplicationBuilderExtensions
         builder.AddEngineLogging();
         builder.Services.AddSingleton<TextReader>(_ => Console.In);
         builder.Services.AddSingleton<TextWriter>(_ => Console.Out);
-        builder.Services.AddSingleton<EngineProtocolRequestSerializer>();
+        builder.Services.AddSingleton<EngineProtocolSerializer>();
         builder.Services.AddSingleton<EngineInformationProvider>();
         builder.Services.AddHostedService<EngineProtocolHost>();
     }

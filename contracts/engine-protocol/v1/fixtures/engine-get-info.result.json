@@ -1,0 +1,10 @@
+{
+  "protocolVersion": 1,
+  "type": "result",
+  "requestId": "desktop-42",
+  "result": {
+    "name": "ChangeLens.Engine",
+    "version": "0.1.0",
+    "protocolVersion": 1
+  }
+}

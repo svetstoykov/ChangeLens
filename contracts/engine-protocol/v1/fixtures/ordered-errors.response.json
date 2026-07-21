@@ -1,0 +1,17 @@
+{
+  "protocolVersion": 1,
+  "type": "error",
+  "requestId": "desktop-43",
+  "errors": [
+    {
+      "type": "Validation",
+      "code": "fixture.first",
+      "message": "The first fixture value is invalid."
+    },
+    {
+      "type": "Conflict",
+      "code": "fixture.second",
+      "message": "The second fixture value conflicts with current state."
+    }
+  ]
+}

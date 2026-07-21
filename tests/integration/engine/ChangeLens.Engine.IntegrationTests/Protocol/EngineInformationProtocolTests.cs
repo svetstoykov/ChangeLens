@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Text.Json;
+using ChangeLens.Engine.IntegrationTests.Support;
 using Xunit;
 
 namespace ChangeLens.Engine.IntegrationTests.Protocol;
@@ -204,7 +205,7 @@ public sealed class EngineInformationProtocolTests
         string? logDirectory = null,
         bool redirectStandardError = false)
     {
-        var repositoryRoot = FindRepositoryRoot();
+        var repositoryRoot = RepositoryPaths.Root;
         var engineProject = Path.Combine(
             repositoryRoot,
             "src",
@@ -237,25 +238,4 @@ public sealed class EngineInformationProtocolTests
         return process;
     }
 
-    /// <summary>
-    ///     Finds the repository root by walking up from the test output directory.
-    /// </summary>
-    /// <returns>The full path to the repository root.</returns>
-    /// <exception cref="DirectoryNotFoundException">The repository root could not be found.</exception>
-    private static string FindRepositoryRoot()
-    {
-        var directory = new DirectoryInfo(AppContext.BaseDirectory);
-
-        while (directory is not null)
-        {
-            if (File.Exists(Path.Combine(directory.FullName, "src", "engine", "ChangeLens.slnx")))
-            {
-                return directory.FullName;
-            }
-
-            directory = directory.Parent;
-        }
-
-        throw new DirectoryNotFoundException("The ChangeLens repository root could not be located.");
-    }
 }

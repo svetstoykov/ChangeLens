@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://changelens.dev/contracts/engine-protocol/v1/payload-free-result.schema.json",
+  "title": "ChangeLens engine protocol payload-free result",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["protocolVersion", "type", "requestId", "result"],
+  "properties": {
+    "protocolVersion": { "const": 1 },
+    "type": { "const": "result" },
+    "requestId": { "type": "string", "minLength": 1 },
+    "result": { "type": "null" }
+  }
+}

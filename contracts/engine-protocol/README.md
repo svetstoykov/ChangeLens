@@ -1,5 +1,13 @@
-# ChangeLens engine protocol
+# Engine protocol contracts
 
-The desktop shell and `ChangeLens.Engine` communicate with newline-delimited JSON over standard input and standard output. Each line is one complete protocol message. Standard error is reserved for diagnostics.
+This directory is the source of truth for implemented ChangeLens.Engine wire shapes.
 
-Versioned schemas live under their corresponding version directory. The initial skeleton defines the `engine.getInfo` handshake used to prove the React → Tauri → .NET development path.
+Each version directory contains:
+
+- shared response and error schemas used by more than one action shape;
+- one strict request/result schema per implemented engine-backed action;
+- canonical fixtures reused by .NET and Rust tests.
+
+Version 1 currently implements `engine.getInfo`. React never creates these messages directly: Rust assigns the protocol version, request identifier, and fixed method. Every request receives exactly one correlated typed result, payload-free `result: null`, or non-empty ordered error response.
+
+When a wire shape changes, update its schema, fixtures, .NET models, Rust models, TypeScript normalization, and boundary tests together. Do not add placeholder parameters or speculative action schemas.

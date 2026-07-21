@@ -5,7 +5,9 @@
   "oneOf": [
     { "$ref": "#/$defs/request" },
     { "$ref": "#/$defs/result" },
-    { "$ref": "#/$defs/errorResponse" }
+    {
+      "$ref": "https://changelens.dev/contracts/engine-protocol/v1/error-response.schema.json"
+    }
   ],
   "$defs": {
     "request": {
@@ -34,39 +36,6 @@
             "name": { "const": "ChangeLens.Engine" },
             "version": { "type": "string", "minLength": 1 },
             "protocolVersion": { "const": 1 }
-          }
-        }
-      }
-    },
-    "errorResponse": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["protocolVersion", "type", "requestId", "error"],
-      "properties": {
-        "protocolVersion": { "const": 1 },
-        "type": { "const": "error" },
-        "requestId": { "type": ["string", "null"] },
-        "error": {
-          "type": "object",
-          "additionalProperties": false,
-          "required": ["type", "code", "message"],
-          "properties": {
-            "type": {
-              "enum": [
-                "NotFound",
-                "Validation",
-                "MalformedInput",
-                "UnprocessableInput",
-                "Conflict",
-                "InvalidOperation",
-                "Unauthorized",
-                "Timeout",
-                "ExternalDependencyFailure",
-                "InternalError"
-              ]
-            },
-            "code": { "type": "string", "minLength": 1 },
-            "message": { "type": "string", "minLength": 1 }
           }
         }
       }

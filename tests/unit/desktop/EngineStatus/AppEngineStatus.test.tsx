@@ -1,23 +1,23 @@
 import "@testing-library/jest-dom/vitest";
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
-import { createResolvablePromise } from "../Support/createResolvablePromise";
 import { App } from "../../../../src/desktop/ui/src/App";
-import type { EngineClient } from "../../../../src/desktop/ui/src/EngineInformation/Interfaces/EngineClient";
+import type { EngineStatusClient } from "../../../../src/desktop/ui/src/EngineStatus/Interfaces/EngineStatusClient";
+import { createResolvablePromise } from "../Support/createResolvablePromise";
 
 afterEach(cleanup);
 
-describe("engine information", () => {
+describe("engine status", () => {
   it("shows a connection state while the engine request is pending", () => {
-    const pendingInformation = createResolvablePromise<never>();
-    const engineClient: EngineClient = {
-      getInformation: () => pendingInformation.promise,
+    const pendingStatus = createResolvablePromise<never>();
+    const engineStatusClient: EngineStatusClient = {
+      checkStatus: () => pendingStatus.promise,
     };
 
-    render(<App engineClient={engineClient} />);
+    render(<App engineStatusClient={engineStatusClient} />);
 
     expect(
-      screen.getByText("Connecting to ChangeLens.Engine…"),
+      screen.getByText("Connecting to the ChangeLens engine…"),
     ).toBeInTheDocument();
     expect(screen.getByRole("status")).toHaveAttribute(
       "data-state",
@@ -25,26 +25,22 @@ describe("engine information", () => {
     );
   });
 
-  it("shows information returned by the engine", async () => {
-    const engineClient: EngineClient = {
-      getInformation: async () => ({
-        name: "ChangeLens.Engine",
-        version: "0.1.0",
-        protocolVersion: 1,
-      }),
+  it("shows that the engine is ready without identifying metadata", async () => {
+    const engineStatusClient: EngineStatusClient = {
+      checkStatus: async () => undefined,
     };
 
-    render(<App engineClient={engineClient} />);
+    render(<App engineStatusClient={engineStatusClient} />);
 
     expect(
-      await screen.findByText("ChangeLens.Engine 0.1.0 · protocol v1"),
+      await screen.findByText("The ChangeLens engine is ready."),
     ).toBeInTheDocument();
     expect(screen.getByRole("status")).toHaveAttribute("data-state", "ready");
   });
 
   it("renders ordered structured action errors and correlation", async () => {
-    const engineClient: EngineClient = {
-      getInformation: () =>
+    const engineStatusClient: EngineStatusClient = {
+      checkStatus: () =>
         Promise.reject({
           kind: "operation",
           requestId: "desktop-43",
@@ -63,7 +59,7 @@ describe("engine information", () => {
         }),
     };
 
-    render(<App engineClient={engineClient} />);
+    render(<App engineStatusClient={engineStatusClient} />);
 
     expect(
       await screen.findByText("Check the supplied values"),
@@ -81,13 +77,13 @@ describe("engine information", () => {
   });
 
   it("sanitizes an unknown client rejection", async () => {
-    const engineClient: EngineClient = {
-      getInformation: async () => {
+    const engineStatusClient: EngineStatusClient = {
+      checkStatus: async () => {
         throw new Error("sensitive raw rejection");
       },
     };
 
-    render(<App engineClient={engineClient} />);
+    render(<App engineStatusClient={engineStatusClient} />);
 
     expect(await screen.findByText("Unexpected failure")).toBeInTheDocument();
     expect(

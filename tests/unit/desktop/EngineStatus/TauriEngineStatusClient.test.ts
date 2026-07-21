@@ -1,27 +1,22 @@
 import { invoke } from "@tauri-apps/api/core";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { TauriEngineClient } from "../../../../src/desktop/ui/src/EngineInformation/Services/TauriEngineClient";
+import { TauriEngineStatusClient } from "../../../../src/desktop/ui/src/EngineStatus/Services/TauriEngineStatusClient";
 
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: vi.fn(),
 }));
 
-describe("TauriEngineClient", () => {
+describe("TauriEngineStatusClient", () => {
   beforeEach(() => {
     vi.mocked(invoke).mockReset();
   });
 
-  it("gets engine information through the narrow Tauri command", async () => {
-    const information = {
-      name: "ChangeLens.Engine",
-      version: "0.1.0",
-      protocolVersion: 1,
-    };
-    vi.mocked(invoke).mockResolvedValue(information);
-    const client = new TauriEngineClient();
+  it("checks engine readiness through the narrow Tauri command", async () => {
+    vi.mocked(invoke).mockResolvedValue(undefined);
+    const client = new TauriEngineStatusClient();
 
-    await expect(client.getInformation()).resolves.toEqual(information);
-    expect(invoke).toHaveBeenCalledExactlyOnceWith("engine_get_info");
+    await expect(client.checkStatus()).resolves.toBeUndefined();
+    expect(invoke).toHaveBeenCalledExactlyOnceWith("engine_check_status");
   });
 
   it("normalizes an ordered Engine action rejection", async () => {
@@ -41,9 +36,9 @@ describe("TauriEngineClient", () => {
         },
       ],
     });
-    const client = new TauriEngineClient();
+    const client = new TauriEngineStatusClient();
 
-    await expect(client.getInformation()).rejects.toMatchObject({
+    await expect(client.checkStatus()).rejects.toMatchObject({
       name: "ActionError",
       kind: "operation",
       requestId: "desktop-43",
@@ -52,6 +47,6 @@ describe("TauriEngineClient", () => {
         { type: "Conflict", code: "fixture.second" },
       ],
     });
-    expect(invoke).toHaveBeenCalledExactlyOnceWith("engine_get_info");
+    expect(invoke).toHaveBeenCalledExactlyOnceWith("engine_check_status");
   });
 });

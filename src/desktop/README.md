@@ -26,7 +26,7 @@ Run the React UI in a normal browser:
 npm run dev
 ```
 
-This mode provides Vite hot reload but has no native IPC bridge. Engine-dependent UI reports `Desktop engine unavailable`; it does not substitute mock data.
+This mode provides Vite hot reload but has no native IPC bridge. Engine-backed actions are rejected and normalized into a safe `ActionError`; the UI presents the structured fallback without substituting mock data.
 
 Run the complete React → Tauri → .NET development path:
 

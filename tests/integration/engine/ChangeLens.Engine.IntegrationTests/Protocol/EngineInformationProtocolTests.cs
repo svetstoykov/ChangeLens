@@ -11,6 +11,36 @@ namespace ChangeLens.Engine.IntegrationTests.Protocol;
 public sealed class EngineInformationProtocolTests
 {
     /// <summary>
+    ///     Verifies that the real Engine result matches the shared cross-language fixture.
+    /// </summary>
+    /// <returns>A task that represents the asynchronous test.</returns>
+    [Fact]
+    public async Task EngineInformationResultMatchesSharedFixture()
+    {
+        var request = await File.ReadAllTextAsync(
+            Path.Combine(
+                RepositoryPaths.EngineProtocolV1,
+                "fixtures",
+                "engine-get-info.request.json"),
+            TestContext.Current.CancellationToken);
+        var expectedJson = await File.ReadAllTextAsync(
+            Path.Combine(
+                RepositoryPaths.EngineProtocolV1,
+                "fixtures",
+                "engine-get-info.result.json"),
+            TestContext.Current.CancellationToken);
+        using var expected = JsonDocument.Parse(expectedJson);
+        using var requestDocument = JsonDocument.Parse(request);
+        using var engine = StartEngine();
+
+        await engine.StandardInput.WriteLineAsync(
+            JsonSerializer.Serialize(requestDocument.RootElement));
+        using var actual = await ReadResponseAsync(engine);
+
+        Assert.True(JsonElement.DeepEquals(expected.RootElement, actual.RootElement));
+    }
+
+    /// <summary>
     ///     Verifies that the engine exits successfully when its protocol input closes.
     /// </summary>
     /// <returns>A task that represents the asynchronous test.</returns>

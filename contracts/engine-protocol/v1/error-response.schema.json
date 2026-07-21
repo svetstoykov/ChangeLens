@@ -12,11 +12,11 @@
     "errors": {
       "type": "array",
       "minItems": 1,
-      "items": { "$ref": "#/$defs/error" }
+      "items": { "$ref": "#/$defs/operationError" }
     }
   },
   "$defs": {
-    "error": {
+    "operationError": {
       "type": "object",
       "additionalProperties": false,
       "required": ["type", "code", "message"],

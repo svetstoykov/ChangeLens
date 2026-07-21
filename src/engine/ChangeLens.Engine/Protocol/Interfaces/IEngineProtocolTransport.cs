@@ -33,6 +33,9 @@ internal interface IEngineProtocolTransport
     /// <returns>
     ///     A task that represents the asynchronous operation. The task result contains the output outcome.
     /// </returns>
+    /// <exception cref="ArgumentNullException">
+    ///     <paramref name="response" /> is <see langword="null" />.
+    /// </exception>
     /// <exception cref="OperationCanceledException">
     ///     The <paramref name="cancellationToken" /> is canceled.
     /// </exception>

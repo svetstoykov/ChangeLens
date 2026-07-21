@@ -30,6 +30,9 @@ internal static class ProtocolResponseFactory
     /// <param name="requestId">The request identifier. Cannot be <see langword="null" />.</param>
     /// <param name="result">The capability result. Cannot be <see langword="null" />.</param>
     /// <returns>A payload-free result response on success; otherwise, an ordered error response.</returns>
+    /// <exception cref="ArgumentNullException">
+    ///     <paramref name="result" /> is <see langword="null" />.
+    /// </exception>
     internal static ProtocolResponse FromResult(string? requestId, Result result)
     {
         ArgumentNullException.ThrowIfNull(result);
@@ -46,6 +49,9 @@ internal static class ProtocolResponseFactory
     /// <param name="requestId">The request identifier, or <see langword="null" /> when the input was rejected.</param>
     /// <param name="result">The capability result. Cannot be <see langword="null" />.</param>
     /// <returns>A typed result response on success; otherwise, an ordered error response.</returns>
+    /// <exception cref="ArgumentNullException">
+    ///     <paramref name="result" /> is <see langword="null" />.
+    /// </exception>
     internal static ProtocolResponse FromResult<T>(string? requestId, Result<T> result)
     {
         ArgumentNullException.ThrowIfNull(result);

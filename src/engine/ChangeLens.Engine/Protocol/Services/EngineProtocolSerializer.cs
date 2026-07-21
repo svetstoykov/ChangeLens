@@ -81,6 +81,9 @@ internal sealed class EngineProtocolSerializer
     /// <param name="parameters">The JSON object containing the action parameters.</param>
     /// <param name="action">The fixed protocol action. Cannot be <see langword="null" />.</param>
     /// <returns>The typed parameters or a validation failure.</returns>
+    /// <exception cref="ArgumentNullException">
+    ///     <paramref name="action" /> is <see langword="null" />.
+    /// </exception>
     internal Result<TParameters> DeserializeParameters<TParameters>(JsonElement parameters, string action)
     {
         ArgumentNullException.ThrowIfNull(action);
@@ -104,6 +107,9 @@ internal sealed class EngineProtocolSerializer
     /// </summary>
     /// <param name="response">The response to serialize. Cannot be <see langword="null" />.</param>
     /// <returns>The serialized protocol response.</returns>
+    /// <exception cref="ArgumentNullException">
+    ///     <paramref name="response" /> is <see langword="null" />.
+    /// </exception>
     internal Result<string> SerializeResponse(ProtocolResponse response)
     {
         ArgumentNullException.ThrowIfNull(response);

@@ -67,6 +67,9 @@ internal static class ProtocolResponseFactory
     /// <param name="requestId">The request identifier, or <see langword="null" /> when unavailable.</param>
     /// <param name="errors">The source errors. Cannot be <see langword="null" />.</param>
     /// <returns>The ordered error response, or a sanitized internal error for an invalid source contract.</returns>
+    /// <exception cref="ArgumentNullException">
+    ///     <paramref name="errors" /> is <see langword="null" />.
+    /// </exception>
     internal static ProtocolErrorResponse CreateError(
         string? requestId,
         IReadOnlyList<OperationError> errors)

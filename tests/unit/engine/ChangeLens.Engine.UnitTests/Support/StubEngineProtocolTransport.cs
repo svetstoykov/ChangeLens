@@ -7,6 +7,12 @@ namespace ChangeLens.Engine.UnitTests.Support;
 /// <summary>
 ///     Provides controlled protocol read and write outcomes for host lifecycle tests.
 /// </summary>
+/// <param name="readAsync">
+///     The function that returns each controlled read outcome. Cannot be <see langword="null" />.
+/// </param>
+/// <param name="writeAsync">
+///     The function that returns each controlled write outcome. Cannot be <see langword="null" />.
+/// </param>
 internal sealed class StubEngineProtocolTransport(
     Func<CancellationToken, Task<Result<EngineProtocolRequest?>>> readAsync,
     Func<ProtocolResponse, CancellationToken, Task<Result>> writeAsync) : IEngineProtocolTransport

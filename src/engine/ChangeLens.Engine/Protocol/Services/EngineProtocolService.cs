@@ -278,7 +278,9 @@ internal sealed class EngineProtocolService(
             EngineProtocolConstants.CurrentVersion,
             EngineProtocolConstants.ErrorResponseType,
             requestId,
-            new ProtocolError(error.Type, error.Code!, error.Message));
+            [
+                new ProtocolError(error.Type, error.Code!, error.Message),
+            ]);
     }
 
     /// <summary>
@@ -304,7 +306,7 @@ internal sealed class EngineProtocolService(
                 logger.LogInformation(
                     "Rejected protocol input {RequestId} with error {ErrorCode} in {ElapsedMilliseconds:0.000} ms.",
                     errorResponse.RequestId,
-                    errorResponse.Error.Code,
+                    errorResponse.Errors[0].Code,
                     elapsed.TotalMilliseconds);
                 return;
             }
@@ -313,7 +315,7 @@ internal sealed class EngineProtocolService(
                 "Processed protocol request {RequestId} for {Method} with error {ErrorCode} in {ElapsedMilliseconds:0.000} ms.",
                 errorResponse.RequestId,
                 request.Method,
-                errorResponse.Error.Code,
+                errorResponse.Errors[0].Code,
                 elapsed.TotalMilliseconds);
             return;
         }

@@ -59,4 +59,15 @@ internal static class EngineProtocolConstants
     ///     The stable error code for unrecognized protocol operations.
     /// </summary>
     internal const string UnknownMethodErrorCode = "protocol.unknownMethod";
+
+    /// <summary>
+    ///     The stable error code returned for an unexpected Engine action failure.
+    /// </summary>
+    internal const string UnexpectedFailureErrorCode = "engine.unexpectedFailure";
+
+    /// <summary>
+    ///     The safe message returned for an unexpected Engine action failure.
+    /// </summary>
+    internal const string UnexpectedFailureMessage =
+        "The engine could not complete the action because of an unexpected failure.";
 }

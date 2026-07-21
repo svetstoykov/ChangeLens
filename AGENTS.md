@@ -101,11 +101,12 @@ Classify the action before adding transport code:
 For every engine-backed action:
 
 1. Specify the capability behavior and its .NET entry point before designing transport types. Transport work does not authorize new Core or Infrastructure behavior.
-2. Record the exact mapping from React client action, Tauri command, Rust client action, protocol action, and .NET processing target.
+2. Record the exact mapping from React client action, Tauri command, Rust client action, protocol action, and .NET
+   processing target.
    Protocol actions use dotted camel case.
 3. Add strict versioned request and result schemas under `contracts/engine-protocol`. Reject missing, unknown, duplicate, and incorrectly typed request properties. Add a `parameters` object only when the action has real input.
-4. Keep protocol versions, request identifiers, and fixed action names out of React. Rust assigns them and exposes only the action's
-   explicit typed Tauri command; never expose a generic `engine_action(action, parameters)` command.
+4. Keep protocol versions, request identifiers, and fixed action names out of React. Rust assigns them and exposes
+   only the action's explicit typed Tauri command; never expose a generic `engine_action(action, parameters)` command.
 5. Add one explicit `EngineActionProcessor` switch branch. Do not add a mediator, reflection-based action selection, keyed DI, a
    service locator, a dynamic registry, per-action transport handlers, or generated protocol types.
 6. Return exactly one correlated result or error. A typed action returns its typed payload; a payload-free action returns `result: null`. Fire-and-forget engine actions are not supported.
@@ -113,7 +114,9 @@ For every engine-backed action:
 8. Never automatically replay a failed action. A later user- or React-initiated action may restart an invalidated engine process. Every future write specification must define a reconciliation action for uncertain transport outcomes.
 9. Add contract, Engine protocol, Rust process, Tauri command, React client, presentation, logging, and stdout-isolation tests in the same change. Shared JSON fixtures must prove cross-language field names and shapes.
 
-Keep the shared transport deliberately small. Extract only process, correlation, bounded-I/O, common response, and error behavior that real actions share. Keep capability arguments, result validation, UI behavior, and stable action selection in the capability slice.
+Keep the shared transport deliberately small. Extract only process, correlation, bounded-I/O, common response, and
+error behavior that real actions share. Keep capability arguments, result validation, UI behavior, and stable action
+selection in the capability slice.
 
 ## Design and Organization Rules
 
@@ -137,9 +140,9 @@ ChangeLens.Core/
 - Mirror a capability path across Core, Engine, Infrastructure, and tests when that capability spans those boundaries.
 - Never create project-wide `Models`, `Services`, or `Interfaces` dumping grounds.
 - Use interfaces and dependency injection for replaceable behavior and external boundaries.
-- Do not use `object`, `dynamic`, `Result<object?>`, untyped dictionaries, or equivalent weakly typed catch-all values as application
-  input or output contracts. Use a concrete type, generic type, or explicit polymorphic abstraction. Framework-required signatures
-  and exceptional boundary cases must be discussed and documented before use.
+- Do not use `object`, `dynamic`, `Result<object?>`, untyped dictionaries, or equivalent weakly typed catch-all values
+  as application input or output contracts. Use a concrete type, generic type, or explicit polymorphic abstraction.
+  Framework-required signatures and exceptional boundary cases must be discussed and documented before use.
 - Do not create an interface mechanically for every class. Immutable models, value objects, and behaviorless helpers do not need one.
 - Avoid static service classes. Static classes are acceptable only for genuine constants or stateless language-level utilities when an injected service would add ceremony without a substitutable boundary.
 - Keep one primary type per file.

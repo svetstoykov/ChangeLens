@@ -159,6 +159,45 @@ ChangeLens.Core/
   lifecycle or exception orchestration in capability-owned extension methods.
 - Prefer the smallest design that fully preserves correctness, consistency, and important behavior.
 
+## React Guidelines
+
+- Prefer small, focused components with clear responsibilities.
+- Use functional components and hooks.
+- Keep state as local as possible; lift it only when multiple components need it.
+- Avoid unnecessary global state. Use Context for genuinely shared application state.
+- Derive values during rendering instead of storing duplicated state.
+- Use `useEffect` only for synchronizing with external systems, not for ordinary calculations or event handling.
+- Prefer composition over large components with many configuration props.
+- Keep business logic outside UI components when it becomes reusable or difficult to follow.
+- Use clear names for components, props, hooks, and event handlers.
+- Handle loading, empty, error, and success states explicitly.
+- Use stable IDs for list keys; never use array indexes when items can change order.
+- Avoid premature memoization. Add `useMemo`, `useCallback`, or `React.memo` only when there is a measured need.
+- Keep forms controlled when validation or dynamic behaviour requires it.
+- Reuse existing components and patterns before introducing new abstractions.
+- Maintain accessibility: semantic HTML, labels, keyboard support, and appropriate ARIA attributes.
+- Keep TypeScript types explicit at component boundaries; avoid `any`.
+
+## Rust Guidelines
+
+- Prefer clear, idiomatic Rust over clever abstractions.
+- Use `cargo fmt` and keep `cargo clippy` clean.
+- Model invalid states out with enums, structs, and strong types.
+- Use `Result` for recoverable failures and propagate errors with `?`.
+- Avoid `unwrap()` and `expect()` in production paths unless failure is genuinely impossible and explained.
+- Prefer borrowing over cloning, but do not complicate code merely to avoid a small clone.
+- Keep ownership and lifetimes simple. Introduce explicit lifetimes only when required.
+- Prefer iterators and pattern matching when they improve readability.
+- Use exhaustive `match` statements for domain states.
+- Keep modules focused and expose the smallest practical public API.
+- Prefer immutable values; use `mut` only where needed.
+- Avoid unnecessary `unsafe`. When required, isolate it and document its safety assumptions.
+- Use standard library types and established crates before building custom utilities.
+- Add dependencies deliberately and avoid large crates for trivial functionality.
+- Handle concurrency through safe Rust primitives; avoid shared mutable state when message passing is simpler.
+- Write focused unit tests for business logic and integration tests for public behaviour.
+- Document public APIs and non-obvious design decisions.
+
 ## Validation and Result Architecture
 
 The backend uses transport-independent Results for expected validation, domain, and known infrastructure failures.

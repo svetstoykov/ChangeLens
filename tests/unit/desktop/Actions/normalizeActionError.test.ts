@@ -57,6 +57,29 @@ describe("normalizeActionError", () => {
     expect(error.errors[0].code).toBe("fixture.code");
   });
 
+  it("preserves a valid rejection without a request identifier", () => {
+    const error = normalizeActionError({
+      kind: "operation",
+      errors: [
+        {
+          type: "Validation",
+          code: "protocol.invalidRequest",
+          message: "The request does not match the engine protocol schema.",
+        },
+      ],
+    });
+
+    expect(error.kind).toBe("operation");
+    expect(error.requestId).toBeUndefined();
+    expect(error.errors).toEqual([
+      {
+        type: "Validation",
+        code: "protocol.invalidRequest",
+        message: "The request does not match the engine protocol schema.",
+      },
+    ]);
+  });
+
   it.each([
     null,
     new Error("sensitive raw error"),

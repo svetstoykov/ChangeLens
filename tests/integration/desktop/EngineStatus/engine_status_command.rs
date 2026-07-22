@@ -65,6 +65,34 @@ fn serializes_registered_engine_status_command_error() {
     );
 }
 
+#[test]
+fn serializes_registered_engine_status_command_error_without_request_id() {
+    let response = invoke_engine_status(Err(EngineActionError {
+        kind: ActionErrorKind::Operation,
+        request_id: None,
+        errors: vec![ActionErrorDetail {
+            error_type: OperationErrorType::Validation,
+            code: "protocol.invalidRequest".into(),
+            message: "The request does not match the engine protocol schema.".into(),
+        }],
+    }))
+    .expect_err("the registered command should return a failed IPC response");
+
+    assert_eq!(
+        response,
+        serde_json::json!({
+            "kind": "operation",
+            "errors": [
+                {
+                    "type": "Validation",
+                    "code": "protocol.invalidRequest",
+                    "message": "The request does not match the engine protocol schema.",
+                },
+            ],
+        })
+    );
+}
+
 fn invoke_engine_status(
     result: Result<(), EngineActionError>,
 ) -> Result<serde_json::Value, serde_json::Value> {

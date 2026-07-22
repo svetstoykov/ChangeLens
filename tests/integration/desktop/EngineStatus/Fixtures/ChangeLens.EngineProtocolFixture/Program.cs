@@ -55,6 +55,26 @@ while (await Console.In.ReadLineAsync() is { } requestLine)
         continue;
     }
 
+    if (mode == "uncorrelated-error-once" && requestCount == 1)
+    {
+        await WriteJsonAsync(new
+        {
+            protocolVersion = 1,
+            type = "error",
+            requestId = (string?)null,
+            errors = new[]
+            {
+                new
+                {
+                    type = "Validation",
+                    code = "protocol.invalidRequest",
+                    message = "The request does not match the engine protocol schema.",
+                },
+            },
+        });
+        continue;
+    }
+
     if (mode == "ordered-error-once" && requestCount == 1)
     {
         await WriteJsonAsync(new

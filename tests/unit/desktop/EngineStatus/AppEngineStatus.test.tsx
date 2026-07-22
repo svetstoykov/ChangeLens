@@ -76,6 +76,35 @@ describe("engine status", () => {
     expect(screen.getByRole("status")).toHaveAttribute("data-state", "error");
   });
 
+  it("renders structured action errors without unavailable correlation", async () => {
+    const engineStatusClient: EngineStatusClient = {
+      checkStatus: () =>
+        Promise.reject({
+          kind: "operation",
+          errors: [
+            {
+              type: "Validation",
+              code: "protocol.invalidRequest",
+              message: "The request does not match the engine protocol schema.",
+            },
+          ],
+        }),
+    };
+
+    render(<App engineStatusClient={engineStatusClient} />);
+
+    expect(
+      await screen.findByText("Check the supplied values"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "The request does not match the engine protocol schema.",
+      ),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/^Request /)).not.toBeInTheDocument();
+    expect(screen.getByRole("status")).toHaveAttribute("data-state", "error");
+  });
+
   it("sanitizes an unknown client rejection", async () => {
     const engineStatusClient: EngineStatusClient = {
       checkStatus: async () => {

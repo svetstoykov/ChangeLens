@@ -22,6 +22,8 @@ public sealed class EngineProtocolContractTests
     [InlineData("engine-status.schema.json", "engine-check-status.result.json")]
     [InlineData("engine-status.schema.json", "ordered-errors.response.json")]
     [InlineData("error-response.schema.json", "ordered-errors.response.json")]
+    [InlineData("engine-status.schema.json", "uncorrelated-error.response.json")]
+    [InlineData("error-response.schema.json", "uncorrelated-error.response.json")]
     [InlineData("payload-free-result.schema.json", "engine-check-status.result.json")]
     public void SharedFixtureMatchesSchema(string schemaFileName, string fixtureFileName)
     {

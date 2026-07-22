@@ -92,6 +92,26 @@ public sealed class EngineStatusProtocolTests
     }
 
     /// <summary>
+    ///     Verifies that input rejected before its common envelope is accepted matches the shared uncorrelated-error fixture.
+    /// </summary>
+    /// <returns>A task that represents the asynchronous test.</returns>
+    [Fact]
+    public async Task RejectedEnvelopeMatchesSharedUncorrelatedErrorFixture()
+    {
+        using var expected = JsonDocument.Parse(
+            await File.ReadAllTextAsync(
+                FixturePath("uncorrelated-error.response.json"),
+                TestContext.Current.CancellationToken));
+        using var engine = StartEngine();
+
+        await engine.StandardInput.WriteLineAsync(
+            """{"protocolVersion":"1","requestId":"desktop-43","action":"engine.checkStatus"}""");
+        using var actual = await ReadResponseAsync(engine);
+
+        Assert.True(JsonElement.DeepEquals(expected.RootElement, actual.RootElement));
+    }
+
+    /// <summary>
     ///     Verifies exact structured errors for known protocol failures.
     /// </summary>
     /// <param name="request">The request that produces the known failure.</param>

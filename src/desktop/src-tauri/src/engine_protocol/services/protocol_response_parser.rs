@@ -20,11 +20,8 @@ pub(crate) fn parse_response<T: DeserializeOwned>(
             request_id,
             result,
         } => {
-            validate_metadata(
-                protocol_version,
-                Some(request_id.as_str()),
-                expected_request_id,
-            )?;
+            validate_protocol_version(protocol_version, expected_request_id)?;
+            validate_request_id(&request_id, expected_request_id)?;
             Ok(result)
         }
         EngineResponse::Error {
@@ -32,7 +29,11 @@ pub(crate) fn parse_response<T: DeserializeOwned>(
             request_id,
             errors,
         } => {
-            validate_metadata(protocol_version, request_id.as_deref(), expected_request_id)?;
+            validate_protocol_version(protocol_version, expected_request_id)?;
+
+            if let Some(response_request_id) = request_id.as_deref() {
+                validate_request_id(response_request_id, expected_request_id)?;
+            }
 
             if errors.is_empty() || errors.iter().any(|error| !error.is_valid()) {
                 return Err(invalid_response(
@@ -42,15 +43,14 @@ pub(crate) fn parse_response<T: DeserializeOwned>(
             }
 
             Err(EngineExchangeError::recoverable(
-                EngineActionError::operation(expected_request_id.to_owned(), errors),
+                EngineActionError::operation(request_id, errors),
             ))
         }
     }
 }
 
-fn validate_metadata(
+fn validate_protocol_version(
     protocol_version: u32,
-    response_request_id: Option<&str>,
     expected_request_id: &str,
 ) -> Result<(), EngineExchangeError> {
     if protocol_version != CURRENT_PROTOCOL_VERSION {
@@ -63,7 +63,14 @@ fn validate_metadata(
         ));
     }
 
-    if response_request_id != Some(expected_request_id) {
+    Ok(())
+}
+
+fn validate_request_id(
+    response_request_id: &str,
+    expected_request_id: &str,
+) -> Result<(), EngineExchangeError> {
+    if response_request_id != expected_request_id {
         return Err(EngineExchangeError::invalidating(
             EngineActionError::protocol(
                 Some(expected_request_id),
@@ -97,6 +104,11 @@ mod tests {
         env!("CARGO_MANIFEST_DIR"),
         "/../../../contracts/engine-protocol/v1/fixtures/ordered-errors.response.json"
     ));
+    const UNCORRELATED_ERROR_FIXTURE: &str = include_str!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../../contracts/engine-protocol/v1/fixtures/uncorrelated-error.response.json"
+    ));
+
     #[test]
     fn preserves_shared_ordered_error_fixture() {
         let error = parse_response::<()>(ERROR_FIXTURE, "desktop-43")
@@ -110,6 +122,25 @@ mod tests {
         assert_eq!(error.errors[0].code, "fixture.first");
         assert_eq!(error.errors[1].error_type, OperationErrorType::Conflict);
         assert_eq!(error.errors[1].code, "fixture.second");
+    }
+
+    #[test]
+    fn preserves_uncorrelated_engine_error_without_invalidating_process() {
+        let exchange_error = parse_response::<()>(UNCORRELATED_ERROR_FIXTURE, "desktop-1")
+            .expect_err("the shared uncorrelated fixture must reject the action");
+
+        assert!(!exchange_error.invalidates_process());
+
+        let error = exchange_error.into_action_error();
+        assert_eq!(error.kind, ActionErrorKind::Operation);
+        assert_eq!(error.request_id, None);
+        assert_eq!(error.errors.len(), 1);
+        assert_eq!(error.errors[0].error_type, OperationErrorType::Validation);
+        assert_eq!(error.errors[0].code, "protocol.invalidRequest");
+        assert_eq!(
+            error.errors[0].message,
+            "The request does not match the engine protocol schema."
+        );
     }
 
     #[test]

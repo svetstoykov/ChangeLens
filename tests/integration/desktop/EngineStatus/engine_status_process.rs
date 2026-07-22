@@ -63,6 +63,23 @@ fn valid_engine_error_does_not_invalidate_process() {
 }
 
 #[test]
+fn uncorrelated_engine_error_does_not_invalidate_process() {
+    let client = client_for_mode("uncorrelated-error-once");
+
+    let first = client
+        .check_status()
+        .expect_err("the fixture must return an uncorrelated error first");
+    client
+        .check_status()
+        .expect("the same fixture process must handle the second request");
+
+    assert_eq!(first.kind, ActionErrorKind::Operation);
+    assert_eq!(first.request_id, None);
+    assert_eq!(first.errors.len(), 1);
+    assert_eq!(first.errors[0].code, "protocol.invalidRequest");
+}
+
+#[test]
 fn invalidates_process_for_unsafe_protocol_and_transport_failures() {
     for (mode, kind, code) in [
         ("exit", ActionErrorKind::Transport, "engine.exited"),

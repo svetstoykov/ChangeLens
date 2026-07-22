@@ -49,4 +49,26 @@ describe("TauriEngineStatusClient", () => {
     });
     expect(invoke).toHaveBeenCalledExactlyOnceWith("engine_check_status");
   });
+
+  it("normalizes an Engine rejection without a request identifier", async () => {
+    vi.mocked(invoke).mockRejectedValue({
+      kind: "operation",
+      errors: [
+        {
+          type: "Validation",
+          code: "protocol.invalidRequest",
+          message: "The request does not match the engine protocol schema.",
+        },
+      ],
+    });
+    const client = new TauriEngineStatusClient();
+
+    await expect(client.checkStatus()).rejects.toMatchObject({
+      name: "ActionError",
+      kind: "operation",
+      requestId: undefined,
+      errors: [{ type: "Validation", code: "protocol.invalidRequest" }],
+    });
+    expect(invoke).toHaveBeenCalledExactlyOnceWith("engine_check_status");
+  });
 });

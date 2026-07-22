@@ -31,51 +31,6 @@ internal static class EngineProtocolConstants
     internal const string ErrorResponseType = "error";
 
     /// <summary>
-    ///     The stable error code for syntactically invalid JSON.
-    /// </summary>
-    internal const string InvalidJsonErrorCode = "protocol.invalidJson";
-
-    /// <summary>
-    ///     The stable error code for requests that do not match the protocol schema.
-    /// </summary>
-    internal const string InvalidRequestErrorCode = "protocol.invalidRequest";
-
-    /// <summary>
-    ///     The stable error code for request lines that exceed the transport bound.
-    /// </summary>
-    internal const string RequestTooLargeErrorCode = "protocol.requestTooLarge";
-
-    /// <summary>
-    ///     The stable error code for unsupported protocol versions.
-    /// </summary>
-    internal const string UnsupportedVersionErrorCode = "protocol.unsupportedVersion";
-
-    /// <summary>
-    ///     The stable error code for unrecognized protocol actions.
-    /// </summary>
-    internal const string UnknownActionErrorCode = "protocol.unknownAction";
-
-    /// <summary>
-    ///     The stable error code for response serialization failures.
-    /// </summary>
-    internal const string SerializationFailedErrorCode = "protocol.serializationFailed";
-
-    /// <summary>
-    ///     The stable error code for protocol input failures.
-    /// </summary>
-    internal const string ReadFailedErrorCode = "protocol.readFailed";
-
-    /// <summary>
-    ///     The stable error code for protocol output failures.
-    /// </summary>
-    internal const string WriteFailedErrorCode = "protocol.writeFailed";
-
-    /// <summary>
-    ///     The stable error code returned for an unexpected Engine action failure.
-    /// </summary>
-    internal const string UnexpectedFailureErrorCode = "engine.unexpectedFailure";
-
-    /// <summary>
     ///     The safe message returned for an unexpected Engine action failure.
     /// </summary>
     internal const string UnexpectedFailureMessage =

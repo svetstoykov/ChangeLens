@@ -40,7 +40,7 @@ internal sealed class EngineProtocolSerializer
             return Result.Fail<EngineProtocolRequest>(
                 OperationError.MalformedInput(
                     "The request is not valid JSON.",
-                    EngineProtocolConstants.InvalidJsonErrorCode));
+                    EngineErrorCode.InvalidJson));
         }
 
         using (document)
@@ -124,7 +124,7 @@ internal sealed class EngineProtocolSerializer
             return Result.Fail<string>(
                 OperationError.InternalError(
                     "The engine could not serialize the protocol response.",
-                    EngineProtocolConstants.SerializationFailedErrorCode));
+                    EngineErrorCode.SerializationFailed));
         }
     }
 
@@ -156,7 +156,7 @@ internal sealed class EngineProtocolSerializer
         Result.Fail<T>(
             OperationError.Validation(
                 "The request does not match the engine protocol schema.",
-                EngineProtocolConstants.InvalidRequestErrorCode));
+                EngineErrorCode.InvalidRequest));
 
     /// <summary>
     ///     Creates the standard failure for parameters that do not match an action schema.
@@ -168,5 +168,5 @@ internal sealed class EngineProtocolSerializer
         Result.Fail<T>(
             OperationError.Validation(
                 $"The parameters do not match the {action} schema.",
-                EngineProtocolConstants.InvalidRequestErrorCode));
+                EngineErrorCode.InvalidRequest));
 }

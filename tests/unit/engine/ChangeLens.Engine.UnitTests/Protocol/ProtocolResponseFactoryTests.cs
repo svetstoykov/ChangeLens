@@ -44,6 +44,22 @@ public sealed class ProtocolResponseFactoryTests
     }
 
     /// <summary>
+    ///     Verifies that a directly created error is mapped without wrapping it in a failed Result.
+    /// </summary>
+    [Fact]
+    public void FromErrorPreservesSingleError()
+    {
+        var source = OperationError.NotFound("Missing.", "fixture.missing");
+
+        var response = ProtocolResponseFactory.FromError("request-error", source);
+
+        var error = Assert.Single(Assert.IsType<ProtocolErrorResponse>(response).Errors);
+        Assert.Equal(source.Type, error.Type);
+        Assert.Equal(source.Code, error.Code);
+        Assert.Equal(source.Message, error.Message);
+    }
+
+    /// <summary>
     ///     Verifies that every error is preserved in source order.
     /// </summary>
     [Fact]
@@ -113,7 +129,7 @@ public sealed class ProtocolResponseFactoryTests
 
         var error = Assert.Single(response.Errors);
         Assert.Equal(ErrorType.InternalError, error.Type);
-        Assert.Equal(EngineProtocolConstants.UnexpectedFailureErrorCode, error.Code);
+        Assert.Equal(EngineErrorCode.UnexpectedFailure, error.Code);
         Assert.Equal(EngineProtocolConstants.UnexpectedFailureMessage, error.Message);
     }
 

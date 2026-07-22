@@ -88,11 +88,11 @@ internal sealed class EngineProtocolTransport(
             logger.LogError(
                 exception,
                 "Failed to read protocol input with error {ErrorCode}.",
-                EngineProtocolConstants.ReadFailedErrorCode);
+                EngineErrorCode.ReadFailed);
             return Result.Fail<EngineProtocolRequest?>(
                 OperationError.ExternalDependencyFailure(
                     "The engine could not read protocol input.",
-                    EngineProtocolConstants.ReadFailedErrorCode));
+                    EngineErrorCode.ReadFailed));
         }
     }
 
@@ -128,11 +128,11 @@ internal sealed class EngineProtocolTransport(
             logger.LogError(
                 exception,
                 "Failed to write protocol output with error {ErrorCode}.",
-                EngineProtocolConstants.WriteFailedErrorCode);
+                EngineErrorCode.WriteFailed);
             return Result.Fail(
                 OperationError.ExternalDependencyFailure(
                     "The engine could not write protocol output.",
-                    EngineProtocolConstants.WriteFailedErrorCode));
+                    EngineErrorCode.WriteFailed));
         }
     }
 
@@ -219,6 +219,6 @@ internal sealed class EngineProtocolTransport(
             ? Result.Fail<string?>(
                 OperationError.MalformedInput(
                     "The protocol request exceeds the allowed size.",
-                    EngineProtocolConstants.RequestTooLargeErrorCode))
+                    EngineErrorCode.RequestTooLarge))
             : Result.Success<string?>(builder.ToString());
 }

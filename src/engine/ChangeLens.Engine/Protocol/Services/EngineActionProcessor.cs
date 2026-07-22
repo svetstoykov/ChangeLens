@@ -46,19 +46,21 @@ internal sealed class EngineActionProcessor(
         ArgumentNullException.ThrowIfNull(request);
         var startedAt = Stopwatch.GetTimestamp();
 
+        ProtocolResponse response;
         try
         {
-            var response = request.ProtocolVersion == EngineProtocolConstants.CurrentVersion
-                ? await ProcessKnownVersionAsync(request, cancellationToken)
-                : ProtocolResponseFactory.FromResult(
+            if (request.ProtocolVersion != EngineProtocolConstants.CurrentVersion)
+            {
+                response = ProtocolResponseFactory.FromError(
                     request.RequestId,
-                    Result.Fail(
-                        OperationError.UnprocessableInput(
-                            $"Protocol version {request.ProtocolVersion} is not supported.",
-                            EngineProtocolConstants.UnsupportedVersionErrorCode)));
-
-            LogOutcome(response, request, Stopwatch.GetElapsedTime(startedAt));
-            return response;
+                    OperationError.UnprocessableInput(
+                        $"Protocol version {request.ProtocolVersion} is not supported.",
+                        EngineErrorCode.UnsupportedVersion));
+            }
+            else
+            {
+                response = await this.ProcessKnownVersionAsync(request, cancellationToken);
+            }
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -72,11 +74,14 @@ internal sealed class EngineActionProcessor(
                 "{ElapsedMilliseconds:0.000} ms.",
                 request.RequestId,
                 request.Action,
-                EngineProtocolConstants.UnexpectedFailureErrorCode,
+                EngineErrorCode.UnexpectedFailure,
                 Stopwatch.GetElapsedTime(startedAt).TotalMilliseconds);
 
             return ProtocolResponseFactory.CreateUnexpectedFailure(request.RequestId);
         }
+
+        this.LogOutcome(response, request, Stopwatch.GetElapsedTime(startedAt));
+        return response;
     }
 
     /// <summary>
@@ -96,22 +101,19 @@ internal sealed class EngineActionProcessor(
         {
             EngineStatusActionConstants.CheckStatusAction
                 when request.Parameters.ValueKind == JsonValueKind.Undefined =>
-                ProcessCheckStatusAsync(request, cancellationToken),
-            EngineStatusActionConstants.CheckStatusAction =>
-                Task.FromResult<ProtocolResponse>(
-                    ProtocolResponseFactory.FromResult(
-                        request.RequestId,
-                        Result.Fail(
-                            OperationError.Validation(
-                                "The engine.checkStatus action does not accept parameters.",
-                                EngineProtocolConstants.InvalidRequestErrorCode)))),
-            _ => Task.FromResult<ProtocolResponse>(
-                ProtocolResponseFactory.FromResult(
+                this.ProcessCheckStatusAsync(request, cancellationToken),
+            EngineStatusActionConstants.CheckStatusAction => Task.FromResult(
+                ProtocolResponseFactory.FromError(
                     request.RequestId,
-                    Result.Fail(
-                        OperationError.NotFound(
-                            $"The action '{request.Action}' is not recognized.",
-                            EngineProtocolConstants.UnknownActionErrorCode)))),
+                    OperationError.Validation(
+                        "The engine.checkStatus action does not accept parameters.",
+                        EngineErrorCode.InvalidRequest))),
+            _ => Task.FromResult(
+                ProtocolResponseFactory.FromError(
+                    request.RequestId,
+                    OperationError.NotFound(
+                        $"The action '{request.Action}' is not recognized.",
+                        EngineErrorCode.UnknownAction))),
         };
 
     /// <summary>

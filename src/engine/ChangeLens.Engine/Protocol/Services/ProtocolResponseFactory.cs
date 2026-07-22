@@ -62,6 +62,22 @@ internal static class ProtocolResponseFactory
     }
 
     /// <summary>
+    ///     Maps one directly created error to a correlated protocol response.
+    /// </summary>
+    /// <param name="requestId">The request identifier, or <see langword="null" /> when unavailable.</param>
+    /// <param name="error">The error to map. Cannot be <see langword="null" />.</param>
+    /// <returns>The correlated error response.</returns>
+    /// <exception cref="ArgumentNullException">
+    ///     <paramref name="error" /> is <see langword="null" />.
+    /// </exception>
+    internal static ProtocolResponse FromError(string? requestId, OperationError error)
+    {
+        ArgumentNullException.ThrowIfNull(error);
+
+        return CreateError(requestId, [error]);
+    }
+
+    /// <summary>
     ///     Creates an error response while preserving every valid source error in order.
     /// </summary>
     /// <param name="requestId">The request identifier, or <see langword="null" /> when unavailable.</param>
@@ -103,7 +119,7 @@ internal static class ProtocolResponseFactory
             [
                 new ProtocolError(
                     ErrorType.InternalError,
-                    EngineProtocolConstants.UnexpectedFailureErrorCode,
+                    EngineErrorCode.UnexpectedFailure,
                     EngineProtocolConstants.UnexpectedFailureMessage),
             ]);
 }

@@ -151,6 +151,7 @@ ChangeLens.Core/
 - Put stable non-prose literals such as protocol identifiers, property names, error codes, configuration keys,
   file-name patterns, and process exit codes in a capability-specific `Constants` folder. Use a static class named
   for its scope, such as `EngineProtocolConstants`; do not create a project-wide constants dumping ground.
+- Name error-code classes `{Domain}ErrorCode` and keep reason names short, such as `EngineErrorCode.UnknownAction`.
 - Keep one-off human-readable messages and structured logging message templates at their call sites unless they
   are reused or form part of a stable external contract.
 - Keep production executable `Program.cs` files limited to host creation, one named composition extension call,

@@ -25,6 +25,9 @@ public sealed class EngineProtocolContractTests
     [InlineData("engine-status.schema.json", "uncorrelated-error.response.json")]
     [InlineData("error-response.schema.json", "uncorrelated-error.response.json")]
     [InlineData("payload-free-result.schema.json", "engine-check-status.result.json")]
+    [InlineData("repository-open.schema.json", "repositories-open.request.json")]
+    [InlineData("repository-open.schema.json", "repositories-open.branch.result.json")]
+    [InlineData("repository-open.schema.json", "repositories-open.detached.result.json")]
     public void SharedFixtureMatchesSchema(string schemaFileName, string fixtureFileName)
     {
         using var fixture = JsonDocument.Parse(File.ReadAllText(FixturePath(fixtureFileName)));
@@ -81,6 +84,44 @@ public sealed class EngineProtocolContractTests
         Assert.False(result.IsValid);
     }
 
+    /// <summary>
+    ///     Verifies that the repository-open schema rejects malformed requests and results.
+    /// </summary>
+    /// <param name="json">The malformed repository-open message.</param>
+    [Theory]
+    [InlineData("""{"protocolVersion":1,"requestId":"id","action":"repositories.open"}""")]
+    [InlineData("""{"protocolVersion":1,"requestId":"id","action":"repositories.open","parameters":{}}""")]
+    [InlineData("""{"protocolVersion":1,"requestId":"id","action":"repositories.open","parameters":{"path":1}}""")]
+    [InlineData("""{"protocolVersion":1,"requestId":"id","action":"repositories.open","parameters":{"path":" "}}""")]
+    [InlineData("""{"protocolVersion":1,"requestId":"id","action":"repositories.open","parameters":{"path":"/repo","extra":true}}""")]
+    [InlineData("""{"protocolVersion":1,"type":"result","requestId":"id","result":{"repository":{"name":"repo","canonicalPath":"/repo","head":{"kind":"branch","revision":"0123456789abcdef0123456789abcdef01234567"}}}}""")]
+    [InlineData("""{"protocolVersion":1,"type":"result","requestId":"id","result":{"repository":{"name":"repo","canonicalPath":"/repo","head":{"kind":"detached","name":"main","revision":"0123456789abcdef0123456789abcdef01234567"}}}}""")]
+    [InlineData("""{"protocolVersion":1,"type":"result","requestId":"id","result":{"repository":{"name":"repo","canonicalPath":"/repo","head":{"kind":"detached","revision":"0123456789ABCDEF0123456789ABCDEF01234567"}}}}""")]
+    [InlineData("""{"protocolVersion":1,"type":"result","requestId":"id","result":{"repository":{"name":"repo","canonicalPath":"/repo","head":{"kind":"detached","revision":"0123456789abcdef"}}}}""")]
+    [InlineData("""{"protocolVersion":1,"type":"result","requestId":"id","result":{"repository":{"name":" ","canonicalPath":"/repo","head":{"kind":"branch","name":"main","revision":"0123456789abcdef0123456789abcdef01234567"}}}}""")]
+    [InlineData("""{"protocolVersion":1,"type":"result","requestId":"id","result":{"repository":{"name":"repo","canonicalPath":" ","head":{"kind":"branch","name":"main","revision":"0123456789abcdef0123456789abcdef01234567"}}}}""")]
+    [InlineData("""{"protocolVersion":1,"type":"result","requestId":"id","result":{"repository":{"name":"repo","canonicalPath":"/repo","head":{"kind":"branch","name":" ","revision":"0123456789abcdef0123456789abcdef01234567"}}}}""")]
+    public void RepositoryOpenSchemaRejectsMalformedMessages(string json)
+    {
+        using var instance = JsonDocument.Parse(json);
+
+        var result = Schemas["repository-open.schema.json"].Evaluate(instance.RootElement);
+
+        Assert.False(result.IsValid);
+    }
+
+    /// <summary>
+    ///     Verifies that duplicate repository-open path properties are rejected before schema evaluation.
+    /// </summary>
+    [Fact]
+    public void RepositoryOpenContractRejectsDuplicatePathProperties()
+    {
+        using var instance = JsonDocument.Parse(
+            """{"protocolVersion":1,"requestId":"id","action":"repositories.open","parameters":{"path":"/first","path":"/second"}}""");
+
+        Assert.True(ContainsDuplicateProperties(instance.RootElement));
+    }
+
     private static IReadOnlyDictionary<string, JsonSchema> LoadSchemas()
     {
         var names = new[]
@@ -88,12 +129,41 @@ public sealed class EngineProtocolContractTests
             "engine-status.schema.json",
             "error-response.schema.json",
             "payload-free-result.schema.json",
+            "repository-open.schema.json",
         };
 
         return names.ToDictionary(
             name => name,
             name => JsonSchema.FromFile(Path.Combine(RepositoryPaths.EngineProtocolV1, name)),
             StringComparer.Ordinal);
+    }
+
+    /// <summary>
+    ///     Determines whether the JSON value contains an object with duplicate property names.
+    /// </summary>
+    /// <param name="element">The JSON value to inspect.</param>
+    /// <returns>
+    ///     <see langword="true" /> if an object contains duplicate property names; otherwise,
+    ///     <see langword="false" />.
+    /// </returns>
+    private static bool ContainsDuplicateProperties(JsonElement element)
+    {
+        if (element.ValueKind == JsonValueKind.Object)
+        {
+            var names = new HashSet<string>(StringComparer.Ordinal);
+
+            foreach (var property in element.EnumerateObject())
+            {
+                if (!names.Add(property.Name) || ContainsDuplicateProperties(property.Value))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        return element.ValueKind == JsonValueKind.Array && element.EnumerateArray().Any(ContainsDuplicateProperties);
     }
 
     private static string FixturePath(string fileName) => Path.Combine(

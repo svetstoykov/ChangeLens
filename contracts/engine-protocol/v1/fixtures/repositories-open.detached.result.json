@@ -1,0 +1,15 @@
+{
+  "protocolVersion": 1,
+  "type": "result",
+  "requestId": "desktop-43",
+  "result": {
+    "repository": {
+      "name": "change_lens",
+      "canonicalPath": "/projects/change_lens",
+      "head": {
+        "kind": "detached",
+        "revision": "0123456789abcdef0123456789abcdef01234567"
+      }
+    }
+  }
+}

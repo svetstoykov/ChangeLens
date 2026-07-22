@@ -116,10 +116,10 @@ public sealed class EngineProtocolContractTests
     [Fact]
     public void RepositoryOpenContractRejectsDuplicatePathProperties()
     {
-        using var instance = JsonDocument.Parse(
-            """{"protocolVersion":1,"requestId":"id","action":"repositories.open","parameters":{"path":"/first","path":"/second"}}""");
+        const string request =
+            """{"protocolVersion":1,"requestId":"id","action":"repositories.open","parameters":{"path":"/first","path":"/second"}}""";
 
-        Assert.True(ContainsDuplicateProperties(instance.RootElement));
+        Assert.False(IsContractValid("repository-open.schema.json", request));
     }
 
     private static IReadOnlyDictionary<string, JsonSchema> LoadSchemas()
@@ -136,6 +136,23 @@ public sealed class EngineProtocolContractTests
             name => name,
             name => JsonSchema.FromFile(Path.Combine(RepositoryPaths.EngineProtocolV1, name)),
             StringComparer.Ordinal);
+    }
+
+    /// <summary>
+    ///     Determines whether raw JSON satisfies a protocol schema after duplicate-property validation.
+    /// </summary>
+    /// <param name="schemaFileName">The schema used to validate the JSON.</param>
+    /// <param name="json">The raw JSON to validate.</param>
+    /// <returns>
+    ///     <see langword="true" /> if the JSON has no duplicate properties and satisfies the schema; otherwise,
+    ///     <see langword="false" />.
+    /// </returns>
+    private static bool IsContractValid(string schemaFileName, string json)
+    {
+        using var instance = JsonDocument.Parse(json);
+
+        return !ContainsDuplicateProperties(instance.RootElement) &&
+               Schemas[schemaFileName].Evaluate(instance.RootElement).IsValid;
     }
 
     /// <summary>

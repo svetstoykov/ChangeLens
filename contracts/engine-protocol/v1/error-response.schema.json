@@ -8,7 +8,7 @@
   "properties": {
     "protocolVersion": { "const": 1 },
     "type": { "const": "error" },
-    "requestId": { "type": ["string", "null"], "minLength": 1 },
+    "requestId": { "type": ["string", "null"], "minLength": 1, "pattern": "\\S" },
     "errors": {
       "type": "array",
       "minItems": 1,
@@ -35,8 +35,8 @@
             "InternalError"
           ]
         },
-        "code": { "type": "string", "minLength": 1 },
-        "message": { "type": "string", "minLength": 1 }
+        "code": { "type": "string", "minLength": 1, "pattern": "\\S" },
+        "message": { "type": "string", "minLength": 1, "pattern": "\\S" }
       }
     }
   }

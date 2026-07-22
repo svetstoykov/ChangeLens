@@ -49,6 +49,36 @@ public sealed class EngineProtocolContractTests
         Assert.False(result.IsValid);
     }
 
+    /// <summary>
+    ///     Verifies that protocol schemas reject identifiers and error text containing only whitespace.
+    /// </summary>
+    /// <param name="schemaFileName">The schema used to validate the document.</param>
+    /// <param name="json">The document containing a whitespace-only string.</param>
+    [Theory]
+    [InlineData(
+        "engine-status.schema.json",
+        """{"protocolVersion":1,"requestId":" \t ","action":"engine.checkStatus"}""")]
+    [InlineData(
+        "payload-free-result.schema.json",
+        """{"protocolVersion":1,"type":"result","requestId":" \t ","result":null}""")]
+    [InlineData(
+        "error-response.schema.json",
+        """{"protocolVersion":1,"type":"error","requestId":" \t ","errors":[{"type":"Validation","code":"fixture.first","message":"Bad"}]}""")]
+    [InlineData(
+        "error-response.schema.json",
+        """{"protocolVersion":1,"type":"error","requestId":"desktop-43","errors":[{"type":"Validation","code":" \t ","message":"Bad"}]}""")]
+    [InlineData(
+        "error-response.schema.json",
+        """{"protocolVersion":1,"type":"error","requestId":"desktop-43","errors":[{"type":"Validation","code":"fixture.first","message":" \t "}]}""")]
+    public void SchemasRejectWhitespaceOnlyStrings(string schemaFileName, string json)
+    {
+        using var instance = JsonDocument.Parse(json);
+
+        var result = Schemas[schemaFileName].Evaluate(instance.RootElement);
+
+        Assert.False(result.IsValid);
+    }
+
     private static IReadOnlyDictionary<string, JsonSchema> LoadSchemas()
     {
         var names = new[]

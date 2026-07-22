@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace ChangeLens.Engine.Protocol.Models;
 
 /// <summary>
@@ -9,6 +11,6 @@ namespace ChangeLens.Engine.Protocol.Models;
 ///     The request identifier, or <see langword="null" /> when correlation could not be recovered.
 /// </param>
 internal abstract record ProtocolResponse(
-    int ProtocolVersion,
-    string Type,
-    string? RequestId);
+    [property: JsonPropertyOrder(0)] int ProtocolVersion,
+    [property: JsonPropertyOrder(1)] string Type,
+    [property: JsonPropertyOrder(2)] string? RequestId);

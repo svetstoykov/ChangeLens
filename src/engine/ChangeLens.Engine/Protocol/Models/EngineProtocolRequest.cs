@@ -10,25 +10,30 @@ namespace ChangeLens.Engine.Protocol.Models;
 internal sealed class EngineProtocolRequest : IEngineProtocolRequest
 {
     /// <summary>
-    ///     Gets the protocol version expected by the caller.
+    ///     Gets the protocol version used by the request.
     /// </summary>
     [JsonRequired]
     public int ProtocolVersion { get; init; }
 
     /// <summary>
-    ///     Gets the identifier used to correlate the request and response.
+    ///     Gets the identifier used to correlate the request with its response.
     /// </summary>
     [JsonRequired]
     public string RequestId { get; init; } = null!;
 
     /// <summary>
-    ///     Gets the fixed protocol method selected for the action.
+    ///     Gets the action requested from the engine.
     /// </summary>
     [JsonRequired]
-    public string Method { get; init; } = null!;
+    public string Action { get; init; } = null!;
 
     /// <summary>
-    ///     Gets the JSON value containing the action parameters, or <see langword="null" /> when absent.
+    ///     Gets the intentionally unbound parameters value retained at the protocol boundary.
     /// </summary>
-    public JsonElement? Params { get; init; }
+    /// <remarks>
+    ///     The protocol slice interprets this value only after selecting <see cref="Action" />. An undefined value
+    ///     means the property was omitted, while every other JSON value means it was supplied. The value must not
+    ///     escape the Engine protocol slice.
+    /// </remarks>
+    public JsonElement Parameters { get; init; }
 }

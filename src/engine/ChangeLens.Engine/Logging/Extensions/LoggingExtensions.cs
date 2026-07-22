@@ -1,4 +1,4 @@
-using ChangeLens.Engine.EngineInformation.Constants;
+using ChangeLens.Engine.Hosting.Constants;
 using ChangeLens.Engine.Logging.Constants;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -48,7 +48,7 @@ internal static class LoggingExtensions
                 .Enrich.FromLogContext()
                 .Enrich.WithProperty(
                     EngineLoggingConstants.ApplicationPropertyName,
-                    EngineInformationConstants.EngineName)
+                    EngineProcessConstants.ApplicationName)
                 .WriteTo.Console(
                     standardErrorFromLevel: LogEventLevel.Verbose,
                     theme: AnsiConsoleTheme.Code,

@@ -34,7 +34,7 @@ Run the complete React → Tauri → .NET development path:
 npm run desktop:dev
 ```
 
-The command builds `ChangeLens.Engine`, starts Vite, opens the Tauri window, launches the engine as a long-lived child process, and performs the real `engine.getInfo` handshake. React changes continue to hot reload inside the native window.
+The command builds `ChangeLens.Engine`, starts Vite, opens the Tauri window, launches the engine as a long-lived child process, and performs the real `engine.checkStatus` readiness action. React changes continue to hot reload inside the native window.
 
 Other checks are available through `npm run build`, `npm test`, `npm run typecheck`, `npm run lint`, and `npm run format:check`.
 

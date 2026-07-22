@@ -1,96 +1,232 @@
 using ChangeLens.Core.Results.Models;
 using System.Text.Json;
-using ChangeLens.Engine.EngineInformation.Services;
-using ChangeLens.Engine.Protocol.Constants;
+using ChangeLens.Engine.Hosting.Constants;
+using ChangeLens.Engine.Protocol.Interfaces;
 using ChangeLens.Engine.Protocol.Models;
 using ChangeLens.Engine.Protocol.Services;
+using ChangeLens.Engine.UnitTests.EngineStatus.Support;
 using ChangeLens.Engine.UnitTests.Support;
 using Xunit;
 
 namespace ChangeLens.Engine.UnitTests.Protocol;
 
 /// <summary>
-///     Verifies isolated request-boundary behavior of the hosted protocol boundary.
+///     Verifies lifecycle orchestration around protocol transport and action processing.
 /// </summary>
+[Collection(EngineExitCodeCollection.Name)]
 public sealed class EngineProtocolHostTests
 {
     /// <summary>
-    ///     Verifies that a common request with an unknown method is rejected.
-    /// </summary>
-    [Fact]
-    public void DispatchRequestRejectsUnknownMethod()
-    {
-        var service = CreateService();
-        var request = new EngineProtocolRequest
-        {
-            ProtocolVersion = EngineProtocolConstants.CurrentVersion,
-            RequestId = "request-method",
-            Method = "analysis.run",
-            Params = JsonDocument.Parse("{}").RootElement.Clone(),
-        };
-
-        var response = Assert.IsType<ProtocolErrorResponse>(service.DispatchRequest(request));
-
-        var error = Assert.Single(response.Errors);
-        Assert.Equal(ErrorType.NotFound, error.Type);
-        Assert.Equal(EngineProtocolConstants.UnknownMethodErrorCode, error.Code);
-    }
-
-    /// <summary>
-    ///     Verifies that an unexpected action exception is logged once and sanitized.
-    /// </summary>
-    [Fact]
-    public void DispatchSafelySanitizesUnexpectedActionException()
-    {
-        var logger = new TestLogger<EngineProtocolHost>();
-        var service = CreateService(logger: logger);
-        var request = new ThrowingProtocolRequest();
-
-        var response = Assert.IsType<ProtocolErrorResponse>(service.DispatchSafely(request));
-
-        var error = Assert.Single(response.Errors);
-        Assert.Equal(EngineProtocolConstants.UnexpectedFailureErrorCode, error.Code);
-        Assert.DoesNotContain("sensitive", error.Message, StringComparison.OrdinalIgnoreCase);
-        Assert.Equal(1, logger.ErrorCount);
-        Assert.IsType<InvalidOperationException>(logger.LastException);
-    }
-
-    /// <summary>
-    ///     Verifies that host shutdown cancellation stops the protocol boundary normally.
+    ///     Verifies that host shutdown cancellation stops protocol input normally.
     /// </summary>
     /// <returns>A task that represents the asynchronous test.</returns>
     [Fact]
     public async Task StopAsyncCancelsProtocolInputWithoutAnErrorLog()
     {
+        var readStarted = new TaskCompletionSource(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        var transport = new StubEngineProtocolTransport(
+            async cancellationToken =>
+            {
+                readStarted.TrySetResult();
+                await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+                return Result.Success<EngineProtocolRequest?>(null);
+            },
+            (_, _) => Task.FromResult(Result.Success()));
         var logger = new TestLogger<EngineProtocolHost>();
         var lifetime = new TestHostApplicationLifetime();
-        var service = new EngineProtocolHost(
-            new BlockingTextReader(),
-            TextWriter.Null,
-            new EngineProtocolSerializer(),
-            new EngineInformationProvider(),
+        var service = CreateService(
+            transport,
             logger,
-            lifetime);
+            lifetime,
+            _ => Task.FromResult(Result.Success()));
 
         await service.StartAsync(CancellationToken.None);
-        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        await readStarted.Task.WaitAsync(timeout.Token);
         await service.StopAsync(timeout.Token);
+        await lifetime.WaitForStopAsync(timeout.Token);
 
         Assert.True(lifetime.StopRequested);
         Assert.Equal(0, logger.ErrorCount);
     }
 
     /// <summary>
-    ///     Creates an isolated host with the real engine-information capability.
+    ///     Verifies that rejected input does not prevent the next valid action from completing.
     /// </summary>
-    /// <param name="logger">The optional test logger.</param>
-    /// <returns>The configured protocol host.</returns>
-    private static EngineProtocolHost CreateService(TestLogger<EngineProtocolHost>? logger = null) =>
+    /// <returns>A task that represents the asynchronous test.</returns>
+    [Fact]
+    public async Task HostProcessesValidInputAfterRejectedInput()
+    {
+        var input = new StringReader(
+            "not-json\n" +
+            "{\"protocolVersion\":1,\"requestId\":\"request-valid\",\"action\":\"engine.checkStatus\"}\n");
+        var output = new StringWriter();
+        var lifetime = new TestHostApplicationLifetime();
+        var service = CreateService(input, output, new TestLogger<EngineProtocolHost>(), lifetime);
+
+        await service.StartAsync(CancellationToken.None);
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+        await lifetime.WaitForStopAsync(timeout.Token);
+        await service.StopAsync(timeout.Token);
+
+        var lines = output.ToString().Split(Environment.NewLine, StringSplitOptions.RemoveEmptyEntries);
+        Assert.Equal(2, lines.Length);
+        Assert.Contains("\"code\":\"protocol.invalidJson\"", lines[0], StringComparison.Ordinal);
+        using var response = JsonDocument.Parse(lines[1]);
+        Assert.Equal("request-valid", response.RootElement.GetProperty("requestId").GetString());
+        Assert.Equal(JsonValueKind.Null, response.RootElement.GetProperty("result").ValueKind);
+    }
+
+    /// <summary>
+    ///     Verifies that a fatal read failure is written once before the host exits unsuccessfully.
+    /// </summary>
+    /// <returns>A task that represents the asynchronous test.</returns>
+    [Fact]
+    public async Task HostWritesFatalReadFailureAndStopsWithNonzeroExitCode()
+    {
+        var originalExitCode = Environment.ExitCode;
+        var readError = OperationError.ExternalDependencyFailure(
+            "Input failed.",
+            "protocol.readFailed");
+        ProtocolResponse? writtenResponse = null;
+        var transport = new StubEngineProtocolTransport(
+            _ => Task.FromResult(Result.Fail<EngineProtocolRequest?>(readError)),
+            (response, _) =>
+            {
+                writtenResponse = response;
+                return Task.FromResult(Result.Success());
+            });
+        var statusCallCount = 0;
+        var logger = new TestLogger<EngineProtocolHost>();
+        var lifetime = new TestHostApplicationLifetime();
+        var service = CreateService(
+            transport,
+            logger,
+            lifetime,
+            _ =>
+            {
+                statusCallCount++;
+                return Task.FromResult(Result.Success());
+            });
+
+        try
+        {
+            Environment.ExitCode = 0;
+            await RunUntilStoppedAsync(service, lifetime);
+
+            Assert.Equal(EngineProcessConstants.UnexpectedFailureExitCode, Environment.ExitCode);
+            Assert.Equal(1, transport.ReadCount);
+            Assert.Equal(1, transport.WriteCount);
+            Assert.Equal(0, statusCallCount);
+            var error = Assert.Single(
+                Assert.IsType<ProtocolErrorResponse>(writtenResponse).Errors);
+            Assert.Equal(readError.Type, error.Type);
+            Assert.Equal(readError.Code, error.Code);
+            Assert.Equal(readError.Message, error.Message);
+            Assert.True(lifetime.StopRequested);
+            Assert.Equal(1, logger.ErrorCount);
+        }
+        finally
+        {
+            Environment.ExitCode = originalExitCode;
+        }
+    }
+
+    /// <summary>
+    ///     Verifies that a write failure stops the host before another request is read or processed.
+    /// </summary>
+    /// <returns>A task that represents the asynchronous test.</returns>
+    [Fact]
+    public async Task HostStopsAfterWriteFailureWithoutReadingOrProcessingAnotherRequest()
+    {
+        var originalExitCode = Environment.ExitCode;
+        var transport = new StubEngineProtocolTransport(
+            _ => Task.FromResult(
+                Result.Success<EngineProtocolRequest?>(CreateRequest("request-first"))),
+            (_, _) => Task.FromResult(
+                Result.Fail(
+                    OperationError.ExternalDependencyFailure(
+                        "Output failed.",
+                        "protocol.writeFailed"))));
+        var statusCallCount = 0;
+        var logger = new TestLogger<EngineProtocolHost>();
+        var lifetime = new TestHostApplicationLifetime();
+        var service = CreateService(
+            transport,
+            logger,
+            lifetime,
+            _ =>
+            {
+                statusCallCount++;
+                return Task.FromResult(Result.Success());
+            });
+
+        try
+        {
+            Environment.ExitCode = 0;
+            await RunUntilStoppedAsync(service, lifetime);
+
+            Assert.Equal(EngineProcessConstants.UnexpectedFailureExitCode, Environment.ExitCode);
+            Assert.Equal(1, transport.ReadCount);
+            Assert.Equal(1, transport.WriteCount);
+            Assert.Equal(1, statusCallCount);
+            Assert.True(lifetime.StopRequested);
+            Assert.Equal(1, logger.ErrorCount);
+        }
+        finally
+        {
+            Environment.ExitCode = originalExitCode;
+        }
+    }
+
+    private static EngineProtocolHost CreateService(
+        TextReader input,
+        TextWriter output,
+        TestLogger<EngineProtocolHost> logger,
+        TestHostApplicationLifetime lifetime)
+    {
+        var serializer = new EngineProtocolSerializer();
+        var transport = new EngineProtocolTransport(
+            input,
+            output,
+            serializer,
+            new TestLogger<EngineProtocolTransport>());
+        return CreateService(
+            transport,
+            logger,
+            lifetime,
+            _ => Task.FromResult(Result.Success()));
+    }
+
+    private static EngineProtocolHost CreateService(
+        IEngineProtocolTransport transport,
+        TestLogger<EngineProtocolHost> logger,
+        TestHostApplicationLifetime lifetime,
+        Func<CancellationToken, Task<Result>> checkStatusAsync) =>
         new(
-            TextReader.Null,
-            TextWriter.Null,
-            new EngineProtocolSerializer(),
-            new EngineInformationProvider(),
-            logger ?? new TestLogger<EngineProtocolHost>(),
-            new TestHostApplicationLifetime());
+            transport,
+            new EngineActionProcessor(
+                new StubEngineStatusService(checkStatusAsync),
+                new TestLogger<EngineActionProcessor>()),
+            logger,
+            lifetime);
+
+    private static EngineProtocolRequest CreateRequest(string requestId) =>
+        new()
+        {
+            ProtocolVersion = 1,
+            RequestId = requestId,
+            Action = "engine.checkStatus",
+        };
+
+    private static async Task RunUntilStoppedAsync(
+        EngineProtocolHost service,
+        TestHostApplicationLifetime lifetime)
+    {
+        await service.StartAsync(CancellationToken.None);
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+        await lifetime.WaitForStopAsync(timeout.Token);
+        await service.StopAsync(timeout.Token);
+    }
 }

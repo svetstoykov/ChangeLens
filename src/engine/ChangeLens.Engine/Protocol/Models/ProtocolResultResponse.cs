@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace ChangeLens.Engine.Protocol.Models;
 
 /// <summary>
@@ -12,4 +14,4 @@ internal sealed record ProtocolResultResponse<T>(
     int ProtocolVersion,
     string Type,
     string RequestId,
-    T Result) : ProtocolResponse(ProtocolVersion, Type, RequestId);
+    [property: JsonPropertyOrder(3)] T Result) : ProtocolResponse(ProtocolVersion, Type, RequestId);

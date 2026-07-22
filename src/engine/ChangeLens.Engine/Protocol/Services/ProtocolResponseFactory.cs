@@ -1,3 +1,4 @@
+using System.Text.Json;
 using ChangeLens.Core.Results.Models;
 using ChangeLens.Engine.Protocol.Constants;
 using ChangeLens.Engine.Protocol.Models;
@@ -29,13 +30,16 @@ internal static class ProtocolResponseFactory
     /// <param name="requestId">The request identifier. Cannot be <see langword="null" />.</param>
     /// <param name="result">The capability result. Cannot be <see langword="null" />.</param>
     /// <returns>A payload-free result response on success; otherwise, an ordered error response.</returns>
+    /// <exception cref="ArgumentNullException">
+    ///     <paramref name="result" /> is <see langword="null" />.
+    /// </exception>
     internal static ProtocolResponse FromResult(string? requestId, Result result)
     {
         ArgumentNullException.ThrowIfNull(result);
 
         return result.IsFailure
             ? CreateError(requestId, result.Errors)
-            : CreateWithValue<object?>(requestId!, null);
+            : CreateWithValue<JsonElement?>(requestId!, null);
     }
 
     /// <summary>
@@ -45,6 +49,9 @@ internal static class ProtocolResponseFactory
     /// <param name="requestId">The request identifier, or <see langword="null" /> when the input was rejected.</param>
     /// <param name="result">The capability result. Cannot be <see langword="null" />.</param>
     /// <returns>A typed result response on success; otherwise, an ordered error response.</returns>
+    /// <exception cref="ArgumentNullException">
+    ///     <paramref name="result" /> is <see langword="null" />.
+    /// </exception>
     internal static ProtocolResponse FromResult<T>(string? requestId, Result<T> result)
     {
         ArgumentNullException.ThrowIfNull(result);
@@ -55,11 +62,30 @@ internal static class ProtocolResponseFactory
     }
 
     /// <summary>
+    ///     Maps one directly created error to a correlated protocol response.
+    /// </summary>
+    /// <param name="requestId">The request identifier, or <see langword="null" /> when unavailable.</param>
+    /// <param name="error">The error to map. Cannot be <see langword="null" />.</param>
+    /// <returns>The correlated error response.</returns>
+    /// <exception cref="ArgumentNullException">
+    ///     <paramref name="error" /> is <see langword="null" />.
+    /// </exception>
+    internal static ProtocolResponse FromError(string? requestId, OperationError error)
+    {
+        ArgumentNullException.ThrowIfNull(error);
+
+        return CreateError(requestId, [error]);
+    }
+
+    /// <summary>
     ///     Creates an error response while preserving every valid source error in order.
     /// </summary>
     /// <param name="requestId">The request identifier, or <see langword="null" /> when unavailable.</param>
     /// <param name="errors">The source errors. Cannot be <see langword="null" />.</param>
     /// <returns>The ordered error response, or a sanitized internal error for an invalid source contract.</returns>
+    /// <exception cref="ArgumentNullException">
+    ///     <paramref name="errors" /> is <see langword="null" />.
+    /// </exception>
     internal static ProtocolErrorResponse CreateError(
         string? requestId,
         IReadOnlyList<OperationError> errors)
@@ -93,7 +119,7 @@ internal static class ProtocolResponseFactory
             [
                 new ProtocolError(
                     ErrorType.InternalError,
-                    EngineProtocolConstants.UnexpectedFailureErrorCode,
+                    EngineErrorCode.UnexpectedFailure,
                     EngineProtocolConstants.UnexpectedFailureMessage),
             ]);
 }

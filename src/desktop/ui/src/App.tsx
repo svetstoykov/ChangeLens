@@ -2,20 +2,19 @@ import { useEffect, useState, type ReactNode } from "react";
 import type { ActionError } from "./Actions/Models/ActionError";
 import { normalizeActionError } from "./Actions/Services/normalizeActionError";
 import { presentActionError } from "./Actions/Services/presentActionError";
-import type { EngineClient } from "./EngineInformation/Interfaces/EngineClient";
-import type { EngineInformation } from "./EngineInformation/Models/EngineInformation";
+import type { EngineStatusClient } from "./EngineStatus/Interfaces/EngineStatusClient";
 import "./styles.css";
 
 interface AppProps {
-  engineClient: EngineClient;
+  engineStatusClient: EngineStatusClient;
 }
 
 type EngineState =
   | { status: "connecting" }
-  | { status: "ready"; information: EngineInformation }
+  | { status: "ready" }
   | { status: "error"; error: ActionError };
 
-export function App({ engineClient }: AppProps) {
+export function App({ engineStatusClient }: AppProps) {
   const [engineState, setEngineState] = useState<EngineState>({
     status: "connecting",
   });
@@ -23,11 +22,11 @@ export function App({ engineClient }: AppProps) {
   useEffect(() => {
     let isCurrent = true;
 
-    engineClient
-      .getInformation()
-      .then((information) => {
+    engineStatusClient
+      .checkStatus()
+      .then(() => {
         if (isCurrent) {
-          setEngineState({ status: "ready", information });
+          setEngineState({ status: "ready" });
         }
       })
       .catch((error: unknown) => {
@@ -42,7 +41,7 @@ export function App({ engineClient }: AppProps) {
     return () => {
       isCurrent = false;
     };
-  }, [engineClient]);
+  }, [engineStatusClient]);
 
   return (
     <main className="app-shell">
@@ -61,7 +60,7 @@ function EngineStatus({ state }: EngineStatusProps) {
   let content: ReactNode;
 
   if (state.status === "connecting") {
-    content = "Connecting to ChangeLens.Engine…";
+    content = "Connecting to the ChangeLens engine…";
   } else if (state.status === "error") {
     const presentation = presentActionError(state.error, {
       "engine.responseTimedOut": "Engine response timed out",
@@ -83,12 +82,7 @@ function EngineStatus({ state }: EngineStatusProps) {
       </>
     );
   } else {
-    content = (
-      <>
-        {state.information.name} {state.information.version} · protocol v
-        {state.information.protocolVersion}
-      </>
-    );
+    content = "The ChangeLens engine is ready.";
   }
 
   return (

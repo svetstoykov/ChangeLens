@@ -11,10 +11,10 @@ pub struct EngineActionError {
 }
 
 impl EngineActionError {
-    pub(crate) fn operation(request_id: String, errors: Vec<ActionErrorDetail>) -> Self {
+    pub(crate) fn operation(request_id: Option<String>, errors: Vec<ActionErrorDetail>) -> Self {
         Self {
             kind: ActionErrorKind::Operation,
-            request_id: Some(request_id),
+            request_id,
             errors,
         }
     }

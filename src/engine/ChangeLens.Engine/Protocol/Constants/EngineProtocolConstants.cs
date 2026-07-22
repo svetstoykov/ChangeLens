@@ -11,9 +11,14 @@ internal static class EngineProtocolConstants
     internal const int CurrentVersion = 1;
 
     /// <summary>
-    ///     The method that returns identifying information about the engine.
+    ///     The maximum number of content characters accepted in one request line.
     /// </summary>
-    internal const string GetInformationMethod = "engine.getInfo";
+    internal const int MaximumRequestCharacterCount = 65_536;
+
+    /// <summary>
+    ///     The fixed number of characters read from protocol input at once.
+    /// </summary>
+    internal const int ReadBufferCharacterCount = 4_096;
 
     /// <summary>
     ///     The message type used for successful responses.
@@ -24,26 +29,6 @@ internal static class EngineProtocolConstants
     ///     The message type used for failed responses.
     /// </summary>
     internal const string ErrorResponseType = "error";
-
-    /// <summary>
-    ///     The stable error code for requests that do not match the protocol schema.
-    /// </summary>
-    internal const string InvalidRequestErrorCode = "protocol.invalidRequest";
-
-    /// <summary>
-    ///     The stable error code for unsupported protocol versions.
-    /// </summary>
-    internal const string UnsupportedVersionErrorCode = "protocol.unsupportedVersion";
-
-    /// <summary>
-    ///     The stable error code for unrecognized protocol methods.
-    /// </summary>
-    internal const string UnknownMethodErrorCode = "protocol.unknownMethod";
-
-    /// <summary>
-    ///     The stable error code returned for an unexpected Engine action failure.
-    /// </summary>
-    internal const string UnexpectedFailureErrorCode = "engine.unexpectedFailure";
 
     /// <summary>
     ///     The safe message returned for an unexpected Engine action failure.

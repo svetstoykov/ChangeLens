@@ -15,55 +15,17 @@ namespace ChangeLens.Engine.UnitTests.Protocol;
 public sealed class ProtocolResponseFactoryTests
 {
     /// <summary>
-    ///     Verifies that payload-free mapping returns the shared protocol response abstraction.
+    ///     Verifies that payload-free mapping returns a typed JSON null result.
     /// </summary>
     [Fact]
-    public void FromResultReturnsProtocolResponse()
+    public void FromResultReturnsJsonNullPayloadFreeSuccess()
     {
         ProtocolResponse response = ProtocolResponseFactory.FromResult(
             "request-response",
             Result.Success());
 
-        Assert.IsType<ProtocolResultResponse<object?>>(response);
-    }
-
-    /// <summary>
-    ///     Verifies that error mapping returns the shared protocol response abstraction.
-    /// </summary>
-    [Fact]
-    public void CreateErrorReturnsProtocolResponse()
-    {
-        ProtocolResponse response = ProtocolResponseFactory.CreateError(
-            "request-error",
-            [OperationError.Validation("Invalid.", "fixture.invalid")]);
-
-        Assert.IsType<ProtocolErrorResponse>(response);
-    }
-
-    /// <summary>
-    ///     Verifies that a direct value remains a typed correlated result.
-    /// </summary>
-    [Fact]
-    public void CreateValueReturnsTypedResult()
-    {
-        var response = ProtocolResponseFactory.CreateWithValue("request-1", new FixturePayload("value"));
-
-        Assert.Equal(EngineProtocolConstants.CurrentVersion, response.ProtocolVersion);
-        Assert.Equal(EngineProtocolConstants.ResultResponseType, response.Type);
-        Assert.Equal("request-1", response.RequestId);
-        Assert.Equal("value", response.Result.Value);
-    }
-
-    /// <summary>
-    ///     Verifies that payload-free success serializes a null result.
-    /// </summary>
-    [Fact]
-    public void FromResultReturnsPayloadFreeSuccess()
-    {
-        var response = ProtocolResponseFactory.FromResult("request-2", Result.Success());
-
-        var result = Assert.IsType<ProtocolResultResponse<object?>>(response);
-        Assert.Equal("request-2", result.RequestId);
+        var result = Assert.IsType<ProtocolResultResponse<JsonElement?>>(response);
+        Assert.Equal("request-response", result.RequestId);
         Assert.Null(result.Result);
     }
 
@@ -79,6 +41,22 @@ public sealed class ProtocolResponseFactoryTests
 
         var result = Assert.IsType<ProtocolResultResponse<FixturePayload>>(response);
         Assert.Equal("typed", result.Result.Value);
+    }
+
+    /// <summary>
+    ///     Verifies that a directly created error is mapped without wrapping it in a failed Result.
+    /// </summary>
+    [Fact]
+    public void FromErrorPreservesSingleError()
+    {
+        var source = OperationError.NotFound("Missing.", "fixture.missing");
+
+        var response = ProtocolResponseFactory.FromError("request-error", source);
+
+        var error = Assert.Single(Assert.IsType<ProtocolErrorResponse>(response).Errors);
+        Assert.Equal(source.Type, error.Type);
+        Assert.Equal(source.Code, error.Code);
+        Assert.Equal(source.Message, error.Message);
     }
 
     /// <summary>
@@ -151,7 +129,7 @@ public sealed class ProtocolResponseFactoryTests
 
         var error = Assert.Single(response.Errors);
         Assert.Equal(ErrorType.InternalError, error.Type);
-        Assert.Equal(EngineProtocolConstants.UnexpectedFailureErrorCode, error.Code);
+        Assert.Equal(EngineErrorCode.UnexpectedFailure, error.Code);
         Assert.Equal(EngineProtocolConstants.UnexpectedFailureMessage, error.Message);
     }
 

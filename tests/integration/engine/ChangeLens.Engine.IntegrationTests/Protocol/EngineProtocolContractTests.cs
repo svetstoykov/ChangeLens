@@ -18,11 +18,13 @@ public sealed class EngineProtocolContractTests
     /// <param name="schemaFileName">The schema file used to validate the fixture.</param>
     /// <param name="fixtureFileName">The fixture file relative to the v1 fixtures directory.</param>
     [Theory]
-    [InlineData("engine-information.schema.json", "engine-get-info.request.json")]
-    [InlineData("engine-information.schema.json", "engine-get-info.result.json")]
-    [InlineData("engine-information.schema.json", "ordered-errors.response.json")]
+    [InlineData("engine-status.schema.json", "engine-check-status.request.json")]
+    [InlineData("engine-status.schema.json", "engine-check-status.result.json")]
+    [InlineData("engine-status.schema.json", "ordered-errors.response.json")]
     [InlineData("error-response.schema.json", "ordered-errors.response.json")]
-    [InlineData("payload-free-result.schema.json", "payload-free.result.json")]
+    [InlineData("engine-status.schema.json", "uncorrelated-error.response.json")]
+    [InlineData("error-response.schema.json", "uncorrelated-error.response.json")]
+    [InlineData("payload-free-result.schema.json", "engine-check-status.result.json")]
     public void SharedFixtureMatchesSchema(string schemaFileName, string fixtureFileName)
     {
         using var fixture = JsonDocument.Parse(File.ReadAllText(FixturePath(fixtureFileName)));
@@ -49,13 +51,43 @@ public sealed class EngineProtocolContractTests
         Assert.False(result.IsValid);
     }
 
+    /// <summary>
+    ///     Verifies that protocol schemas reject identifiers and error text containing only whitespace.
+    /// </summary>
+    /// <param name="schemaFileName">The schema used to validate the document.</param>
+    /// <param name="json">The document containing a whitespace-only string.</param>
+    [Theory]
+    [InlineData(
+        "engine-status.schema.json",
+        """{"protocolVersion":1,"requestId":" \t ","action":"engine.checkStatus"}""")]
+    [InlineData(
+        "payload-free-result.schema.json",
+        """{"protocolVersion":1,"type":"result","requestId":" \t ","result":null}""")]
+    [InlineData(
+        "error-response.schema.json",
+        """{"protocolVersion":1,"type":"error","requestId":" \t ","errors":[{"type":"Validation","code":"fixture.first","message":"Bad"}]}""")]
+    [InlineData(
+        "error-response.schema.json",
+        """{"protocolVersion":1,"type":"error","requestId":"desktop-43","errors":[{"type":"Validation","code":" \t ","message":"Bad"}]}""")]
+    [InlineData(
+        "error-response.schema.json",
+        """{"protocolVersion":1,"type":"error","requestId":"desktop-43","errors":[{"type":"Validation","code":"fixture.first","message":" \t "}]}""")]
+    public void SchemasRejectWhitespaceOnlyStrings(string schemaFileName, string json)
+    {
+        using var instance = JsonDocument.Parse(json);
+
+        var result = Schemas[schemaFileName].Evaluate(instance.RootElement);
+
+        Assert.False(result.IsValid);
+    }
+
     private static IReadOnlyDictionary<string, JsonSchema> LoadSchemas()
     {
         var names = new[]
         {
+            "engine-status.schema.json",
             "error-response.schema.json",
             "payload-free-result.schema.json",
-            "engine-information.schema.json",
         };
 
         return names.ToDictionary(

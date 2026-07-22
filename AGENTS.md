@@ -95,21 +95,28 @@ Classify the action before adding transport code:
 
 - UI-only actions remain in React.
 - Native-only actions use one explicit typed Tauri command and do not enter the Engine protocol.
-- Engine-backed actions use React → an explicit Tauri command → the shared Rust engine client/process → `EngineProtocolService` → an already approved capability entry point.
+- Engine-backed actions use React → an explicit Tauri command → the shared Rust engine client/process →
+  `EngineActionProcessor` → an already approved capability entry point.
 
 For every engine-backed action:
 
 1. Specify the capability behavior and its .NET entry point before designing transport types. Transport work does not authorize new Core or Infrastructure behavior.
-2. Record the exact mapping from React client method, Tauri command, Rust client method, protocol method, and .NET dispatch target. Protocol methods use dotted camel case.
+2. Record the exact mapping from React client action, Tauri command, Rust client action, protocol action, and .NET
+   processing target.
+   Protocol actions use dotted camel case.
 3. Add strict versioned request and result schemas under `contracts/engine-protocol`. Reject missing, unknown, duplicate, and incorrectly typed request properties. Add a `parameters` object only when the action has real input.
-4. Keep protocol versions, request identifiers, and fixed method names out of React. Rust assigns them and exposes only the action's explicit typed Tauri command; never expose a generic `engine_request(method, payload)` command.
-5. Add one explicit `EngineProtocolService` switch branch. Do not add a mediator, reflection dispatch, keyed DI, a service locator, a dynamic registry, per-action transport handlers, or generated protocol types.
+4. Keep protocol versions, request identifiers, and fixed action names out of React. Rust assigns them and exposes
+   only the action's explicit typed Tauri command; never expose a generic `engine_action(action, parameters)` command.
+5. Add one explicit `EngineActionProcessor` switch branch. Do not add a mediator, reflection-based action selection, keyed DI, a
+   service locator, a dynamic registry, per-action transport handlers, or generated protocol types.
 6. Return exactly one correlated result or error. A typed action returns its typed payload; a payload-free action returns `result: null`. Fire-and-forget engine actions are not supported.
 7. Preserve every expected error's `ErrorType`, stable code, safe message, order, and request identifier. An uncoded or unsafe error becomes a sanitized `InternalError` at the Engine boundary. Rust-originated failures use the approved `transport` or `protocol` kind; TypeScript normalizes all rejections to `ActionError`.
 8. Never automatically replay a failed action. A later user- or React-initiated action may restart an invalidated engine process. Every future write specification must define a reconciliation action for uncertain transport outcomes.
 9. Add contract, Engine protocol, Rust process, Tauri command, React client, presentation, logging, and stdout-isolation tests in the same change. Shared JSON fixtures must prove cross-language field names and shapes.
 
-Keep the shared transport deliberately small. Extract only process, correlation, bounded-I/O, common response, and error behavior that real actions share. Keep capability arguments, result validation, UI behavior, and stable method selection in the capability slice.
+Keep the shared transport deliberately small. Extract only process, correlation, bounded-I/O, common response, and
+error behavior that real actions share. Keep capability arguments, result validation, UI behavior, and stable action
+selection in the capability slice.
 
 ## Design and Organization Rules
 
@@ -133,6 +140,9 @@ ChangeLens.Core/
 - Mirror a capability path across Core, Engine, Infrastructure, and tests when that capability spans those boundaries.
 - Never create project-wide `Models`, `Services`, or `Interfaces` dumping grounds.
 - Use interfaces and dependency injection for replaceable behavior and external boundaries.
+- Do not use `object`, `dynamic`, `Result<object?>`, untyped dictionaries, or equivalent weakly typed catch-all values
+  as application input or output contracts. Use a concrete type, generic type, or explicit polymorphic abstraction.
+  Framework-required signatures and exceptional boundary cases must be discussed and documented before use.
 - Do not create an interface mechanically for every class. Immutable models, value objects, and behaviorless helpers do not need one.
 - Avoid static service classes. Static classes are acceptable only for genuine constants or stateless language-level utilities when an injected service would add ceremony without a substitutable boundary.
 - Keep one primary type per file.
@@ -141,6 +151,7 @@ ChangeLens.Core/
 - Put stable non-prose literals such as protocol identifiers, property names, error codes, configuration keys,
   file-name patterns, and process exit codes in a capability-specific `Constants` folder. Use a static class named
   for its scope, such as `EngineProtocolConstants`; do not create a project-wide constants dumping ground.
+- Name error-code classes `{Domain}ErrorCode` and keep reason names short, such as `EngineErrorCode.UnknownAction`.
 - Keep one-off human-readable messages and structured logging message templates at their call sites unless they
   are reused or form part of a stable external contract.
 - Keep production executable `Program.cs` files limited to host creation, one named composition extension call,

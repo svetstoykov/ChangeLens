@@ -12,6 +12,9 @@ namespace ChangeLens.Infrastructure.IntegrationTests.FileSystem.Services;
 /// </summary>
 public sealed class PhysicalRepositoryPathResolverTests
 {
+    /// <summary>
+    ///     Resolves a relative directory to its normalized absolute path.
+    /// </summary>
     [Fact]
     public async Task ResolveAsync_RelativeDirectory_ReturnsAbsoluteNormalizedDirectory()
     {
@@ -36,6 +39,9 @@ public sealed class PhysicalRepositoryPathResolverTests
         }
     }
 
+    /// <summary>
+    ///     Resolves a directory path with dot segments to its physical directory.
+    /// </summary>
     [Fact]
     public async Task ResolveAsync_DirectoryWithDotSegments_ReturnsCollapsedDirectory()
     {
@@ -55,6 +61,9 @@ public sealed class PhysicalRepositoryPathResolverTests
         Assert.EndsWith(Path.DirectorySeparatorChar + targetDirectory.Name, physicalPath);
     }
 
+    /// <summary>
+    ///     Resolves a directory link to its target directory.
+    /// </summary>
     [Fact]
     public async Task ResolveAsync_DirectoryLink_ReturnsLinkTarget()
     {
@@ -70,6 +79,9 @@ public sealed class PhysicalRepositoryPathResolverTests
         Assert.Equal(targetDirectory.FullName, result.Data);
     }
 
+    /// <summary>
+    ///     Resolves a path beneath a directory link to its physical child directory.
+    /// </summary>
     [Fact]
     public async Task ResolveAsync_LinkInIntermediateSegment_ReturnsPhysicalChildDirectory()
     {
@@ -86,6 +98,9 @@ public sealed class PhysicalRepositoryPathResolverTests
         Assert.Equal(physicalChildDirectory.FullName, result.Data);
     }
 
+    /// <summary>
+    ///     Resolves a file-system root without changing its path.
+    /// </summary>
     [Fact]
     public async Task ResolveAsync_FileSystemRoot_ReturnsRoot()
     {
@@ -99,6 +114,9 @@ public sealed class PhysicalRepositoryPathResolverTests
         Assert.Equal(root, result.Data);
     }
 
+    /// <summary>
+    ///     Returns the path-not-found error for a missing path.
+    /// </summary>
     [Fact]
     public async Task ResolveAsync_MissingPath_ReturnsNotFoundError()
     {
@@ -112,6 +130,9 @@ public sealed class PhysicalRepositoryPathResolverTests
         AssertFailure(result, ErrorType.NotFound, RepositoryErrorCode.PathNotFound);
     }
 
+    /// <summary>
+    ///     Returns the path-not-found error for a file path.
+    /// </summary>
     [Fact]
     public async Task ResolveAsync_FilePath_ReturnsNotFoundError()
     {
@@ -125,6 +146,9 @@ public sealed class PhysicalRepositoryPathResolverTests
         AssertFailure(result, ErrorType.NotFound, RepositoryErrorCode.PathNotFound);
     }
 
+    /// <summary>
+    ///     Returns the access-denied error for an inaccessible directory.
+    /// </summary>
     [Fact]
     public async Task ResolveAsync_InaccessibleDirectory_ReturnsUnauthorizedError()
     {
@@ -165,6 +189,9 @@ public sealed class PhysicalRepositoryPathResolverTests
         }
     }
 
+    /// <summary>
+    ///     Throws when cancellation is requested before path resolution.
+    /// </summary>
     [Fact]
     public async Task ResolveAsync_CanceledToken_ThrowsOperationCanceledException()
     {

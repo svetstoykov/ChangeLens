@@ -4,6 +4,7 @@ mod engine_action_error;
 mod engine_exchange_error;
 mod engine_protocol_request;
 mod engine_response;
+mod engine_shutdown_outcome;
 mod operation_error_type;
 
 pub use action_error_detail::ActionErrorDetail;
@@ -14,3 +15,4 @@ pub use operation_error_type::OperationErrorType;
 pub(crate) use engine_exchange_error::EngineExchangeError;
 pub(crate) use engine_protocol_request::EngineProtocolRequest;
 pub(crate) use engine_response::EngineResponse;
+pub(crate) use engine_shutdown_outcome::EngineShutdownOutcome;

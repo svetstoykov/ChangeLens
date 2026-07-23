@@ -1,8 +1,13 @@
-use changelens_desktop_lib::configure_engine_status;
+use changelens_desktop_lib::configure_desktop;
 use changelens_desktop_lib::engine_protocol::{
     ActionErrorDetail, ActionErrorKind, EngineActionError, OperationErrorType,
 };
 use changelens_desktop_lib::engine_status::{EngineStatusService, EngineStatusState};
+use changelens_desktop_lib::repositories::{
+    RepositoryDescriptor, RepositoryFolderPicker, RepositoryFolderPickerState, RepositoryService,
+    RepositoryState,
+};
+use std::path::PathBuf;
 use std::sync::Arc;
 use tauri::test::{INVOKE_KEY, get_ipc_response, mock_builder, mock_context, noop_assets};
 
@@ -13,6 +18,22 @@ struct FixedEngineStatusService {
 impl EngineStatusService for FixedEngineStatusService {
     fn check_status(&self) -> Result<(), EngineActionError> {
         self.result.clone()
+    }
+}
+
+struct UnusedRepositoryFolderPicker;
+
+impl RepositoryFolderPicker for UnusedRepositoryFolderPicker {
+    fn select_folder(&self) -> Result<Option<PathBuf>, EngineActionError> {
+        unreachable!("the engine status test does not open a folder picker")
+    }
+}
+
+struct UnusedRepositoryService;
+
+impl RepositoryService for UnusedRepositoryService {
+    fn open_repository(&self, _path: &str) -> Result<RepositoryDescriptor, EngineActionError> {
+        unreachable!("the engine status test does not open a repository")
     }
 }
 
@@ -96,10 +117,14 @@ fn serializes_registered_engine_status_command_error_without_request_id() {
 fn invoke_engine_status(
     result: Result<(), EngineActionError>,
 ) -> Result<serde_json::Value, serde_json::Value> {
-    let state = EngineStatusState::new(Arc::new(FixedEngineStatusService { result }));
-    let app = configure_engine_status(mock_builder(), state)
-        .build(mock_context(noop_assets()))
-        .expect("the test desktop application should build");
+    let app = configure_desktop(
+        mock_builder(),
+        EngineStatusState::new(Arc::new(FixedEngineStatusService { result })),
+        RepositoryState::new(Arc::new(UnusedRepositoryService)),
+        RepositoryFolderPickerState::new(Arc::new(UnusedRepositoryFolderPicker)),
+    )
+    .build(mock_context(noop_assets()))
+    .expect("the test desktop application should build");
     let webview = tauri::WebviewWindowBuilder::new(&app, "main", Default::default())
         .build()
         .expect("the test webview should build");

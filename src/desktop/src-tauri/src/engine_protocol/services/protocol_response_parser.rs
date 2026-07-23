@@ -95,6 +95,7 @@ fn invalid_response(request_id: Option<&str>, message: &str) -> EngineExchangeEr
 mod tests {
     use super::parse_response;
     use crate::engine_protocol::{ActionErrorKind, OperationErrorType};
+    use crate::repositories::RepositoryOpenResult;
 
     const STATUS_RESULT_FIXTURE: &str = include_str!(concat!(
         env!("CARGO_MANIFEST_DIR"),
@@ -107,6 +108,14 @@ mod tests {
     const UNCORRELATED_ERROR_FIXTURE: &str = include_str!(concat!(
         env!("CARGO_MANIFEST_DIR"),
         "/../../../contracts/engine-protocol/v1/fixtures/uncorrelated-error.response.json"
+    ));
+    const REPOSITORY_BRANCH_RESULT_FIXTURE: &str = include_str!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../../contracts/engine-protocol/v1/fixtures/repositories-open.branch.result.json"
+    ));
+    const REPOSITORY_DETACHED_RESULT_FIXTURE: &str = include_str!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../../contracts/engine-protocol/v1/fixtures/repositories-open.detached.result.json"
     ));
 
     #[test]
@@ -147,6 +156,28 @@ mod tests {
     fn parses_shared_payload_free_result_fixture() {
         parse_response::<()>(STATUS_RESULT_FIXTURE, "desktop-42")
             .expect("the canonical payload-free result must parse");
+    }
+
+    #[test]
+    fn parses_shared_typed_repository_result_fixtures() {
+        parse_response::<RepositoryOpenResult>(REPOSITORY_BRANCH_RESULT_FIXTURE, "desktop-42")
+            .expect("the canonical branch result must parse");
+        parse_response::<RepositoryOpenResult>(REPOSITORY_DETACHED_RESULT_FIXTURE, "desktop-43")
+            .expect("the canonical detached result must parse");
+    }
+
+    #[test]
+    fn invalid_typed_result_invalidates_the_process() {
+        let response = r#"{"protocolVersion":1,"type":"result","requestId":"desktop-1","result":{"repository":{"name":"change_lens","canonicalPath":"/projects/change_lens","head":{"kind":"detached","name":"main","revision":"0123456789abcdef0123456789abcdef01234567"}}}}"#;
+
+        let error = parse_response::<RepositoryOpenResult>(response, "desktop-1")
+            .expect_err("the malformed typed result must fail");
+
+        assert!(error.invalidates_process());
+        assert_eq!(
+            error.into_action_error().errors[0].code,
+            "protocol.invalidResponse"
+        );
     }
 
     #[test]

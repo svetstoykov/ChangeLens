@@ -3,9 +3,27 @@ import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 import { App } from "../../../../src/desktop/ui/src/App";
 import type { EngineStatusClient } from "../../../../src/desktop/ui/src/EngineStatus/Interfaces/EngineStatusClient";
+import type { RepositoryClient } from "../../../../src/desktop/ui/src/Repositories/Interfaces/RepositoryClient";
+import type { RepositoryFolderPicker } from "../../../../src/desktop/ui/src/Repositories/Interfaces/RepositoryFolderPicker";
 import { createResolvablePromise } from "../Support/createResolvablePromise";
 
 afterEach(cleanup);
+
+const repositoryClient: RepositoryClient = {
+  openRepository: async (path) => ({
+    name: "change_lens",
+    canonicalPath: path,
+    head: {
+      kind: "branch",
+      name: "main",
+      revision: "0123456789abcdef0123456789abcdef01234567",
+    },
+  }),
+};
+
+const repositoryFolderPicker: RepositoryFolderPicker = {
+  selectFolder: async () => null,
+};
 
 describe("engine status", () => {
   it("shows a connection state while the engine request is pending", () => {
@@ -14,7 +32,7 @@ describe("engine status", () => {
       checkStatus: () => pendingStatus.promise,
     };
 
-    render(<App engineStatusClient={engineStatusClient} />);
+    renderApp(engineStatusClient);
 
     expect(
       screen.getByText("Connecting to the ChangeLens engine…"),
@@ -30,7 +48,7 @@ describe("engine status", () => {
       checkStatus: async () => undefined,
     };
 
-    render(<App engineStatusClient={engineStatusClient} />);
+    renderApp(engineStatusClient);
 
     expect(
       await screen.findByText("The ChangeLens engine is ready."),
@@ -59,7 +77,7 @@ describe("engine status", () => {
         }),
     };
 
-    render(<App engineStatusClient={engineStatusClient} />);
+    renderApp(engineStatusClient);
 
     expect(
       await screen.findByText("Check the supplied values"),
@@ -91,7 +109,7 @@ describe("engine status", () => {
         }),
     };
 
-    render(<App engineStatusClient={engineStatusClient} />);
+    renderApp(engineStatusClient);
 
     expect(
       await screen.findByText("Check the supplied values"),
@@ -112,7 +130,7 @@ describe("engine status", () => {
       },
     };
 
-    render(<App engineStatusClient={engineStatusClient} />);
+    renderApp(engineStatusClient);
 
     expect(await screen.findByText("Unexpected failure")).toBeInTheDocument();
     expect(
@@ -124,3 +142,13 @@ describe("engine status", () => {
     expect(screen.getByRole("status")).toHaveAttribute("data-state", "error");
   });
 });
+
+function renderApp(engineStatusClient: EngineStatusClient) {
+  return render(
+    <App
+      engineStatusClient={engineStatusClient}
+      repositoryClient={repositoryClient}
+      repositoryFolderPicker={repositoryFolderPicker}
+    />,
+  );
+}

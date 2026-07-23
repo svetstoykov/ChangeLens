@@ -1,7 +1,12 @@
 use crate::engine_protocol::EngineActionError;
+use crate::engine_protocol::constants::ENGINE_SHUTDOWN_FORCED_CODE;
 
 pub(crate) fn report_engine_action_failure(error: &EngineActionError) {
     eprintln!("{}", create_engine_action_diagnostic(error));
+}
+
+pub(crate) fn report_engine_shutdown_forced() {
+    eprintln!("{}", create_engine_shutdown_forced_diagnostic());
 }
 
 fn create_engine_action_diagnostic(error: &EngineActionError) -> serde_json::Value {
@@ -17,9 +22,16 @@ fn create_engine_action_diagnostic(error: &EngineActionError) -> serde_json::Val
     })
 }
 
+fn create_engine_shutdown_forced_diagnostic() -> serde_json::Value {
+    serde_json::json!({
+        "event": ENGINE_SHUTDOWN_FORCED_CODE,
+        "code": ENGINE_SHUTDOWN_FORCED_CODE,
+    })
+}
+
 #[cfg(test)]
 mod tests {
-    use super::create_engine_action_diagnostic;
+    use super::{create_engine_action_diagnostic, create_engine_shutdown_forced_diagnostic};
     use crate::engine_protocol::{
         ActionErrorDetail, ActionErrorKind, EngineActionError, OperationErrorType,
     };
@@ -41,5 +53,17 @@ mod tests {
         assert_eq!(diagnostic["requestId"], "desktop-1");
         assert_eq!(diagnostic["errorCodes"][0], "engine.readFailed");
         assert!(diagnostic.get("message").is_none());
+    }
+
+    #[test]
+    fn creates_sanitized_forced_shutdown_diagnostic() {
+        let diagnostic = create_engine_shutdown_forced_diagnostic();
+        let fields = diagnostic
+            .as_object()
+            .expect("the diagnostic must be a structured object");
+
+        assert_eq!(diagnostic["event"], "engine.shutdownForced");
+        assert_eq!(diagnostic["code"], "engine.shutdownForced");
+        assert_eq!(fields.len(), 2);
     }
 }

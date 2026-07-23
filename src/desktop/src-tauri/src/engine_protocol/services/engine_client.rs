@@ -2,6 +2,7 @@ use crate::engine_protocol::{EngineActionError, EngineProcess, EngineProtocolReq
 use std::path::PathBuf;
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::time::Duration;
 
 const CURRENT_PROTOCOL_VERSION: u32 = 1;
 
@@ -56,6 +57,7 @@ impl EngineClient {
         &self,
         action: &str,
         parameters: Option<TParameters>,
+        response_timeout: Duration,
     ) -> Result<TResult, EngineActionError>
     where
         TParameters: serde::Serialize,
@@ -88,7 +90,7 @@ impl EngineClient {
         let exchange_result = process_guard
             .as_mut()
             .expect("the engine process was initialized")
-            .exchange::<_, TResult>(&request, &request_id);
+            .exchange::<_, TResult>(&request, &request_id, response_timeout);
 
         match exchange_result {
             Ok(result) => Ok(result),

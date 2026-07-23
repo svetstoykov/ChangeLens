@@ -27,3 +27,7 @@ path = "../../../tests/integration/desktop/EngineStatus/engine_status_command.rs
 [[test]]
 name = "engine_status_process"
 path = "../../../tests/integration/desktop/EngineStatus/engine_status_process.rs"
+
+[[test]]
+name = "repository_process"
+path = "../../../tests/integration/desktop/Repositories/repository_process.rs"

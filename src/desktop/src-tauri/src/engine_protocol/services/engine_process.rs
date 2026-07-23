@@ -8,7 +8,6 @@ use std::thread::{self, JoinHandle};
 use std::time::Duration;
 
 const MAX_RESPONSE_BYTES: usize = 64 * 1024;
-const RESPONSE_TIMEOUT: Duration = Duration::from_secs(5);
 
 pub(crate) struct EngineProcess {
     child: Child,
@@ -56,6 +55,7 @@ impl EngineProcess {
         &mut self,
         request: &TRequest,
         request_id: &str,
+        response_timeout: Duration,
     ) -> Result<TResult, EngineExchangeError>
     where
         TRequest: serde::Serialize,
@@ -64,7 +64,7 @@ impl EngineProcess {
         let request_line = serialize_request(request, request_id)?;
         write_request(&mut self.stdin, &request_line, request_id)?;
 
-        let response_line = self.receive_response(request_id)?;
+        let response_line = self.receive_response(request_id, response_timeout)?;
         parse_response(&response_line, request_id)
     }
 
@@ -72,7 +72,11 @@ impl EngineProcess {
         self.child.id()
     }
 
-    fn receive_response(&self, request_id: &str) -> Result<String, EngineExchangeError> {
+    fn receive_response(
+        &self,
+        request_id: &str,
+        response_timeout: Duration,
+    ) -> Result<String, EngineExchangeError> {
         let response_receiver = self.response_receiver.as_ref().ok_or_else(|| {
             EngineExchangeError::invalidating(EngineActionError::transport(
                 Some(request_id),
@@ -82,7 +86,7 @@ impl EngineProcess {
             ))
         })?;
 
-        match response_receiver.recv_timeout(RESPONSE_TIMEOUT) {
+        match response_receiver.recv_timeout(response_timeout) {
             Ok(Ok(response_line)) => Ok(response_line),
             Ok(Err(error)) => Err(EngineExchangeError::invalidating(
                 error.with_request_id(request_id),

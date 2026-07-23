@@ -1,6 +1,7 @@
 using System.Text.Json;
 
 var mode = args.FirstOrDefault() ?? "success";
+var repositoryRequestLogPath = args.Skip(1).FirstOrDefault();
 var requestCount = 0;
 
 while (await Console.In.ReadLineAsync() is { } requestLine)
@@ -9,14 +10,46 @@ while (await Console.In.ReadLineAsync() is { } requestLine)
     var requestId = request.RootElement.GetProperty("requestId").GetString()
         ?? throw new InvalidOperationException("The fixture request identifier is required.");
     var action = request.RootElement.GetProperty("action").GetString();
-    if (action != "engine.checkStatus")
+
+    if (action == "repositories.open")
     {
-        throw new InvalidOperationException("The fixture only accepts the engine.checkStatus action.");
+        var expectedRequest = JsonSerializer.Serialize(new
+        {
+            protocolVersion = 1,
+            requestId,
+            action = "repositories.open",
+            parameters = new
+            {
+                path = "/projects/change_lens",
+            },
+        });
+
+        if (requestLine != expectedRequest)
+        {
+            throw new InvalidOperationException("The repository request does not match the expected shape.");
+        }
+
+        if (repositoryRequestLogPath is not null)
+        {
+            await File.AppendAllTextAsync(
+                repositoryRequestLogPath,
+                requestLine + Environment.NewLine);
+        }
+    }
+    else if (action != "engine.checkStatus")
+    {
+        throw new InvalidOperationException("The fixture received an unsupported action.");
     }
 
     requestCount++;
 
     if (mode == "timeout-once" && requestId == "desktop-1")
+    {
+        await Task.Delay(TimeSpan.FromSeconds(30));
+        continue;
+    }
+
+    if (mode == "repository-delay-first" && requestId == "desktop-1")
     {
         await Task.Delay(TimeSpan.FromSeconds(30));
         continue;
@@ -51,7 +84,7 @@ while (await Console.In.ReadLineAsync() is { } requestLine)
 
     if (mode == "correlation")
     {
-        await WriteResultAsync("other-request");
+        await WriteStatusResultAsync("other-request");
         continue;
     }
 
@@ -101,10 +134,22 @@ while (await Console.In.ReadLineAsync() is { } requestLine)
         continue;
     }
 
-    await WriteResultAsync(requestId);
+    if (action == "repositories.open")
+    {
+        if (mode == "repository-ordered-error-once" && requestCount == 1)
+        {
+            await WriteOrderedErrorAsync(requestId);
+            continue;
+        }
+
+        await WriteRepositoryResultAsync(requestId, mode, requestCount);
+        continue;
+    }
+
+    await WriteStatusResultAsync(requestId);
 }
 
-async Task WriteResultAsync(string requestId)
+async Task WriteStatusResultAsync(string requestId)
 {
     JsonElement? result = null;
     await WriteJsonAsync(new
@@ -113,6 +158,114 @@ async Task WriteResultAsync(string requestId)
         type = "result",
         requestId,
         result,
+    });
+}
+
+async Task WriteRepositoryResultAsync(string requestId, string fixtureMode, int currentRequestCount)
+{
+    const string revision = "0123456789abcdef0123456789abcdef01234567";
+
+    object head = fixtureMode switch
+    {
+        "repository-detached" => new
+        {
+            kind = "detached",
+            revision,
+        },
+        "repository-wrong-kind-once" when currentRequestCount == 1 => new
+        {
+            kind = "other",
+            revision,
+        },
+        "repository-detached-name-once" when currentRequestCount == 1 => new
+        {
+            kind = "detached",
+            name = "main",
+            revision,
+        },
+        "repository-branch-missing-name-once" when currentRequestCount == 1 => new
+        {
+            kind = "branch",
+            revision,
+        },
+        "repository-blank-branch-once" when currentRequestCount == 1 => new
+        {
+            kind = "branch",
+            name = " ",
+            revision,
+        },
+        "repository-uppercase-revision-once" when currentRequestCount == 1 => new
+        {
+            kind = "branch",
+            name = "main",
+            revision = revision.ToUpperInvariant(),
+        },
+        "repository-short-revision-once" when currentRequestCount == 1 => new
+        {
+            kind = "branch",
+            name = "main",
+            revision = "0123456789abcdef",
+        },
+        "repository-nonhex-revision-once" when currentRequestCount == 1 => new
+        {
+            kind = "branch",
+            name = "main",
+            revision = "g123456789abcdef0123456789abcdef01234567",
+        },
+        _ => new
+        {
+            kind = "branch",
+            name = "main",
+            revision,
+        },
+    };
+
+    var name = fixtureMode == "repository-blank-name-once" && currentRequestCount == 1
+        ? " "
+        : "change_lens";
+    var canonicalPath = fixtureMode == "repository-blank-path-once" && currentRequestCount == 1
+        ? "\t"
+        : "/projects/change_lens";
+
+    await WriteJsonAsync(new
+    {
+        protocolVersion = 1,
+        type = "result",
+        requestId,
+        result = new
+        {
+            repository = new
+            {
+                name,
+                canonicalPath,
+                head,
+            },
+        },
+    });
+}
+
+async Task WriteOrderedErrorAsync(string requestId)
+{
+    await WriteJsonAsync(new
+    {
+        protocolVersion = 1,
+        type = "error",
+        requestId,
+        errors = new[]
+        {
+            new
+            {
+                type = "Validation",
+                code = "fixture.first",
+                message = "The first fixture value is invalid.",
+            },
+            new
+            {
+                type = "Conflict",
+                code = "fixture.second",
+                message = "The second fixture value conflicts with current state.",
+            },
+        },
     });
 }
 

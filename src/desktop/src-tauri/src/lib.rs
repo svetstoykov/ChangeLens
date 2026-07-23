@@ -1,5 +1,6 @@
 pub mod engine_protocol;
 pub mod engine_status;
+pub mod repositories;
 
 use engine_protocol::{
     ActionErrorKind, EngineActionError, EngineClient, report_engine_action_failure,

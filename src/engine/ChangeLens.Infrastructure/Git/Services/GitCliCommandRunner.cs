@@ -22,6 +22,11 @@ namespace ChangeLens.Infrastructure.Git.Services;
 ///         Git arguments are passed as distinct process arguments. Paging, prompts, optional locks, and locale-dependent
 ///         output are disabled for every execution.
 ///     </para>
+///     <para>
+///         Deadlines and caller cancellation cover both process exit and redirected-stream completion. Descendant
+///         cleanup is best effort after the tracked process exits because the platform process API no longer retains a
+///         handle to that descendant tree.
+///     </para>
 /// </remarks>
 public sealed class GitCliCommandRunner : IGitCommandRunner
 {
@@ -118,22 +123,32 @@ public sealed class GitCliCommandRunner : IGitCommandRunner
             timeout.Token);
         var standardOutputTask = ReadBoundedAsync(
             process.StandardOutput.BaseStream,
-            command.MaximumStreamBytes);
+            command.MaximumStreamBytes,
+            executionCancellation.Token);
         var standardErrorTask = ReadBoundedAsync(
             process.StandardError.BaseStream,
+            command.MaximumStreamBytes,
+            executionCancellation.Token);
+        var exitTask = process.WaitForExitAsync(CancellationToken.None);
+        var completionTask = WaitForCompletionOrLimitAsync(
+            exitTask,
+            standardOutputTask,
+            standardErrorTask,
             command.MaximumStreamBytes);
-        var exitTask = process.WaitForExitAsync(executionCancellation.Token);
+        Task[] cleanupTasks =
+        [
+            exitTask,
+            standardOutputTask,
+            standardErrorTask,
+            completionTask,
+        ];
 
         try
         {
-            var exceededLimit = await WaitForExitOrLimitAsync(
-                exitTask,
-                standardOutputTask,
-                standardErrorTask,
-                command.MaximumStreamBytes);
+            var exceededLimit = await completionTask.WaitAsync(executionCancellation.Token);
             if (exceededLimit)
             {
-                await TerminateAndReapAsync(process, standardOutputTask, standardErrorTask);
+                await TerminateAndCleanUpAsync(process, executionCancellation, cleanupTasks);
                 return InspectionFailed();
             }
 
@@ -160,18 +175,18 @@ public sealed class GitCliCommandRunner : IGitCommandRunner
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
-            await TerminateAndReapAsync(process, standardOutputTask, standardErrorTask);
+            await TerminateAndCleanUpAsync(process, executionCancellation, cleanupTasks);
             cancellationToken.ThrowIfCancellationRequested();
             throw;
         }
         catch (OperationCanceledException) when (timeout.IsCancellationRequested)
         {
-            await TerminateAndReapAsync(process, standardOutputTask, standardErrorTask);
+            await TerminateAndCleanUpAsync(process, executionCancellation, cleanupTasks);
             return TimedOut();
         }
         catch (IOException)
         {
-            await TerminateAndReapAsync(process, standardOutputTask, standardErrorTask);
+            await TerminateAndCleanUpAsync(process, executionCancellation, cleanupTasks);
             return InspectionFailed();
         }
     }
@@ -219,7 +234,8 @@ public sealed class GitCliCommandRunner : IGitCommandRunner
     }
 
     /// <summary>
-    ///     Waits for process exit while detecting either output stream that reaches the rejection sentinel.
+    ///     Waits for process exit and stream completion while detecting either stream that reaches the rejection
+    ///     sentinel.
     /// </summary>
     /// <param name="exitTask">The process-exit task. Cannot be <see langword="null" />.</param>
     /// <param name="standardOutputTask">
@@ -233,7 +249,7 @@ public sealed class GitCliCommandRunner : IGitCommandRunner
     ///     A task that represents the asynchronous operation. The task result is <see langword="true" /> when either
     ///     stream exceeds the bound; otherwise, <see langword="false" />.
     /// </returns>
-    private static async Task<bool> WaitForExitOrLimitAsync(
+    private static async Task<bool> WaitForCompletionOrLimitAsync(
         Task exitTask,
         Task<byte[]> standardOutputTask,
         Task<byte[]> standardErrorTask,
@@ -246,7 +262,7 @@ public sealed class GitCliCommandRunner : IGitCommandRunner
             standardErrorTask,
         };
 
-        while (true)
+        while (pendingTasks.Count > 0)
         {
             var completedTask = await Task.WhenAny(pendingTasks);
             pendingTasks.Remove(completedTask);
@@ -254,7 +270,7 @@ public sealed class GitCliCommandRunner : IGitCommandRunner
             if (completedTask == exitTask)
             {
                 await exitTask;
-                return false;
+                continue;
             }
 
             var bytes = completedTask == standardOutputTask
@@ -265,6 +281,8 @@ public sealed class GitCliCommandRunner : IGitCommandRunner
                 return true;
             }
         }
+
+        return false;
     }
 
     /// <summary>
@@ -272,12 +290,19 @@ public sealed class GitCliCommandRunner : IGitCommandRunner
     /// </summary>
     /// <param name="stream">The redirected process stream. Cannot be <see langword="null" />.</param>
     /// <param name="maximumStreamBytes">The maximum accepted byte count.</param>
+    /// <param name="cancellationToken">
+    ///     A <see cref="CancellationToken" /> to observe while waiting for redirected output.
+    /// </param>
     /// <returns>
     ///     A task that represents the asynchronous operation. The task result contains the bounded byte capture.
     /// </returns>
+    /// <exception cref="OperationCanceledException">
+    ///     If the <paramref name="cancellationToken" /> is canceled.
+    /// </exception>
     private static async Task<byte[]> ReadBoundedAsync(
         Stream stream,
-        int maximumStreamBytes)
+        int maximumStreamBytes,
+        CancellationToken cancellationToken)
     {
         var captureLimit = (long)maximumStreamBytes + 1;
         var buffer = new byte[(int)Math.Min(8_192, captureLimit)];
@@ -290,7 +315,7 @@ public sealed class GitCliCommandRunner : IGitCommandRunner
                 captureLimit - capture.Length);
             var bytesRead = await stream.ReadAsync(
                 buffer.AsMemory(0, requestedBytes),
-                CancellationToken.None);
+                cancellationToken);
             if (bytesRead == 0)
             {
                 break;
@@ -298,28 +323,41 @@ public sealed class GitCliCommandRunner : IGitCommandRunner
 
             await capture.WriteAsync(
                 buffer.AsMemory(0, bytesRead),
-                CancellationToken.None);
+                cancellationToken);
         }
 
         return capture.ToArray();
     }
 
     /// <summary>
-    ///     Terminates the process tree when still active and waits for process and stream cleanup without cancellation.
+    ///     Terminates the process tree when still active, closes redirected streams, and bounds cleanup work.
     /// </summary>
+    /// <remarks>
+    ///     Once the tracked process has exited, its descendants cannot be discovered reliably through
+    ///     <see cref="Process" />. Closing the local stream handles still guarantees that cleanup cannot hold the caller
+    ///     beyond the grace period.
+    /// </remarks>
     /// <param name="process">The started process. Cannot be <see langword="null" />.</param>
-    /// <param name="standardOutputTask">
-    ///     The bounded standard-output capture task. Cannot be <see langword="null" />.
+    /// <param name="executionCancellation">
+    ///     The linked source that controls process execution. Cannot be <see langword="null" />.
     /// </param>
-    /// <param name="standardErrorTask">
-    ///     The bounded standard-error capture task. Cannot be <see langword="null" />.
+    /// <param name="cleanupTasks">
+    ///     The process and stream tasks to observe during cleanup. Cannot be <see langword="null" />.
     /// </param>
     /// <returns>A task that represents the asynchronous operation.</returns>
-    private static async Task TerminateAndReapAsync(
+    private static async Task TerminateAndCleanUpAsync(
         Process process,
-        Task<byte[]> standardOutputTask,
-        Task<byte[]> standardErrorTask)
+        CancellationTokenSource executionCancellation,
+        IReadOnlyCollection<Task> cleanupTasks)
     {
+        try
+        {
+            await executionCancellation.CancelAsync();
+        }
+        catch (AggregateException)
+        {
+        }
+
         try
         {
             if (!process.HasExited)
@@ -334,18 +372,52 @@ public sealed class GitCliCommandRunner : IGitCommandRunner
 
         try
         {
-            await process.WaitForExitAsync(CancellationToken.None);
+            await process.StandardOutput.BaseStream.DisposeAsync();
         }
         catch (Exception exception) when (
-            exception is InvalidOperationException or Win32Exception)
+            exception is IOException or InvalidOperationException)
         {
         }
 
         try
         {
-            await Task.WhenAll(standardOutputTask, standardErrorTask);
+            await process.StandardError.BaseStream.DisposeAsync();
         }
-        catch (IOException)
+        catch (Exception exception) when (
+            exception is IOException or InvalidOperationException)
+        {
+        }
+
+        var observationTasks = cleanupTasks
+            .Select(ObserveCleanupTaskAsync)
+            .ToArray();
+
+        try
+        {
+            await Task.WhenAll(observationTasks)
+                .WaitAsync(GitProcessConstants.CleanupGracePeriod);
+        }
+        catch (TimeoutException)
+        {
+        }
+    }
+
+    /// <summary>
+    ///     Observes expected task failures after execution has already reached a terminal outcome.
+    /// </summary>
+    /// <param name="task">The cleanup task to observe. Cannot be <see langword="null" />.</param>
+    /// <returns>A task that represents the asynchronous operation.</returns>
+    private static async Task ObserveCleanupTaskAsync(Task task)
+    {
+        try
+        {
+            await task;
+        }
+        catch (Exception exception) when (
+            exception is OperationCanceledException
+                or IOException
+                or InvalidOperationException
+                or Win32Exception)
         {
         }
     }

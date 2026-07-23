@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using System.Diagnostics;
 using System.Globalization;
 using System.Text.Json;
@@ -225,28 +226,34 @@ public sealed class GitCliCommandRunnerTests
     }
 
     /// <summary>
-    ///     Asynchronously honors the internal deadline after the root exits while a child retains the redirected streams.
+    ///     Asynchronously honors the internal deadline after the root exits while a child retains the redirected
+    ///     streams.
     /// </summary>
     /// <returns>A task that represents the asynchronous operation.</returns>
     [Fact]
-    public async Task RunAsync_RootExitsWithInheritingChild_InternalTimeoutCompletesAndReapsChild()
+    public async Task RunAsync_RootExitsWithInheritingChild_InternalTimeoutCompletesWithinBound()
     {
         using var temporaryDirectory = new TemporaryDirectory();
         var childProcessIdPath = Path.Combine(temporaryDirectory.DirectoryPath, "child.pid");
         var runner = CreateRunner();
 
-        var result = await RunInFixtureModeAsync(
-                "spawn-inheriting-child-and-exit",
-                () => runner.RunAsync(
-                    CreateCommand([childProcessIdPath], TimeSpan.FromSeconds(1)),
-                    CancellationToken.None))
-            .WaitAsync(
-                TimeSpan.FromSeconds(5),
-                TestContext.Current.CancellationToken);
+        try
+        {
+            var result = await RunInFixtureModeAsync(
+                    "spawn-inheriting-child-and-exit",
+                    () => runner.RunAsync(
+                        CreateCommand([childProcessIdPath], TimeSpan.FromSeconds(1)),
+                        CancellationToken.None))
+                .WaitAsync(
+                    TimeSpan.FromSeconds(5),
+                    TestContext.Current.CancellationToken);
 
-        AssertFailure(result, ErrorType.Timeout, GitErrorCode.TimedOut);
-        var childProcessId = await ReadProcessIdAsync(childProcessIdPath);
-        await AssertProcessReapedAsync(childProcessId);
+            AssertFailure(result, ErrorType.Timeout, GitErrorCode.TimedOut);
+        }
+        finally
+        {
+            await TerminateRecordedProcessAsync(childProcessIdPath);
+        }
     }
 
     /// <summary>
@@ -254,26 +261,31 @@ public sealed class GitCliCommandRunnerTests
     /// </summary>
     /// <returns>A task that represents the asynchronous operation.</returns>
     [Fact]
-    public async Task RunAsync_RootExitsWithInheritingChild_CallerCancellationCompletesAndReapsChild()
+    public async Task RunAsync_RootExitsWithInheritingChild_CallerCancellationCompletesWithinBound()
     {
         using var temporaryDirectory = new TemporaryDirectory();
         var childProcessIdPath = Path.Combine(temporaryDirectory.DirectoryPath, "child.pid");
         using var cancellationTokenSource = new CancellationTokenSource(TimeSpan.FromSeconds(1));
         var runner = CreateRunner();
 
-        var exception = await Assert.ThrowsAsync<OperationCanceledException>(
-            () => RunInFixtureModeAsync(
-                    "spawn-inheriting-child-and-exit",
-                    () => runner.RunAsync(
-                        CreateCommand([childProcessIdPath], TimeSpan.FromSeconds(10)),
-                        cancellationTokenSource.Token))
-                .WaitAsync(
-                    TimeSpan.FromSeconds(5),
-                    TestContext.Current.CancellationToken));
+        try
+        {
+            var exception = await Assert.ThrowsAsync<OperationCanceledException>(
+                () => RunInFixtureModeAsync(
+                        "spawn-inheriting-child-and-exit",
+                        () => runner.RunAsync(
+                            CreateCommand([childProcessIdPath], TimeSpan.FromSeconds(10)),
+                            cancellationTokenSource.Token))
+                    .WaitAsync(
+                        TimeSpan.FromSeconds(5),
+                        TestContext.Current.CancellationToken));
 
-        Assert.Equal(cancellationTokenSource.Token, exception.CancellationToken);
-        var childProcessId = await ReadProcessIdAsync(childProcessIdPath);
-        await AssertProcessReapedAsync(childProcessId);
+            Assert.Equal(cancellationTokenSource.Token, exception.CancellationToken);
+        }
+        finally
+        {
+            await TerminateRecordedProcessAsync(childProcessIdPath);
+        }
     }
 
     private static string DotnetExecutablePath =>
@@ -352,5 +364,43 @@ public sealed class GitCliCommandRunnerTests
         }
 
         Assert.Fail($"Process {processId} was not reaped within the allowed time.");
+    }
+
+    /// <summary>
+    ///     Asynchronously terminates the descendant recorded by a fixture that intentionally outlives its parent.
+    /// </summary>
+    /// <param name="path">The path containing the descendant process identifier.</param>
+    /// <returns>A task that represents the asynchronous operation.</returns>
+    private static async Task TerminateRecordedProcessAsync(string path)
+    {
+        if (!File.Exists(path))
+        {
+            return;
+        }
+
+        var value = await File.ReadAllTextAsync(path, CancellationToken.None);
+        if (!int.TryParse(value, CultureInfo.InvariantCulture, out var processId))
+        {
+            return;
+        }
+
+        try
+        {
+            using var process = Process.GetProcessById(processId);
+            if (!process.HasExited)
+            {
+                process.Kill(entireProcessTree: true);
+            }
+
+            await process.WaitForExitAsync(CancellationToken.None)
+                .WaitAsync(TimeSpan.FromSeconds(5));
+        }
+        catch (Exception exception) when (
+            exception is ArgumentException
+                or InvalidOperationException
+                or Win32Exception
+                or TimeoutException)
+        {
+        }
     }
 }

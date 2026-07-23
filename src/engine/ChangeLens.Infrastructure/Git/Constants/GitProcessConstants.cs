@@ -6,6 +6,11 @@ namespace ChangeLens.Infrastructure.Git.Constants;
 internal static class GitProcessConstants
 {
     /// <summary>
+    ///     The maximum time allowed for best-effort process and stream cleanup.
+    /// </summary>
+    internal static readonly TimeSpan CleanupGracePeriod = TimeSpan.FromSeconds(1);
+
+    /// <summary>
     ///     The default Git executable resolved from the process search path.
     /// </summary>
     internal const string DefaultExecutable = "git";

@@ -5,6 +5,7 @@ using ChangeLens.Engine.Protocol.Interfaces;
 using ChangeLens.Engine.Protocol.Models;
 using ChangeLens.Engine.Protocol.Services;
 using ChangeLens.Engine.UnitTests.EngineStatus.Support;
+using ChangeLens.Engine.UnitTests.Repositories.Support;
 using ChangeLens.Engine.UnitTests.Support;
 using Xunit;
 
@@ -208,6 +209,8 @@ public sealed class EngineProtocolHostTests
             transport,
             new EngineActionProcessor(
                 new StubEngineStatusService(checkStatusAsync),
+                new RepositoryInspectorFixture().Inspector,
+                new EngineProtocolSerializer(),
                 new TestLogger<EngineActionProcessor>()),
             logger,
             lifetime);

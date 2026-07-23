@@ -44,7 +44,7 @@ public sealed class GitCliCommandRunner : IGitCommandRunner
     }
 
     /// <summary>
-    ///     Initializes a new instance of the <see cref="GitCliCommandRunner" /> class for infrastructure testing.
+    ///     Initializes a new instance of the <see cref="GitCliCommandRunner" /> class using a configured executable.
     /// </summary>
     /// <param name="executablePath">
     ///     The configured executable path or name. Cannot be <see langword="null" /> or empty.
@@ -63,7 +63,7 @@ public sealed class GitCliCommandRunner : IGitCommandRunner
     ///     -or-
     ///     <paramref name="executableArguments" /> is <see langword="null" />.
     /// </exception>
-    internal GitCliCommandRunner(
+    public GitCliCommandRunner(
         string executablePath,
         IEnumerable<string> executableArguments)
     {

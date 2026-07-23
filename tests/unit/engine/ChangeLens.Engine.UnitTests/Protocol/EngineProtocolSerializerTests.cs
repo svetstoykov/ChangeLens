@@ -3,6 +3,7 @@ using ChangeLens.Core.Results.Models;
 using ChangeLens.Engine.Protocol.Constants;
 using ChangeLens.Engine.Protocol.Models;
 using ChangeLens.Engine.Protocol.Services;
+using ChangeLens.Engine.Repositories.Models;
 using ChangeLens.Engine.UnitTests.Support;
 using Xunit;
 
@@ -111,6 +112,61 @@ public sealed class EngineProtocolSerializerTests
         var error = Assert.Single(result.Errors);
         Assert.Equal(ErrorType.Validation, error.Type);
         Assert.Equal("protocol.invalidRequest", error.Code);
+    }
+
+    /// <summary>
+    ///     Verifies that repository parameters reject malformed nested properties.
+    /// </summary>
+    /// <param name="parametersJson">The malformed repository parameters.</param>
+    [Theory]
+    [InlineData("""{"path":"/first","path":"/second"}""")]
+    [InlineData("""{"Path":"/repository"}""")]
+    [InlineData("""{"path":"/repository","extra":true}""")]
+    [InlineData("""{"path":null}""")]
+    public void DeserializeParametersRejectsMalformedRepositoryProperties(string parametersJson)
+    {
+        using var document = JsonDocument.Parse(parametersJson);
+
+        var result = _serializer.DeserializeParameters<RepositoryOpenParameters>(
+            document.RootElement,
+            "repositories.open");
+
+        var error = Assert.Single(result.Errors);
+        Assert.Equal(ErrorType.Validation, error.Type);
+        Assert.Equal("protocol.invalidRequest", error.Code);
+    }
+
+    /// <summary>
+    ///     Verifies that repository parameter names use the exact protocol casing.
+    /// </summary>
+    [Fact]
+    public void DeserializeParametersBindsExactRepositoryPathProperty()
+    {
+        using var document = JsonDocument.Parse("""{"path":"/repository"}""");
+
+        var result = _serializer.DeserializeParameters<RepositoryOpenParameters>(
+            document.RootElement,
+            "repositories.open");
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal("/repository", result.Data!.Path);
+    }
+
+    /// <summary>
+    ///     Verifies that structural binding leaves the path scalar bound to Core validation.
+    /// </summary>
+    [Fact]
+    public void DeserializeParametersBinds8193ScalarRepositoryPath()
+    {
+        var path = new string('a', 8_193);
+        using var document = JsonDocument.Parse(JsonSerializer.Serialize(new { path }));
+
+        var result = _serializer.DeserializeParameters<RepositoryOpenParameters>(
+            document.RootElement,
+            "repositories.open");
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal(path, result.Data!.Path);
     }
 
     /// <summary>

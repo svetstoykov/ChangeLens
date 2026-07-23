@@ -1,10 +1,13 @@
 using System.Diagnostics;
 using System.Text.Json;
 using ChangeLens.Core.EngineStatus.Interfaces;
+using ChangeLens.Core.Git.Services;
 using ChangeLens.Core.Results.Models;
 using ChangeLens.Engine.EngineStatus.Constants;
 using ChangeLens.Engine.Protocol.Constants;
 using ChangeLens.Engine.Protocol.Models;
+using ChangeLens.Engine.Repositories.Constants;
+using ChangeLens.Engine.Repositories.Models;
 using Microsoft.Extensions.Logging;
 
 namespace ChangeLens.Engine.Protocol.Services;
@@ -17,9 +20,13 @@ namespace ChangeLens.Engine.Protocol.Services;
 ///     singleton-safe collaborators and does not maintain mutable state.
 /// </remarks>
 /// <param name="engineStatusService">The engine-status capability. Cannot be <see langword="null" />.</param>
+/// <param name="gitRepositoryInspector">The Git repository inspection capability. Cannot be <see langword="null" />.</param>
+/// <param name="protocolSerializer">The strict engine protocol serializer. Cannot be <see langword="null" />.</param>
 /// <param name="logger">The logger for action outcomes. Cannot be <see langword="null" />.</param>
 internal sealed class EngineActionProcessor(
     IEngineStatusService engineStatusService,
+    GitRepositoryInspector gitRepositoryInspector,
+    EngineProtocolSerializer protocolSerializer,
     ILogger<EngineActionProcessor> logger)
 {
     /// <summary>
@@ -99,6 +106,8 @@ internal sealed class EngineActionProcessor(
         CancellationToken cancellationToken) =>
         request.Action switch
         {
+            RepositoryActionConstants.OpenAction =>
+                this.ProcessRepositoryOpenAsync(request, cancellationToken),
             EngineStatusActionConstants.CheckStatusAction
                 when request.Parameters.ValueKind == JsonValueKind.Undefined =>
                 this.ProcessCheckStatusAsync(request, cancellationToken),
@@ -115,6 +124,52 @@ internal sealed class EngineActionProcessor(
                         $"The action '{request.Action}' is not recognized.",
                         EngineErrorCode.UnknownAction))),
         };
+
+    /// <summary>
+    ///     Asynchronously binds and executes the repository-open action.
+    /// </summary>
+    /// <param name="request">The current-version repository-open request. Cannot be <see langword="null" />.</param>
+    /// <param name="cancellationToken">
+    ///     A <see cref="CancellationToken" /> to observe while waiting for repository inspection.
+    /// </param>
+    /// <returns>
+    ///     A task that represents the asynchronous operation. The task result contains the mapped repository response.
+    /// </returns>
+    private async Task<ProtocolResponse> ProcessRepositoryOpenAsync(
+        EngineProtocolRequest request,
+        CancellationToken cancellationToken)
+    {
+        if (request.Parameters.ValueKind == JsonValueKind.Undefined)
+        {
+            return ProtocolResponseFactory.FromError(
+                request.RequestId,
+                OperationError.Validation(
+                    "The repositories.open action requires parameters.",
+                    EngineErrorCode.InvalidRequest));
+        }
+
+        var parametersResult = protocolSerializer.DeserializeParameters<RepositoryOpenParameters>(
+            request.Parameters,
+            RepositoryActionConstants.OpenAction);
+        if (parametersResult.IsFailure)
+        {
+            return ProtocolResponseFactory.CreateError(request.RequestId, parametersResult.Errors);
+        }
+
+        var inspectionResult = await gitRepositoryInspector.InspectAsync(
+            parametersResult.Data!.Path,
+            cancellationToken);
+        if (inspectionResult.IsFailure)
+        {
+            return ProtocolResponseFactory.FromResult(
+                request.RequestId,
+                Result.ErrorFromResult<RepositoryOpenResult>(inspectionResult));
+        }
+
+        return ProtocolResponseFactory.FromResult(
+            request.RequestId,
+            Result.Success(RepositoryOpenResult.FromDescriptor(inspectionResult.Data!)));
+    }
 
     /// <summary>
     ///     Asynchronously executes the payload-free engine-status action.

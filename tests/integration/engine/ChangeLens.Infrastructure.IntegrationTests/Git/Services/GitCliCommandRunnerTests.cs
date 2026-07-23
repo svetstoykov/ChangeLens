@@ -224,6 +224,58 @@ public sealed class GitCliCommandRunnerTests
         await AssertProcessReapedAsync(childProcessId);
     }
 
+    /// <summary>
+    ///     Asynchronously honors the internal deadline after the root exits while a child retains the redirected streams.
+    /// </summary>
+    /// <returns>A task that represents the asynchronous operation.</returns>
+    [Fact]
+    public async Task RunAsync_RootExitsWithInheritingChild_InternalTimeoutCompletesAndReapsChild()
+    {
+        using var temporaryDirectory = new TemporaryDirectory();
+        var childProcessIdPath = Path.Combine(temporaryDirectory.DirectoryPath, "child.pid");
+        var runner = CreateRunner();
+
+        var result = await RunInFixtureModeAsync(
+                "spawn-inheriting-child-and-exit",
+                () => runner.RunAsync(
+                    CreateCommand([childProcessIdPath], TimeSpan.FromSeconds(1)),
+                    CancellationToken.None))
+            .WaitAsync(
+                TimeSpan.FromSeconds(5),
+                TestContext.Current.CancellationToken);
+
+        AssertFailure(result, ErrorType.Timeout, GitErrorCode.TimedOut);
+        var childProcessId = await ReadProcessIdAsync(childProcessIdPath);
+        await AssertProcessReapedAsync(childProcessId);
+    }
+
+    /// <summary>
+    ///     Asynchronously honors caller cancellation after the root exits while a child retains redirected streams.
+    /// </summary>
+    /// <returns>A task that represents the asynchronous operation.</returns>
+    [Fact]
+    public async Task RunAsync_RootExitsWithInheritingChild_CallerCancellationCompletesAndReapsChild()
+    {
+        using var temporaryDirectory = new TemporaryDirectory();
+        var childProcessIdPath = Path.Combine(temporaryDirectory.DirectoryPath, "child.pid");
+        using var cancellationTokenSource = new CancellationTokenSource(TimeSpan.FromSeconds(1));
+        var runner = CreateRunner();
+
+        var exception = await Assert.ThrowsAsync<OperationCanceledException>(
+            () => RunInFixtureModeAsync(
+                    "spawn-inheriting-child-and-exit",
+                    () => runner.RunAsync(
+                        CreateCommand([childProcessIdPath], TimeSpan.FromSeconds(10)),
+                        cancellationTokenSource.Token))
+                .WaitAsync(
+                    TimeSpan.FromSeconds(5),
+                    TestContext.Current.CancellationToken));
+
+        Assert.Equal(cancellationTokenSource.Token, exception.CancellationToken);
+        var childProcessId = await ReadProcessIdAsync(childProcessIdPath);
+        await AssertProcessReapedAsync(childProcessId);
+    }
+
     private static string DotnetExecutablePath =>
         Environment.GetEnvironmentVariable("DOTNET_HOST_PATH") ?? "dotnet";
 

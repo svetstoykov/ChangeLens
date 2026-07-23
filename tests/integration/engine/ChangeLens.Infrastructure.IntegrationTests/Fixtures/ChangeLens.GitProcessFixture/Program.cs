@@ -49,6 +49,9 @@ switch (mode)
     case "spawn-child":
         return await SpawnChildAsync(args);
 
+    case "spawn-inheriting-child-and-exit":
+        return await SpawnInheritingChildAndExitAsync(args);
+
     case "success":
         await Console.Out.WriteAsync("fixture standard output");
         await Console.Error.WriteAsync("fixture standard error");
@@ -97,5 +100,31 @@ static async Task<int> SpawnChildAsync(string[] arguments)
         arguments[0],
         child.Id.ToString(CultureInfo.InvariantCulture));
     await Task.Delay(TimeSpan.FromMinutes(5));
+    return 0;
+}
+
+static async Task<int> SpawnInheritingChildAndExitAsync(string[] arguments)
+{
+    if (arguments.Length != 1)
+    {
+        return 2;
+    }
+
+    var processPath = Environment.ProcessPath
+        ?? throw new InvalidOperationException("The fixture process path is unavailable.");
+    var assemblyPath = Assembly.GetExecutingAssembly().Location;
+    var startInfo = new ProcessStartInfo(processPath)
+    {
+        CreateNoWindow = true,
+        UseShellExecute = false,
+    };
+    startInfo.ArgumentList.Add(assemblyPath);
+    startInfo.Environment["CHANGELENS_GIT_FIXTURE_MODE"] = "sleep";
+
+    using var child = Process.Start(startInfo)
+        ?? throw new InvalidOperationException("The child fixture process could not be started.");
+    await File.WriteAllTextAsync(
+        arguments[0],
+        child.Id.ToString(CultureInfo.InvariantCulture));
     return 0;
 }

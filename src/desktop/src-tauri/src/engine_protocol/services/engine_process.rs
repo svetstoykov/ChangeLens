@@ -1,17 +1,20 @@
+use crate::engine_protocol::constants::GRACEFUL_SHUTDOWN_TIMEOUT;
 use crate::engine_protocol::services::{parse_response, resolve_engine_path};
-use crate::engine_protocol::{EngineActionError, EngineExchangeError, OperationErrorType};
+use crate::engine_protocol::{
+    EngineActionError, EngineExchangeError, EngineShutdownOutcome, OperationErrorType,
+};
 use std::io::{BufRead, BufReader, Read, Write};
 use std::path::Path;
 use std::process::{Child, ChildStdin, ChildStdout, Command, Stdio};
 use std::sync::mpsc::{Receiver, RecvTimeoutError, SyncSender, sync_channel};
 use std::thread::{self, JoinHandle};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 const MAX_RESPONSE_BYTES: usize = 64 * 1024;
 
 pub(crate) struct EngineProcess {
     child: Child,
-    stdin: ChildStdin,
+    stdin: Option<ChildStdin>,
     response_receiver: Option<Receiver<Result<String, EngineActionError>>>,
     reader_thread: Option<JoinHandle<()>>,
 }
@@ -45,7 +48,7 @@ impl EngineProcess {
 
         Ok(Self {
             child,
-            stdin,
+            stdin: Some(stdin),
             response_receiver: Some(response_receiver),
             reader_thread: Some(reader_thread),
         })
@@ -62,7 +65,15 @@ impl EngineProcess {
         TResult: serde::de::DeserializeOwned,
     {
         let request_line = serialize_request(request, request_id)?;
-        write_request(&mut self.stdin, &request_line, request_id)?;
+        let stdin = self.stdin.as_mut().ok_or_else(|| {
+            EngineExchangeError::invalidating(EngineActionError::transport(
+                Some(request_id),
+                "engine.writeFailed",
+                OperationErrorType::ExternalDependencyFailure,
+                "The engine action request could not be written.",
+            ))
+        })?;
+        write_request(stdin, &request_line, request_id)?;
 
         let response_line = self.receive_response(request_id, response_timeout)?;
         parse_response(&response_line, request_id)
@@ -70,6 +81,48 @@ impl EngineProcess {
 
     pub(crate) fn id(&self) -> u32 {
         self.child.id()
+    }
+
+    pub(crate) fn shutdown(&mut self) -> EngineShutdownOutcome {
+        self.stdin.take();
+        let deadline = Instant::now() + GRACEFUL_SHUTDOWN_TIMEOUT;
+
+        let outcome = loop {
+            match self.child.try_wait() {
+                Ok(Some(_)) => {
+                    let _ = self.child.wait();
+                    break EngineShutdownOutcome::Graceful;
+                }
+                Ok(None) if Instant::now() < deadline => {
+                    thread::sleep(Duration::from_millis(10));
+                }
+                Ok(None) | Err(_) => {
+                    self.force_terminate_and_reap();
+                    break EngineShutdownOutcome::Forced;
+                }
+            }
+        };
+
+        self.join_response_reader();
+        outcome
+    }
+
+    pub(crate) fn force_shutdown(&mut self) {
+        self.stdin.take();
+        self.force_terminate_and_reap();
+        self.join_response_reader();
+    }
+
+    fn force_terminate_and_reap(&mut self) {
+        let _ = self.child.kill();
+        let _ = self.child.wait();
+    }
+
+    fn join_response_reader(&mut self) {
+        self.response_receiver.take();
+        if let Some(reader_thread) = self.reader_thread.take() {
+            let _ = reader_thread.join();
+        }
     }
 
     fn receive_response(
@@ -113,13 +166,7 @@ impl EngineProcess {
 
 impl Drop for EngineProcess {
     fn drop(&mut self) {
-        self.response_receiver.take();
-        let _ = self.child.kill();
-        let _ = self.child.wait();
-
-        if let Some(reader_thread) = self.reader_thread.take() {
-            let _ = reader_thread.join();
-        }
+        let _ = self.shutdown();
     }
 }
 

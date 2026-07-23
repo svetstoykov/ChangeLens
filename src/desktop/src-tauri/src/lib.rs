@@ -32,12 +32,18 @@ pub fn configure_desktop<R: tauri::Runtime>(
 pub fn run() {
     let engine_client = Arc::new(EngineClient::new());
 
-    configure_desktop(
+    let app = configure_desktop(
         tauri::Builder::default(),
         EngineStatusState::new(engine_client.clone()),
-        RepositoryState::new(engine_client),
+        RepositoryState::new(engine_client.clone()),
         RepositoryFolderPickerState::new(Arc::new(NativeRepositoryFolderPicker)),
     )
-    .run(tauri::generate_context!())
+    .build(tauri::generate_context!())
     .expect("the ChangeLens desktop runtime could not be started");
+
+    app.run(move |_app_handle, event| {
+        if matches!(event, tauri::RunEvent::ExitRequested { .. }) {
+            engine_client.shutdown();
+        }
+    });
 }

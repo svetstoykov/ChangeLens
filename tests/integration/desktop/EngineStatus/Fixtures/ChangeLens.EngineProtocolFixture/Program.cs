@@ -149,6 +149,21 @@ while (await Console.In.ReadLineAsync() is { } requestLine)
     await WriteStatusResultAsync(requestId);
 }
 
+if (mode == "record-eof")
+{
+    if (repositoryRequestLogPath is null)
+    {
+        throw new InvalidOperationException("The EOF marker path is required.");
+    }
+
+    await File.WriteAllTextAsync(repositoryRequestLogPath, "eof");
+}
+
+if (mode == "ignore-eof")
+{
+    await Task.Delay(Timeout.InfiniteTimeSpan);
+}
+
 async Task WriteStatusResultAsync(string requestId)
 {
     JsonElement? result = null;

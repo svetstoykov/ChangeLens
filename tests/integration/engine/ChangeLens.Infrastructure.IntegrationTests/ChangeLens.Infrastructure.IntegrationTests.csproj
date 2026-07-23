@@ -9,6 +9,10 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Remove="Fixtures/**/*.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="coverlet.collector" Version="10.0.1">
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
@@ -24,6 +28,7 @@
   <ItemGroup>
     <ProjectReference Include="../../../../src/engine/ChangeLens.Core/ChangeLens.Core.csproj" />
     <ProjectReference Include="../../../../src/engine/ChangeLens.Infrastructure/ChangeLens.Infrastructure.csproj" />
+    <ProjectReference Include="Fixtures/ChangeLens.GitProcessFixture/ChangeLens.GitProcessFixture.csproj" />
   </ItemGroup>
 
 </Project>

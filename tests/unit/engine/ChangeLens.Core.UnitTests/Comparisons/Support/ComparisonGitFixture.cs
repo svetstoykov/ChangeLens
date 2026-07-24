@@ -46,6 +46,10 @@ internal sealed class ComparisonGitFixture
             Discovery,
             Runner,
             new ComparisonFileSummaryComposer());
+        FreshnessChecker = new GitComparisonFreshnessChecker(
+            new GitRepositoryInspector(Runner, Resolver),
+            Discovery,
+            Runner);
     }
 
     /// <summary>
@@ -57,6 +61,11 @@ internal sealed class ComparisonGitFixture
     ///     Gets the comparison-preparation service under test.
     /// </summary>
     internal GitComparisonPreparer Preparer { get; }
+
+    /// <summary>
+    ///     Gets the comparison freshness checker under test.
+    /// </summary>
+    internal GitComparisonFreshnessChecker FreshnessChecker { get; }
 
     /// <summary>
     ///     Gets the controlled Git command runner.
@@ -72,7 +81,9 @@ internal sealed class ComparisonGitFixture
     ///     Queues a successful attached-branch repository inspection.
     /// </summary>
     /// <param name="branchName">The checked-out branch name.</param>
-    internal void EnqueueInspection(string branchName = "main")
+    internal void EnqueueInspection(
+        string branchName = "main",
+        string revision = Sha1Revision)
     {
         Resolver.Enqueue(Result.Success<string>("/physical/selection"));
         Resolver.Enqueue(Result.Success<string>(CanonicalPath));
@@ -80,7 +91,7 @@ internal sealed class ComparisonGitFixture
         Runner.Enqueue(Output("true\n"));
         Runner.Enqueue(Output("false\n"));
         Runner.Enqueue(Output(CanonicalPath + "\n"));
-        Runner.Enqueue(Output(Sha1Revision + "\n"));
+        Runner.Enqueue(Output(revision + "\n"));
         Runner.Enqueue(Output(branchName + "\n"));
     }
 
@@ -136,6 +147,24 @@ internal sealed class ComparisonGitFixture
         Runner.Enqueue(Output(branchName + "\n"));
         Runner.Enqueue(Output(targetRevision + "\n"));
         EnqueueTargets(Target("refs/heads/topic", targetRevision));
+    }
+
+    /// <summary>
+    ///     Queues a complete comparison freshness check with controlled fact output.
+    /// </summary>
+    /// <param name="targetRevision">The selected target revision.</param>
+    /// <param name="workingTree">The raw porcelain-v2 working-tree output.</param>
+    /// <param name="branchName">The checked-out branch name.</param>
+    internal void EnqueueFreshnessCheck(
+        string targetRevision = OtherSha1Revision,
+        string workingTree = "",
+        string branchName = "main")
+    {
+        EnqueueInspection(branchName);
+        EnqueueTargets(Target("refs/heads/topic", targetRevision));
+        Runner.Enqueue(Output(string.Empty));
+        Runner.Enqueue(Output(targetRevision + "\n"));
+        Runner.Enqueue(Output(workingTree));
     }
 
     /// <summary>

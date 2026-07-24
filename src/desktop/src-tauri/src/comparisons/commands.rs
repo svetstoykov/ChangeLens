@@ -2,7 +2,7 @@ use crate::comparisons::{
     ComparisonFreshness, ComparisonState, ComparisonTargetPage, PreparedComparison,
 };
 use crate::engine_protocol::{
-    EngineActionError, action_task_failed, report_rust_originated_failure,
+    EngineActionError, await_action_task, report_rust_originated_failure,
 };
 use tauri::State;
 
@@ -16,7 +16,7 @@ pub(crate) async fn comparison_list_targets(
     target_set_token: Option<String>,
 ) -> Result<ComparisonTargetPage, EngineActionError> {
     let comparison_service = state.service();
-    let result = match tauri::async_runtime::spawn_blocking(move || {
+    let result = await_action_task(move || {
         comparison_service.list_targets(
             &path,
             query.as_deref(),
@@ -24,11 +24,7 @@ pub(crate) async fn comparison_list_targets(
             target_set_token.as_deref(),
         )
     })
-    .await
-    {
-        Ok(result) => result,
-        Err(_) => Err(action_task_failed()),
-    };
+    .await;
 
     report_rust_originated_failure(&result);
 
@@ -43,14 +39,7 @@ pub(crate) async fn comparison_prepare(
     target: String,
 ) -> Result<PreparedComparison, EngineActionError> {
     let comparison_service = state.service();
-    let result = match tauri::async_runtime::spawn_blocking(move || {
-        comparison_service.prepare(&path, &target)
-    })
-    .await
-    {
-        Ok(result) => result,
-        Err(_) => Err(action_task_failed()),
-    };
+    let result = await_action_task(move || comparison_service.prepare(&path, &target)).await;
 
     report_rust_originated_failure(&result);
 
@@ -66,14 +55,10 @@ pub(crate) async fn comparison_check_freshness(
     freshness_token: String,
 ) -> Result<ComparisonFreshness, EngineActionError> {
     let comparison_service = state.service();
-    let result = match tauri::async_runtime::spawn_blocking(move || {
+    let result = await_action_task(move || {
         comparison_service.check_freshness(&path, &target, &freshness_token)
     })
-    .await
-    {
-        Ok(result) => result,
-        Err(_) => Err(action_task_failed()),
-    };
+    .await;
 
     report_rust_originated_failure(&result);
 

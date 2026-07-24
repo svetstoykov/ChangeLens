@@ -1,5 +1,5 @@
 use crate::engine_protocol::{
-    EngineActionError, OperationErrorType, action_task_failed, report_rust_originated_failure,
+    EngineActionError, OperationErrorType, await_action_task, report_rust_originated_failure,
 };
 use crate::repositories::{RepositoryDescriptor, RepositoryFolderPickerState, RepositoryState};
 use tauri::State;
@@ -9,20 +9,18 @@ pub(crate) async fn select_repository_folder(
     state: State<'_, RepositoryFolderPickerState>,
 ) -> Result<Option<String>, EngineActionError> {
     let folder_picker = state.picker();
-    let result =
-        match tauri::async_runtime::spawn_blocking(move || folder_picker.select_folder()).await {
-            Ok(Ok(Some(path))) => path.into_os_string().into_string().map(Some).map_err(|_| {
-                EngineActionError::transport(
-                    None,
-                    "repository.pathEncodingUnsupported",
-                    OperationErrorType::UnprocessableInput,
-                    "The selected path cannot be represented as Unicode.",
-                )
-            }),
-            Ok(Ok(None)) => Ok(None),
-            Ok(Err(error)) => Err(error),
-            Err(_) => Err(action_task_failed()),
-        };
+    let result = match await_action_task(move || folder_picker.select_folder()).await {
+        Ok(Some(path)) => path.into_os_string().into_string().map(Some).map_err(|_| {
+            EngineActionError::transport(
+                None,
+                "repository.pathEncodingUnsupported",
+                OperationErrorType::UnprocessableInput,
+                "The selected path cannot be represented as Unicode.",
+            )
+        }),
+        Ok(None) => Ok(None),
+        Err(error) => Err(error),
+    };
 
     report_rust_originated_failure(&result);
 
@@ -35,14 +33,7 @@ pub(crate) async fn repository_open(
     path: String,
 ) -> Result<RepositoryDescriptor, EngineActionError> {
     let repository_service = state.service();
-    let result = match tauri::async_runtime::spawn_blocking(move || {
-        repository_service.open_repository(&path)
-    })
-    .await
-    {
-        Ok(result) => result,
-        Err(_) => Err(action_task_failed()),
-    };
+    let result = await_action_task(move || repository_service.open_repository(&path)).await;
 
     report_rust_originated_failure(&result);
 

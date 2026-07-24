@@ -3,7 +3,7 @@ mod constants;
 mod models;
 mod services;
 
-pub(crate) use command_failure::{action_task_failed, report_rust_originated_failure};
+pub(crate) use command_failure::{await_action_task, report_rust_originated_failure};
 pub use models::{ActionErrorDetail, ActionErrorKind, EngineActionError, OperationErrorType};
 pub(crate) use models::{
     EngineExchangeError, EngineProtocolRequest, EngineResponse, EngineShutdownOutcome,

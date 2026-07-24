@@ -23,6 +23,8 @@ const TARGET_SET_TOKEN: &str = "0123456789abcdef0123456789abcdef0123456789abcdef
 const FRESHNESS_TOKEN: &str = "abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789";
 const DIAGNOSTIC_CHILD_ENVIRONMENT_VARIABLE: &str =
     "CHANGELENS_COMPARISON_COMMAND_DIAGNOSTIC_CHILD";
+const PANIC_DIAGNOSTIC_CHILD_ENVIRONMENT_VARIABLE: &str =
+    "CHANGELENS_COMPARISON_COMMAND_PANIC_DIAGNOSTIC_CHILD";
 
 struct SuccessfulEngineStatusService;
 
@@ -54,6 +56,72 @@ struct FixedComparisonService {
     prepare_result: Result<PreparedComparison, EngineActionError>,
     freshness_result: Result<ComparisonFreshness, EngineActionError>,
     panic_on_call: bool,
+}
+
+struct BlockingRuntimeProbeComparisonService {
+    calls: Arc<Mutex<Vec<ComparisonCall>>>,
+}
+
+impl ComparisonService for BlockingRuntimeProbeComparisonService {
+    fn list_targets(
+        &self,
+        path: &str,
+        query: Option<&str>,
+        after: Option<&str>,
+        target_set_token: Option<&str>,
+    ) -> Result<ComparisonTargetPage, EngineActionError> {
+        self.record(ComparisonCall::ListTargets {
+            path: path.to_owned(),
+            query: query.map(str::to_owned),
+            after: after.map(str::to_owned),
+            target_set_token: target_set_token.map(str::to_owned),
+            thread_id: std::thread::current().id(),
+        });
+        self.verify_blocking_worker();
+
+        Ok(target_page())
+    }
+
+    fn prepare(&self, path: &str, target: &str) -> Result<PreparedComparison, EngineActionError> {
+        self.record(ComparisonCall::Prepare {
+            path: path.to_owned(),
+            target: target.to_owned(),
+            thread_id: std::thread::current().id(),
+        });
+        self.verify_blocking_worker();
+
+        Ok(prepared_comparison())
+    }
+
+    fn check_freshness(
+        &self,
+        path: &str,
+        target: &str,
+        freshness_token: &str,
+    ) -> Result<ComparisonFreshness, EngineActionError> {
+        self.record(ComparisonCall::CheckFreshness {
+            path: path.to_owned(),
+            target: target.to_owned(),
+            freshness_token: freshness_token.to_owned(),
+            thread_id: std::thread::current().id(),
+        });
+        self.verify_blocking_worker();
+
+        Ok(ComparisonFreshness::Current)
+    }
+}
+
+impl BlockingRuntimeProbeComparisonService {
+    fn record(&self, call: ComparisonCall) {
+        self.calls
+            .lock()
+            .expect("the recorded comparison calls should be available")
+            .push(call);
+    }
+
+    fn verify_blocking_worker(&self) {
+        tauri::async_runtime::block_on(std::future::ready(()));
+    }
 }
 
 impl ComparisonService for FixedComparisonService {
@@ -330,6 +398,43 @@ fn comparison_task_panic_returns_one_sanitized_unexpected_error() {
 }
 
 #[test]
+fn comparison_task_panic_logs_one_sanitized_diagnostic_without_raw_payload() {
+    let output = Command::new(
+        std::env::current_exe()
+            .expect("the comparison command test executable should be available"),
+    )
+    .args([
+        "--exact",
+        "comparison_panic_diagnostic_child_process",
+        "--nocapture",
+        "--test-threads=1",
+    ])
+    .env(PANIC_DIAGNOSTIC_CHILD_ENVIRONMENT_VARIABLE, "1")
+    .output()
+    .expect("the panic diagnostic child process should run");
+
+    assert!(
+        output.status.success(),
+        "the panic diagnostic child process should pass: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    let standard_error = String::from_utf8(output.stderr)
+        .expect("the panic diagnostic child process should write UTF-8 diagnostics");
+    assert_eq!(
+        standard_error
+            .matches("\"event\":\"engine.actionFailed\"")
+            .count(),
+        1
+    );
+    assert_eq!(
+        standard_error.matches("desktop.actionTaskFailed").count(),
+        1
+    );
+    assert!(!standard_error.contains("comparison service fixture panic"));
+}
+
+#[test]
 fn comparison_commands_run_on_blocking_workers() {
     let calls = Arc::new(Mutex::new(Vec::new()));
     let calling_thread = std::thread::current().id();
@@ -337,7 +442,7 @@ fn comparison_commands_run_on_blocking_workers() {
     invoke_command(
         "comparison_list_targets",
         tauri::ipc::InvokeBody::Json(serde_json::json!({ "path": REPOSITORY_PATH })),
-        comparison_service(Arc::clone(&calls), false),
+        blocking_runtime_probe_comparison_service(Arc::clone(&calls)),
     )
     .expect("the target page should be returned");
     invoke_command(
@@ -346,7 +451,7 @@ fn comparison_commands_run_on_blocking_workers() {
             "path": REPOSITORY_PATH,
             "target": TARGET,
         })),
-        comparison_service(Arc::clone(&calls), false),
+        blocking_runtime_probe_comparison_service(Arc::clone(&calls)),
     )
     .expect("the prepared comparison should be returned");
     invoke_command(
@@ -356,7 +461,7 @@ fn comparison_commands_run_on_blocking_workers() {
             "target": TARGET,
             "freshnessToken": FRESHNESS_TOKEN,
         })),
-        comparison_service(Arc::clone(&calls), false),
+        blocking_runtime_probe_comparison_service(Arc::clone(&calls)),
     )
     .expect("the comparison freshness should be returned");
 
@@ -462,6 +567,23 @@ fn comparison_diagnostic_child_process() {
     .expect_err("the operation error should reach the comparison command boundary");
 }
 
+#[test]
+fn comparison_panic_diagnostic_child_process() {
+    if std::env::var_os(PANIC_DIAGNOSTIC_CHILD_ENVIRONMENT_VARIABLE).is_none() {
+        return;
+    }
+
+    invoke_command(
+        "comparison_prepare",
+        tauri::ipc::InvokeBody::Json(serde_json::json!({
+            "path": REPOSITORY_PATH,
+            "target": TARGET,
+        })),
+        comparison_service(Arc::new(Mutex::new(Vec::new())), true),
+    )
+    .expect_err("the panicking task should reach the command boundary");
+}
+
 impl ComparisonCall {
     fn thread_id(&self) -> ThreadId {
         match self {
@@ -520,6 +642,12 @@ fn comparison_service(
         Ok(ComparisonFreshness::Current),
         panic_on_call,
     )
+}
+
+fn blocking_runtime_probe_comparison_service(
+    calls: Arc<Mutex<Vec<ComparisonCall>>>,
+) -> Arc<dyn ComparisonService> {
+    Arc::new(BlockingRuntimeProbeComparisonService { calls })
 }
 
 fn fixed_comparison_service(

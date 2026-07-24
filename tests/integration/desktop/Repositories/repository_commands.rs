@@ -2,7 +2,6 @@ use changelens_desktop_lib::comparisons::{
     ComparisonFreshness, ComparisonService, ComparisonState, ComparisonTargetPage,
     PreparedComparison,
 };
-use changelens_desktop_lib::configure_desktop;
 use changelens_desktop_lib::engine_protocol::{
     ActionErrorDetail, ActionErrorKind, EngineActionError, EngineClient, OperationErrorType,
 };
@@ -11,6 +10,7 @@ use changelens_desktop_lib::repositories::{
     RepositoryDescriptor, RepositoryFolderPicker, RepositoryFolderPickerState, RepositoryHead,
     RepositoryService, RepositoryState,
 };
+use changelens_desktop_lib::{configure_desktop, handle_desktop_run_event};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -343,7 +343,7 @@ fn rust_errors_are_reported_once_and_engine_operation_errors_are_not_relogged() 
 }
 
 #[test]
-fn engine_backed_states_share_one_process_and_keep_graceful_shutdown() {
+fn engine_backed_states_share_one_process_and_exit_request_runs_graceful_shutdown_handler() {
     let marker_path = unique_fixture_path("shared-comparison-state");
     let engine_client = Arc::new(shared_engine_client(&marker_path));
     let app = configure_desktop(
@@ -377,7 +377,20 @@ fn engine_backed_states_share_one_process_and_keep_graceful_shutdown() {
 
     assert_eq!(engine_client.process_id_for_testing(), Some(process_id));
 
-    engine_client.shutdown();
+    let webview = tauri::WebviewWindowBuilder::new(&app, "main", Default::default())
+        .build()
+        .expect("the test webview should build");
+    let shutdown_client = Arc::clone(&engine_client);
+    let close_window = std::thread::spawn(move || {
+        webview
+            .close()
+            .expect("closing the final test window should request application exit");
+    });
+
+    app.run_return(move |_app_handle, event| handle_desktop_run_event(&shutdown_client, &event));
+    close_window
+        .join()
+        .expect("the test window close task should complete");
 
     assert_eq!(engine_client.process_id_for_testing(), None);
     assert_eq!(

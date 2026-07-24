@@ -37,6 +37,14 @@ pub fn configure_desktop<R: tauri::Runtime>(
         ])
 }
 
+/// Handles desktop lifecycle events that affect the Engine process.
+#[doc(hidden)]
+pub fn handle_desktop_run_event(engine_client: &EngineClient, event: &tauri::RunEvent) {
+    if matches!(event, tauri::RunEvent::ExitRequested { .. }) {
+        engine_client.shutdown();
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let engine_client = Arc::new(EngineClient::new());
@@ -51,9 +59,5 @@ pub fn run() {
     .build(tauri::generate_context!())
     .expect("the ChangeLens desktop runtime could not be started");
 
-    app.run(move |_app_handle, event| {
-        if matches!(event, tauri::RunEvent::ExitRequested { .. }) {
-            engine_client.shutdown();
-        }
-    });
+    app.run(move |_app_handle, event| handle_desktop_run_event(&engine_client, &event));
 }

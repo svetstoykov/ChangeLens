@@ -30,7 +30,7 @@ describe("RepositoryIdentity", () => {
         "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
       ),
     ).toBeInTheDocument();
-    expect(document.querySelector("img")).not.toBeInTheDocument();
+    expect(document.querySelector("img[onerror]")).not.toBeInTheDocument();
   });
 
   it("labels detached revisions truthfully", () => {

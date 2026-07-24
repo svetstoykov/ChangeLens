@@ -4,6 +4,8 @@ import { normalizeActionError } from "../../Actions/Services/normalizeActionErro
 import { presentActionError } from "../../Actions/Services/presentActionError";
 import { repositoryErrorTitles } from "../Constants/repositoryErrorTitles";
 import type { RepositoryDescriptor } from "../Models/RepositoryDescriptor";
+import { LocalIcon } from "../../Visuals/Components/LocalIcon";
+import folderIcon from "../../assets/folder.svg";
 
 type PickerState = "idle" | "choosing" | "opening" | "error";
 
@@ -106,6 +108,7 @@ export function RepositoryPickerDialog({
 
   return (
     <dialog
+      className="repository-picker"
       ref={dialogRef}
       aria-describedby="repository-picker-description"
       aria-modal="true"
@@ -125,7 +128,7 @@ export function RepositoryPickerDialog({
       </p>
       {effectiveState === "opening" && path ? (
         <p role="status" aria-live="polite">
-          Inspecting repository… {path}
+          Inspecting repository… <code>{path}</code>
         </p>
       ) : null}
       {presentation ? (
@@ -146,6 +149,7 @@ export function RepositoryPickerDialog({
         disabled={isBusy}
         onClick={chooseFolder}
       >
+        <LocalIcon source={folderIcon} />
         Choose folder
       </button>
       {dismissible ? (

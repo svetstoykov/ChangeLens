@@ -1,4 +1,8 @@
 import type { RepositoryDescriptor } from "../Models/RepositoryDescriptor";
+import { LocalIcon } from "../../Visuals/Components/LocalIcon";
+import branchIcon from "../../assets/branch.svg";
+import detachedIcon from "../../assets/detached.svg";
+import folderIcon from "../../assets/folder.svg";
 
 interface RepositoryIdentityProps {
   readonly repository: RepositoryDescriptor;
@@ -13,22 +17,37 @@ export function RepositoryIdentity({
 
   return (
     <section
+      className="repository-identity"
       aria-label="Open repository"
       data-repository-generation={repositoryGeneration}
     >
-      <h2>{repository.name}</h2>
+      <div className="repository-identity-heading">
+        <LocalIcon source={folderIcon} />
+        <h2>{repository.name}</h2>
+      </div>
       <dl>
         <div>
           <dt>Path</dt>
-          <dd>{repository.canonicalPath}</dd>
+          <dd>
+            <code>{repository.canonicalPath}</code>
+          </dd>
         </div>
         <div>
           <dt>Head</dt>
-          <dd>{headName}</dd>
+          <dd className="repository-head">
+            <LocalIcon
+              source={
+                repository.head.kind === "branch" ? branchIcon : detachedIcon
+              }
+            />
+            <code>{headName}</code>
+          </dd>
         </div>
         <div>
           <dt>Revision</dt>
-          <dd>{repository.head.revision}</dd>
+          <dd>
+            <code>{repository.head.revision}</code>
+          </dd>
         </div>
       </dl>
     </section>

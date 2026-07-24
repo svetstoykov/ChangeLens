@@ -1,5 +1,11 @@
 import type { ComparisonFreshnessState } from "../Models/ComparisonWorkspaceState";
 import type { PreparedComparison } from "../Models/PreparedComparison";
+import { LocalIcon } from "../../Visuals/Components/LocalIcon";
+import checkIcon from "../../assets/check.svg";
+import conflictIcon from "../../assets/conflict.svg";
+import fileIcon from "../../assets/file.svg";
+import refreshIcon from "../../assets/refresh.svg";
+import warningIcon from "../../assets/warning.svg";
 
 interface ComparisonSummaryProps {
   readonly preparedComparison: PreparedComparison | null;
@@ -12,21 +18,28 @@ export function ComparisonSummary({
 }: ComparisonSummaryProps) {
   if (preparedComparison === null) {
     return (
-      <section aria-labelledby="comparison-summary-heading">
-        <h2 id="comparison-summary-heading">Comparison summary</h2>
+      <section
+        className="comparison-summary"
+        aria-labelledby="comparison-summary-heading"
+      >
+        <h3 id="comparison-summary-heading">Current change</h3>
         <p>Choose a target to prepare a comparison.</p>
       </section>
     );
   }
 
   return (
-    <section aria-labelledby="comparison-summary-heading">
-      <h2 id="comparison-summary-heading">Comparison summary</h2>
+    <section
+      className="comparison-summary"
+      aria-labelledby="comparison-summary-heading"
+    >
+      <p className="eyebrow">Aggregate facts</p>
+      <h3 id="comparison-summary-heading">Current change</h3>
       <Readiness
         readiness={preparedComparison.readiness.state}
         freshness={freshness}
       />
-      <dl>
+      <dl className="comparison-facts">
         <Fact
           label="Current work commits"
           value={preparedComparison.currentWorkCommitCount}
@@ -38,10 +51,12 @@ export function ComparisonSummary({
         <Fact
           label="Changed files"
           value={preparedComparison.changedFileTotal}
+          icon={fileIcon}
         />
         <Fact
           label="Uncommitted files"
           value={preparedComparison.uncommittedFileTotal}
+          icon={warningIcon}
         />
         <Fact label="Staged files" value={preparedComparison.stagedFileCount} />
         <Fact
@@ -52,20 +67,20 @@ export function ComparisonSummary({
           label="Untracked files"
           value={preparedComparison.untrackedFileCount}
         />
-        <div>
+        <div className="technical-fact">
           <dt>Target revision</dt>
           <dd>
             <code>{preparedComparison.target.revision}</code>
           </dd>
         </div>
-        <div>
+        <div className="technical-fact">
           <dt>Merge base</dt>
           <dd>
             <code>{preparedComparison.mergeBaseRevision}</code>
           </dd>
         </div>
       </dl>
-      <p>
+      <p className="fact-note">
         File categories can overlap when one file has both staged and unstaged
         changes.
       </p>
@@ -76,13 +91,18 @@ export function ComparisonSummary({
 function Fact({
   label,
   value,
+  icon,
 }: {
   readonly label: string;
   readonly value: number;
+  readonly icon?: string;
 }) {
   return (
     <div>
-      <dt>{label}</dt>
+      <dt>
+        {icon ? <LocalIcon source={icon} /> : null}
+        {label}
+      </dt>
       <dd>{value}</dd>
     </div>
   );
@@ -96,19 +116,63 @@ function Readiness({
   readonly freshness: ComparisonFreshnessState;
 }) {
   if (freshness === "stale")
-    return <p role="status">Comparison is stale. Refresh before analyzing.</p>;
+    return (
+      <ReadinessStatus
+        state="stale"
+        icon={warningIcon}
+        text="Comparison is stale. Refresh before analyzing."
+      />
+    );
   if (freshness === "unknown")
     return (
-      <p role="status">
-        Comparison freshness is unknown. Refresh before analyzing.
-      </p>
+      <ReadinessStatus
+        state="unknown"
+        icon={warningIcon}
+        text="Comparison freshness is unknown. Refresh before analyzing."
+      />
     );
   if (freshness === "checking")
-    return <p role="status">Checking comparison freshness…</p>;
-  if (readiness === "empty") return <p role="status">No changes to analyze</p>;
+    return (
+      <ReadinessStatus
+        state="checking"
+        icon={refreshIcon}
+        text="Checking comparison freshness…"
+      />
+    );
+  if (readiness === "empty")
+    return (
+      <ReadinessStatus
+        state="empty"
+        icon={fileIcon}
+        text="No changes to analyze"
+      />
+    );
   if (readiness === "conflicts")
     return (
-      <p role="status">Resolve conflicts outside ChangeLens, then refresh</p>
+      <ReadinessStatus
+        state="conflicts"
+        icon={conflictIcon}
+        text="Resolve conflicts outside ChangeLens, then refresh"
+      />
     );
-  return <p role="status">Ready to analyze</p>;
+  return (
+    <ReadinessStatus state="ready" icon={checkIcon} text="Ready to analyze" />
+  );
+}
+
+function ReadinessStatus({
+  state,
+  icon,
+  text,
+}: {
+  readonly state: string;
+  readonly icon: string;
+  readonly text: string;
+}) {
+  return (
+    <p className="readiness-status" data-readiness={state} role="status">
+      <LocalIcon source={icon} />
+      <span>{text}</span>
+    </p>
+  );
 }

@@ -1,4 +1,8 @@
 import type { ComparisonFreshnessState } from "../Models/ComparisonWorkspaceState";
+import { LocalIcon } from "../../Visuals/Components/LocalIcon";
+import checkIcon from "../../assets/check.svg";
+import refreshIcon from "../../assets/refresh.svg";
+import warningIcon from "../../assets/warning.svg";
 
 interface FreshnessControlProps {
   readonly freshness: ComparisonFreshnessState;
@@ -20,15 +24,27 @@ export function FreshnessControl({
         : freshness === "stale"
           ? "Stale"
           : "Unknown";
+  const statusIcon = freshness === "current" ? checkIcon : warningIcon;
   return (
-    <section aria-label="Comparison freshness">
-      <p>Freshness: {label}</p>
+    <section
+      className="freshness-control"
+      aria-label="Comparison freshness"
+      data-freshness={freshness}
+    >
+      <p>
+        <LocalIcon
+          source={freshness === "checking" ? refreshIcon : statusIcon}
+        />
+        <span>Freshness: {label}</span>
+      </p>
       <button
+        className="icon-button"
         type="button"
+        aria-label="Refresh comparison"
         onClick={onRefresh}
         disabled={freshness === "checking"}
       >
-        Refresh comparison
+        <LocalIcon source={refreshIcon} />
       </button>
     </section>
   );

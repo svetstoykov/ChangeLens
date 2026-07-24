@@ -70,7 +70,10 @@ describe("RepositoryPickerDialog", () => {
     expect(screen.getByRole("status")).toHaveTextContent(
       'Inspecting repository… <img onerror="alert(1)">',
     );
-    expect(document.querySelector("img")).not.toBeInTheDocument();
+    expect(screen.getByRole("status").querySelector("code")).toHaveTextContent(
+      '<img onerror="alert(1)">',
+    );
+    expect(document.querySelector("img[onerror]")).not.toBeInTheDocument();
   });
 
   it("shows ordered known errors and lets the user choose another folder", async () => {

@@ -50,6 +50,7 @@ export default defineConfig({
   },
   test: {
     environment: "jsdom",
+    setupFiles: [`${desktopTests}/Support/dialogTestSetup.ts`],
     include: [`${desktopTests}/**/*.test.{ts,tsx}`],
     coverage: {
       provider: "v8",

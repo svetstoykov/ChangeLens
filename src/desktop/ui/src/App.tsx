@@ -1,97 +1,157 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useState } from "react";
+import { AppShell } from "./AppShell";
 import type { ActionError } from "./Actions/Models/ActionError";
 import { normalizeActionError } from "./Actions/Services/normalizeActionError";
 import { presentActionError } from "./Actions/Services/presentActionError";
 import type { EngineStatusClient } from "./EngineStatus/Interfaces/EngineStatusClient";
+import { RepositoryIdentity } from "./Repositories/Components/RepositoryIdentity";
+import { RepositoryPickerDialog } from "./Repositories/Components/RepositoryPickerDialog";
+import { repositoryErrorTitles } from "./Repositories/Constants/repositoryErrorTitles";
 import type { RepositoryClient } from "./Repositories/Interfaces/RepositoryClient";
 import type { RepositoryFolderPicker } from "./Repositories/Interfaces/RepositoryFolderPicker";
+import type { RepositoryDescriptor } from "./Repositories/Models/RepositoryDescriptor";
 import "./styles.css";
 
 interface AppProps {
-  engineStatusClient: EngineStatusClient;
-  repositoryClient: RepositoryClient;
-  repositoryFolderPicker: RepositoryFolderPicker;
+  readonly engineStatusClient: EngineStatusClient;
+  readonly repositoryClient: RepositoryClient;
+  readonly repositoryFolderPicker: RepositoryFolderPicker;
 }
 
-type EngineState =
-  | { status: "connecting" }
-  | { status: "ready" }
-  | { status: "error"; error: ActionError };
+export type ApplicationState =
+  | { readonly status: "checkingEngine" }
+  | { readonly status: "engineError"; readonly error: ActionError }
+  | { readonly status: "selectingRepository" }
+  | {
+      readonly status: "repositoryOpen";
+      readonly repository: RepositoryDescriptor;
+      readonly repositoryGeneration: number;
+    }
+  | {
+      readonly status: "replacingRepository";
+      readonly repository: RepositoryDescriptor;
+      readonly repositoryGeneration: number;
+    };
 
-export function App({ engineStatusClient }: AppProps) {
-  const [engineState, setEngineState] = useState<EngineState>({
-    status: "connecting",
+export function App({
+  engineStatusClient,
+  repositoryClient,
+  repositoryFolderPicker,
+}: AppProps) {
+  const [state, setState] = useState<ApplicationState>({
+    status: "checkingEngine",
   });
+  const [retryGeneration, setRetryGeneration] = useState(0);
 
   useEffect(() => {
     let isCurrent = true;
-
-    engineStatusClient
-      .checkStatus()
-      .then(() => {
-        if (isCurrent) {
-          setEngineState({ status: "ready" });
-        }
-      })
-      .catch((error: unknown) => {
-        if (isCurrent) {
-          setEngineState({
-            status: "error",
-            error: normalizeActionError(error),
+    engineStatusClient.checkStatus().then(
+      () => {
+        if (isCurrent) setState({ status: "selectingRepository" });
+      },
+      (reason: unknown) => {
+        if (isCurrent)
+          setState({
+            status: "engineError",
+            error: normalizeActionError(reason),
           });
-        }
-      });
-
+      },
+    );
     return () => {
       isCurrent = false;
     };
-  }, [engineStatusClient]);
+  }, [engineStatusClient, retryGeneration]);
 
-  return (
-    <main className="app-shell">
-      <h1>ChangeLens</h1>
-      <p>Desktop UI infrastructure</p>
-      <EngineStatus state={engineState} />
-    </main>
-  );
-}
-
-interface EngineStatusProps {
-  state: EngineState;
-}
-
-function EngineStatus({ state }: EngineStatusProps) {
-  let content: ReactNode;
-
-  if (state.status === "connecting") {
-    content = "Connecting to the ChangeLens engine…";
-  } else if (state.status === "error") {
-    const presentation = presentActionError(state.error, {
-      "engine.responseTimedOut": "Engine response timed out",
-    });
-
-    content = (
-      <>
-        <strong>{presentation.title}</strong>
-        <ul className="action-errors">
-          {presentation.messages.map((message, index) => (
-            <li key={`${state.error.errors[index]!.code}-${index}`}>
-              {message}
-            </li>
-          ))}
-        </ul>
-        {presentation.requestId ? (
-          <small>Request {presentation.requestId}</small>
-        ) : null}
-      </>
-    );
-  } else {
-    content = "The ChangeLens engine is ready.";
+  function commitRepository(repository: RepositoryDescriptor) {
+    setState((currentState) => ({
+      status: "repositoryOpen",
+      repository,
+      repositoryGeneration:
+        currentState.status === "replacingRepository"
+          ? currentState.repositoryGeneration + 1
+          : 1,
+    }));
   }
 
+  if (state.status === "checkingEngine") {
+    return (
+      <AppShell>
+        <p role="status">Connecting to the ChangeLens engine…</p>
+      </AppShell>
+    );
+  }
+  if (state.status === "engineError") {
+    const presentation = presentActionError(state.error, repositoryErrorTitles);
+    return (
+      <AppShell>
+        <section role="alert">
+          <strong>{presentation.title}</strong>
+          <ul>
+            {presentation.messages.map((message, index) => (
+              <li key={`${state.error.errors[index]!.code}-${index}`}>
+                {message}
+              </li>
+            ))}
+          </ul>
+          <button
+            type="button"
+            onClick={() => {
+              setState({ status: "checkingEngine" });
+              setRetryGeneration((generation) => generation + 1);
+            }}
+          >
+            Retry
+          </button>
+        </section>
+      </AppShell>
+    );
+  }
+  if (state.status === "selectingRepository") {
+    return (
+      <AppShell>
+        <RepositoryPickerDialog
+          dismissible={false}
+          onDismiss={() => undefined}
+          selectFolder={() => repositoryFolderPicker.selectFolder()}
+          onOpenRepository={(path) => repositoryClient.openRepository(path)}
+          onRepositoryOpened={commitRepository}
+        />
+      </AppShell>
+    );
+  }
+
+  const replacing = state.status === "replacingRepository";
   return (
-    <div className="engine-status" data-state={state.status} role="status">
-      {content}
-    </div>
+    <AppShell
+      repositoryIdentity={
+        <RepositoryIdentity
+          repository={state.repository}
+          repositoryGeneration={state.repositoryGeneration}
+        />
+      }
+      onOpenAnotherRepository={() =>
+        setState({
+          status: "replacingRepository",
+          repository: state.repository,
+          repositoryGeneration: state.repositoryGeneration,
+        })
+      }
+    >
+      {replacing ? (
+        <RepositoryPickerDialog
+          dismissible
+          onDismiss={() =>
+            setState({
+              status: "repositoryOpen",
+              repository: state.repository,
+              repositoryGeneration: state.repositoryGeneration,
+            })
+          }
+          selectFolder={() => repositoryFolderPicker.selectFolder()}
+          onOpenRepository={(path) => repositoryClient.openRepository(path)}
+          onRepositoryOpened={commitRepository}
+        />
+      ) : null}
+    </AppShell>
   );
 }

@@ -119,6 +119,106 @@ internal sealed class TemporaryGitRepository : IDisposable
         Directory.CreateDirectory(Path.Combine(RootPath, "nested", "directory")).FullName;
 
     /// <summary>
+    ///     Creates a local branch at the current committed revision without checking it out.
+    /// </summary>
+    /// <param name="branchName">The branch name. Cannot be <see langword="null" /> or empty.</param>
+    internal void CreateLocalBranch(string branchName)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(branchName);
+        RunGitChecked(["-C", RootPath, "branch", branchName, Revision]);
+    }
+
+    /// <summary>
+    ///     Creates a direct cached remote-tracking ref at the current committed revision without fetching.
+    /// </summary>
+    /// <param name="remoteName">The remote name. Cannot be <see langword="null" /> or empty.</param>
+    /// <param name="branchName">The remote branch name. Cannot be <see langword="null" /> or empty.</param>
+    internal void CreateRemoteTrackingBranch(
+        string remoteName,
+        string branchName)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(remoteName);
+        ArgumentException.ThrowIfNullOrWhiteSpace(branchName);
+        RunGitChecked(
+            [
+                "-C",
+                RootPath,
+                "update-ref",
+                $"refs/remotes/{remoteName}/{branchName}",
+                Revision,
+            ]);
+    }
+
+    /// <summary>
+    ///     Creates a symbolic cached remote HEAD without contacting a remote.
+    /// </summary>
+    /// <param name="remoteName">The remote name. Cannot be <see langword="null" /> or empty.</param>
+    /// <param name="branchName">The cached branch selected by the symbolic ref.</param>
+    internal void CreateSymbolicRemoteHead(
+        string remoteName,
+        string branchName)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(remoteName);
+        ArgumentException.ThrowIfNullOrWhiteSpace(branchName);
+        RunGitChecked(
+            [
+                "-C",
+                RootPath,
+                "symbolic-ref",
+                $"refs/remotes/{remoteName}/HEAD",
+                $"refs/remotes/{remoteName}/{branchName}",
+            ]);
+    }
+
+    /// <summary>
+    ///     Configures a local branch to track a named remote branch without fetching.
+    /// </summary>
+    /// <param name="branchName">The local branch name. Cannot be <see langword="null" /> or empty.</param>
+    /// <param name="remoteName">The configured remote name. Cannot be <see langword="null" /> or empty.</param>
+    /// <param name="remoteBranchName">The remote branch name. Cannot be <see langword="null" /> or empty.</param>
+    internal void ConfigureBranchUpstream(
+        string branchName,
+        string remoteName,
+        string remoteBranchName)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(branchName);
+        ArgumentException.ThrowIfNullOrWhiteSpace(remoteName);
+        ArgumentException.ThrowIfNullOrWhiteSpace(remoteBranchName);
+        RunGitChecked(
+            [
+                "-C",
+                RootPath,
+                "config",
+                $"remote.{remoteName}.url",
+                $"https://example.invalid/{remoteName}.git",
+            ]);
+        RunGitChecked(
+            [
+                "-C",
+                RootPath,
+                "config",
+                $"remote.{remoteName}.fetch",
+                $"+refs/heads/*:refs/remotes/{remoteName}/*",
+            ]);
+        RunGitChecked(
+            [
+                "-C",
+                RootPath,
+                "config",
+                $"branch.{branchName}.remote",
+                remoteName,
+            ]);
+        RunGitChecked(
+            [
+                "-C",
+                RootPath,
+                "config",
+                $"branch.{branchName}.merge",
+                $"refs/heads/{remoteBranchName}",
+            ]);
+    }
+
+    /// <summary>
     ///     Detaches HEAD at the current committed revision.
     /// </summary>
     internal void CheckoutDetached()

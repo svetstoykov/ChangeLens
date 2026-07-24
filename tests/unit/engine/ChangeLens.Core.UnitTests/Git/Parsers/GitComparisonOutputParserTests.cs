@@ -72,6 +72,21 @@ public sealed class GitComparisonOutputParserTests
     }
 
     /// <summary>
+    ///     Verifies duplicate otherwise-valid full refs are rejected before target classification.
+    /// </summary>
+    [Fact]
+    public void ParseTargetRecordsRejectsDuplicateFullReferences()
+    {
+        var standardOutput =
+            $"refs/heads/topic\0{Sha1Revision}\0commit\0\0\0\n" +
+            $"refs/heads/topic\0{OtherSha1Revision}\0commit\0\0origin\0\n";
+
+        var result = GitComparisonOutputParser.ParseTargetRecords(Success(standardOutput));
+
+        AssertInspectionFailure(result);
+    }
+
+    /// <summary>
     ///     Verifies that known noncommit objects remain available for capability filtering.
     /// </summary>
     /// <param name="objectType">The Git object type.</param>

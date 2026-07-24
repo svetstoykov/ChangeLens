@@ -49,6 +49,7 @@ internal static class GitComparisonOutputParser
 
         var lines = output.StandardOutput.Split('\n');
         var records = new List<GitComparisonTargetRecord>(lines.Length - 1);
+        var seenFullNames = new HashSet<string>(StringComparer.Ordinal);
 
         for (var index = 0; index < lines.Length - 1; index++)
         {
@@ -65,7 +66,8 @@ internal static class GitComparisonOutputParser
                 !IsSupportedObjectId(fields[1]) ||
                 !IsKnownObjectType(fields[2]) ||
                 fields[3].Length > 0 && !IsValidFullReference(fields[3]) ||
-                !IsValidOptionalText(fields[4]))
+                !IsValidOptionalText(fields[4]) ||
+                !seenFullNames.Add(fields[0]))
             {
                 return InspectionFailure<IReadOnlyList<GitComparisonTargetRecord>>();
             }

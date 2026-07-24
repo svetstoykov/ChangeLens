@@ -48,9 +48,17 @@ The desktop command:
 1. Builds `ChangeLens.Engine` in `Debug/net10.0`.
 2. Starts Vite on `http://localhost:5173`.
 3. Compiles and opens the Tauri window.
-4. Starts the .NET engine and performs the `engine.getInfo` handshake.
+4. Starts the .NET engine and performs the `engine.checkStatus` readiness action.
 
 Stop everything with `Ctrl+C`. Tauri also terminates its engine child process.
+
+## Prepare a comparison
+
+Wait for readiness, use the native picker to open a repository, choose a local or cached remote-tracking target, prepare it, then check freshness before relying on the displayed comparison facts. Cached remote-tracking refs are local knowledge only: ChangeLens does not fetch and does not make network calls.
+
+A green freshness state says the displayed aggregate facts remain current. Use the visible refresh control to reload facts; timeouts and failures are not replayed automatically. A later user action may start a fresh Engine process. Change context remains transient and local, is not logged or persisted, and this phase does not provide an analysis action.
+
+In browser-only Vite mode, native-bound operations intentionally show safe desktop-boundary errors and never invent repository or comparison data. The development Engine resolution remains in place until Phase 1D.
 
 ## Debug the complete application
 
@@ -62,7 +70,7 @@ Stop everything with `Ctrl+C`. Tauri also terminates its engine child process.
 2. Start the complete application with `npm run desktop:dev`.
 3. In Rider, select **Run → Attach to Process**. In Visual Studio, select **Debug → Attach to Process**.
 4. Attach to the `dotnet` process whose command line contains `ChangeLens.Engine.dll`.
-5. Reload the Tauri window after attaching if the initial `engine.getInfo` request has already completed.
+5. Reload the Tauri window after attaching if the initial `engine.checkStatus` request has already completed.
 
 Starting Tauri first and attaching afterward is the simplest workflow for request handling. Use Rider's **Attach to an Unstarted Process** only when a breakpoint must catch engine startup.
 

@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using System.Diagnostics;
 using System.Globalization;
+using System.Text;
 using System.Text.Json;
 using ChangeLens.Core.Git.Constants;
 using ChangeLens.Core.Git.Models;
@@ -180,6 +181,71 @@ public sealed class GitCliCommandRunnerTests
 
         Assert.True(result.IsSuccess);
         Assert.Equal(128 * 1024, Assert.IsType<GitCommandOutput>(result.Data).StandardOutput.Length);
+    }
+
+    /// <summary>
+    ///     Asynchronously preserves exactly 8 MiB of committed-file facts and an independent 64 KiB diagnostic stream.
+    /// </summary>
+    /// <returns>A task that represents the asynchronous operation.</returns>
+    [Fact]
+    public async Task RunAsync_ExactComparisonFactAndDiagnosticLimits_Succeeds()
+    {
+        var runner = CreateRunner();
+
+        var result = await RunInFixtureModeAsync(
+            "raw-committed-records",
+            new Dictionary<string, string>
+            {
+                ["CHANGELENS_GIT_FIXTURE_RECORD_COUNT"] = "8192",
+                ["CHANGELENS_GIT_FIXTURE_PATH_LENGTH"] = "924",
+                ["CHANGELENS_GIT_FIXTURE_STDERR_BYTES"] = (64 * 1024).ToString(CultureInfo.InvariantCulture),
+            },
+            () => runner.RunAsync(CreateCommand([]), CancellationToken.None));
+
+        Assert.True(result.IsSuccess);
+        var output = Assert.IsType<GitCommandOutput>(result.Data);
+        Assert.Equal(MaximumStandardOutputBytes, Encoding.UTF8.GetByteCount(output.StandardOutput));
+        Assert.Equal(MaximumStandardErrorBytes, Encoding.UTF8.GetByteCount(output.StandardError));
+    }
+
+    /// <summary>
+    ///     Asynchronously rejects an 8 MiB-plus-one comparison fact stream without exposing partial data and reaps its child.
+    /// </summary>
+    /// <returns>A task that represents the asynchronous operation.</returns>
+    [Fact]
+    public async Task RunAsync_ComparisonFactOneByteOverLimit_ReturnsTooLargeWithoutPartialDataAndReapsChild()
+    {
+        using var temporaryDirectory = new TemporaryDirectory();
+        var childProcessIdPath = Path.Combine(temporaryDirectory.DirectoryPath, "child.pid");
+        var tooLarge = OperationError.UnprocessableInput("Output limit.", "comparison.tooLarge");
+        var runner = CreateRunner();
+
+        try
+        {
+            var result = await RunInFixtureModeAsync(
+                "raw-committed-records",
+                new Dictionary<string, string>
+                {
+                    ["CHANGELENS_GIT_FIXTURE_RECORD_COUNT"] = "8192",
+                    ["CHANGELENS_GIT_FIXTURE_PATH_LENGTH"] = "924",
+                    ["CHANGELENS_GIT_FIXTURE_EXTRA_STDOUT_BYTES"] = "1",
+                    ["CHANGELENS_GIT_FIXTURE_STDERR_BYTES"] = (64 * 1024).ToString(CultureInfo.InvariantCulture),
+                    ["CHANGELENS_GIT_FIXTURE_CHILD_PROCESS_ID_PATH"] = childProcessIdPath,
+                    ["CHANGELENS_GIT_FIXTURE_WAIT_AFTER_WRITE"] = "true",
+                },
+                () => runner.RunAsync(
+                    CreateCommand([], outputLimitError: tooLarge),
+                    CancellationToken.None));
+
+            Assert.True(result.IsFailure);
+            Assert.Same(tooLarge, Assert.Single(result.Errors));
+            Assert.Null(result.Data);
+            await AssertProcessReapedAsync(await ReadProcessIdAsync(childProcessIdPath));
+        }
+        finally
+        {
+            await TerminateRecordedProcessAsync(childProcessIdPath);
+        }
     }
 
     /// <summary>
@@ -412,10 +478,27 @@ public sealed class GitCliCommandRunnerTests
     private static async Task<T> RunInFixtureModeAsync<T>(
         string mode,
         Func<Task<T>> operation)
+        => await RunInFixtureModeAsync(
+            mode,
+            new Dictionary<string, string>(StringComparer.Ordinal),
+            operation);
+
+    private static async Task<T> RunInFixtureModeAsync<T>(
+        string mode,
+        IReadOnlyDictionary<string, string> variables,
+        Func<Task<T>> operation)
     {
         const string variableName = "CHANGELENS_GIT_FIXTURE_MODE";
         var previousMode = Environment.GetEnvironmentVariable(variableName);
+        var previousValues = variables.ToDictionary(
+            pair => pair.Key,
+            pair => Environment.GetEnvironmentVariable(pair.Key),
+            StringComparer.Ordinal);
         Environment.SetEnvironmentVariable(variableName, mode);
+        foreach (var (name, value) in variables)
+        {
+            Environment.SetEnvironmentVariable(name, value);
+        }
 
         try
         {
@@ -424,6 +507,10 @@ public sealed class GitCliCommandRunnerTests
         finally
         {
             Environment.SetEnvironmentVariable(variableName, previousMode);
+            foreach (var (name, value) in previousValues)
+            {
+                Environment.SetEnvironmentVariable(name, value);
+            }
         }
     }
 

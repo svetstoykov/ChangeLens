@@ -2,6 +2,7 @@ using ChangeLens.Core.Comparisons.Constants;
 using ChangeLens.Core.Git.Models;
 using ChangeLens.Core.Git.Parsers;
 using ChangeLens.Core.Results.Models;
+using System.Text;
 using Xunit;
 
 namespace ChangeLens.Core.UnitTests.Git.Parsers;
@@ -555,6 +556,25 @@ public sealed class GitComparisonOutputParserTests
                 new GitCommandOutput(0, string.Empty, oversizedDiagnostics)));
     }
 
+    /// <summary>
+    ///     Verifies exactly 8 MiB of reviewed committed-file records produces the complete expected fact count.
+    /// </summary>
+    [Fact]
+    public void ParseCommittedFilesAtExactFactLimitReturnsAllRecords()
+    {
+        const int recordCount = 8192;
+        const int pathLength = 924;
+        var standardOutput = CreateRawRecords(recordCount, pathLength);
+
+        Assert.Equal(8 * 1024 * 1024, Encoding.UTF8.GetByteCount(standardOutput));
+        var result = GitComparisonOutputParser.ParseCommittedFiles(Success(standardOutput));
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal(recordCount, result.Data!.Count);
+        Assert.Equal("p0000" + new string('x', pathLength - 5), result.Data[0].Path);
+        Assert.Equal("p8191" + new string('x', pathLength - 5), result.Data[^1].Path);
+    }
+
     private static GitCommandOutput Success(string standardOutput) =>
         new(0, standardOutput, string.Empty);
 
@@ -569,6 +589,18 @@ public sealed class GitComparisonOutputParserTests
         originalPath is null
             ? $":{oldMode} {newMode} {oldRevision} {newRevision} {status}\0{path}\0"
             : $":{oldMode} {newMode} {oldRevision} {newRevision} {status}\0{originalPath}\0{path}\0";
+
+    private static string CreateRawRecords(int recordCount, int pathLength)
+    {
+        var records = new StringBuilder(recordCount * 1024);
+        for (var index = 0; index < recordCount; index++)
+        {
+            var path = $"p{index:D4}" + new string('x', pathLength - 5);
+            records.Append(Raw("100644", "100644", Sha1Revision, OtherSha1Revision, "M", path));
+        }
+
+        return records.ToString();
+    }
 
     private static string Ordinary(string status, string submodule, string path)
     {

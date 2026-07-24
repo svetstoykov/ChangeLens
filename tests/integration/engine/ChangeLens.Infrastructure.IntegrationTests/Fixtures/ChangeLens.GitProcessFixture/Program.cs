@@ -39,6 +39,10 @@ switch (mode)
         await WriteBytesAsync(Console.OpenStandardOutput(), 128 * 1024);
         return 0;
 
+    case "raw-committed-records":
+        await WriteRawCommittedRecordsAsync();
+        return 0;
+
     case "invalid-utf8":
         await Console.OpenStandardOutput().WriteAsync(new byte[] { 0xc3, 0x28 });
         return 0;
@@ -176,6 +180,81 @@ static async Task<int> RunRealGitAsync(
     await process.WaitForExitAsync();
     await Task.WhenAll(outputTask, errorTask);
     return process.ExitCode;
+}
+
+static async Task WriteRawCommittedRecordsAsync()
+{
+    const string recordCountVariable = "CHANGELENS_GIT_FIXTURE_RECORD_COUNT";
+    const string pathLengthVariable = "CHANGELENS_GIT_FIXTURE_PATH_LENGTH";
+    const string extraOutputVariable = "CHANGELENS_GIT_FIXTURE_EXTRA_STDOUT_BYTES";
+    const string standardErrorVariable = "CHANGELENS_GIT_FIXTURE_STDERR_BYTES";
+    const string childProcessIdVariable = "CHANGELENS_GIT_FIXTURE_CHILD_PROCESS_ID_PATH";
+    const string waitAfterWriteVariable = "CHANGELENS_GIT_FIXTURE_WAIT_AFTER_WRITE";
+    var recordCount = ReadRequiredNonnegativeInt(recordCountVariable);
+    var pathLength = ReadRequiredNonnegativeInt(pathLengthVariable);
+    var extraOutputBytes = ReadOptionalNonnegativeInt(extraOutputVariable);
+    var standardErrorBytes = ReadOptionalNonnegativeInt(standardErrorVariable);
+    var childProcessIdPath = Environment.GetEnvironmentVariable(childProcessIdVariable);
+    if (childProcessIdPath is not null)
+    {
+        await SpawnSleepingChildAsync(childProcessIdPath);
+    }
+
+    var output = Console.OpenStandardOutput();
+    const string header = ":100644 100644 0123456789012345678901234567890123456789 1123456789012345678901234567890123456789 M\0";
+    var headerBytes = Encoding.ASCII.GetBytes(header);
+    for (var index = 0; index < recordCount; index++)
+    {
+        var prefix = $"p{index:D4}";
+        if (prefix.Length > pathLength)
+        {
+            throw new InvalidOperationException("The configured path length cannot encode the record index.");
+        }
+
+        await output.WriteAsync(headerBytes);
+        await output.WriteAsync(Encoding.ASCII.GetBytes(prefix + new string('x', pathLength - prefix.Length) + "\0"));
+    }
+
+    await WriteBytesAsync(output, extraOutputBytes);
+    await WriteBytesAsync(Console.OpenStandardError(), standardErrorBytes);
+    if (Environment.GetEnvironmentVariable(waitAfterWriteVariable) == "true")
+    {
+        await Task.Delay(TimeSpan.FromMinutes(5));
+    }
+}
+
+static int ReadRequiredNonnegativeInt(string variableName)
+{
+    var value = Environment.GetEnvironmentVariable(variableName);
+    return int.TryParse(value, NumberStyles.None, CultureInfo.InvariantCulture, out var result) && result >= 0
+        ? result
+        : throw new InvalidOperationException($"{variableName} must contain a nonnegative integer.");
+}
+
+static int ReadOptionalNonnegativeInt(string variableName)
+{
+    var value = Environment.GetEnvironmentVariable(variableName);
+    return string.IsNullOrEmpty(value) ? 0 : ReadRequiredNonnegativeInt(variableName);
+}
+
+static async Task SpawnSleepingChildAsync(string childProcessIdPath)
+{
+    var processPath = Environment.ProcessPath
+        ?? throw new InvalidOperationException("The fixture process path is unavailable.");
+    var assemblyPath = Assembly.GetExecutingAssembly().Location;
+    var startInfo = new ProcessStartInfo(processPath)
+    {
+        CreateNoWindow = true,
+        RedirectStandardError = true,
+        RedirectStandardOutput = true,
+        UseShellExecute = false,
+    };
+    startInfo.ArgumentList.Add(assemblyPath);
+    startInfo.Environment[fixtureModeVariable] = "sleep";
+
+    using var child = Process.Start(startInfo)
+        ?? throw new InvalidOperationException("The child fixture process could not be started.");
+    await File.WriteAllTextAsync(childProcessIdPath, child.Id.ToString(CultureInfo.InvariantCulture));
 }
 
 static async Task WriteBytesAsync(Stream stream, int count)

@@ -150,6 +150,26 @@ internal sealed class ComparisonGitFixture
     }
 
     /// <summary>
+    ///     Queues preparation through the committed-diff command, which returns the supplied bounded-output failure.
+    /// </summary>
+    /// <param name="failure">The exact non-null failure returned for committed file facts.</param>
+    /// <exception cref="ArgumentNullException">
+    ///     <paramref name="failure" /> is <see langword="null" />.
+    /// </exception>
+    internal void EnqueuePreparationWithCommittedFailure(OperationError failure)
+    {
+        ArgumentNullException.ThrowIfNull(failure);
+        EnqueueInspection();
+        EnqueueTargets(Target("refs/heads/topic", OtherSha1Revision));
+        Runner.Enqueue(Output(string.Empty));
+        Runner.Enqueue(Output(OtherSha1Revision + "\n"));
+        Runner.Enqueue(Output(string.Empty));
+        Runner.Enqueue(Output(BaseSha1Revision + "\n"));
+        Runner.Enqueue(Output("0\t0\n"));
+        Runner.Enqueue(Result.Fail<GitCommandOutput>(failure));
+    }
+
+    /// <summary>
     ///     Queues a complete comparison freshness check with controlled fact output.
     /// </summary>
     /// <param name="targetRevision">The selected target revision.</param>

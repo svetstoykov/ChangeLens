@@ -1,4 +1,6 @@
 using System.Reflection;
+using System.Text;
+using System.Diagnostics;
 using ChangeLens.Core.Comparisons.Constants;
 using ChangeLens.Core.Comparisons.Models;
 using ChangeLens.Core.Git.Models;
@@ -293,6 +295,60 @@ public sealed class GitComparisonPreparerTests
                 Assert.True(command.Timeout > TimeSpan.Zero);
                 Assert.True(command.Timeout <= ComparisonLimits.PreparationTimeout);
             });
+    }
+
+    /// <summary>
+    ///     Asynchronously composes every committed-file fact from a valid raw-diff stream at the exact 8 MiB limit.
+    /// </summary>
+    /// <returns>A task that represents the asynchronous operation.</returns>
+    [Fact]
+    public async Task PrepareAsyncExactFactLimitReturnsCompleteAggregateCounts()
+    {
+        const int recordCount = 8192;
+        var startedAt = Stopwatch.GetTimestamp();
+        var fixture = new ComparisonGitFixture();
+        fixture.EnqueuePreparation(committedFiles: CreateRawCommittedRecords(recordCount, 924));
+
+        var result = await fixture.Preparer.PrepareAsync(
+            "/selected",
+            Target,
+            TestContext.Current.CancellationToken);
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal(recordCount, result.Data!.Files.ChangedFileTotal);
+        Assert.Equal(0, result.Data.Files.UncommittedFileTotal);
+        Assert.Equal(0, result.Data.Files.StagedFileCount);
+        Assert.Equal(0, result.Data.Files.UnstagedFileCount);
+        Assert.Equal(0, result.Data.Files.UntrackedFileCount);
+        TestContext.Current.TestOutputHelper?.WriteLine(
+            $"comparison fact capacity: bytes=8388608; records={recordCount}; changedFiles={result.Data.Files.ChangedFileTotal}; elapsedMilliseconds={Stopwatch.GetElapsedTime(startedAt).TotalMilliseconds:F0}");
+    }
+
+    /// <summary>
+    ///     Asynchronously forwards the exact output-limit failure before any partial comparison aggregate is created.
+    /// </summary>
+    /// <returns>A task that represents the asynchronous operation.</returns>
+    [Fact]
+    public async Task PrepareAsyncFactLimitFailureReturnsOnlyPreservedTooLargeError()
+    {
+        var startedAt = Stopwatch.GetTimestamp();
+        var tooLarge = OperationError.UnprocessableInput(
+            "The comparison exceeds the supported local inspection limit.",
+            ComparisonErrorCode.TooLarge);
+        var fixture = new ComparisonGitFixture();
+        fixture.EnqueuePreparationWithCommittedFailure(tooLarge);
+
+        var result = await fixture.Preparer.PrepareAsync(
+            "/selected",
+            Target,
+            TestContext.Current.CancellationToken);
+
+        Assert.True(result.IsFailure);
+        Assert.Null(result.Data);
+        Assert.Same(tooLarge, Assert.Single(result.Errors));
+        Assert.Equal(13, fixture.Runner.Commands.Count);
+        TestContext.Current.TestOutputHelper?.WriteLine(
+            $"comparison fact capacity: sourceOverflowBytes=8388609; errors={result.Errors.Count}; payload=null; elapsedMilliseconds={Stopwatch.GetElapsedTime(startedAt).TotalMilliseconds:F0}");
     }
 
     /// <summary>
@@ -902,6 +958,22 @@ public sealed class GitComparisonPreparerTests
             ? $":{oldMode} {newMode} {oldRevision} {newRevision} {status}\0{path}\0"
             : $":{oldMode} {newMode} {oldRevision} {newRevision} {status}\0" +
               $"{originalPath}\0{path}\0";
+
+    private static string CreateRawCommittedRecords(int recordCount, int pathLength)
+    {
+        var records = new StringBuilder(recordCount * 1024);
+        for (var index = 0; index < recordCount; index++)
+        {
+            records.Append(
+                Raw(
+                    "100644",
+                    "100644",
+                    "M",
+                    $"p{index:D4}" + new string('x', pathLength - 5)));
+        }
+
+        return records.ToString();
+    }
 
     private static string Ordinary(string status, string path)
     {

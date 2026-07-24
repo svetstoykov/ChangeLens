@@ -1,5 +1,6 @@
 use changelens_desktop_lib::comparisons::{ComparisonService, ComparisonTargetKind};
 use changelens_desktop_lib::engine_protocol::{ActionErrorKind, EngineClient, OperationErrorType};
+use changelens_desktop_lib::repositories::RepositoryService;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::OnceLock;
@@ -10,15 +11,18 @@ const TARGET: &str = "refs/remotes/origin/main";
 const FRESHNESS_TOKEN: &str = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
 
 #[test]
-fn reuses_one_process_for_list_prepare_and_freshness() {
+fn repository_open_and_comparison_actions_reuse_one_process() {
     let client = client_for_mode("comparison-success");
 
+    let repository = client
+        .open_repository(REPOSITORY_PATH)
+        .expect("the repository result must parse");
+    let process_id = client
+        .process_id_for_testing()
+        .expect("the repository action must start the fixture");
     let targets = client
         .list_targets(REPOSITORY_PATH, Some("main"), None, None)
         .expect("the target page must parse");
-    let process_id = client
-        .process_id_for_testing()
-        .expect("the first action must start the fixture");
     let prepared = client
         .prepare(REPOSITORY_PATH, TARGET)
         .expect("the prepared comparison must parse");
@@ -26,6 +30,7 @@ fn reuses_one_process_for_list_prepare_and_freshness() {
         .check_freshness(REPOSITORY_PATH, TARGET, FRESHNESS_TOKEN)
         .expect("the freshness result must parse");
 
+    assert_eq!(repository.canonical_path, REPOSITORY_PATH);
     assert_eq!(
         targets.targets[0].kind,
         ComparisonTargetKind::RemoteTracking

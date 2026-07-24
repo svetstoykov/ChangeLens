@@ -22,6 +22,11 @@ internal sealed class ComparisonGitFixture
     internal const string OtherSha1Revision = "89abcdef0123456789abcdef0123456789abcdef";
 
     /// <summary>
+    ///     Defines a merge-base SHA-1 revision used by comparison tests.
+    /// </summary>
+    internal const string BaseSha1Revision = "fedcba9876543210fedcba9876543210fedcba98";
+
+    /// <summary>
     ///     Defines the canonical repository root returned by the fixture.
     /// </summary>
     internal const string CanonicalPath = "/canonical/repository";
@@ -36,12 +41,22 @@ internal sealed class ComparisonGitFixture
         Discovery = new GitComparisonTargetDiscovery(
             new GitRepositoryInspector(Runner, Resolver),
             Runner);
+        Preparer = new GitComparisonPreparer(
+            new GitRepositoryInspector(Runner, Resolver),
+            Discovery,
+            Runner,
+            new ComparisonFileSummaryComposer());
     }
 
     /// <summary>
     ///     Gets the target-discovery service under test.
     /// </summary>
     internal GitComparisonTargetDiscovery Discovery { get; }
+
+    /// <summary>
+    ///     Gets the comparison-preparation service under test.
+    /// </summary>
+    internal GitComparisonPreparer Preparer { get; }
 
     /// <summary>
     ///     Gets the controlled Git command runner.
@@ -90,6 +105,38 @@ internal sealed class ComparisonGitFixture
     /// <param name="records">The complete record lines without their final line feeds.</param>
     internal void EnqueueTargets(params string[] records) =>
         Runner.Enqueue(Output(string.Concat(records.Select(record => record + "\n"))));
+
+    /// <summary>
+    ///     Queues a complete stable comparison preparation with controlled fact output.
+    /// </summary>
+    /// <param name="targetRevision">The selected target revision.</param>
+    /// <param name="mergeBaseRevision">The unique merge-base revision.</param>
+    /// <param name="counts">The target-only and current-work count output.</param>
+    /// <param name="committedFiles">The raw committed-file output.</param>
+    /// <param name="workingTree">The beginning and ending working-tree output.</param>
+    /// <param name="branchName">The beginning and ending branch name.</param>
+    internal void EnqueuePreparation(
+        string targetRevision = OtherSha1Revision,
+        string mergeBaseRevision = BaseSha1Revision,
+        string counts = "0\t0\n",
+        string committedFiles = "",
+        string workingTree = "",
+        string branchName = "main")
+    {
+        EnqueueInspection(branchName);
+        EnqueueTargets(Target("refs/heads/topic", targetRevision));
+        Runner.Enqueue(Output(string.Empty));
+        Runner.Enqueue(Output(targetRevision + "\n"));
+        Runner.Enqueue(Output(workingTree));
+        Runner.Enqueue(Output(mergeBaseRevision + "\n"));
+        Runner.Enqueue(Output(counts));
+        Runner.Enqueue(Output(committedFiles));
+        Runner.Enqueue(Output(workingTree));
+        Runner.Enqueue(Output(Sha1Revision + "\n"));
+        Runner.Enqueue(Output(branchName + "\n"));
+        Runner.Enqueue(Output(targetRevision + "\n"));
+        EnqueueTargets(Target("refs/heads/topic", targetRevision));
+    }
 
     /// <summary>
     ///     Creates one strictly formatted comparison-ref record.

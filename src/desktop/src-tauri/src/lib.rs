@@ -1,3 +1,4 @@
+pub mod comparisons;
 pub mod engine_protocol;
 pub mod engine_status;
 pub mod repositories;

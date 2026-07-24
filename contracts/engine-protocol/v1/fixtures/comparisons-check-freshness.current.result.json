@@ -1,0 +1,8 @@
+{
+  "protocolVersion": 1,
+  "type": "result",
+  "requestId": "comparison-freshness-1",
+  "result": {
+    "state": "current"
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "protocolVersion": 1,
+  "type": "error",
+  "requestId": "comparison-error",
+  "errors": [
+    {
+      "type": "UnprocessableInput",
+      "code": "comparison.tooLarge",
+      "message": "The comparison exceeds the supported local inspection limit."
+    }
+  ]
+}

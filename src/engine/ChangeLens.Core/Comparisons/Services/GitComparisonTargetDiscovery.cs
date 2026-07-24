@@ -248,7 +248,10 @@ public sealed class GitComparisonTargetDiscovery(
                 page,
                 suggestion,
                 token,
-                discovered.UnsupportedTargetCount));
+                discovered.UnsupportedTargetCount)
+            {
+                UnpagedTargets = filtered,
+            });
     }
 
     private static Result ValidateRequest(

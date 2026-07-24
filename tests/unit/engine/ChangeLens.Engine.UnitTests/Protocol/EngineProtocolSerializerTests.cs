@@ -186,6 +186,26 @@ public sealed class EngineProtocolSerializerTests
     }
 
     /// <summary>
+    ///     Verifies response measurement exactly matches the production serialized UTF-8 payload.
+    /// </summary>
+    [Fact]
+    public void GetSerializedUtf8ByteCountMatchesProductionSerialization()
+    {
+        var response = ProtocolResponseFactory.CreateError(
+            "request-κόσμε",
+            [OperationError.Validation("Quoted \"value\".", "fixture.invalid")]);
+
+        var serialization = _serializer.SerializeResponse(response);
+        var measurement = _serializer.GetSerializedUtf8ByteCount(response);
+
+        Assert.True(serialization.IsSuccess);
+        Assert.True(measurement.IsSuccess);
+        Assert.Equal(
+            System.Text.Encoding.UTF8.GetByteCount(serialization.Data!),
+            measurement.Data);
+    }
+
+    /// <summary>
     ///     Verifies that unsupported response payloads return a stable serialization failure.
     /// </summary>
     [Fact]

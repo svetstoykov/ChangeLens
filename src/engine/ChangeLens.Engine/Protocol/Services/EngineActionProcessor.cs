@@ -1,8 +1,13 @@
 using System.Diagnostics;
 using System.Text.Json;
+using ChangeLens.Core.Comparisons.Models;
+using ChangeLens.Core.Comparisons.Services;
 using ChangeLens.Core.EngineStatus.Interfaces;
 using ChangeLens.Core.Git.Services;
 using ChangeLens.Core.Results.Models;
+using ChangeLens.Engine.Comparisons.Constants;
+using ChangeLens.Engine.Comparisons.Models;
+using ChangeLens.Engine.Comparisons.Services;
 using ChangeLens.Engine.EngineStatus.Constants;
 using ChangeLens.Engine.Protocol.Constants;
 using ChangeLens.Engine.Protocol.Models;
@@ -21,11 +26,25 @@ namespace ChangeLens.Engine.Protocol.Services;
 /// </remarks>
 /// <param name="engineStatusService">The engine-status capability. Cannot be <see langword="null" />.</param>
 /// <param name="gitRepositoryInspector">The Git repository inspection capability. Cannot be <see langword="null" />.</param>
+/// <param name="comparisonTargetDiscovery">
+///     The comparison-target discovery capability. Cannot be <see langword="null" />.
+/// </param>
+/// <param name="comparisonPreparer">The comparison-preparation capability. Cannot be <see langword="null" />.</param>
+/// <param name="comparisonFreshnessChecker">
+///     The comparison freshness capability. Cannot be <see langword="null" />.
+/// </param>
+/// <param name="comparisonTargetPageBuilder">
+///     The bounded target-page builder. Cannot be <see langword="null" />.
+/// </param>
 /// <param name="protocolSerializer">The strict engine protocol serializer. Cannot be <see langword="null" />.</param>
 /// <param name="logger">The logger for action outcomes. Cannot be <see langword="null" />.</param>
 internal sealed class EngineActionProcessor(
     IEngineStatusService engineStatusService,
     GitRepositoryInspector gitRepositoryInspector,
+    GitComparisonTargetDiscovery comparisonTargetDiscovery,
+    GitComparisonPreparer comparisonPreparer,
+    GitComparisonFreshnessChecker comparisonFreshnessChecker,
+    ComparisonTargetPageBuilder comparisonTargetPageBuilder,
     EngineProtocolSerializer protocolSerializer,
     ILogger<EngineActionProcessor> logger)
 {
@@ -75,8 +94,11 @@ internal sealed class EngineActionProcessor(
         }
         catch (Exception exception)
         {
+            var loggedException = IsComparisonAction(request.Action)
+                ? new InvalidOperationException("Unexpected comparison action failure.")
+                : exception;
             logger.LogError(
-                exception,
+                loggedException,
                 "Unexpected failure processing engine action {RequestId} for {Action} with error {ErrorCode} in " +
                 "{ElapsedMilliseconds:0.000} ms.",
                 request.RequestId,
@@ -108,6 +130,12 @@ internal sealed class EngineActionProcessor(
         {
             RepositoryActionConstants.OpenAction =>
                 this.ProcessRepositoryOpenAsync(request, cancellationToken),
+            ComparisonActionConstants.ListTargetsAction =>
+                this.ProcessComparisonListTargetsAsync(request, cancellationToken),
+            ComparisonActionConstants.PrepareAction =>
+                this.ProcessComparisonPrepareAsync(request, cancellationToken),
+            ComparisonActionConstants.CheckFreshnessAction =>
+                this.ProcessComparisonCheckFreshnessAsync(request, cancellationToken),
             EngineStatusActionConstants.CheckStatusAction
                 when request.Parameters.ValueKind == JsonValueKind.Undefined =>
                 this.ProcessCheckStatusAsync(request, cancellationToken),
@@ -172,6 +200,146 @@ internal sealed class EngineActionProcessor(
     }
 
     /// <summary>
+    ///     Asynchronously binds and executes comparison-target discovery.
+    /// </summary>
+    /// <param name="request">The current-version target-list request. Cannot be <see langword="null" />.</param>
+    /// <param name="cancellationToken">
+    ///     A <see cref="CancellationToken" /> to observe while waiting for discovery.
+    /// </param>
+    /// <returns>A task that represents the asynchronous operation and contains the bounded target response.</returns>
+    private async Task<ProtocolResponse> ProcessComparisonListTargetsAsync(
+        EngineProtocolRequest request,
+        CancellationToken cancellationToken)
+    {
+        if (request.Parameters.ValueKind == JsonValueKind.Undefined)
+        {
+            return MissingParameters(request.RequestId, ComparisonActionConstants.ListTargetsAction);
+        }
+
+        var parametersResult = protocolSerializer.DeserializeParameters<ComparisonListTargetsParameters>(
+            request.Parameters,
+            ComparisonActionConstants.ListTargetsAction);
+        if (parametersResult.IsFailure)
+        {
+            return ProtocolResponseFactory.CreateError(request.RequestId, parametersResult.Errors);
+        }
+
+        var parameters = parametersResult.Data!;
+        var discoveryResult = await comparisonTargetDiscovery.ListAsync(
+            parameters.Path,
+            parameters.Query,
+            parameters.After,
+            parameters.TargetSetToken,
+            cancellationToken);
+        if (discoveryResult.IsFailure)
+        {
+            return ProtocolResponseFactory.FromResult(
+                request.RequestId,
+                Result.ErrorFromResult<ComparisonTargetPageResult>(discoveryResult));
+        }
+
+        return ProtocolResponseFactory.FromResult(
+            request.RequestId,
+            comparisonTargetPageBuilder.Build(request.RequestId, discoveryResult.Data!));
+    }
+
+    /// <summary>
+    ///     Asynchronously binds and executes comparison preparation.
+    /// </summary>
+    /// <param name="request">The current-version preparation request. Cannot be <see langword="null" />.</param>
+    /// <param name="cancellationToken">
+    ///     A <see cref="CancellationToken" /> to observe while waiting for preparation.
+    /// </param>
+    /// <returns>A task that represents the asynchronous operation and contains prepared comparison facts.</returns>
+    private async Task<ProtocolResponse> ProcessComparisonPrepareAsync(
+        EngineProtocolRequest request,
+        CancellationToken cancellationToken)
+    {
+        if (request.Parameters.ValueKind == JsonValueKind.Undefined)
+        {
+            return MissingParameters(request.RequestId, ComparisonActionConstants.PrepareAction);
+        }
+
+        var parametersResult = protocolSerializer.DeserializeParameters<ComparisonPrepareParameters>(
+            request.Parameters,
+            ComparisonActionConstants.PrepareAction);
+        if (parametersResult.IsFailure)
+        {
+            return ProtocolResponseFactory.CreateError(request.RequestId, parametersResult.Errors);
+        }
+
+        var parameters = parametersResult.Data!;
+        var preparationResult = await comparisonPreparer.PrepareAsync(
+            parameters.Path,
+            parameters.Target,
+            cancellationToken);
+        if (preparationResult.IsFailure)
+        {
+            return ProtocolResponseFactory.FromResult(
+                request.RequestId,
+                Result.ErrorFromResult<ComparisonPrepareResult>(preparationResult));
+        }
+
+        return ProtocolResponseFactory.FromResult(
+            request.RequestId,
+            Result.Success(
+                ComparisonPrepareResult.FromPreparedComparison(preparationResult.Data!)));
+    }
+
+    /// <summary>
+    ///     Asynchronously binds and executes a prepared comparison freshness check.
+    /// </summary>
+    /// <param name="request">The current-version freshness request. Cannot be <see langword="null" />.</param>
+    /// <param name="cancellationToken">
+    ///     A <see cref="CancellationToken" /> to observe while waiting for the check.
+    /// </param>
+    /// <returns>A task that represents the asynchronous operation and contains the tagged freshness state.</returns>
+    private async Task<ProtocolResponse> ProcessComparisonCheckFreshnessAsync(
+        EngineProtocolRequest request,
+        CancellationToken cancellationToken)
+    {
+        if (request.Parameters.ValueKind == JsonValueKind.Undefined)
+        {
+            return MissingParameters(
+                request.RequestId,
+                ComparisonActionConstants.CheckFreshnessAction);
+        }
+
+        var parametersResult =
+            protocolSerializer.DeserializeParameters<ComparisonCheckFreshnessParameters>(
+                request.Parameters,
+                ComparisonActionConstants.CheckFreshnessAction);
+        if (parametersResult.IsFailure)
+        {
+            return ProtocolResponseFactory.CreateError(request.RequestId, parametersResult.Errors);
+        }
+
+        var parameters = parametersResult.Data!;
+        var freshnessResult = await comparisonFreshnessChecker.CheckAsync(
+            parameters.Path,
+            parameters.Target,
+            parameters.FreshnessToken,
+            cancellationToken);
+        if (freshnessResult.IsFailure)
+        {
+            return ProtocolResponseFactory.FromResult(
+                request.RequestId,
+                Result.ErrorFromResult<ComparisonFreshnessResult>(freshnessResult));
+        }
+
+        ComparisonFreshnessResult result = freshnessResult.Data switch
+        {
+            ComparisonFreshnessState.Current => new CurrentComparisonFreshnessResult(),
+            ComparisonFreshnessState.Stale => new StaleComparisonFreshnessResult(),
+            _ => throw new InvalidOperationException(
+                "The comparison freshness state is not approved for the engine protocol."),
+        };
+        return ProtocolResponseFactory.FromResult(
+            request.RequestId,
+            Result.Success(result));
+    }
+
+    /// <summary>
     ///     Asynchronously executes the payload-free engine-status action.
     /// </summary>
     /// <param name="request">The validated status request. Cannot be <see langword="null" />.</param>
@@ -188,6 +356,29 @@ internal sealed class EngineActionProcessor(
         var result = await engineStatusService.CheckStatusAsync(cancellationToken);
         return ProtocolResponseFactory.FromResult(request.RequestId, result);
     }
+
+    /// <summary>
+    ///     Creates the standard validation failure for a parameterized action with omitted parameters.
+    /// </summary>
+    /// <param name="requestId">The correlated request identifier.</param>
+    /// <param name="action">The fixed parameterized action.</param>
+    /// <returns>The correlated invalid-request response.</returns>
+    private static ProtocolResponse MissingParameters(string requestId, string action) =>
+        ProtocolResponseFactory.FromError(
+            requestId,
+            OperationError.Validation(
+                $"The {action} action requires parameters.",
+                EngineErrorCode.InvalidRequest));
+
+    /// <summary>
+    ///     Determines whether an action belongs to the comparison boundary with restricted diagnostic context.
+    /// </summary>
+    /// <param name="action">The action name.</param>
+    /// <returns><see langword="true" /> for an approved comparison action; otherwise, <see langword="false" />.</returns>
+    private static bool IsComparisonAction(string action) =>
+        action is ComparisonActionConstants.ListTargetsAction or
+            ComparisonActionConstants.PrepareAction or
+            ComparisonActionConstants.CheckFreshnessAction;
 
     /// <summary>
     ///     Logs one successful or expected failed action outcome.

@@ -1,11 +1,12 @@
-using ChangeLens.Core.Results.Models;
 using System.Text.Json;
+using ChangeLens.Core.Results.Models;
+using ChangeLens.Engine.Comparisons.Services;
 using ChangeLens.Engine.Hosting.Constants;
 using ChangeLens.Engine.Protocol.Interfaces;
 using ChangeLens.Engine.Protocol.Models;
 using ChangeLens.Engine.Protocol.Services;
+using ChangeLens.Engine.UnitTests.Comparisons.Support;
 using ChangeLens.Engine.UnitTests.EngineStatus.Support;
-using ChangeLens.Engine.UnitTests.Repositories.Support;
 using ChangeLens.Engine.UnitTests.Support;
 using Xunit;
 
@@ -204,16 +205,24 @@ public sealed class EngineProtocolHostTests
         IEngineProtocolTransport transport,
         TestLogger<EngineProtocolHost> logger,
         TestHostApplicationLifetime lifetime,
-        Func<CancellationToken, Task<Result>> checkStatusAsync) =>
-        new(
+        Func<CancellationToken, Task<Result>> checkStatusAsync)
+    {
+        var serializer = new EngineProtocolSerializer();
+        var comparison = new ComparisonProcessorFixture();
+        return new EngineProtocolHost(
             transport,
             new EngineActionProcessor(
                 new StubEngineStatusService(checkStatusAsync),
-                new RepositoryInspectorFixture().Inspector,
-                new EngineProtocolSerializer(),
+                comparison.RepositoryInspector,
+                comparison.TargetDiscovery,
+                comparison.Preparer,
+                comparison.FreshnessChecker,
+                new ComparisonTargetPageBuilder(serializer),
+                serializer,
                 new TestLogger<EngineActionProcessor>()),
             logger,
             lifetime);
+    }
 
     private static EngineProtocolRequest CreateRequest(string requestId) =>
         new()

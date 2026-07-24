@@ -5,13 +5,22 @@ This directory is the source of truth for implemented ChangeLens.Engine wire sha
 Version 1 requests use an action envelope containing `protocolVersion`, `requestId`, and `action`. Rust owns the
 protocol version, request identifier, and fixed action name; React does not create protocol messages directly.
 
-Version 1 currently implements `engine.checkStatus` and `repositories.open`. The `engine.checkStatus` action takes no
-input, so its request has no `parameters` property. The `repositories.open` action takes a repository path through its
-`parameters` property. Add `parameters` to an action request only when that action has real input.
+Version 1 currently implements `engine.checkStatus`, `repositories.open`, `comparisons.listTargets`,
+`comparisons.prepare`, and `comparisons.checkFreshness`. The `engine.checkStatus` action takes no input, so its request
+has no `parameters` property. Every other implemented action has a strict capability-specific `parameters` object.
+Add `parameters` to an action request only when that action has real input.
 
 The `repositories.open` result describes a repository and its current head. Its `head` is a strict tagged union: a
 branch head has `kind: "branch"`, a non-empty branch name, and a lowercase 40- or 64-character revision; a detached
 head has `kind: "detached"` and the same revision shape without a branch name.
+
+Comparison target discovery returns only local and cached remote-tracking refs. Continuation requests pair `after`
+with the exact `targetSetToken`; neither field may appear alone. Complete target-list response envelopes are measured
+with the production serializer and remain at or below 48 KiB.
+
+Comparison preparation returns repository identity, the exact target and merge base, aggregate commit and file
+counts, a strict `ready`, `empty`, or `conflicts` readiness union, and a 64-character lowercase freshness token.
+Freshness checks return only the strict `current` or `stale` state union.
 
 Every accepted request envelope receives exactly one correlated response. Successful actions return either a typed result or the
 canonical payload-free `result: null`. Expected failures after envelope acceptance return the request identifier and a non-empty,

@@ -1,0 +1,12 @@
+{
+  "protocolVersion": 1,
+  "type": "result",
+  "requestId": "comparison-list-empty",
+  "result": {
+    "targets": [],
+    "suggestedTarget": null,
+    "nextCursor": null,
+    "targetSetToken": "89abcdef0123456789abcdef0123456789abcdef0123456789abcdef01234567",
+    "unsupportedTargetCount": 0
+  }
+}

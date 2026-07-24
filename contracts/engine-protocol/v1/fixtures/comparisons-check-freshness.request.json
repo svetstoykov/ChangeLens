@@ -1,0 +1,10 @@
+{
+  "protocolVersion": 1,
+  "requestId": "comparison-freshness-1",
+  "action": "comparisons.checkFreshness",
+  "parameters": {
+    "path": "/projects/change_lens",
+    "target": "refs/remotes/origin/main",
+    "freshnessToken": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+  }
+}

@@ -13,4 +13,15 @@ public sealed record ComparisonTargetSet(
     IReadOnlyList<ComparisonTargetDescriptor> Targets,
     ComparisonTargetDescriptor? SuggestedTarget,
     string TargetSetToken,
-    int UnsupportedTargetCount);
+    int UnsupportedTargetCount)
+{
+    /// <summary>
+    ///     Gets the complete filtered target set before a continuation cursor is applied.
+    /// </summary>
+    /// <remarks>
+    ///     Engine page shaping uses this immutable set to keep transport-size exclusions consistent across
+    ///     continuation pages. For an unpaged or directly constructed set, the value defaults to
+    ///     <see cref="Targets" />.
+    /// </remarks>
+    public IReadOnlyList<ComparisonTargetDescriptor> UnpagedTargets { get; init; } = Targets;
+}

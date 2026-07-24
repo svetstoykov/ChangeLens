@@ -171,6 +171,46 @@ public sealed class GitComparisonTargetDiscoveryTests
     }
 
     /// <summary>
+    ///     Verifies continuation results retain the complete filtered set for deterministic Engine page shaping.
+    /// </summary>
+    [Fact]
+    public async Task ListAsyncRetainsUnpagedTargetsAfterCursor()
+    {
+        var records = new[]
+        {
+            ComparisonGitFixture.Target("refs/heads/a"),
+            ComparisonGitFixture.Target("refs/heads/b"),
+            ComparisonGitFixture.Target("refs/heads/c"),
+        };
+        var fixture = new ComparisonGitFixture();
+        fixture.EnqueueInspection();
+        fixture.EnqueueTargets(records);
+        fixture.EnqueueInspection();
+        fixture.EnqueueTargets(records);
+        var first = await fixture.Discovery.ListAsync(
+            "/selected",
+            null,
+            null,
+            null,
+            TestContext.Current.CancellationToken);
+
+        var continuation = await fixture.Discovery.ListAsync(
+            "/selected",
+            null,
+            "refs/heads/a",
+            first.Data!.TargetSetToken,
+            TestContext.Current.CancellationToken);
+
+        Assert.True(continuation.IsSuccess);
+        Assert.Equal(
+            ["refs/heads/b", "refs/heads/c"],
+            continuation.Data!.Targets.Select(target => target.FullName));
+        Assert.Equal(
+            ["refs/heads/a", "refs/heads/b", "refs/heads/c"],
+            continuation.Data.UnpagedTargets.Select(target => target.FullName));
+    }
+
+    /// <summary>
     ///     Verifies target classification, ordering, display names, unsupported counts, and configured default selection.
     /// </summary>
     [Fact]

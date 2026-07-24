@@ -1,0 +1,11 @@
+{
+  "protocolVersion": 1,
+  "requestId": "comparison-list-2",
+  "action": "comparisons.listTargets",
+  "parameters": {
+    "path": "/projects/change_lens",
+    "query": "main",
+    "after": "refs/heads/release",
+    "targetSetToken": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+  }
+}

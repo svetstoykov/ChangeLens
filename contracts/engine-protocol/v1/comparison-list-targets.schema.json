@@ -1,0 +1,119 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://changelens.dev/contracts/engine-protocol/v1/comparison-list-targets.schema.json",
+  "title": "ChangeLens comparison-target exchange",
+  "oneOf": [
+    { "$ref": "#/$defs/request" },
+    { "$ref": "#/$defs/result" },
+    { "$ref": "https://changelens.dev/contracts/engine-protocol/v1/error-response.schema.json" }
+  ],
+  "$defs": {
+    "request": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["protocolVersion", "requestId", "action", "parameters"],
+      "properties": {
+        "protocolVersion": { "const": 1 },
+        "requestId": { "type": "string", "minLength": 1, "pattern": "\\S" },
+        "action": { "const": "comparisons.listTargets" },
+        "parameters": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["path"],
+          "dependentRequired": {
+            "after": ["targetSetToken"],
+            "targetSetToken": ["after"]
+          },
+          "properties": {
+            "path": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 8192,
+              "pattern": "^(?=.*\\S)[^\\u0000]+$"
+            },
+            "query": {
+              "type": "string",
+              "maxLength": 256,
+              "pattern": "^[^\\u0000]*$"
+            },
+            "after": { "$ref": "#/$defs/refName" },
+            "targetSetToken": { "$ref": "#/$defs/token" }
+          }
+        }
+      }
+    },
+    "result": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["protocolVersion", "type", "requestId", "result"],
+      "properties": {
+        "protocolVersion": { "const": 1 },
+        "type": { "const": "result" },
+        "requestId": { "type": "string", "minLength": 1, "pattern": "\\S" },
+        "result": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "targets",
+            "suggestedTarget",
+            "nextCursor",
+            "targetSetToken",
+            "unsupportedTargetCount"
+          ],
+          "properties": {
+            "targets": {
+              "type": "array",
+              "items": { "$ref": "#/$defs/target" }
+            },
+            "suggestedTarget": {
+              "oneOf": [
+                { "$ref": "#/$defs/target" },
+                { "type": "null" }
+              ]
+            },
+            "nextCursor": {
+              "oneOf": [
+                { "$ref": "#/$defs/refName" },
+                { "type": "null" }
+              ]
+            },
+            "targetSetToken": { "$ref": "#/$defs/token" },
+            "unsupportedTargetCount": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        }
+      }
+    },
+    "target": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "name", "fullName", "revision"],
+      "properties": {
+        "kind": { "enum": ["local", "remoteTracking"] },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4096
+        },
+        "fullName": { "$ref": "#/$defs/refName" },
+        "revision": { "$ref": "#/$defs/revision" }
+      }
+    },
+    "refName": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 4096,
+      "pattern": "^refs/(?:heads|remotes)/[^\\u0000]+$"
+    },
+    "revision": {
+      "type": "string",
+      "pattern": "^(?:[0-9a-f]{40}|[0-9a-f]{64})$"
+    },
+    "token": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    }
+  }
+}

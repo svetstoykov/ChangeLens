@@ -9,6 +9,11 @@ namespace ChangeLens.Engine.UnitTests.Support;
 internal sealed class TestLogger<T> : ILogger<T>
 {
     /// <summary>
+    ///     Gets the formatted captured log messages in call order.
+    /// </summary>
+    internal List<string> Entries { get; } = new();
+
+    /// <summary>
     ///     Gets the number of captured error or critical log calls.
     /// </summary>
     internal int ErrorCount { get; private set; }
@@ -33,6 +38,8 @@ internal sealed class TestLogger<T> : ILogger<T>
         Exception? exception,
         Func<TState, Exception?, string> formatter)
     {
+        Entries.Add(formatter(state, exception));
+
         if (logLevel < LogLevel.Error)
         {
             return;

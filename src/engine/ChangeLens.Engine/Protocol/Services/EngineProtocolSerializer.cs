@@ -129,6 +129,35 @@ internal sealed class EngineProtocolSerializer
     }
 
     /// <summary>
+    ///     Measures a protocol response with the exact production UTF-8 serialization policy.
+    /// </summary>
+    /// <param name="response">The response to measure. Cannot be <see langword="null" />.</param>
+    /// <returns>The exact serialized UTF-8 byte count or a serialization failure.</returns>
+    /// <exception cref="ArgumentNullException">
+    ///     <paramref name="response" /> is <see langword="null" />.
+    /// </exception>
+    internal Result<int> GetSerializedUtf8ByteCount(ProtocolResponse response)
+    {
+        ArgumentNullException.ThrowIfNull(response);
+
+        try
+        {
+            return Result.Success(
+                JsonSerializer.SerializeToUtf8Bytes(
+                    response,
+                    response.GetType(),
+                    SerializerOptions).Length);
+        }
+        catch (Exception exception) when (exception is JsonException or NotSupportedException)
+        {
+            return Result.Fail<int>(
+                OperationError.InternalError(
+                    "The engine could not serialize the protocol response.",
+                    EngineErrorCode.SerializationFailed));
+        }
+    }
+
+    /// <summary>
     ///     Creates strict JSON options for all protocol messages.
     /// </summary>
     /// <returns>Options that enforce the versioned protocol's property and enum representation.</returns>

@@ -1,0 +1,34 @@
+{
+  "protocolVersion": 1,
+  "type": "result",
+  "requestId": "comparison-prepare-1",
+  "result": {
+    "repository": {
+      "name": "change_lens",
+      "canonicalPath": "/projects/change_lens",
+      "head": {
+        "kind": "branch",
+        "name": "feature/comparison",
+        "revision": "0123456789abcdef0123456789abcdef01234567"
+      }
+    },
+    "target": {
+      "kind": "remoteTracking",
+      "name": "origin/main",
+      "fullName": "refs/remotes/origin/main",
+      "revision": "89abcdef0123456789abcdef0123456789abcdef"
+    },
+    "mergeBaseRevision": "fedcba9876543210fedcba9876543210fedcba98",
+    "currentWorkCommitCount": 3,
+    "targetOnlyCommitCount": 1,
+    "changedFileTotal": 7,
+    "uncommittedFileTotal": 3,
+    "stagedFileCount": 1,
+    "unstagedFileCount": 2,
+    "untrackedFileCount": 1,
+    "readiness": {
+      "state": "ready"
+    },
+    "freshnessToken": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+  }
+}

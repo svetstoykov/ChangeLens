@@ -17,9 +17,13 @@ public sealed class GitCommand
     ///     <see langword="null" /> values.
     /// </param>
     /// <param name="timeout">The positive time allowed for the process to complete.</param>
-    /// <param name="maximumStreamBytes">The positive maximum number of bytes captured from each output stream.</param>
+    /// <param name="maximumStandardOutputBytes">The positive maximum number of bytes captured from standard output.</param>
+    /// <param name="maximumStandardErrorBytes">The positive maximum number of bytes captured from standard error.</param>
+    /// <param name="errorPolicy">The terminal errors selected by the calling capability. Cannot be <see langword="null" />.</param>
     /// <exception cref="ArgumentNullException">
     ///     <paramref name="arguments" /> is <see langword="null" />.
+    ///     -or-
+    ///     <paramref name="errorPolicy" /> is <see langword="null" />.
     /// </exception>
     /// <exception cref="ArgumentException">
     ///     <paramref name="arguments" /> contains a <see langword="null" /> value.
@@ -27,12 +31,15 @@ public sealed class GitCommand
     /// <exception cref="ArgumentOutOfRangeException">
     ///     <paramref name="timeout" /> is less than or equal to <see cref="TimeSpan.Zero" />.
     ///     -or-
-    ///     <paramref name="maximumStreamBytes" /> is less than or equal to zero.
+    ///     <paramref name="maximumStandardOutputBytes" /> or <paramref name="maximumStandardErrorBytes" /> is less
+    ///     than or equal to zero.
     /// </exception>
     public GitCommand(
         IEnumerable<string> arguments,
         TimeSpan timeout,
-        int maximumStreamBytes)
+        int maximumStandardOutputBytes,
+        int maximumStandardErrorBytes,
+        GitCommandErrorPolicy errorPolicy)
     {
         ArgumentNullException.ThrowIfNull(arguments);
         var copiedArguments = arguments.ToArray();
@@ -42,10 +49,14 @@ public sealed class GitCommand
         }
 
         ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(timeout, TimeSpan.Zero);
-        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maximumStreamBytes);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maximumStandardOutputBytes);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maximumStandardErrorBytes);
+        ArgumentNullException.ThrowIfNull(errorPolicy);
         _arguments = Array.AsReadOnly(copiedArguments);
         Timeout = timeout;
-        MaximumStreamBytes = maximumStreamBytes;
+        MaximumStandardOutputBytes = maximumStandardOutputBytes;
+        MaximumStandardErrorBytes = maximumStandardErrorBytes;
+        ErrorPolicy = errorPolicy;
     }
 
     /// <summary>
@@ -59,7 +70,17 @@ public sealed class GitCommand
     public TimeSpan Timeout { get; }
 
     /// <summary>
-    ///     Gets the maximum number of bytes captured from each output stream.
+    ///     Gets the maximum number of bytes captured from standard output.
     /// </summary>
-    public int MaximumStreamBytes { get; }
+    public int MaximumStandardOutputBytes { get; }
+
+    /// <summary>
+    ///     Gets the maximum number of bytes captured from standard error.
+    /// </summary>
+    public int MaximumStandardErrorBytes { get; }
+
+    /// <summary>
+    ///     Gets the terminal errors selected by the calling capability.
+    /// </summary>
+    public GitCommandErrorPolicy ErrorPolicy { get; }
 }

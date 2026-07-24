@@ -159,7 +159,11 @@ public sealed class GitRepositoryInspectorTests
             runner.Commands,
             command =>
             {
-                Assert.Equal(65_536, command.MaximumStreamBytes);
+                Assert.Equal(65_536, command.MaximumStandardOutputBytes);
+                Assert.Equal(65_536, command.MaximumStandardErrorBytes);
+                Assert.Equal(GitErrorCode.TimedOut, command.ErrorPolicy.TimedOut.Code);
+                Assert.Equal(RepositoryErrorCode.InspectionFailed, command.ErrorPolicy.OutputLimitExceeded.Code);
+                Assert.Equal(RepositoryErrorCode.InspectionFailed, command.ErrorPolicy.InspectionFailed.Code);
                 Assert.True(command.Timeout > TimeSpan.Zero);
                 Assert.True(command.Timeout <= TimeSpan.FromSeconds(15));
             });

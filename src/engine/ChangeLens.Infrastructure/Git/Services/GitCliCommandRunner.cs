@@ -39,6 +39,7 @@ public sealed class GitCliCommandRunner : IGitCommandRunner
 
     private readonly string _executablePath;
     private readonly ReadOnlyCollection<string> _executableArguments;
+    private readonly Func<Stream, int, CancellationToken, Task<byte[]>> _readBoundedAsync;
 
     /// <summary>
     ///     Initializes a new instance of the <see cref="GitCliCommandRunner" /> class using the installed Git executable.
@@ -71,9 +72,42 @@ public sealed class GitCliCommandRunner : IGitCommandRunner
     public GitCliCommandRunner(
         string executablePath,
         IEnumerable<string> executableArguments)
+        : this(executablePath, executableArguments, ReadBoundedAsync)
+    {
+    }
+
+    /// <summary>
+    ///     This is an internal API that supports the library infrastructure and is not
+    ///     subject to the same compatibility standards as public APIs. It may be changed
+    ///     or removed without notice in any release.
+    /// </summary>
+    /// <param name="executablePath">
+    ///     The configured executable path or name. Cannot be <see langword="null" /> or empty.
+    /// </param>
+    /// <param name="executableArguments">
+    ///     The immutable prefix arguments placed before every Git argument. Cannot be <see langword="null" /> or contain
+    ///     <see langword="null" /> values.
+    /// </param>
+    /// <param name="readBoundedAsync">
+    ///     The redirected-stream reader. Cannot be <see langword="null" />.
+    /// </param>
+    /// <exception cref="ArgumentException">
+    ///     <paramref name="executablePath" /> is empty or contains only white-space characters.
+    ///     -or-
+    ///     <paramref name="executableArguments" /> contains a <see langword="null" /> value.
+    /// </exception>
+    /// <exception cref="ArgumentNullException">
+    ///     <paramref name="executablePath" />, <paramref name="executableArguments" />, or <paramref name="readBoundedAsync" />
+    ///     is <see langword="null" />.
+    /// </exception>
+    internal GitCliCommandRunner(
+        string executablePath,
+        IEnumerable<string> executableArguments,
+        Func<Stream, int, CancellationToken, Task<byte[]>> readBoundedAsync)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(executablePath);
         ArgumentNullException.ThrowIfNull(executableArguments);
+        ArgumentNullException.ThrowIfNull(readBoundedAsync);
 
         var copiedArguments = executableArguments.ToArray();
         if (copiedArguments.Any(argument => argument is null))
@@ -85,6 +119,7 @@ public sealed class GitCliCommandRunner : IGitCommandRunner
 
         _executablePath = executablePath;
         _executableArguments = Array.AsReadOnly(copiedArguments);
+        _readBoundedAsync = readBoundedAsync;
     }
 
     /// <inheritdoc />
@@ -121,20 +156,21 @@ public sealed class GitCliCommandRunner : IGitCommandRunner
         using var executionCancellation = CancellationTokenSource.CreateLinkedTokenSource(
             cancellationToken,
             timeout.Token);
-        var standardOutputTask = ReadBoundedAsync(
+        var standardOutputTask = _readBoundedAsync(
             process.StandardOutput.BaseStream,
-            command.MaximumStreamBytes,
+            command.MaximumStandardOutputBytes,
             executionCancellation.Token);
-        var standardErrorTask = ReadBoundedAsync(
+        var standardErrorTask = _readBoundedAsync(
             process.StandardError.BaseStream,
-            command.MaximumStreamBytes,
+            command.MaximumStandardErrorBytes,
             executionCancellation.Token);
         var exitTask = process.WaitForExitAsync(CancellationToken.None);
         var completionTask = WaitForCompletionOrLimitAsync(
             exitTask,
             standardOutputTask,
             standardErrorTask,
-            command.MaximumStreamBytes);
+            command.MaximumStandardOutputBytes,
+            command.MaximumStandardErrorBytes);
         Task[] cleanupTasks =
         [
             exitTask,
@@ -149,15 +185,15 @@ public sealed class GitCliCommandRunner : IGitCommandRunner
             if (exceededLimit)
             {
                 await TerminateAndCleanUpAsync(process, executionCancellation, cleanupTasks);
-                return InspectionFailed();
+                return Result.Fail<GitCommandOutput>(command.ErrorPolicy.OutputLimitExceeded);
             }
 
             var standardOutputBytes = await standardOutputTask;
             var standardErrorBytes = await standardErrorTask;
-            if (standardOutputBytes.Length > command.MaximumStreamBytes
-                || standardErrorBytes.Length > command.MaximumStreamBytes)
+            if (standardOutputBytes.Length > command.MaximumStandardOutputBytes
+                || standardErrorBytes.Length > command.MaximumStandardErrorBytes)
             {
-                return InspectionFailed();
+                return Result.Fail<GitCommandOutput>(command.ErrorPolicy.OutputLimitExceeded);
             }
 
             try
@@ -170,7 +206,7 @@ public sealed class GitCliCommandRunner : IGitCommandRunner
             }
             catch (DecoderFallbackException)
             {
-                return InspectionFailed();
+                return Result.Fail<GitCommandOutput>(command.ErrorPolicy.InspectionFailed);
             }
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -182,12 +218,12 @@ public sealed class GitCliCommandRunner : IGitCommandRunner
         catch (OperationCanceledException) when (timeout.IsCancellationRequested)
         {
             await TerminateAndCleanUpAsync(process, executionCancellation, cleanupTasks);
-            return TimedOut();
+            return Result.Fail<GitCommandOutput>(command.ErrorPolicy.TimedOut);
         }
-        catch (IOException)
+        catch (Exception exception) when (exception is IOException or InvalidOperationException)
         {
             await TerminateAndCleanUpAsync(process, executionCancellation, cleanupTasks);
-            return InspectionFailed();
+            return Result.Fail<GitCommandOutput>(command.ErrorPolicy.InspectionFailed);
         }
     }
 
@@ -230,6 +266,7 @@ public sealed class GitCliCommandRunner : IGitCommandRunner
             GitProcessConstants.InvariantLocaleValue;
         startInfo.Environment[GitProcessConstants.LanguageEnvironmentVariable] =
             GitProcessConstants.InvariantLocaleValue;
+        startInfo.Environment[GitProcessConstants.ExternalDiffEnvironmentVariable] = string.Empty;
         return startInfo;
     }
 
@@ -244,7 +281,8 @@ public sealed class GitCliCommandRunner : IGitCommandRunner
     /// <param name="standardErrorTask">
     ///     The bounded standard-error capture task. Cannot be <see langword="null" />.
     /// </param>
-    /// <param name="maximumStreamBytes">The maximum accepted byte count for either stream.</param>
+    /// <param name="maximumStandardOutputBytes">The maximum accepted byte count for standard output.</param>
+    /// <param name="maximumStandardErrorBytes">The maximum accepted byte count for standard error.</param>
     /// <returns>
     ///     A task that represents the asynchronous operation. The task result is <see langword="true" /> when either
     ///     stream exceeds the bound; otherwise, <see langword="false" />.
@@ -253,7 +291,8 @@ public sealed class GitCliCommandRunner : IGitCommandRunner
         Task exitTask,
         Task<byte[]> standardOutputTask,
         Task<byte[]> standardErrorTask,
-        int maximumStreamBytes)
+        int maximumStandardOutputBytes,
+        int maximumStandardErrorBytes)
     {
         var pendingTasks = new List<Task>
         {
@@ -276,6 +315,9 @@ public sealed class GitCliCommandRunner : IGitCommandRunner
             var bytes = completedTask == standardOutputTask
                 ? await standardOutputTask
                 : await standardErrorTask;
+            var maximumStreamBytes = completedTask == standardOutputTask
+                ? maximumStandardOutputBytes
+                : maximumStandardErrorBytes;
             if (bytes.Length > maximumStreamBytes)
             {
                 return true;
@@ -428,15 +470,4 @@ public sealed class GitCliCommandRunner : IGitCommandRunner
                 "Git is unavailable.",
                 GitErrorCode.Unavailable));
 
-    private static Result<GitCommandOutput> TimedOut() =>
-        Result.Fail<GitCommandOutput>(
-            OperationError.Timeout(
-                "Git repository inspection exceeded its allowed time.",
-                GitErrorCode.TimedOut));
-
-    private static Result<GitCommandOutput> InspectionFailed() =>
-        Result.Fail<GitCommandOutput>(
-            OperationError.ExternalDependencyFailure(
-                "Git repository inspection failed.",
-                RepositoryErrorCode.InspectionFailed));
 }

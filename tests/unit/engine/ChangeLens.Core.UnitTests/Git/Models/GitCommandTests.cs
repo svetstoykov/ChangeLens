@@ -1,6 +1,7 @@
 using ChangeLens.Core.Git.Constants;
 using ChangeLens.Core.Git.Models;
 using ChangeLens.Core.Repositories.Constants;
+using ChangeLens.Core.Results.Models;
 using Xunit;
 
 namespace ChangeLens.Core.UnitTests.Git.Models;
@@ -18,7 +19,7 @@ public sealed class GitCommandTests
     {
         var arguments = new List<string> { "--version" };
 
-        var command = new GitCommand(arguments, TimeSpan.FromSeconds(1), 1024);
+        var command = CreateCommand(arguments);
         arguments[0] = "status";
         arguments.Add("--short");
 
@@ -31,7 +32,7 @@ public sealed class GitCommandTests
     [Fact]
     public void ArgumentsAreReadOnly()
     {
-        var command = new GitCommand(["--version"], TimeSpan.FromSeconds(1), 1024);
+        var command = CreateCommand(["--version"]);
         var arguments = Assert.IsAssignableFrom<IList<string>>(command.Arguments);
 
         Assert.Throws<NotSupportedException>(() => arguments.Add("status"));
@@ -41,14 +42,29 @@ public sealed class GitCommandTests
     ///     Verifies that command construction preserves positive execution limits.
     /// </summary>
     [Fact]
-    public void ConstructorPreservesPositiveLimits()
+    public void ConstructorPreservesIndependentLimitsAndPolicyErrors()
     {
-        var timeout = TimeSpan.FromSeconds(3);
+        var timeoutError = OperationError.Timeout("Timed out.", "comparison.timedOut");
+        var outputLimitError = OperationError.UnprocessableInput("Too large.", "comparison.tooLarge");
+        var inspectionError = OperationError.ExternalDependencyFailure(
+            "Inspection failed.",
+            "comparison.inspectionFailed");
+        var timeout = TimeSpan.FromSeconds(10);
 
-        var command = new GitCommand(["--version"], timeout, 4096);
+        var command = new GitCommand(
+            ["status", "--porcelain=v2", "-z"],
+            timeout,
+            8 * 1024 * 1024,
+            64 * 1024,
+            new GitCommandErrorPolicy(timeoutError, outputLimitError, inspectionError));
 
+        Assert.Equal(["status", "--porcelain=v2", "-z"], command.Arguments);
         Assert.Equal(timeout, command.Timeout);
-        Assert.Equal(4096, command.MaximumStreamBytes);
+        Assert.Equal(8 * 1024 * 1024, command.MaximumStandardOutputBytes);
+        Assert.Equal(64 * 1024, command.MaximumStandardErrorBytes);
+        Assert.Same(timeoutError, command.ErrorPolicy.TimedOut);
+        Assert.Same(outputLimitError, command.ErrorPolicy.OutputLimitExceeded);
+        Assert.Same(inspectionError, command.ErrorPolicy.InspectionFailed);
     }
 
     /// <summary>
@@ -58,7 +74,7 @@ public sealed class GitCommandTests
     public void ConstructorRejectsNullArguments()
     {
         Assert.Throws<ArgumentNullException>(
-            () => new GitCommand(null!, TimeSpan.FromSeconds(1), 1024));
+            () => CreateCommand(null!));
     }
 
     /// <summary>
@@ -68,7 +84,7 @@ public sealed class GitCommandTests
     public void ConstructorRejectsNullArgument()
     {
         Assert.Throws<ArgumentException>(
-            () => new GitCommand(["--version", null!], TimeSpan.FromSeconds(1), 1024));
+            () => CreateCommand(["--version", null!]));
     }
 
     /// <summary>
@@ -81,7 +97,7 @@ public sealed class GitCommandTests
     public void ConstructorRejectsNonpositiveTimeout(long ticks)
     {
         Assert.Throws<ArgumentOutOfRangeException>(
-            () => new GitCommand(["--version"], TimeSpan.FromTicks(ticks), 1024));
+            () => new GitCommand(["--version"], TimeSpan.FromTicks(ticks), 1024, 1024, CreatePolicy()));
     }
 
     /// <summary>
@@ -91,10 +107,56 @@ public sealed class GitCommandTests
     [Theory]
     [InlineData(0)]
     [InlineData(-1)]
-    public void ConstructorRejectsNonpositiveStreamLimit(int maximumStreamBytes)
+    public void ConstructorRejectsNonpositiveStandardOutputLimit(int maximumStreamBytes)
     {
         Assert.Throws<ArgumentOutOfRangeException>(
-            () => new GitCommand(["--version"], TimeSpan.FromSeconds(1), maximumStreamBytes));
+            () => new GitCommand(
+                ["--version"],
+                TimeSpan.FromSeconds(1),
+                maximumStreamBytes,
+                1024,
+                CreatePolicy()));
+    }
+
+    /// <summary>
+    ///     Verifies that command construction rejects nonpositive standard-error limits.
+    /// </summary>
+    /// <param name="maximumStreamBytes">The invalid stream limit.</param>
+    [Theory]
+    [InlineData(0)]
+    [InlineData(-1)]
+    public void ConstructorRejectsNonpositiveStandardErrorLimit(int maximumStreamBytes)
+    {
+        Assert.Throws<ArgumentOutOfRangeException>(
+            () => new GitCommand(
+                ["--version"],
+                TimeSpan.FromSeconds(1),
+                1024,
+                maximumStreamBytes,
+                CreatePolicy()));
+    }
+
+    /// <summary>
+    ///     Verifies that command construction rejects a missing error policy.
+    /// </summary>
+    [Fact]
+    public void ConstructorRejectsNullErrorPolicy()
+    {
+        Assert.Throws<ArgumentNullException>(
+            () => new GitCommand(["--version"], TimeSpan.FromSeconds(1), 1024, 1024, null!));
+    }
+
+    /// <summary>
+    ///     Verifies that error policy construction rejects missing terminal errors.
+    /// </summary>
+    [Fact]
+    public void ErrorPolicyConstructorRejectsNullErrors()
+    {
+        var error = OperationError.Timeout("Timed out.", "comparison.timedOut");
+
+        Assert.Throws<ArgumentNullException>(() => new GitCommandErrorPolicy(null!, error, error));
+        Assert.Throws<ArgumentNullException>(() => new GitCommandErrorPolicy(error, null!, error));
+        Assert.Throws<ArgumentNullException>(() => new GitCommandErrorPolicy(error, error, null!));
     }
 
     /// <summary>
@@ -123,4 +185,13 @@ public sealed class GitCommandTests
         Assert.Equal("git.unavailable", GitErrorCode.Unavailable);
         Assert.Equal("git.timedOut", GitErrorCode.TimedOut);
     }
+
+    private static GitCommand CreateCommand(IEnumerable<string> arguments) =>
+        new(arguments, TimeSpan.FromSeconds(1), 1024, 1024, CreatePolicy());
+
+    private static GitCommandErrorPolicy CreatePolicy() =>
+        new(
+            OperationError.Timeout("Timed out.", "comparison.timedOut"),
+            OperationError.UnprocessableInput("Too large.", "comparison.tooLarge"),
+            OperationError.ExternalDependencyFailure("Inspection failed.", "comparison.inspectionFailed"));
 }

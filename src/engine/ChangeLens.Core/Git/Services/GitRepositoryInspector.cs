@@ -49,13 +49,54 @@ public sealed class GitRepositoryInspector(
         string? path,
         CancellationToken cancellationToken)
     {
+        return await this.InspectAsync(
+            path,
+            GitInspectionConstants.InspectionTimeout,
+            RepositoryInspectionErrors(),
+            cancellationToken);
+    }
+
+    /// <summary>
+    ///     Asynchronously inspects the repository selected by the given directory path within a supplied budget.
+    /// </summary>
+    /// <param name="path">
+    ///     The selected repository directory path, or <see langword="null" /> when none was supplied.
+    /// </param>
+    /// <param name="totalBudget">The positive total time allowed for path resolution and Git facts.</param>
+    /// <param name="errorPolicy">
+    ///     The terminal Git errors selected by the calling capability. Cannot be <see langword="null" />.
+    /// </param>
+    /// <param name="cancellationToken">
+    ///     A <see cref="CancellationToken" /> to observe while waiting for the task to complete.
+    /// </param>
+    /// <returns>
+    ///     A task that represents the asynchronous operation. The task result contains the canonical repository identity
+    ///     and committed HEAD state on success.
+    /// </returns>
+    /// <exception cref="ArgumentOutOfRangeException">
+    ///     <paramref name="totalBudget" /> is less than or equal to <see cref="TimeSpan.Zero" />.
+    /// </exception>
+    /// <exception cref="ArgumentNullException">
+    ///     <paramref name="errorPolicy" /> is <see langword="null" />.
+    /// </exception>
+    /// <exception cref="OperationCanceledException">
+    ///     The <paramref name="cancellationToken" /> is canceled.
+    /// </exception>
+    internal async Task<Result<RepositoryDescriptor>> InspectAsync(
+        string? path,
+        TimeSpan totalBudget,
+        GitCommandErrorPolicy errorPolicy,
+        CancellationToken cancellationToken)
+    {
+        ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(totalBudget, TimeSpan.Zero);
+        ArgumentNullException.ThrowIfNull(errorPolicy);
         var validationResult = ValidatePath(path);
         if (validationResult.IsFailure)
         {
             return Result.ErrorFromResult<RepositoryDescriptor>(validationResult);
         }
 
-        using var deadline = new CancellationTokenSource(GitInspectionConstants.InspectionTimeout);
+        using var deadline = new CancellationTokenSource(totalBudget);
         using var inspectionCancellation = CancellationTokenSource.CreateLinkedTokenSource(
             cancellationToken,
             deadline.Token);
@@ -74,12 +115,14 @@ public sealed class GitRepositoryInspector(
             return await this.InspectResolvedAsync(
                 selectedPathResult.Data!,
                 startedAt,
+                totalBudget,
+                errorPolicy,
                 inspectionCancellation.Token);
         }
         catch (OperationCanceledException) when (
             !cancellationToken.IsCancellationRequested && deadline.IsCancellationRequested)
         {
-            return TimedOut<RepositoryDescriptor>();
+            return Result.Fail<RepositoryDescriptor>(errorPolicy.TimedOut);
         }
     }
 
@@ -88,6 +131,8 @@ public sealed class GitRepositoryInspector(
     /// </summary>
     /// <param name="selectedPath">The canonical selected directory. Cannot be <see langword="null" />.</param>
     /// <param name="startedAt">The monotonic timestamp at which the shared inspection budget began.</param>
+    /// <param name="totalBudget">The total time allowed for the inspection.</param>
+    /// <param name="errorPolicy">The terminal Git errors selected by the calling capability.</param>
     /// <param name="cancellationToken">
     ///     A <see cref="CancellationToken" /> to observe while waiting for the task to complete.
     /// </param>
@@ -98,9 +143,11 @@ public sealed class GitRepositoryInspector(
     private async Task<Result<RepositoryDescriptor>> InspectResolvedAsync(
         string selectedPath,
         long startedAt,
+        TimeSpan totalBudget,
+        GitCommandErrorPolicy errorPolicy,
         CancellationToken cancellationToken)
     {
-        var versionResult = await RunAsync(startedAt, ["--version"], cancellationToken);
+        var versionResult = await RunAsync(startedAt, totalBudget, errorPolicy, ["--version"], cancellationToken);
         if (versionResult.IsFailure)
         {
             return Result.ErrorFromResult<RepositoryDescriptor>(versionResult);
@@ -113,7 +160,7 @@ public sealed class GitRepositoryInspector(
         }
 
         var insideResult = await RunAsync(
-            startedAt,
+            startedAt, totalBudget, errorPolicy,
             ["-C", selectedPath, "rev-parse", "--is-inside-work-tree"],
             cancellationToken);
         if (insideResult.IsFailure)
@@ -134,7 +181,7 @@ public sealed class GitRepositoryInspector(
         }
 
         var bareResult = await RunAsync(
-            startedAt,
+            startedAt, totalBudget, errorPolicy,
             ["-C", selectedPath, "rev-parse", "--is-bare-repository"],
             cancellationToken);
         if (bareResult.IsFailure)
@@ -173,7 +220,7 @@ public sealed class GitRepositoryInspector(
         }
 
         var rootResult = await RunAsync(
-            startedAt,
+            startedAt, totalBudget, errorPolicy,
             ["-C", selectedPath, "rev-parse", "--show-toplevel"],
             cancellationToken);
         if (rootResult.IsFailure)
@@ -203,7 +250,7 @@ public sealed class GitRepositoryInspector(
 
         var canonicalRoot = canonicalRootResult.Data!;
         var revisionResult = await RunAsync(
-            startedAt,
+            startedAt, totalBudget, errorPolicy,
             ["-C", canonicalRoot, "rev-parse", "--verify", "HEAD^{commit}"],
             cancellationToken);
         if (revisionResult.IsFailure)
@@ -224,7 +271,7 @@ public sealed class GitRepositoryInspector(
         }
 
         var headResult = await RunAsync(
-            startedAt,
+            startedAt, totalBudget, errorPolicy,
             ["-C", canonicalRoot, "symbolic-ref", "--quiet", "--short", "HEAD"],
             cancellationToken);
         if (headResult.IsFailure)
@@ -257,6 +304,8 @@ public sealed class GitRepositoryInspector(
     ///     Runs one Git fact with the time remaining in the shared inspection budget.
     /// </summary>
     /// <param name="startedAt">The monotonic timestamp at which the shared inspection budget began.</param>
+    /// <param name="totalBudget">The total time allowed for the inspection.</param>
+    /// <param name="errorPolicy">The terminal Git errors selected by the calling capability.</param>
     /// <param name="arguments">The approved Git arguments. Cannot be <see langword="null" />.</param>
     /// <param name="cancellationToken">
     ///     A <see cref="CancellationToken" /> to observe while waiting for the task to complete.
@@ -266,17 +315,24 @@ public sealed class GitRepositoryInspector(
     /// </returns>
     private Task<Result<GitCommandOutput>> RunAsync(
         long startedAt,
+        TimeSpan totalBudget,
+        GitCommandErrorPolicy errorPolicy,
         IReadOnlyList<string> arguments,
         CancellationToken cancellationToken)
     {
-        var remaining = GitInspectionConstants.InspectionTimeout - Stopwatch.GetElapsedTime(startedAt);
+        var remaining = totalBudget - Stopwatch.GetElapsedTime(startedAt);
         if (remaining <= TimeSpan.Zero)
         {
-            return Task.FromResult(TimedOut<GitCommandOutput>());
+            return Task.FromResult(Result.Fail<GitCommandOutput>(errorPolicy.TimedOut));
         }
 
         return commandRunner.RunAsync(
-            new GitCommand(arguments, remaining, GitInspectionConstants.MaximumStreamBytes),
+            new GitCommand(
+                arguments,
+                remaining,
+                GitInspectionConstants.MaximumStreamBytes,
+                GitInspectionConstants.MaximumStreamBytes,
+                errorPolicy),
             cancellationToken);
     }
 
@@ -325,13 +381,18 @@ public sealed class GitRepositoryInspector(
                 RepositoryErrorCode.InvalidPath));
 
     /// <summary>
-    ///     Creates the stable Git inspection timeout failure.
+    ///     Creates the Phase 1A terminal errors for repository inspection.
     /// </summary>
-    /// <typeparam name="T">The success payload type.</typeparam>
-    /// <returns>A failed result with the Git timeout error.</returns>
-    private static Result<T> TimedOut<T>() =>
-        Result.Fail<T>(
+    /// <returns>The immutable terminal error policy for repository inspection.</returns>
+    private static GitCommandErrorPolicy RepositoryInspectionErrors() =>
+        new(
             OperationError.Timeout(
                 "Git repository inspection exceeded its allowed time.",
-                GitErrorCode.TimedOut));
+                GitErrorCode.TimedOut),
+            OperationError.ExternalDependencyFailure(
+                "Git repository inspection failed.",
+                RepositoryErrorCode.InspectionFailed),
+            OperationError.ExternalDependencyFailure(
+                "Git repository inspection failed.",
+                RepositoryErrorCode.InspectionFailed));
 }

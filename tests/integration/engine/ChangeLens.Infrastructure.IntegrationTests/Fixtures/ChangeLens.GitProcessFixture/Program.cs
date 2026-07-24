@@ -17,6 +17,7 @@ switch (mode)
             "GCM_INTERACTIVE",
             "GIT_PAGER",
             "PAGER",
+            "GIT_EXTERNAL_DIFF",
             "LC_ALL",
             "LANG",
         };
@@ -30,12 +31,12 @@ switch (mode)
         await Console.Out.WriteAsync(JsonSerializer.Serialize(payload));
         return 0;
 
-    case "oversized-stdout":
-        await WriteBytesAsync(Console.OpenStandardOutput(), 65_537);
+    case "large-stderr":
+        await WriteBytesAsync(Console.OpenStandardError(), 65_537);
         return 0;
 
-    case "oversized-stderr":
-        await WriteBytesAsync(Console.OpenStandardError(), 65_537);
+    case "large-stdout":
+        await WriteBytesAsync(Console.OpenStandardOutput(), 128 * 1024);
         return 0;
 
     case "invalid-utf8":
@@ -48,6 +49,9 @@ switch (mode)
 
     case "spawn-child":
         return await SpawnChildAsync(args);
+
+    case "spawn-child-and-large-stdout":
+        return await SpawnChildAsync(args, writeLargeStandardOutput: true);
 
     case "spawn-inheriting-child-and-exit":
         return await SpawnInheritingChildAndExitAsync(args);
@@ -74,7 +78,9 @@ static async Task WriteBytesAsync(Stream stream, int count)
     await stream.FlushAsync();
 }
 
-static async Task<int> SpawnChildAsync(string[] arguments)
+static async Task<int> SpawnChildAsync(
+    string[] arguments,
+    bool writeLargeStandardOutput = false)
 {
     if (arguments.Length != 1)
     {
@@ -99,6 +105,11 @@ static async Task<int> SpawnChildAsync(string[] arguments)
     await File.WriteAllTextAsync(
         arguments[0],
         child.Id.ToString(CultureInfo.InvariantCulture));
+    if (writeLargeStandardOutput)
+    {
+        await WriteBytesAsync(Console.OpenStandardOutput(), 65_537);
+    }
+
     await Task.Delay(TimeSpan.FromMinutes(5));
     return 0;
 }

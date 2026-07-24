@@ -4,6 +4,7 @@ import { App } from "./App";
 import { TauriEngineStatusClient } from "./EngineStatus/Services/TauriEngineStatusClient";
 import { TauriRepositoryClient } from "./Repositories/Services/TauriRepositoryClient";
 import { TauriRepositoryFolderPicker } from "./Repositories/Services/TauriRepositoryFolderPicker";
+import { TauriComparisonClient } from "./Comparisons/Services/TauriComparisonClient";
 
 const rootElement = document.getElementById("root");
 
@@ -14,6 +15,7 @@ if (rootElement === null) {
 const engineStatusClient = new TauriEngineStatusClient();
 const repositoryClient = new TauriRepositoryClient();
 const repositoryFolderPicker = new TauriRepositoryFolderPicker();
+const comparisonClient = new TauriComparisonClient();
 
 createRoot(rootElement).render(
   <StrictMode>
@@ -21,6 +23,7 @@ createRoot(rootElement).render(
       engineStatusClient={engineStatusClient}
       repositoryClient={repositoryClient}
       repositoryFolderPicker={repositoryFolderPicker}
+      comparisonClient={comparisonClient}
     />
   </StrictMode>,
 );

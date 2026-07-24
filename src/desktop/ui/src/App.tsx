@@ -1,5 +1,7 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { AppShell } from "./AppShell";
+import { RepositoryWorkspace } from "./Comparisons/Components/RepositoryWorkspace";
+import type { ComparisonClient } from "./Comparisons/Interfaces/ComparisonClient";
 import type { ActionError } from "./Actions/Models/ActionError";
 import { normalizeActionError } from "./Actions/Services/normalizeActionError";
 import { presentActionError } from "./Actions/Services/presentActionError";
@@ -16,6 +18,7 @@ interface AppProps {
   readonly engineStatusClient: EngineStatusClient;
   readonly repositoryClient: RepositoryClient;
   readonly repositoryFolderPicker: RepositoryFolderPicker;
+  readonly comparisonClient?: ComparisonClient;
 }
 
 export type ApplicationState =
@@ -37,6 +40,7 @@ export function App({
   engineStatusClient,
   repositoryClient,
   repositoryFolderPicker,
+  comparisonClient,
 }: AppProps) {
   const [state, setState] = useState<ApplicationState>({
     status: "checkingEngine",
@@ -72,6 +76,21 @@ export function App({
           : 1,
     }));
   }
+
+  const handleRepositoryRefreshed = useCallback(
+    (repository: RepositoryDescriptor) => {
+      setState((currentState) => {
+        if (
+          currentState.status !== "repositoryOpen" &&
+          currentState.status !== "replacingRepository"
+        ) {
+          return currentState;
+        }
+        return { ...currentState, repository };
+      });
+    },
+    [],
+  );
 
   if (state.status === "checkingEngine") {
     return (
@@ -150,6 +169,14 @@ export function App({
           selectFolder={() => repositoryFolderPicker.selectFolder()}
           onOpenRepository={(path) => repositoryClient.openRepository(path)}
           onRepositoryOpened={commitRepository}
+        />
+      ) : null}
+      {comparisonClient ? (
+        <RepositoryWorkspace
+          key={state.repositoryGeneration}
+          repository={state.repository}
+          comparisonClient={comparisonClient}
+          onRepositoryRefreshed={handleRepositoryRefreshed}
         />
       ) : null}
     </AppShell>

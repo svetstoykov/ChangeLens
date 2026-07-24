@@ -1,5 +1,5 @@
 use crate::engine_protocol::{
-    ActionErrorKind, EngineActionError, OperationErrorType, report_engine_action_failure,
+    EngineActionError, OperationErrorType, action_task_failed, report_rust_originated_failure,
 };
 use crate::repositories::{RepositoryDescriptor, RepositoryFolderPickerState, RepositoryState};
 use tauri::State;
@@ -47,20 +47,4 @@ pub(crate) async fn repository_open(
     report_rust_originated_failure(&result);
 
     result
-}
-
-fn action_task_failed() -> EngineActionError {
-    EngineActionError::unexpected(
-        None,
-        "desktop.actionTaskFailed",
-        "The desktop could not complete the engine action task.",
-    )
-}
-
-fn report_rust_originated_failure<T>(result: &Result<T, EngineActionError>) {
-    if let Err(error) = result
-        && error.kind != ActionErrorKind::Operation
-    {
-        report_engine_action_failure(error);
-    }
 }

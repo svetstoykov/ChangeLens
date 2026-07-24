@@ -1,4 +1,6 @@
-use crate::engine_protocol::{ActionErrorKind, EngineActionError, report_engine_action_failure};
+use crate::engine_protocol::{
+    EngineActionError, action_task_failed, report_rust_originated_failure,
+};
 use crate::engine_status::EngineStatusState;
 use tauri::State;
 
@@ -13,18 +15,10 @@ pub(crate) async fn engine_check_status(
             .await
         {
             Ok(result) => result,
-            Err(_) => Err(EngineActionError::unexpected(
-                None,
-                "desktop.actionTaskFailed",
-                "The desktop could not complete the engine action task.",
-            )),
+            Err(_) => Err(action_task_failed()),
         };
 
-    if let Err(error) = &result
-        && error.kind != ActionErrorKind::Operation
-    {
-        report_engine_action_failure(error);
-    }
+    report_rust_originated_failure(&result);
 
     result
 }

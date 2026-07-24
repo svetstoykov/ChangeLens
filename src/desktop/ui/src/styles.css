@@ -479,8 +479,11 @@ h3 {
   text-align: left;
 }
 
-.target-group [role="option"][aria-selected="true"] {
+.target-group [role="option"][data-active="true"] {
   border-color: var(--primary);
+}
+
+.target-group [role="option"][aria-selected="true"] {
   background: var(--surface-selected);
 }
 

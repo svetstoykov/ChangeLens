@@ -45,6 +45,7 @@ export function TargetCombobox({
     const target = targets[activeIndex];
     if (target === undefined) return;
     onSelect(target);
+    setActiveIndex(-1);
     setExpanded(false);
   }
 
@@ -69,7 +70,9 @@ export function TargetCombobox({
           aria-controls={listId}
           aria-expanded={expanded}
           aria-activedescendant={
-            activeIndex >= 0 ? `${listId}-option-${activeIndex}` : undefined
+            expanded && activeIndex >= 0
+              ? `${listId}-option-${activeIndex}`
+              : undefined
           }
           value={query}
           onChange={(event) => {
@@ -131,8 +134,10 @@ export function TargetCombobox({
             targets={localTargets}
             startIndex={0}
             activeIndex={activeIndex}
+            selectedTarget={selectedTarget}
             onSelect={(target) => {
               onSelect(target);
+              setActiveIndex(-1);
               setExpanded(false);
             }}
           />
@@ -142,8 +147,10 @@ export function TargetCombobox({
             targets={remoteTargets}
             startIndex={localTargets.length}
             activeIndex={activeIndex}
+            selectedTarget={selectedTarget}
             onSelect={(target) => {
               onSelect(target);
+              setActiveIndex(-1);
               setExpanded(false);
             }}
           />
@@ -174,6 +181,7 @@ interface TargetGroupProps {
   readonly targets: readonly ComparisonTarget[];
   readonly startIndex: number;
   readonly activeIndex: number;
+  readonly selectedTarget: ComparisonTarget | null;
   readonly onSelect: (target: ComparisonTarget) => void;
 }
 
@@ -183,6 +191,7 @@ function TargetGroup({
   targets,
   startIndex,
   activeIndex,
+  selectedTarget,
   onSelect,
 }: TargetGroupProps) {
   if (targets.length === 0) return null;
@@ -197,7 +206,8 @@ function TargetGroup({
             key={target.fullName}
             role="option"
             type="button"
-            aria-selected={targetIndex === activeIndex}
+            aria-selected={target.fullName === selectedTarget?.fullName}
+            data-active={targetIndex === activeIndex ? "true" : undefined}
             onMouseDown={(event) => event.preventDefault()}
             onClick={() => onSelect(target)}
           >

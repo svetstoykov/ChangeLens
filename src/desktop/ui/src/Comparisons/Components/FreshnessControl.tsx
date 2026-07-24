@@ -7,12 +7,14 @@ import warningIcon from "../../assets/warning.svg";
 interface FreshnessControlProps {
   readonly freshness: ComparisonFreshnessState;
   readonly hasTarget: boolean;
+  readonly isBusy: boolean;
   readonly onRefresh: () => void;
 }
 
 export function FreshnessControl({
   freshness,
   hasTarget,
+  isBusy,
   onRefresh,
 }: FreshnessControlProps) {
   if (!hasTarget) return null;
@@ -42,7 +44,7 @@ export function FreshnessControl({
         type="button"
         aria-label="Refresh comparison"
         onClick={onRefresh}
-        disabled={freshness === "checking"}
+        disabled={freshness === "checking" || isBusy}
       >
         <LocalIcon source={refreshIcon} />
       </button>

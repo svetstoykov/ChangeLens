@@ -11,10 +11,13 @@ export interface ComparisonWorkspaceState {
   readonly preparedComparison: PreparedComparison | null;
   readonly freshness: ComparisonFreshnessState;
   readonly error: ActionError | null;
+  readonly errorSource:
+    "discovery" | "preparation" | "freshness" | "refresh" | null;
   readonly query: string;
   readonly nextCursor: string | null;
   readonly targetSetToken: string | null;
   readonly unsupportedTargetCount: number;
   readonly isDiscovering: boolean;
   readonly isPreparing: boolean;
+  readonly isRefreshing: boolean;
 }

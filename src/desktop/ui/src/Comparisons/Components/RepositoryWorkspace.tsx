@@ -30,6 +30,10 @@ export function RepositoryWorkspace({
   });
   const { state } = controller;
   const error = state.error ? presentActionError(state.error) : null;
+  const errorCode = state.error?.errors[0].code;
+  const canRetryError =
+    errorCode === "comparison.timedOut" ||
+    errorCode === "comparison.inspectionFailed";
 
   return (
     <section
@@ -98,10 +102,24 @@ export function RepositoryWorkspace({
                   </li>
                 ))}
               </ul>
-              {state.error?.errors[0].code ===
-              "comparison.invalidTargetQuery" ? (
+              {errorCode === "comparison.invalidTargetQuery" ? (
                 <button type="button" onClick={controller.resetSearch}>
                   Reset search
+                </button>
+              ) : null}
+              {canRetryError && state.errorSource === "discovery" ? (
+                <button type="button" onClick={controller.retryDiscovery}>
+                  Retry loading targets
+                </button>
+              ) : null}
+              {canRetryError && state.errorSource === "preparation" ? (
+                <button type="button" onClick={controller.retryPreparation}>
+                  Retry preparation
+                </button>
+              ) : null}
+              {canRetryError && state.errorSource === "refresh" ? (
+                <button type="button" onClick={controller.refresh}>
+                  Retry refresh
                 </button>
               ) : null}
             </section>
@@ -131,6 +149,12 @@ export function RepositoryWorkspace({
           className="current-change-facts"
           aria-label="Current change facts"
         >
+          {state.isPreparing ? (
+            <p role="status">Preparing comparison…</p>
+          ) : null}
+          {state.isRefreshing && !state.isPreparing ? (
+            <p role="status">Refreshing comparison…</p>
+          ) : null}
           <ComparisonSummary
             preparedComparison={state.preparedComparison}
             freshness={state.freshness}
@@ -138,6 +162,7 @@ export function RepositoryWorkspace({
           <FreshnessControl
             freshness={state.freshness}
             hasTarget={state.selectedTarget !== null}
+            isBusy={state.isPreparing || state.isRefreshing}
             onRefresh={controller.refresh}
           />
         </section>

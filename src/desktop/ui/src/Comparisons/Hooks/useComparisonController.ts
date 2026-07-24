@@ -4,8 +4,6 @@ import type { RepositoryDescriptor } from "../../Repositories/Models/RepositoryD
 import type { ComparisonClient } from "../Interfaces/ComparisonClient";
 import type { ComparisonWorkspaceState } from "../Models/ComparisonWorkspaceState";
 import type { ComparisonTarget } from "../Models/ComparisonTarget";
-import type { ComparisonTargetPage } from "../Models/ComparisonTargetPage";
-import type { PreparedComparison } from "../Models/PreparedComparison";
 
 interface UseComparisonControllerOptions {
   readonly repository: RepositoryDescriptor;
@@ -21,6 +19,8 @@ interface ComparisonController {
   readonly refresh: () => void;
   readonly checkFreshness: () => void;
   readonly resetSearch: () => void;
+  readonly retryDiscovery: () => void;
+  readonly retryPreparation: () => void;
 }
 
 const initialState: ComparisonWorkspaceState = {
@@ -29,12 +29,14 @@ const initialState: ComparisonWorkspaceState = {
   preparedComparison: null,
   freshness: "unknown",
   error: null,
+  errorSource: null,
   query: "",
   nextCursor: null,
   targetSetToken: null,
   unsupportedTargetCount: 0,
   isDiscovering: false,
   isPreparing: false,
+  isRefreshing: false,
 };
 
 export function useComparisonController({
@@ -44,114 +46,200 @@ export function useComparisonController({
 }: UseComparisonControllerOptions): ComparisonController {
   const [state, setState] = useState<ComparisonWorkspaceState>(initialState);
   const stateRef = useRef(state);
-  const generationRef = useRef(0);
+  const discoveryEpochRef = useRef(0);
+  const preparationEpochRef = useRef(0);
+  const freshnessEpochRef = useRef(0);
+  const refreshEpochRef = useRef(0);
   const queryTimerRef = useRef<number | undefined>(undefined);
 
-  useEffect(() => {
-    stateRef.current = state;
-  }, [state]);
+  const updateState = useCallback(
+    (
+      updater: (current: ComparisonWorkspaceState) => ComparisonWorkspaceState,
+    ) => {
+      setState((current) => {
+        const next = updater(current);
+        stateRef.current = next;
+        return next;
+      });
+    },
+    [],
+  );
 
   const prepare = useCallback(
-    async (target: ComparisonTarget, generation = generationRef.current) => {
-      setState((current) => ({
+    async (target: ComparisonTarget, refreshEpoch?: number) => {
+      const preparationEpoch = ++preparationEpochRef.current;
+      freshnessEpochRef.current += 1;
+      updateState((current) => ({
         ...current,
         selectedTarget: target,
+        freshness: current.preparedComparison ? "stale" : "unknown",
         error: null,
+        errorSource: null,
         isPreparing: true,
       }));
+
       try {
         const prepared = await comparisonClient.prepare({
           path: repository.canonicalPath,
           target: target.fullName,
         });
-        if (generation !== generationRef.current) return;
-        applyPreparedComparison(
-          prepared,
-          target,
-          setState,
-          onRepositoryRefreshed,
-        );
-      } catch (reason: unknown) {
-        if (generation !== generationRef.current) return;
-        const error = normalizeActionError(reason);
-        setState((current) => ({
+        if (
+          preparationEpoch !== preparationEpochRef.current ||
+          (refreshEpoch !== undefined &&
+            refreshEpoch !== refreshEpochRef.current)
+        ) {
+          return;
+        }
+
+        freshnessEpochRef.current += 1;
+        onRepositoryRefreshed(prepared.repository);
+        updateState((current) => ({
           ...current,
-          error,
+          selectedTarget: prepared.target,
+          preparedComparison: prepared,
+          freshness: "current",
+          error: null,
+          errorSource: null,
+          isPreparing: false,
+          isRefreshing: false,
+        }));
+      } catch (reason: unknown) {
+        if (
+          preparationEpoch !== preparationEpochRef.current ||
+          (refreshEpoch !== undefined &&
+            refreshEpoch !== refreshEpochRef.current)
+        ) {
+          return;
+        }
+
+        updateState((current) => ({
+          ...current,
+          error: normalizeActionError(reason),
+          errorSource: "preparation",
           freshness: current.preparedComparison ? "stale" : "unknown",
           isPreparing: false,
+          isRefreshing: false,
         }));
       }
     },
-    [comparisonClient, onRepositoryRefreshed, repository.canonicalPath],
-  );
-
-  const applyPage = useCallback(
-    (page: ComparisonTargetPage, append: boolean, generation: number) => {
-      if (generation !== generationRef.current) return;
-      const current = stateRef.current;
-      const targets = append
-        ? mergeTargets(current.targets, page.targets)
-        : page.targets;
-      const suggested =
-        current.selectedTarget === null && !append
-          ? page.suggestedTarget
-          : null;
-      setState((value) => ({
-        ...value,
-        targets,
-        selectedTarget: value.selectedTarget ?? suggested,
-        nextCursor: page.nextCursor,
-        targetSetToken: page.targetSetToken,
-        unsupportedTargetCount: page.unsupportedTargetCount,
-        error: null,
-        isDiscovering: false,
-      }));
-      if (suggested !== null) void prepare(suggested, generation);
-    },
-    [prepare],
+    [
+      comparisonClient,
+      onRepositoryRefreshed,
+      repository.canonicalPath,
+      updateState,
+    ],
   );
 
   const discover = useCallback(
     async (query: string, append = false) => {
-      const generation = ++generationRef.current;
-      const prior = stateRef.current;
-      const after = append ? prior.nextCursor : null;
-      const targetSetToken = append ? prior.targetSetToken : null;
-      setState((current) => ({
-        ...current,
-        query,
-        isDiscovering: true,
-        error: null,
-        ...(append
-          ? {}
-          : { targets: [], nextCursor: null, targetSetToken: null }),
-      }));
-      try {
-        const page = await comparisonClient.listTargets({
-          path: repository.canonicalPath,
-          ...(query === "" ? {} : { query }),
-          ...(after === null ? {} : { after }),
-          ...(targetSetToken === null ? {} : { targetSetToken }),
-        });
-        applyPage(page, append, generation);
-      } catch (reason: unknown) {
-        if (generation !== generationRef.current) return;
-        setState((current) => ({
+      async function requestPage(
+        appendPage: boolean,
+        allowContinuationRecovery: boolean,
+      ): Promise<void> {
+        const discoveryEpoch = ++discoveryEpochRef.current;
+        const prior = stateRef.current;
+        const after = appendPage ? prior.nextCursor : null;
+        const targetSetToken = appendPage ? prior.targetSetToken : null;
+        updateState((current) => ({
           ...current,
-          error: normalizeActionError(reason),
-          isDiscovering: false,
+          query,
+          isDiscovering: true,
+          error: null,
+          errorSource: null,
+          ...(appendPage
+            ? {}
+            : {
+                targets: [],
+                nextCursor: null,
+                targetSetToken: null,
+                unsupportedTargetCount: 0,
+              }),
         }));
+
+        try {
+          const page = await comparisonClient.listTargets({
+            path: repository.canonicalPath,
+            ...(query === "" ? {} : { query }),
+            ...(after === null ? {} : { after }),
+            ...(targetSetToken === null ? {} : { targetSetToken }),
+          });
+          if (discoveryEpoch !== discoveryEpochRef.current) return;
+
+          const current = stateRef.current;
+          const targets = appendPage
+            ? mergeTargets(current.targets, page.targets)
+            : page.targets;
+          const suggested =
+            current.selectedTarget === null && !appendPage
+              ? page.suggestedTarget
+              : null;
+          updateState((value) => ({
+            ...value,
+            targets,
+            selectedTarget: value.selectedTarget ?? suggested,
+            nextCursor: page.nextCursor,
+            targetSetToken: page.targetSetToken,
+            unsupportedTargetCount: page.unsupportedTargetCount,
+            error: null,
+            errorSource: null,
+            isDiscovering: false,
+          }));
+          if (suggested !== null) {
+            refreshEpochRef.current += 1;
+            void prepare(suggested);
+          }
+        } catch (reason: unknown) {
+          if (discoveryEpoch !== discoveryEpochRef.current) return;
+          const error = normalizeActionError(reason);
+          const code = error.errors[0].code;
+          if (
+            appendPage &&
+            allowContinuationRecovery &&
+            (code === "comparison.invalidTargetPage" ||
+              code === "comparison.targetsChanged")
+          ) {
+            updateState((current) => ({
+              ...current,
+              targets: [],
+              nextCursor: null,
+              targetSetToken: null,
+              unsupportedTargetCount: 0,
+              error: null,
+              errorSource: null,
+              isDiscovering: false,
+            }));
+            await requestPage(false, false);
+            return;
+          }
+
+          updateState((current) => ({
+            ...current,
+            error,
+            errorSource: "discovery",
+            isDiscovering: false,
+          }));
+        }
       }
+
+      await requestPage(append, append);
     },
-    [applyPage, comparisonClient, repository.canonicalPath],
+    [comparisonClient, prepare, repository.canonicalPath, updateState],
   );
 
   useEffect(() => {
-    generationRef.current += 1;
+    discoveryEpochRef.current += 1;
+    preparationEpochRef.current += 1;
+    freshnessEpochRef.current += 1;
+    refreshEpochRef.current += 1;
+    stateRef.current = initialState;
     setState(initialState);
     void discover("");
+
     return () => {
-      generationRef.current += 1;
+      discoveryEpochRef.current += 1;
+      preparationEpochRef.current += 1;
+      freshnessEpochRef.current += 1;
+      refreshEpochRef.current += 1;
       if (queryTimerRef.current !== undefined) {
         window.clearTimeout(queryTimerRef.current);
       }
@@ -160,23 +248,35 @@ export function useComparisonController({
 
   const selectTarget = useCallback(
     (target: ComparisonTarget) => {
-      const generation = ++generationRef.current;
-      void prepare(target, generation);
+      refreshEpochRef.current += 1;
+      void prepare(target);
     },
     [prepare],
   );
 
   const setQuery = useCallback(
     (query: string) => {
-      setState((current) => ({ ...current, query }));
+      discoveryEpochRef.current += 1;
+      updateState((current) => ({
+        ...current,
+        query,
+        targets: [],
+        nextCursor: null,
+        targetSetToken: null,
+        unsupportedTargetCount: 0,
+        error: null,
+        errorSource: null,
+        isDiscovering: true,
+      }));
       if (queryTimerRef.current !== undefined) {
         window.clearTimeout(queryTimerRef.current);
       }
       queryTimerRef.current = window.setTimeout(() => {
+        queryTimerRef.current = undefined;
         void discover(query);
       }, 250);
     },
-    [discover],
+    [discover, updateState],
   );
 
   const loadMore = useCallback(() => {
@@ -192,41 +292,94 @@ export function useComparisonController({
 
   const checkFreshness = useCallback(async () => {
     const current = stateRef.current;
-    if (current.selectedTarget === null || current.preparedComparison === null)
+    if (
+      current.selectedTarget === null ||
+      current.preparedComparison === null ||
+      current.isPreparing ||
+      current.isRefreshing ||
+      current.selectedTarget.fullName !==
+        current.preparedComparison.target.fullName
+    ) {
       return;
-    const generation = ++generationRef.current;
-    setState((value) => ({ ...value, freshness: "checking", error: null }));
+    }
+
+    const target = current.selectedTarget.fullName;
+    const freshnessToken = current.preparedComparison.freshnessToken;
+    const freshnessEpoch = ++freshnessEpochRef.current;
+    updateState((value) => ({
+      ...value,
+      freshness: "checking",
+      error: null,
+      errorSource: null,
+    }));
+
     try {
       const freshness = await comparisonClient.checkFreshness({
         path: repository.canonicalPath,
-        target: current.selectedTarget.fullName,
-        freshnessToken: current.preparedComparison.freshnessToken,
+        target,
+        freshnessToken,
       });
-      if (generation !== generationRef.current) return;
-      setState((value) => ({ ...value, freshness: freshness.state }));
+      if (
+        freshnessEpoch !== freshnessEpochRef.current ||
+        !matchesPreparedPair(stateRef.current, target, freshnessToken)
+      ) {
+        return;
+      }
+      updateState((value) => ({ ...value, freshness: freshness.state }));
     } catch (reason: unknown) {
-      if (generation !== generationRef.current) return;
-      setState((value) => ({
+      if (
+        freshnessEpoch !== freshnessEpochRef.current ||
+        !matchesPreparedPair(stateRef.current, target, freshnessToken)
+      ) {
+        return;
+      }
+      updateState((value) => ({
         ...value,
         freshness: "unknown",
         error: normalizeActionError(reason),
+        errorSource: "freshness",
       }));
     }
-  }, [comparisonClient, repository.canonicalPath]);
+  }, [comparisonClient, repository.canonicalPath, updateState]);
 
   useEffect(() => {
-    if (state.preparedComparison === null || state.selectedTarget === null)
+    if (
+      state.preparedComparison === null ||
+      state.selectedTarget === null ||
+      state.isPreparing ||
+      state.isRefreshing ||
+      state.preparedComparison.target.fullName !== state.selectedTarget.fullName
+    ) {
       return;
+    }
+
     const onFocus = () => void checkFreshness();
     window.addEventListener("focus", onFocus);
     return () => window.removeEventListener("focus", onFocus);
-  }, [checkFreshness, state.preparedComparison, state.selectedTarget]);
+  }, [
+    checkFreshness,
+    state.isPreparing,
+    state.isRefreshing,
+    state.preparedComparison,
+    state.selectedTarget,
+  ]);
 
   const refresh = useCallback(async () => {
     const target = stateRef.current.selectedTarget;
     if (target === null) return;
-    const generation = ++generationRef.current;
-    setState((current) => ({ ...current, isDiscovering: true, error: null }));
+
+    const refreshEpoch = ++refreshEpochRef.current;
+    preparationEpochRef.current += 1;
+    freshnessEpochRef.current += 1;
+    updateState((current) => ({
+      ...current,
+      freshness: current.preparedComparison ? "stale" : "unknown",
+      error: null,
+      errorSource: null,
+      isPreparing: false,
+      isRefreshing: true,
+    }));
+
     try {
       let after: string | undefined;
       let targetSetToken: string | undefined;
@@ -238,36 +391,61 @@ export function useComparisonController({
           ...(after === undefined ? {} : { after }),
           ...(targetSetToken === undefined ? {} : { targetSetToken }),
         });
+        if (refreshEpoch !== refreshEpochRef.current) return;
         exactTarget = page.targets.find(
           (item) => item.fullName === target.fullName,
         );
         after = page.nextCursor ?? undefined;
         targetSetToken = page.targetSetToken;
       } while (exactTarget === undefined && after !== undefined);
-      if (generation !== generationRef.current) return;
+
       if (exactTarget === undefined) {
-        setState((current) => ({
+        updateState((current) => ({
           ...current,
           selectedTarget: null,
           freshness: current.preparedComparison ? "stale" : "unknown",
-          isDiscovering: false,
+          isRefreshing: false,
         }));
         return;
       }
-      setState((current) => ({ ...current, isDiscovering: false }));
-      await prepare(exactTarget, generation);
+
+      await prepare(exactTarget, refreshEpoch);
     } catch (reason: unknown) {
-      if (generation !== generationRef.current) return;
-      setState((current) => ({
+      if (refreshEpoch !== refreshEpochRef.current) return;
+      updateState((current) => ({
         ...current,
-        isDiscovering: false,
         freshness: current.preparedComparison ? "stale" : "unknown",
         error: normalizeActionError(reason),
+        errorSource: "refresh",
+        isRefreshing: false,
       }));
     }
-  }, [comparisonClient, prepare, repository.canonicalPath]);
+  }, [comparisonClient, prepare, repository.canonicalPath, updateState]);
 
-  const resetSearch = useCallback(() => void discover(""), [discover]);
+  const resetSearch = useCallback(() => {
+    if (queryTimerRef.current !== undefined) {
+      window.clearTimeout(queryTimerRef.current);
+      queryTimerRef.current = undefined;
+    }
+    discoveryEpochRef.current += 1;
+    void discover("");
+  }, [discover]);
+
+  const retryDiscovery = useCallback(() => {
+    if (queryTimerRef.current !== undefined) {
+      window.clearTimeout(queryTimerRef.current);
+      queryTimerRef.current = undefined;
+    }
+    discoveryEpochRef.current += 1;
+    void discover(stateRef.current.query);
+  }, [discover]);
+
+  const retryPreparation = useCallback(() => {
+    const target = stateRef.current.selectedTarget;
+    if (target === null) return;
+    refreshEpochRef.current += 1;
+    void prepare(target);
+  }, [prepare]);
 
   return {
     state,
@@ -277,6 +455,8 @@ export function useComparisonController({
     refresh: () => void refresh(),
     checkFreshness: () => void checkFreshness(),
     resetSearch,
+    retryDiscovery,
+    retryPreparation,
   };
 }
 
@@ -289,19 +469,14 @@ function mergeTargets(
   return [...targets.values()];
 }
 
-function applyPreparedComparison(
-  prepared: PreparedComparison,
-  target: ComparisonTarget,
-  setState: React.Dispatch<React.SetStateAction<ComparisonWorkspaceState>>,
-  onRepositoryRefreshed: (repository: RepositoryDescriptor) => void,
-): void {
-  onRepositoryRefreshed(prepared.repository);
-  setState((current) => ({
-    ...current,
-    selectedTarget: target,
-    preparedComparison: prepared,
-    freshness: "current",
-    error: null,
-    isPreparing: false,
-  }));
+function matchesPreparedPair(
+  state: ComparisonWorkspaceState,
+  target: string,
+  freshnessToken: string,
+): boolean {
+  return (
+    state.selectedTarget?.fullName === target &&
+    state.preparedComparison?.target.fullName === target &&
+    state.preparedComparison.freshnessToken === freshnessToken
+  );
 }

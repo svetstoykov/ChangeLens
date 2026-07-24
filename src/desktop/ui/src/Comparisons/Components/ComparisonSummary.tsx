@@ -1,4 +1,5 @@
 import type { ComparisonFreshnessState } from "../Models/ComparisonWorkspaceState";
+import type { ComparisonReadiness } from "../Models/ComparisonReadiness";
 import type { PreparedComparison } from "../Models/PreparedComparison";
 import { LocalIcon } from "../../Visuals/Components/LocalIcon";
 import checkIcon from "../../assets/check.svg";
@@ -36,7 +37,7 @@ export function ComparisonSummary({
       <p className="eyebrow">Aggregate facts</p>
       <h3 id="comparison-summary-heading">Current change</h3>
       <Readiness
-        readiness={preparedComparison.readiness.state}
+        readiness={preparedComparison.readiness}
         freshness={freshness}
       />
       <dl className="comparison-facts">
@@ -67,6 +68,13 @@ export function ComparisonSummary({
           label="Untracked files"
           value={preparedComparison.untrackedFileCount}
         />
+        {preparedComparison.readiness.state === "conflicts" ? (
+          <Fact
+            label="Conflicted files"
+            value={preparedComparison.readiness.conflictedFileCount}
+            icon={conflictIcon}
+          />
+        ) : null}
         <div className="technical-fact">
           <dt>Target revision</dt>
           <dd>
@@ -112,7 +120,7 @@ function Readiness({
   readiness,
   freshness,
 }: {
-  readonly readiness: PreparedComparison["readiness"]["state"];
+  readonly readiness: ComparisonReadiness;
   readonly freshness: ComparisonFreshnessState;
 }) {
   if (freshness === "stale")
@@ -139,7 +147,7 @@ function Readiness({
         text="Checking comparison freshness…"
       />
     );
-  if (readiness === "empty")
+  if (readiness.state === "empty")
     return (
       <ReadinessStatus
         state="empty"
@@ -147,7 +155,7 @@ function Readiness({
         text="No changes to analyze"
       />
     );
-  if (readiness === "conflicts")
+  if (readiness.state === "conflicts")
     return (
       <ReadinessStatus
         state="conflicts"

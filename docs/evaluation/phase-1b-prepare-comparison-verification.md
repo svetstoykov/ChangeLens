@@ -17,8 +17,8 @@ Tooling: .NET SDK 10.0.300; Git 2.45.2; rustc/cargo 1.97.1; Node 22.22.0; npm 10
 | `rtk /usr/bin/time -p npm run format:check --prefix src/desktop` | PASS | all matched files formatted; 0.71 s real time. |
 | `rtk /usr/bin/time -p npm run lint --prefix src/desktop` | PASS | exit 0; 1.54 s real time. |
 | `rtk /usr/bin/time -p npm run typecheck --prefix src/desktop` | PASS | exit 0; 0.31 s real time. |
-| `rtk npm test --prefix src/desktop` | PASS | 79 tests in 14 files, 2.56 s. |
-| `rtk npm run build --prefix src/desktop` | PASS | 56 modules, 111 ms Vite build. |
+| `rtk npm test --prefix src/desktop` | PASS | 94 tests in 17 files, 2.71 s. |
+| `rtk npm run build --prefix src/desktop` | PASS | 56 modules, 110 ms Vite build. |
 | `rtk dotnet test tests/integration/engine/ChangeLens.Infrastructure.IntegrationTests/ChangeLens.Infrastructure.IntegrationTests.csproj --nologo --filter FullyQualifiedName~ComparisonCapacityTests` | PASS | 2 tests, 3.8 s. |
 | `rtk proxy dotnet test tests/integration/engine/ChangeLens.Engine.IntegrationTests/ChangeLens.Engine.IntegrationTests.csproj --nologo --filter FullyQualifiedName~ComparisonCapacityProtocolTests --logger "console;verbosity=detailed"` | PASS | 1 test, 3.81 s. |
 | `rtk dotnet test tests/unit/engine/ChangeLens.Core.UnitTests/ChangeLens.Core.UnitTests.csproj --nologo --filter "FullyQualifiedName~PrepareAsyncExactFactLimitReturnsCompleteAggregateCounts|FullyQualifiedName~PrepareAsyncFactLimitFailureReturnsOnlyPreservedTooLargeError"` | PASS | 2 tests, 0.91 s. |

@@ -1,4 +1,5 @@
 using System.Security.Cryptography;
+using System.Text;
 
 namespace ChangeLens.Infrastructure.IntegrationTests.Git.Support;
 
@@ -9,9 +10,11 @@ internal sealed class RepositoryStateSnapshot
 {
     private RepositoryStateSnapshot(
         IReadOnlyDictionary<string, string> fileHashes,
+        IReadOnlyDictionary<string, string> categoryHashes,
         string porcelainStatus)
     {
         FileHashes = fileHashes;
+        CategoryHashes = categoryHashes;
         PorcelainStatus = porcelainStatus;
     }
 
@@ -21,12 +24,17 @@ internal sealed class RepositoryStateSnapshot
     internal IReadOnlyDictionary<string, string> FileHashes { get; }
 
     /// <summary>
+    ///     Gets stable content hashes for each repository state category relevant to read-only verification.
+    /// </summary>
+    internal IReadOnlyDictionary<string, string> CategoryHashes { get; }
+
+    /// <summary>
     ///     Gets the exact exit and stream evidence from Git porcelain status.
     /// </summary>
     internal string PorcelainStatus { get; }
 
     /// <summary>
-    ///     Captures the selected directory, worktree, Git directory, common Git directory, and porcelain status.
+    ///     Captures the worktree, Git state categories, and porcelain status without recording access-time metadata.
     /// </summary>
     /// <param name="selectedPath">The selected directory to capture. Cannot be <see langword="null" /> or empty.</param>
     /// <returns>The content and status snapshot.</returns>
@@ -72,7 +80,22 @@ internal sealed class RepositoryStateSnapshot
             status.ExitCode.ToString(System.Globalization.CultureInfo.InvariantCulture),
             status.StandardOutput,
             status.StandardError);
-        return new RepositoryStateSnapshot(hashes, porcelainStatus);
+        var gitDirectory = roots.GetValueOrDefault("git");
+        var commonGitDirectory = roots.GetValueOrDefault("common") ?? gitDirectory;
+        var categoryHashes = new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["worktree"] = HashFiles(CaptureWorktreeFiles(roots.GetValueOrDefault("worktree"))),
+            ["head"] = HashFiles(CapturePath("HEAD", gitDirectory)),
+            ["refs"] = HashFiles(
+                CapturePath("refs", commonGitDirectory)
+                    .Concat(CapturePath("packed-refs", commonGitDirectory))),
+            ["index"] = HashFiles(CapturePath("index", gitDirectory)),
+            ["config"] = HashFiles(CapturePath("config", commonGitDirectory)),
+            ["objects"] = HashFiles(CapturePath("objects", commonGitDirectory)),
+            ["fetchHead"] = HashFiles(CapturePath("FETCH_HEAD", gitDirectory)),
+            ["porcelain"] = HashText(porcelainStatus),
+        };
+        return new RepositoryStateSnapshot(hashes, categoryHashes, porcelainStatus);
     }
 
     private static void AddMetadataRoot(
@@ -116,4 +139,80 @@ internal sealed class RepositoryStateSnapshot
             hashes[$"{rootKind}:{relativePath}"] = hash;
         }
     }
+
+    private static IReadOnlyDictionary<string, string> CaptureWorktreeFiles(string? worktreePath)
+    {
+        if (worktreePath is null || !Directory.Exists(worktreePath))
+        {
+            return new SortedDictionary<string, string>(StringComparer.Ordinal);
+        }
+
+        var hashes = new SortedDictionary<string, string>(StringComparer.Ordinal);
+        foreach (var filePath in Directory.EnumerateFiles(worktreePath, "*", SearchOption.AllDirectories))
+        {
+            var relativePath = Path.GetRelativePath(worktreePath, filePath)
+                .Replace(Path.DirectorySeparatorChar, '/');
+            if (relativePath == ".git" || relativePath.StartsWith(".git/", StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            hashes[relativePath] = HashFile(filePath);
+        }
+
+        return hashes;
+    }
+
+    private static IReadOnlyDictionary<string, string> CapturePath(string relativePath, string? rootPath)
+    {
+        if (rootPath is null)
+        {
+            return new SortedDictionary<string, string>(StringComparer.Ordinal);
+        }
+
+        var path = Path.Combine(rootPath, relativePath);
+        if (File.Exists(path))
+        {
+            return new SortedDictionary<string, string>(StringComparer.Ordinal)
+            {
+                [relativePath] = HashFile(path),
+            };
+        }
+
+        if (!Directory.Exists(path))
+        {
+            return new SortedDictionary<string, string>(StringComparer.Ordinal);
+        }
+
+        var hashes = new SortedDictionary<string, string>(StringComparer.Ordinal);
+        CaptureFiles(relativePath, path, hashes);
+        return hashes;
+    }
+
+    private static string HashFiles(IEnumerable<KeyValuePair<string, string>> fileHashes)
+    {
+        var builder = new StringBuilder();
+        foreach (var pair in fileHashes.OrderBy(pair => pair.Key, StringComparer.Ordinal))
+        {
+            builder.Append(pair.Key);
+            builder.Append('\0');
+            builder.Append(pair.Value);
+            builder.Append('\n');
+        }
+
+        return HashText(builder.ToString());
+    }
+
+    private static string HashFile(string filePath)
+    {
+        using var stream = new FileStream(
+            filePath,
+            FileMode.Open,
+            FileAccess.Read,
+            FileShare.ReadWrite | FileShare.Delete);
+        return Convert.ToHexString(SHA256.HashData(stream)).ToLowerInvariant();
+    }
+
+    private static string HashText(string value) =>
+        Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(value))).ToLowerInvariant();
 }

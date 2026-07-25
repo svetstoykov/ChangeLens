@@ -1,0 +1,9 @@
+{
+  "protocolVersion": 1,
+  "requestId": "comparison-list-1",
+  "action": "comparisons.listTargets",
+  "parameters": {
+    "path": "/projects/change_lens",
+    "query": "main"
+  }
+}

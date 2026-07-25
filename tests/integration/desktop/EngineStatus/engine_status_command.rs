@@ -1,3 +1,7 @@
+use changelens_desktop_lib::comparisons::{
+    ComparisonFreshness, ComparisonService, ComparisonState, ComparisonTargetPage,
+    PreparedComparison,
+};
 use changelens_desktop_lib::configure_desktop;
 use changelens_desktop_lib::engine_protocol::{
     ActionErrorDetail, ActionErrorKind, EngineActionError, OperationErrorType,
@@ -34,6 +38,33 @@ struct UnusedRepositoryService;
 impl RepositoryService for UnusedRepositoryService {
     fn open_repository(&self, _path: &str) -> Result<RepositoryDescriptor, EngineActionError> {
         unreachable!("the engine status test does not open a repository")
+    }
+}
+
+struct UnusedComparisonService;
+
+impl ComparisonService for UnusedComparisonService {
+    fn list_targets(
+        &self,
+        _path: &str,
+        _query: Option<&str>,
+        _after: Option<&str>,
+        _target_set_token: Option<&str>,
+    ) -> Result<ComparisonTargetPage, EngineActionError> {
+        unreachable!("the engine status test does not list comparison targets")
+    }
+
+    fn prepare(&self, _path: &str, _target: &str) -> Result<PreparedComparison, EngineActionError> {
+        unreachable!("the engine status test does not prepare comparisons")
+    }
+
+    fn check_freshness(
+        &self,
+        _path: &str,
+        _target: &str,
+        _freshness_token: &str,
+    ) -> Result<ComparisonFreshness, EngineActionError> {
+        unreachable!("the engine status test does not check comparison freshness")
     }
 }
 
@@ -122,6 +153,7 @@ fn invoke_engine_status(
         EngineStatusState::new(Arc::new(FixedEngineStatusService { result })),
         RepositoryState::new(Arc::new(UnusedRepositoryService)),
         RepositoryFolderPickerState::new(Arc::new(UnusedRepositoryFolderPicker)),
+        ComparisonState::new(Arc::new(UnusedComparisonService)),
     )
     .build(mock_context(noop_assets()))
     .expect("the test desktop application should build");

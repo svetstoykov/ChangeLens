@@ -1,0 +1,95 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://changelens.dev/contracts/engine-protocol/v1/comparison-check-freshness.schema.json",
+  "title": "ChangeLens comparison-freshness exchange",
+  "oneOf": [
+    { "$ref": "#/$defs/request" },
+    { "$ref": "#/$defs/currentResult" },
+    { "$ref": "#/$defs/staleResult" },
+    { "$ref": "https://changelens.dev/contracts/engine-protocol/v1/error-response.schema.json" }
+  ],
+  "$defs": {
+    "request": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["protocolVersion", "requestId", "action", "parameters"],
+      "properties": {
+        "protocolVersion": { "const": 1 },
+        "requestId": { "type": "string", "minLength": 1, "pattern": "\\S" },
+        "action": { "const": "comparisons.checkFreshness" },
+        "parameters": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["path", "target", "freshnessToken"],
+          "properties": {
+            "path": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 8192,
+              "pattern": "^(?=.*\\S)[^\\u0000]+$"
+            },
+            "target": { "$ref": "#/$defs/refName" },
+            "freshnessToken": { "$ref": "#/$defs/token" }
+          }
+        }
+      }
+    },
+    "currentResult": {
+      "allOf": [
+        { "$ref": "#/$defs/resultBase" },
+        {
+          "properties": {
+            "result": { "$ref": "#/$defs/current" }
+          }
+        }
+      ]
+    },
+    "staleResult": {
+      "allOf": [
+        { "$ref": "#/$defs/resultBase" },
+        {
+          "properties": {
+            "result": { "$ref": "#/$defs/stale" }
+          }
+        }
+      ]
+    },
+    "resultBase": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["protocolVersion", "type", "requestId", "result"],
+      "properties": {
+        "protocolVersion": { "const": 1 },
+        "type": { "const": "result" },
+        "requestId": { "type": "string", "minLength": 1, "pattern": "\\S" },
+        "result": {}
+      }
+    },
+    "current": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["state"],
+      "properties": {
+        "state": { "const": "current" }
+      }
+    },
+    "stale": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["state"],
+      "properties": {
+        "state": { "const": "stale" }
+      }
+    },
+    "refName": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 4096,
+      "pattern": "^refs/(?:heads|remotes)/[^\\u0000]+$"
+    },
+    "token": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    }
+  }
+}

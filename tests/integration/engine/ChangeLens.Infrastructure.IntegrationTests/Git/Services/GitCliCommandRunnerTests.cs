@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using System.Diagnostics;
 using System.Globalization;
+using System.Text;
 using System.Text.Json;
 using ChangeLens.Core.Git.Constants;
 using ChangeLens.Core.Git.Models;
@@ -17,7 +18,8 @@ namespace ChangeLens.Infrastructure.IntegrationTests.Git.Services;
 /// </summary>
 public sealed class GitCliCommandRunnerTests
 {
-    private const int MaximumStreamBytes = 65_536;
+    private const int MaximumStandardOutputBytes = 8 * 1024 * 1024;
+    private const int MaximumStandardErrorBytes = 64 * 1024;
     private static readonly TimeSpan DefaultTimeout = TimeSpan.FromSeconds(10);
 
     /// <summary>
@@ -60,6 +62,7 @@ public sealed class GitCliCommandRunnerTests
         Assert.Equal("cat", environment.GetProperty("PAGER").GetString());
         Assert.Equal("C", environment.GetProperty("LC_ALL").GetString());
         Assert.Equal("C", environment.GetProperty("LANG").GetString());
+        Assert.Equal(string.Empty, environment.GetProperty("GIT_EXTERNAL_DIFF").GetString());
     }
 
     /// <summary>
@@ -142,21 +145,107 @@ public sealed class GitCliCommandRunnerTests
     /// <param name="mode">The fixture mode that selects the oversized stream.</param>
     /// <returns>A task that represents the asynchronous operation.</returns>
     [Theory]
-    [InlineData("oversized-stdout")]
-    [InlineData("oversized-stderr")]
-    public async Task RunAsync_OversizedStream_ReturnsSafeInspectionFailure(string mode)
+    [InlineData("large-stdout")]
+    [InlineData("large-stderr")]
+    public async Task RunAsync_StreamExceedingItsOwnBound_ReturnsSuppliedOutputLimitError(string mode)
+    {
+        var runner = CreateRunner();
+        var outputLimitError = OperationError.UnprocessableInput("Output limit.", "comparison.tooLarge");
+
+        var result = await RunInFixtureModeAsync(
+            mode,
+            () => runner.RunAsync(
+                CreateCommand(
+                    [],
+                    maximumStandardOutputBytes: mode == "large-stdout" ? 64 * 1024 : null,
+                    outputLimitError: outputLimitError),
+                CancellationToken.None));
+
+        var error = Assert.Single(result.Errors);
+        Assert.Same(outputLimitError, error);
+        Assert.DoesNotContain(new string('x', 32), error.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    ///     Asynchronously allows large standard output below its separate configured ceiling.
+    /// </summary>
+    /// <returns>A task that represents the asynchronous operation.</returns>
+    [Fact]
+    public async Task RunAsync_LargeStandardOutputBelowSeparateCeiling_Succeeds()
     {
         var runner = CreateRunner();
 
         var result = await RunInFixtureModeAsync(
-            mode,
+            "large-stdout",
             () => runner.RunAsync(CreateCommand([]), CancellationToken.None));
 
-        var error = AssertFailure(
-            result,
-            ErrorType.ExternalDependencyFailure,
-            RepositoryErrorCode.InspectionFailed);
-        Assert.DoesNotContain(new string('x', 32), error.Message, StringComparison.Ordinal);
+        Assert.True(result.IsSuccess);
+        Assert.Equal(128 * 1024, Assert.IsType<GitCommandOutput>(result.Data).StandardOutput.Length);
+    }
+
+    /// <summary>
+    ///     Asynchronously preserves exactly 8 MiB of committed-file facts and an independent 64 KiB diagnostic stream.
+    /// </summary>
+    /// <returns>A task that represents the asynchronous operation.</returns>
+    [Fact]
+    public async Task RunAsync_ExactComparisonFactAndDiagnosticLimits_Succeeds()
+    {
+        var runner = CreateRunner();
+
+        var result = await RunInFixtureModeAsync(
+            "raw-committed-records",
+            new Dictionary<string, string>
+            {
+                ["CHANGELENS_GIT_FIXTURE_RECORD_COUNT"] = "8192",
+                ["CHANGELENS_GIT_FIXTURE_PATH_LENGTH"] = "924",
+                ["CHANGELENS_GIT_FIXTURE_STDERR_BYTES"] = (64 * 1024).ToString(CultureInfo.InvariantCulture),
+            },
+            () => runner.RunAsync(CreateCommand([]), CancellationToken.None));
+
+        Assert.True(result.IsSuccess);
+        var output = Assert.IsType<GitCommandOutput>(result.Data);
+        Assert.Equal(MaximumStandardOutputBytes, Encoding.UTF8.GetByteCount(output.StandardOutput));
+        Assert.Equal(MaximumStandardErrorBytes, Encoding.UTF8.GetByteCount(output.StandardError));
+    }
+
+    /// <summary>
+    ///     Asynchronously rejects an 8 MiB-plus-one comparison fact stream without exposing partial data and reaps its child.
+    /// </summary>
+    /// <returns>A task that represents the asynchronous operation.</returns>
+    [Fact]
+    public async Task RunAsync_ComparisonFactOneByteOverLimit_ReturnsTooLargeWithoutPartialDataAndReapsChild()
+    {
+        using var temporaryDirectory = new TemporaryDirectory();
+        var childProcessIdPath = Path.Combine(temporaryDirectory.DirectoryPath, "child.pid");
+        var tooLarge = OperationError.UnprocessableInput("Output limit.", "comparison.tooLarge");
+        var runner = CreateRunner();
+
+        try
+        {
+            var result = await RunInFixtureModeAsync(
+                "raw-committed-records",
+                new Dictionary<string, string>
+                {
+                    ["CHANGELENS_GIT_FIXTURE_RECORD_COUNT"] = "8192",
+                    ["CHANGELENS_GIT_FIXTURE_PATH_LENGTH"] = "924",
+                    ["CHANGELENS_GIT_FIXTURE_EXTRA_STDOUT_BYTES"] = "1",
+                    ["CHANGELENS_GIT_FIXTURE_STDERR_BYTES"] = (64 * 1024).ToString(CultureInfo.InvariantCulture),
+                    ["CHANGELENS_GIT_FIXTURE_CHILD_PROCESS_ID_PATH"] = childProcessIdPath,
+                    ["CHANGELENS_GIT_FIXTURE_WAIT_AFTER_WRITE"] = "true",
+                },
+                () => runner.RunAsync(
+                    CreateCommand([], outputLimitError: tooLarge),
+                    CancellationToken.None));
+
+            Assert.True(result.IsFailure);
+            Assert.Same(tooLarge, Assert.Single(result.Errors));
+            Assert.Null(result.Data);
+            await AssertProcessReapedAsync(await ReadProcessIdAsync(childProcessIdPath));
+        }
+        finally
+        {
+            await TerminateRecordedProcessAsync(childProcessIdPath);
+        }
     }
 
     /// <summary>
@@ -164,19 +253,71 @@ public sealed class GitCliCommandRunnerTests
     /// </summary>
     /// <returns>A task that represents the asynchronous operation.</returns>
     [Fact]
-    public async Task RunAsync_InvalidUtf8_ReturnsSafeInspectionFailure()
+    public async Task RunAsync_InvalidUtf8_ReturnsSuppliedInspectionFailure()
     {
         var runner = CreateRunner();
+        var inspectionError = OperationError.ExternalDependencyFailure("Inspection failed.", "comparison.failed");
 
         var result = await RunInFixtureModeAsync(
             "invalid-utf8",
-            () => runner.RunAsync(CreateCommand([]), CancellationToken.None));
+            () => runner.RunAsync(CreateCommand([], inspectionError: inspectionError), CancellationToken.None));
 
-        var error = AssertFailure(
-            result,
-            ErrorType.ExternalDependencyFailure,
-            RepositoryErrorCode.InspectionFailed);
+        var error = Assert.Single(result.Errors);
+        Assert.Same(inspectionError, error);
         Assert.DoesNotContain("�", error.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    ///     Asynchronously returns the supplied inspection failure when reading a redirected stream fails.
+    /// </summary>
+    /// <returns>A task that represents the asynchronous operation.</returns>
+    [Fact]
+    public async Task RunAsync_RedirectedStreamReadFailure_ReturnsSuppliedInspectionFailure()
+    {
+        var inspectionError = OperationError.ExternalDependencyFailure("Inspection failed.", "comparison.failed");
+        var runner = new GitCliCommandRunner(
+            DotnetExecutablePath,
+            [FixtureAssemblyPath],
+            ThrowRedirectedStreamReadFailureAsync);
+
+        var result = await RunInFixtureModeAsync(
+            "sleep",
+            () => runner.RunAsync(CreateCommand([], inspectionError: inspectionError), CancellationToken.None));
+
+        Assert.Same(inspectionError, Assert.Single(result.Errors));
+    }
+
+    /// <summary>
+    ///     Asynchronously terminates and reaps the controlled process tree when a stream limit is exceeded.
+    /// </summary>
+    /// <returns>A task that represents the asynchronous operation.</returns>
+    [Fact]
+    public async Task RunAsync_OutputLimit_KillsAndReapsProcessTree()
+    {
+        using var temporaryDirectory = new TemporaryDirectory();
+        var childProcessIdPath = Path.Combine(temporaryDirectory.DirectoryPath, "child.pid");
+        var outputLimitError = OperationError.UnprocessableInput("Output limit.", "comparison.tooLarge");
+        var runner = CreateRunner();
+
+        try
+        {
+            var result = await RunInFixtureModeAsync(
+                "spawn-child-and-large-stdout",
+                () => runner.RunAsync(
+                    CreateCommand(
+                        [childProcessIdPath],
+                        maximumStandardOutputBytes: 64 * 1024,
+                        outputLimitError: outputLimitError),
+                    CancellationToken.None));
+
+            Assert.Same(outputLimitError, Assert.Single(result.Errors));
+            var childProcessId = await ReadProcessIdAsync(childProcessIdPath);
+            await AssertProcessReapedAsync(childProcessId);
+        }
+        finally
+        {
+            await TerminateRecordedProcessAsync(childProcessIdPath);
+        }
     }
 
     /// <summary>
@@ -189,14 +330,15 @@ public sealed class GitCliCommandRunnerTests
         using var temporaryDirectory = new TemporaryDirectory();
         var childProcessIdPath = Path.Combine(temporaryDirectory.DirectoryPath, "child.pid");
         var runner = CreateRunner();
+        var timedOut = OperationError.Timeout("Timed out.", "comparison.timedOut");
 
         var result = await RunInFixtureModeAsync(
             "spawn-child",
             () => runner.RunAsync(
-                CreateCommand([childProcessIdPath], TimeSpan.FromSeconds(2)),
+                CreateCommand([childProcessIdPath], TimeSpan.FromSeconds(2), timedOutError: timedOut),
                 CancellationToken.None));
 
-        AssertFailure(result, ErrorType.Timeout, GitErrorCode.TimedOut);
+        Assert.Same(timedOut, Assert.Single(result.Errors));
         var childProcessId = await ReadProcessIdAsync(childProcessIdPath);
         await AssertProcessReapedAsync(childProcessId);
     }
@@ -297,18 +439,66 @@ public sealed class GitCliCommandRunnerTests
     private static GitCliCommandRunner CreateRunner() =>
         new(DotnetExecutablePath, [FixtureAssemblyPath]);
 
+    private static Task<byte[]> ThrowRedirectedStreamReadFailureAsync(
+        Stream stream,
+        int maximumStreamBytes,
+        CancellationToken cancellationToken) =>
+        Task.FromException<byte[]>(new IOException("controlled redirected-stream read failure"));
+
     private static GitCommand CreateCommand(
         IReadOnlyList<string> arguments,
-        TimeSpan? timeout = null) =>
-        new(arguments, timeout ?? DefaultTimeout, MaximumStreamBytes);
+        TimeSpan? timeout = null,
+        int? maximumStandardOutputBytes = null,
+        int? maximumStandardErrorBytes = null,
+        OperationError? timedOutError = null,
+        OperationError? outputLimitError = null,
+        OperationError? inspectionError = null) =>
+        new(
+            arguments,
+            timeout ?? DefaultTimeout,
+            maximumStandardOutputBytes ?? MaximumStandardOutputBytes,
+            maximumStandardErrorBytes ?? MaximumStandardErrorBytes,
+            CreatePolicy(timedOutError, outputLimitError, inspectionError));
+
+    private static GitCommandErrorPolicy CreatePolicy(
+        OperationError? timedOutError = null,
+        OperationError? outputLimitError = null,
+        OperationError? inspectionError = null) =>
+        new(
+            timedOutError ?? OperationError.Timeout(
+                "Git repository inspection exceeded its allowed time.",
+                GitErrorCode.TimedOut),
+            outputLimitError ?? OperationError.ExternalDependencyFailure(
+                "Git repository inspection failed.",
+                RepositoryErrorCode.InspectionFailed),
+            inspectionError ?? OperationError.ExternalDependencyFailure(
+                "Git repository inspection failed.",
+                RepositoryErrorCode.InspectionFailed));
 
     private static async Task<T> RunInFixtureModeAsync<T>(
         string mode,
         Func<Task<T>> operation)
+        => await RunInFixtureModeAsync(
+            mode,
+            new Dictionary<string, string>(StringComparer.Ordinal),
+            operation);
+
+    private static async Task<T> RunInFixtureModeAsync<T>(
+        string mode,
+        IReadOnlyDictionary<string, string> variables,
+        Func<Task<T>> operation)
     {
         const string variableName = "CHANGELENS_GIT_FIXTURE_MODE";
         var previousMode = Environment.GetEnvironmentVariable(variableName);
+        var previousValues = variables.ToDictionary(
+            pair => pair.Key,
+            pair => Environment.GetEnvironmentVariable(pair.Key),
+            StringComparer.Ordinal);
         Environment.SetEnvironmentVariable(variableName, mode);
+        foreach (var (name, value) in variables)
+        {
+            Environment.SetEnvironmentVariable(name, value);
+        }
 
         try
         {
@@ -317,6 +507,10 @@ public sealed class GitCliCommandRunnerTests
         finally
         {
             Environment.SetEnvironmentVariable(variableName, previousMode);
+            foreach (var (name, value) in previousValues)
+            {
+                Environment.SetEnvironmentVariable(name, value);
+            }
         }
     }
 

@@ -1,0 +1,35 @@
+{
+  "protocolVersion": 1,
+  "type": "result",
+  "requestId": "comparison-prepare-conflicts",
+  "result": {
+    "repository": {
+      "name": "change_lens",
+      "canonicalPath": "/projects/change_lens",
+      "head": {
+        "kind": "branch",
+        "name": "feature/conflict",
+        "revision": "0123456789abcdef0123456789abcdef01234567"
+      }
+    },
+    "target": {
+      "kind": "local",
+      "name": "main",
+      "fullName": "refs/heads/main",
+      "revision": "89abcdef0123456789abcdef0123456789abcdef"
+    },
+    "mergeBaseRevision": "fedcba9876543210fedcba9876543210fedcba98",
+    "currentWorkCommitCount": 2,
+    "targetOnlyCommitCount": 1,
+    "changedFileTotal": 4,
+    "uncommittedFileTotal": 2,
+    "stagedFileCount": 1,
+    "unstagedFileCount": 1,
+    "untrackedFileCount": 0,
+    "readiness": {
+      "state": "conflicts",
+      "conflictedFileCount": 2
+    },
+    "freshnessToken": "fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210"
+  }
+}

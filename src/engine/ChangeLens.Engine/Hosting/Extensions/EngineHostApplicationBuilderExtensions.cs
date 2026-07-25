@@ -1,6 +1,8 @@
+using ChangeLens.Core.Comparisons.Services;
 using ChangeLens.Core.EngineStatus.Interfaces;
 using ChangeLens.Core.EngineStatus.Services;
 using ChangeLens.Core.Git.Services;
+using ChangeLens.Engine.Comparisons.Services;
 using ChangeLens.Engine.Logging.Extensions;
 using ChangeLens.Engine.Protocol.Interfaces;
 using ChangeLens.Engine.Protocol.Services;
@@ -49,7 +51,27 @@ internal static class EngineHostApplicationBuilderExtensions
                 new GitRepositoryInspector(
                     serviceProvider.GetRequiredService<GitCliCommandRunner>(),
                     serviceProvider.GetRequiredService<PhysicalRepositoryPathResolver>()));
+        builder.Services.AddSingleton<ComparisonFileSummaryComposer>();
+        builder.Services.AddSingleton(
+            serviceProvider =>
+                new GitComparisonTargetDiscovery(
+                    serviceProvider.GetRequiredService<GitRepositoryInspector>(),
+                    serviceProvider.GetRequiredService<GitCliCommandRunner>()));
+        builder.Services.AddSingleton(
+            serviceProvider =>
+                new GitComparisonPreparer(
+                    serviceProvider.GetRequiredService<GitRepositoryInspector>(),
+                    serviceProvider.GetRequiredService<GitComparisonTargetDiscovery>(),
+                    serviceProvider.GetRequiredService<GitCliCommandRunner>(),
+                    serviceProvider.GetRequiredService<ComparisonFileSummaryComposer>()));
+        builder.Services.AddSingleton(
+            serviceProvider =>
+                new GitComparisonFreshnessChecker(
+                    serviceProvider.GetRequiredService<GitRepositoryInspector>(),
+                    serviceProvider.GetRequiredService<GitComparisonTargetDiscovery>(),
+                    serviceProvider.GetRequiredService<GitCliCommandRunner>()));
         builder.Services.AddSingleton<EngineProtocolSerializer>();
+        builder.Services.AddSingleton<ComparisonTargetPageBuilder>();
         builder.Services.AddSingleton<IEngineProtocolTransport, EngineProtocolTransport>();
         builder.Services.AddSingleton<EngineActionProcessor>();
         builder.Services.AddHostedService<EngineProtocolHost>();

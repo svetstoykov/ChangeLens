@@ -119,11 +119,286 @@ internal sealed class TemporaryGitRepository : IDisposable
         Directory.CreateDirectory(Path.Combine(RootPath, "nested", "directory")).FullName;
 
     /// <summary>
+    ///     Creates a local branch at the current committed revision without checking it out.
+    /// </summary>
+    /// <param name="branchName">The branch name. Cannot be <see langword="null" /> or empty.</param>
+    internal void CreateLocalBranch(string branchName)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(branchName);
+        RunGitChecked(["-C", RootPath, "branch", branchName, Revision]);
+    }
+
+    /// <summary>
+    ///     Creates a direct cached remote-tracking ref at the current committed revision without fetching.
+    /// </summary>
+    /// <param name="remoteName">The remote name. Cannot be <see langword="null" /> or empty.</param>
+    /// <param name="branchName">The remote branch name. Cannot be <see langword="null" /> or empty.</param>
+    internal void CreateRemoteTrackingBranch(
+        string remoteName,
+        string branchName)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(remoteName);
+        ArgumentException.ThrowIfNullOrWhiteSpace(branchName);
+        RunGitChecked(
+            [
+                "-C",
+                RootPath,
+                "update-ref",
+                $"refs/remotes/{remoteName}/{branchName}",
+                Revision,
+            ]);
+    }
+
+    /// <summary>
+    ///     Creates a symbolic cached remote HEAD without contacting a remote.
+    /// </summary>
+    /// <param name="remoteName">The remote name. Cannot be <see langword="null" /> or empty.</param>
+    /// <param name="branchName">The cached branch selected by the symbolic ref.</param>
+    internal void CreateSymbolicRemoteHead(
+        string remoteName,
+        string branchName)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(remoteName);
+        ArgumentException.ThrowIfNullOrWhiteSpace(branchName);
+        RunGitChecked(
+            [
+                "-C",
+                RootPath,
+                "symbolic-ref",
+                $"refs/remotes/{remoteName}/HEAD",
+                $"refs/remotes/{remoteName}/{branchName}",
+            ]);
+    }
+
+    /// <summary>
+    ///     Configures a local branch to track a named remote branch without fetching.
+    /// </summary>
+    /// <param name="branchName">The local branch name. Cannot be <see langword="null" /> or empty.</param>
+    /// <param name="remoteName">The configured remote name. Cannot be <see langword="null" /> or empty.</param>
+    /// <param name="remoteBranchName">The remote branch name. Cannot be <see langword="null" /> or empty.</param>
+    internal void ConfigureBranchUpstream(
+        string branchName,
+        string remoteName,
+        string remoteBranchName)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(branchName);
+        ArgumentException.ThrowIfNullOrWhiteSpace(remoteName);
+        ArgumentException.ThrowIfNullOrWhiteSpace(remoteBranchName);
+        RunGitChecked(
+            [
+                "-C",
+                RootPath,
+                "config",
+                $"remote.{remoteName}.url",
+                $"https://example.invalid/{remoteName}.git",
+            ]);
+        RunGitChecked(
+            [
+                "-C",
+                RootPath,
+                "config",
+                $"remote.{remoteName}.fetch",
+                $"+refs/heads/*:refs/remotes/{remoteName}/*",
+            ]);
+        RunGitChecked(
+            [
+                "-C",
+                RootPath,
+                "config",
+                $"branch.{branchName}.remote",
+                remoteName,
+            ]);
+        RunGitChecked(
+            [
+                "-C",
+                RootPath,
+                "config",
+                $"branch.{branchName}.merge",
+                $"refs/heads/{remoteBranchName}",
+            ]);
+    }
+
+    /// <summary>
     ///     Detaches HEAD at the current committed revision.
     /// </summary>
     internal void CheckoutDetached()
     {
         RunGitChecked(["-C", RootPath, "checkout", "--detach", "--quiet"]);
+    }
+
+    /// <summary>
+    ///     Checks out an existing local branch.
+    /// </summary>
+    /// <param name="branchName">The branch name. Cannot be <see langword="null" /> or empty.</param>
+    internal void CheckoutBranch(string branchName)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(branchName);
+        RunGitChecked(["-C", RootPath, "checkout", "--quiet", branchName]);
+    }
+
+    /// <summary>
+    ///     Writes, stages, and commits one repository-relative file.
+    /// </summary>
+    /// <param name="relativePath">The repository-relative file path. Cannot be <see langword="null" /> or empty.</param>
+    /// <param name="content">The exact file content. Cannot be <see langword="null" />.</param>
+    /// <param name="message">The commit message. Cannot be <see langword="null" /> or empty.</param>
+    internal void CommitFile(
+        string relativePath,
+        string content,
+        string message)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(relativePath);
+        ArgumentNullException.ThrowIfNull(content);
+        ArgumentException.ThrowIfNullOrWhiteSpace(message);
+        var filePath = Path.Combine(RootPath, relativePath);
+        Directory.CreateDirectory(Path.GetDirectoryName(filePath)!);
+        File.WriteAllText(filePath, content);
+        RunGitChecked(["-C", RootPath, "add", "--", relativePath]);
+        RunGitChecked(
+            ["-C", RootPath, "commit", "--quiet", "--no-gpg-sign", "-m", message]);
+    }
+
+    /// <summary>
+    ///     Writes one unstaged repository-relative file.
+    /// </summary>
+    /// <param name="relativePath">The repository-relative file path. Cannot be <see langword="null" /> or empty.</param>
+    /// <param name="content">The exact file content. Cannot be <see langword="null" />.</param>
+    internal void WriteFile(
+        string relativePath,
+        string content)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(relativePath);
+        ArgumentNullException.ThrowIfNull(content);
+        var filePath = Path.Combine(RootPath, relativePath);
+        Directory.CreateDirectory(Path.GetDirectoryName(filePath)!);
+        File.WriteAllText(filePath, content);
+    }
+
+    /// <summary>
+    ///     Stages one repository-relative path.
+    /// </summary>
+    /// <param name="relativePath">The repository-relative path. Cannot be <see langword="null" /> or empty.</param>
+    internal void Stage(string relativePath)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(relativePath);
+        RunGitChecked(["-C", RootPath, "add", "--", relativePath]);
+    }
+
+    /// <summary>
+    ///     Moves and stages one repository-relative path.
+    /// </summary>
+    /// <param name="sourcePath">The current repository-relative path. Cannot be <see langword="null" /> or empty.</param>
+    /// <param name="destinationPath">The new repository-relative path. Cannot be <see langword="null" /> or empty.</param>
+    internal void Move(
+        string sourcePath,
+        string destinationPath)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(sourcePath);
+        ArgumentException.ThrowIfNullOrWhiteSpace(destinationPath);
+        RunGitChecked(["-C", RootPath, "mv", "--", sourcePath, destinationPath]);
+    }
+
+    /// <summary>
+    ///     Removes and stages one repository-relative path.
+    /// </summary>
+    /// <param name="relativePath">The repository-relative path. Cannot be <see langword="null" /> or empty.</param>
+    internal void Remove(string relativePath)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(relativePath);
+        RunGitChecked(["-C", RootPath, "rm", "--quiet", "--", relativePath]);
+    }
+
+    /// <summary>
+    ///     Replaces a tracked regular file with a staged symbolic link.
+    /// </summary>
+    /// <param name="relativePath">The repository-relative path. Cannot be <see langword="null" /> or empty.</param>
+    /// <param name="targetPath">The symbolic-link target text. Cannot be <see langword="null" /> or empty.</param>
+    internal void ReplaceWithSymbolicLink(
+        string relativePath,
+        string targetPath)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(relativePath);
+        ArgumentException.ThrowIfNullOrWhiteSpace(targetPath);
+        var filePath = Path.Combine(RootPath, relativePath);
+        File.Delete(filePath);
+        File.CreateSymbolicLink(filePath, targetPath);
+        Stage(relativePath);
+    }
+
+    /// <summary>
+    ///     Creates a local branch whose commit belongs to an unrelated root history.
+    /// </summary>
+    /// <param name="branchName">The branch name. Cannot be <see langword="null" /> or empty.</param>
+    internal void CreateUnrelatedBranch(string branchName)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(branchName);
+        var tree = RunGitChecked(
+            ["-C", RootPath, "rev-parse", "--verify", "HEAD^{tree}"]).StandardOutput.Trim();
+        var commit = RunGitChecked(
+            ["-C", RootPath, "commit-tree", tree, "-m", "unrelated root"]).StandardOutput.Trim();
+        RunGitChecked(
+            ["-C", RootPath, "update-ref", $"refs/heads/{branchName}", commit]);
+    }
+
+    /// <summary>
+    ///     Creates a target and current revision with two best criss-cross merge bases.
+    /// </summary>
+    /// <param name="targetBranchName">The target branch name. Cannot be <see langword="null" /> or empty.</param>
+    internal void CreateCrissCrossHistory(string targetBranchName)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(targetBranchName);
+        var root = Revision;
+        var tree = RunGitChecked(
+            ["-C", RootPath, "rev-parse", "--verify", "HEAD^{tree}"]).StandardOutput.Trim();
+        var firstCurrent = RunGitChecked(
+            ["-C", RootPath, "commit-tree", tree, "-p", root, "-m", "first current"]).StandardOutput.Trim();
+        var firstTarget = RunGitChecked(
+            ["-C", RootPath, "commit-tree", tree, "-p", root, "-m", "first target"]).StandardOutput.Trim();
+        var current = RunGitChecked(
+            [
+                "-C",
+                RootPath,
+                "commit-tree",
+                tree,
+                "-p",
+                firstCurrent,
+                "-p",
+                firstTarget,
+                "-m",
+                "merge current",
+            ]).StandardOutput.Trim();
+        var target = RunGitChecked(
+            [
+                "-C",
+                RootPath,
+                "commit-tree",
+                tree,
+                "-p",
+                firstTarget,
+                "-p",
+                firstCurrent,
+                "-m",
+                "merge target",
+            ]).StandardOutput.Trim();
+        RunGitChecked(["-C", RootPath, "update-ref", "refs/heads/main", current, root]);
+        RunGitChecked(
+            ["-C", RootPath, "update-ref", $"refs/heads/{targetBranchName}", target]);
+    }
+
+    /// <summary>
+    ///     Merges a branch and requires the controlled histories to produce conflicts.
+    /// </summary>
+    /// <param name="branchName">The branch name to merge. Cannot be <see langword="null" /> or empty.</param>
+    internal void MergeExpectingConflict(string branchName)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(branchName);
+        var output = RunGit(
+            ["-C", RootPath, "merge", "--no-commit", "--no-ff", branchName]);
+        if (output.ExitCode == 0)
+        {
+            throw new InvalidOperationException(
+                "The controlled merge unexpectedly completed without conflicts.");
+        }
     }
 
     /// <summary>

@@ -36,6 +36,10 @@ while (await Console.In.ReadLineAsync() is { } requestLine)
                 requestLine + Environment.NewLine);
         }
     }
+    else if (action is "comparisons.listTargets" or "comparisons.prepare" or "comparisons.checkFreshness")
+    {
+        ValidateComparisonRequest(requestLine, request.RootElement, requestId, action);
+    }
     else if (action != "engine.checkStatus")
     {
         throw new InvalidOperationException("The fixture received an unsupported action.");
@@ -50,6 +54,12 @@ while (await Console.In.ReadLineAsync() is { } requestLine)
     }
 
     if (mode == "repository-delay-first" && requestId == "desktop-1")
+    {
+        await Task.Delay(TimeSpan.FromSeconds(30));
+        continue;
+    }
+
+    if (mode == "comparison-delay-first" && requestId == "desktop-1")
     {
         await Task.Delay(TimeSpan.FromSeconds(30));
         continue;
@@ -143,6 +153,18 @@ while (await Console.In.ReadLineAsync() is { } requestLine)
         }
 
         await WriteRepositoryResultAsync(requestId, mode, requestCount);
+        continue;
+    }
+
+    if (action.StartsWith("comparisons.", StringComparison.Ordinal))
+    {
+        if (mode == "comparison-ordered-error-once" && requestCount == 1)
+        {
+            await WriteOrderedErrorAsync(requestId);
+            continue;
+        }
+
+        await WriteComparisonResultAsync(requestId, action, mode);
         continue;
     }
 
@@ -280,6 +302,170 @@ async Task WriteOrderedErrorAsync(string requestId)
                 code = "fixture.second",
                 message = "The second fixture value conflicts with current state.",
             },
+        },
+    });
+}
+
+static void ValidateComparisonRequest(
+    string requestLine,
+    JsonElement request,
+    string requestId,
+    string action)
+{
+    object expectedParameters = action switch
+    {
+        "comparisons.listTargets" when request.GetProperty("parameters").TryGetProperty("query", out _) =>
+            new
+            {
+                path = "/projects/change_lens",
+                query = "main",
+            },
+        "comparisons.listTargets" => new
+        {
+            path = "/projects/change_lens",
+        },
+        "comparisons.prepare" => new
+        {
+            path = "/projects/change_lens",
+            target = "refs/remotes/origin/main",
+        },
+        "comparisons.checkFreshness" => new
+        {
+            path = "/projects/change_lens",
+            target = "refs/remotes/origin/main",
+            freshnessToken = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+        },
+        _ => throw new InvalidOperationException("The comparison action is not supported by this fixture."),
+    };
+    var expectedRequest = JsonSerializer.Serialize(new
+    {
+        protocolVersion = 1,
+        requestId,
+        action,
+        parameters = expectedParameters,
+    });
+
+    if (requestLine != expectedRequest)
+    {
+        throw new InvalidOperationException("The comparison request does not match the expected shape.");
+    }
+}
+
+async Task WriteComparisonResultAsync(string requestId, string action, string fixtureMode)
+{
+    const string revision = "0123456789abcdef0123456789abcdef01234567";
+    const string targetRevision = "89abcdef0123456789abcdef0123456789abcdef";
+    const string token = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+
+    if (action == "comparisons.listTargets")
+    {
+        if (fixtureMode == "comparison-invalid-result-once")
+        {
+            await WriteJsonAsync(new
+            {
+                protocolVersion = 1,
+                type = "result",
+                requestId,
+                result = new
+                {
+                    targets = new[]
+                    {
+                        new
+                        {
+                            kind = "remoteTracking",
+                            name = "origin/main",
+                            fullName = "refs/tags/main",
+                            revision,
+                        },
+                    },
+                    suggestedTarget = (object?)null,
+                    nextCursor = (string?)null,
+                    targetSetToken = token,
+                    unsupportedTargetCount = 0,
+                },
+            });
+            return;
+        }
+
+        await WriteJsonAsync(new
+        {
+            protocolVersion = 1,
+            type = "result",
+            requestId,
+            result = new
+            {
+                targets = new[]
+                {
+                    new
+                    {
+                        kind = "remoteTracking",
+                        name = "origin/main",
+                        fullName = "refs/remotes/origin/main",
+                        revision,
+                    },
+                },
+                suggestedTarget = (object?)null,
+                nextCursor = (string?)null,
+                targetSetToken = token,
+                unsupportedTargetCount = 0,
+            },
+        });
+        return;
+    }
+
+    if (action == "comparisons.prepare")
+    {
+        await WriteJsonAsync(new
+        {
+            protocolVersion = 1,
+            type = "result",
+            requestId,
+            result = new
+            {
+                repository = new
+                {
+                    name = "change_lens",
+                    canonicalPath = "/projects/change_lens",
+                    head = new
+                    {
+                        kind = "branch",
+                        name = "main",
+                        revision,
+                    },
+                },
+                target = new
+                {
+                    kind = "remoteTracking",
+                    name = "origin/main",
+                    fullName = "refs/remotes/origin/main",
+                    revision = targetRevision,
+                },
+                mergeBaseRevision = revision,
+                currentWorkCommitCount = 3,
+                targetOnlyCommitCount = 1,
+                changedFileTotal = 7,
+                uncommittedFileTotal = 3,
+                stagedFileCount = 1,
+                unstagedFileCount = 2,
+                untrackedFileCount = 1,
+                readiness = new
+                {
+                    state = "ready",
+                },
+                freshnessToken = token,
+            },
+        });
+        return;
+    }
+
+    await WriteJsonAsync(new
+    {
+        protocolVersion = 1,
+        type = "result",
+        requestId,
+        result = new
+        {
+            state = "current",
         },
     });
 }

@@ -1,0 +1,30 @@
+{
+  "protocolVersion": 1,
+  "type": "result",
+  "requestId": "comparison-list-1",
+  "result": {
+    "targets": [
+      {
+        "kind": "local",
+        "name": "release",
+        "fullName": "refs/heads/release",
+        "revision": "89abcdef0123456789abcdef0123456789abcdef"
+      },
+      {
+        "kind": "remoteTracking",
+        "name": "origin/main",
+        "fullName": "refs/remotes/origin/main",
+        "revision": "0123456789abcdef0123456789abcdef01234567"
+      }
+    ],
+    "suggestedTarget": {
+      "kind": "remoteTracking",
+      "name": "origin/main",
+      "fullName": "refs/remotes/origin/main",
+      "revision": "0123456789abcdef0123456789abcdef01234567"
+    },
+    "nextCursor": "refs/remotes/origin/main",
+    "targetSetToken": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+    "unsupportedTargetCount": 1
+  }
+}

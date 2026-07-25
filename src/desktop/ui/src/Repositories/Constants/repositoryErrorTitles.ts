@@ -1,0 +1,16 @@
+export const repositoryErrorTitles: Readonly<Record<string, string>> = {
+  "repository.invalidPath": "Choose another folder",
+  "repository.pathNotFound": "Folder not found",
+  "repository.accessDenied": "Repository access is required",
+  "repository.pathEncodingUnsupported": "Path encoding is unsupported",
+  "repository.notGitRepository": "Not a Git working tree",
+  "repository.workTreeUnavailable": "Git working tree unavailable",
+  "repository.headUnavailable": "Repository has no committed revision",
+  "repository.inspectionFailed": "Repository inspection failed",
+  "git.unavailable": "Git is unavailable",
+  "git.timedOut": "Git inspection timed out",
+  "desktop.folderPickerUnavailable": "Folder picker unavailable",
+  "engine.startFailed": "ChangeLens Engine unavailable",
+  "engine.responseTimedOut": "ChangeLens Engine timed out",
+  "protocol.unsupportedVersion": "Desktop and Engine do not match",
+};

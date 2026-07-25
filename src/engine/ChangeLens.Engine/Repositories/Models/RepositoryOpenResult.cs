@@ -23,21 +23,6 @@ internal sealed record RepositoryOpenResult(RepositoryResult Repository)
     {
         ArgumentNullException.ThrowIfNull(descriptor);
 
-        RepositoryHeadResult head = descriptor.Head switch
-        {
-            BranchRepositoryHead branch => new BranchRepositoryHeadResult(
-                branch.Name,
-                branch.Revision),
-            DetachedRepositoryHead detached => new DetachedRepositoryHeadResult(
-                detached.Revision),
-            _ => throw new InvalidOperationException(
-                "The repository HEAD type is not approved for the engine protocol."),
-        };
-
-        return new RepositoryOpenResult(
-            new RepositoryResult(
-                descriptor.Name,
-                descriptor.CanonicalPath,
-                head));
+        return new RepositoryOpenResult(RepositoryResult.FromDescriptor(descriptor));
     }
 }

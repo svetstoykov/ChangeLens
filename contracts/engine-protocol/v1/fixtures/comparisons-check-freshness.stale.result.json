@@ -1,0 +1,8 @@
+{
+  "protocolVersion": 1,
+  "type": "result",
+  "requestId": "comparison-freshness-stale",
+  "result": {
+    "state": "stale"
+  }
+}

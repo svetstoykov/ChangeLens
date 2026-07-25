@@ -28,6 +28,112 @@ public sealed class EngineProtocolContractTests
     [InlineData("repository-open.schema.json", "repositories-open.request.json")]
     [InlineData("repository-open.schema.json", "repositories-open.branch.result.json")]
     [InlineData("repository-open.schema.json", "repositories-open.detached.result.json")]
+    [InlineData(
+        "comparison-list-targets.schema.json",
+        "comparisons-list-targets.request.json")]
+    [InlineData(
+        "comparison-list-targets.schema.json",
+        "comparisons-list-targets.first-page.result.json")]
+    [InlineData(
+        "comparison-list-targets.schema.json",
+        "comparisons-list-targets.next-page.request.json")]
+    [InlineData(
+        "comparison-list-targets.schema.json",
+        "comparisons-list-targets.empty.result.json")]
+    [InlineData("comparison-prepare.schema.json", "comparisons-prepare.request.json")]
+    [InlineData(
+        "comparison-prepare.schema.json",
+        "comparisons-prepare.ready.result.json")]
+    [InlineData(
+        "comparison-prepare.schema.json",
+        "comparisons-prepare.empty.result.json")]
+    [InlineData(
+        "comparison-prepare.schema.json",
+        "comparisons-prepare.conflicts.result.json")]
+    [InlineData(
+        "comparison-check-freshness.schema.json",
+        "comparisons-check-freshness.request.json")]
+    [InlineData(
+        "comparison-check-freshness.schema.json",
+        "comparisons-check-freshness.current.result.json")]
+    [InlineData(
+        "comparison-check-freshness.schema.json",
+        "comparisons-check-freshness.stale.result.json")]
+    [InlineData(
+        "comparison-list-targets.schema.json",
+        "comparisons-error-invalid-target-query.response.json")]
+    [InlineData(
+        "comparison-list-targets.schema.json",
+        "comparisons-error-invalid-target-page.response.json")]
+    [InlineData(
+        "comparison-list-targets.schema.json",
+        "comparisons-error-targets-changed.response.json")]
+    [InlineData(
+        "comparison-prepare.schema.json",
+        "comparisons-error-target-unavailable.response.json")]
+    [InlineData(
+        "comparison-prepare.schema.json",
+        "comparisons-error-target-invalid.response.json")]
+    [InlineData(
+        "comparison-check-freshness.schema.json",
+        "comparisons-error-target-invalid.response.json")]
+    [InlineData(
+        "comparison-prepare.schema.json",
+        "comparisons-error-unrelated-history.response.json")]
+    [InlineData(
+        "comparison-prepare.schema.json",
+        "comparisons-error-ambiguous-base.response.json")]
+    [InlineData(
+        "comparison-prepare.schema.json",
+        "comparisons-error-changed-during-preparation.response.json")]
+    [InlineData(
+        "comparison-prepare.schema.json",
+        "comparisons-error-too-large.response.json")]
+    [InlineData(
+        "comparison-list-targets.schema.json",
+        "comparisons-error-timed-out.response.json")]
+    [InlineData(
+        "comparison-check-freshness.schema.json",
+        "comparisons-error-inspection-failed.response.json")]
+    [InlineData(
+        "comparison-check-freshness.schema.json",
+        "comparisons-error-invalid-freshness-token.response.json")]
+    [InlineData(
+        "error-response.schema.json",
+        "comparisons-error-invalid-target-query.response.json")]
+    [InlineData(
+        "error-response.schema.json",
+        "comparisons-error-invalid-target-page.response.json")]
+    [InlineData(
+        "error-response.schema.json",
+        "comparisons-error-targets-changed.response.json")]
+    [InlineData(
+        "error-response.schema.json",
+        "comparisons-error-target-unavailable.response.json")]
+    [InlineData(
+        "error-response.schema.json",
+        "comparisons-error-target-invalid.response.json")]
+    [InlineData(
+        "error-response.schema.json",
+        "comparisons-error-unrelated-history.response.json")]
+    [InlineData(
+        "error-response.schema.json",
+        "comparisons-error-ambiguous-base.response.json")]
+    [InlineData(
+        "error-response.schema.json",
+        "comparisons-error-changed-during-preparation.response.json")]
+    [InlineData(
+        "error-response.schema.json",
+        "comparisons-error-too-large.response.json")]
+    [InlineData(
+        "error-response.schema.json",
+        "comparisons-error-timed-out.response.json")]
+    [InlineData(
+        "error-response.schema.json",
+        "comparisons-error-inspection-failed.response.json")]
+    [InlineData(
+        "error-response.schema.json",
+        "comparisons-error-invalid-freshness-token.response.json")]
     public void SharedFixtureMatchesSchema(string schemaFileName, string fixtureFileName)
     {
         using var fixture = JsonDocument.Parse(File.ReadAllText(FixturePath(fixtureFileName)));
@@ -122,6 +228,153 @@ public sealed class EngineProtocolContractTests
         Assert.False(IsContractValid("repository-open.schema.json", request));
     }
 
+    /// <summary>
+    ///     Verifies the target-list contract rejects malformed requests and result fields.
+    /// </summary>
+    /// <param name="json">The malformed target-list exchange.</param>
+    [Theory]
+    [InlineData("""{"protocolVersion":1,"requestId":"id","action":"comparisons.listTargets"}""")]
+    [InlineData(
+        """{"protocolVersion":1,"requestId":"id","action":"comparisons.listTargets","parameters":null}""")]
+    [InlineData(
+        """{"protocolVersion":1,"requestId":"id","action":"comparisons.listTargets","parameters":{}}""")]
+    [InlineData(
+        """{"protocolVersion":1,"requestId":"id","action":"comparisons.listtargets","parameters":{"path":"/repo"}}""")]
+    [InlineData(
+        """{"protocolVersion":1,"requestId":"id","action":"comparisons.listTargets","parameters":{"Path":"/repo"}}""")]
+    [InlineData(
+        """{"protocolVersion":1,"requestId":"id","action":"comparisons.listTargets","parameters":{"path":"/repo","query":null}}""")]
+    [InlineData(
+        """{"protocolVersion":1,"requestId":"id","action":"comparisons.listTargets","parameters":{"path":"/repo","after":"refs/heads/main"}}""")]
+    [InlineData(
+        """{"protocolVersion":1,"requestId":"id","action":"comparisons.listTargets","parameters":{"path":"/repo","targetSetToken":"0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"}}""")]
+    [InlineData(
+        """{"protocolVersion":1,"requestId":"id","action":"comparisons.listTargets","parameters":{"path":"/repo","after":"refs/heads/main","targetSetToken":"ABCDEF6789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"}}""")]
+    [InlineData(
+        """{"protocolVersion":1,"type":"result","requestId":"id","result":{"targets":[{"kind":"REMOTE_TRACKING","name":"origin/main","fullName":"refs/remotes/origin/main","revision":"0123456789abcdef0123456789abcdef01234567"}],"suggestedTarget":null,"nextCursor":null,"targetSetToken":"0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef","unsupportedTargetCount":0}}""")]
+    [InlineData(
+        """{"protocolVersion":1,"type":"result","requestId":"id","result":{"targets":[],"suggestedTarget":null,"nextCursor":null,"targetSetToken":"0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef","unsupportedTargetCount":-1}}""")]
+    [InlineData(
+        """{"protocolVersion":1,"type":"result","requestId":"id","result":{"targets":[],"suggestedTarget":null,"nextCursor":null,"targetSetToken":"0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef","unsupportedTargetCount":0.5}}""")]
+    public void ComparisonListTargetsSchemaRejectsMalformedMessages(string json)
+    {
+        Assert.False(IsContractValid("comparison-list-targets.schema.json", json));
+    }
+
+    /// <summary>
+    ///     Verifies target-list scalar bounds and duplicate-property rejection.
+    /// </summary>
+    [Fact]
+    public void ComparisonListTargetsSchemaRejectsOverlongAndDuplicateFields()
+    {
+        var token = new string('0', 64);
+
+        Assert.False(
+            IsContractValid(
+                "comparison-list-targets.schema.json",
+                JsonSerializer.Serialize(
+                    new
+                    {
+                        protocolVersion = 1,
+                        requestId = "id",
+                        action = "comparisons.listTargets",
+                        parameters = new { path = "/repo", query = new string('q', 257) },
+                    })));
+        Assert.False(
+            IsContractValid(
+                "comparison-list-targets.schema.json",
+                JsonSerializer.Serialize(
+                    new
+                    {
+                        protocolVersion = 1,
+                        requestId = "id",
+                        action = "comparisons.listTargets",
+                        parameters = new
+                        {
+                            path = "/repo",
+                            after = "refs/heads/" + new string('c', 4_086),
+                            targetSetToken = token,
+                        },
+                    })));
+        Assert.False(
+            IsContractValid(
+                "comparison-list-targets.schema.json",
+                """{"protocolVersion":1,"requestId":"id","action":"comparisons.listTargets","parameters":{"path":"/first","path":"/second"}}"""));
+    }
+
+    /// <summary>
+    ///     Verifies the comparison-preparation contract rejects malformed requests, counts, revisions, and unions.
+    /// </summary>
+    /// <param name="json">The malformed comparison-preparation exchange.</param>
+    [Theory]
+    [InlineData(
+        """{"protocolVersion":1,"requestId":"id","action":"comparisons.prepare","parameters":{"path":"/repo"}}""")]
+    [InlineData(
+        """{"protocolVersion":1,"requestId":"id","action":"comparisons.prepare","parameters":{"path":"/repo","target":null}}""")]
+    [InlineData(
+        """{"protocolVersion":1,"requestId":"id","action":"comparisons.Prepare","parameters":{"path":"/repo","target":"refs/heads/main"}}""")]
+    [InlineData(
+        """{"protocolVersion":1,"requestId":"id","action":"comparisons.prepare","parameters":{"path":"/repo","target":"refs/heads/main","extra":true}}""")]
+    [InlineData(
+        """{"protocolVersion":1,"type":"result","requestId":"id","result":{"repository":{"name":"repo","canonicalPath":"/repo","head":{"kind":"branch","name":"main","revision":"0123456789abcdef0123456789abcdef01234567"}},"target":{"kind":"local","name":"topic","fullName":"refs/heads/topic","revision":"bad"},"mergeBaseRevision":"0123456789abcdef0123456789abcdef01234567","currentWorkCommitCount":1,"targetOnlyCommitCount":0,"changedFileTotal":1,"uncommittedFileTotal":0,"stagedFileCount":0,"unstagedFileCount":0,"untrackedFileCount":0,"readiness":{"state":"ready"},"freshnessToken":"0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"}}""")]
+    [InlineData(
+        """{"protocolVersion":1,"type":"result","requestId":"id","result":{"repository":{"name":"repo","canonicalPath":"/repo","head":{"kind":"branch","name":"main","revision":"0123456789abcdef0123456789abcdef01234567"}},"target":{"kind":"local","name":"topic","fullName":"refs/heads/topic","revision":"0123456789abcdef0123456789abcdef01234567"},"mergeBaseRevision":"0123456789abcdef0123456789abcdef01234567","currentWorkCommitCount":-1,"targetOnlyCommitCount":0,"changedFileTotal":1,"uncommittedFileTotal":0,"stagedFileCount":0,"unstagedFileCount":0,"untrackedFileCount":0,"readiness":{"state":"ready","conflictedFileCount":0},"freshnessToken":"0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"}}""")]
+    [InlineData(
+        """{"protocolVersion":1,"type":"result","requestId":"id","result":{"repository":{"name":"repo","canonicalPath":"/repo","head":{"kind":"branch","name":"main","revision":"0123456789abcdef0123456789abcdef01234567"}},"target":{"kind":"local","name":"topic","fullName":"refs/heads/topic","revision":"0123456789abcdef0123456789abcdef01234567"},"mergeBaseRevision":"0123456789abcdef0123456789abcdef01234567","currentWorkCommitCount":1.5,"targetOnlyCommitCount":0,"changedFileTotal":1,"uncommittedFileTotal":0,"stagedFileCount":0,"unstagedFileCount":0,"untrackedFileCount":0,"readiness":{"state":"unknown"},"freshnessToken":"0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"}}""")]
+    public void ComparisonPrepareSchemaRejectsMalformedMessages(string json)
+    {
+        Assert.False(IsContractValid("comparison-prepare.schema.json", json));
+    }
+
+    /// <summary>
+    ///     Verifies preparation rejects an overlong target and duplicate target property.
+    /// </summary>
+    [Fact]
+    public void ComparisonPrepareSchemaRejectsOverlongAndDuplicateTargets()
+    {
+        Assert.False(
+            IsContractValid(
+                "comparison-prepare.schema.json",
+                JsonSerializer.Serialize(
+                    new
+                    {
+                        protocolVersion = 1,
+                        requestId = "id",
+                        action = "comparisons.prepare",
+                        parameters = new
+                        {
+                            path = "/repo",
+                            target = "refs/heads/" + new string('t', 4_086),
+                        },
+                    })));
+        Assert.False(
+            IsContractValid(
+                "comparison-prepare.schema.json",
+                """{"protocolVersion":1,"requestId":"id","action":"comparisons.prepare","parameters":{"path":"/repo","target":"refs/heads/one","target":"refs/heads/two"}}"""));
+    }
+
+    /// <summary>
+    ///     Verifies the freshness contract rejects malformed requests, tokens, tags, and union fields.
+    /// </summary>
+    /// <param name="json">The malformed freshness exchange.</param>
+    [Theory]
+    [InlineData(
+        """{"protocolVersion":1,"requestId":"id","action":"comparisons.checkFreshness","parameters":{"path":"/repo","target":"refs/heads/main"}}""")]
+    [InlineData(
+        """{"protocolVersion":1,"requestId":"id","action":"comparisons.checkFreshness","parameters":{"path":"/repo","target":"refs/heads/main","freshnessToken":null}}""")]
+    [InlineData(
+        """{"protocolVersion":1,"requestId":"id","action":"comparisons.checkfreshness","parameters":{"path":"/repo","target":"refs/heads/main","freshnessToken":"0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"}}""")]
+    [InlineData(
+        """{"protocolVersion":1,"requestId":"id","action":"comparisons.checkFreshness","parameters":{"path":"/repo","target":"refs/heads/main","freshnessToken":"ABCDEF6789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"}}""")]
+    [InlineData(
+        """{"protocolVersion":1,"type":"result","requestId":"id","result":{"state":"CURRENT"}}""")]
+    [InlineData(
+        """{"protocolVersion":1,"type":"result","requestId":"id","result":{"state":"current","extra":true}}""")]
+    public void ComparisonCheckFreshnessSchemaRejectsMalformedMessages(string json)
+    {
+        Assert.False(IsContractValid("comparison-check-freshness.schema.json", json));
+    }
+
     private static IReadOnlyDictionary<string, JsonSchema> LoadSchemas()
     {
         var names = new[]
@@ -130,6 +383,9 @@ public sealed class EngineProtocolContractTests
             "error-response.schema.json",
             "payload-free-result.schema.json",
             "repository-open.schema.json",
+            "comparison-list-targets.schema.json",
+            "comparison-prepare.schema.json",
+            "comparison-check-freshness.schema.json",
         };
 
         return names.ToDictionary(

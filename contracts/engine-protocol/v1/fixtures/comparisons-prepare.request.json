@@ -1,0 +1,9 @@
+{
+  "protocolVersion": 1,
+  "requestId": "comparison-prepare-1",
+  "action": "comparisons.prepare",
+  "parameters": {
+    "path": "/projects/change_lens",
+    "target": "refs/remotes/origin/main"
+  }
+}

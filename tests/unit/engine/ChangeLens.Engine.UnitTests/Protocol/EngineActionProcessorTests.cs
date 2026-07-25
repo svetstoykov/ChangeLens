@@ -1,8 +1,12 @@
 using System.Text.Json;
+using ChangeLens.Core.Comparisons.Services;
 using ChangeLens.Core.Results.Models;
+using ChangeLens.Engine.Comparisons.Models;
+using ChangeLens.Engine.Comparisons.Services;
 using ChangeLens.Engine.Protocol.Models;
 using ChangeLens.Engine.Protocol.Services;
 using ChangeLens.Engine.Repositories.Models;
+using ChangeLens.Engine.UnitTests.Comparisons.Support;
 using ChangeLens.Engine.UnitTests.EngineStatus.Support;
 using ChangeLens.Engine.UnitTests.Repositories.Support;
 using ChangeLens.Engine.UnitTests.Support;
@@ -16,6 +20,8 @@ namespace ChangeLens.Engine.UnitTests.Protocol;
 public sealed class EngineActionProcessorTests
 {
     private const string Revision = "0123456789abcdef0123456789abcdef01234567";
+    private const string Token =
+        "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
 
     /// <summary>
     ///     Verifies that status success returns a correlated payload-free result.
@@ -364,16 +370,307 @@ public sealed class EngineActionProcessorTests
         Assert.IsType<InvalidOperationException>(logger.LastException);
     }
 
+    /// <summary>
+    ///     Verifies malformed comparison parameters are rejected before repository or Git access.
+    /// </summary>
+    /// <param name="action">The fixed comparison action.</param>
+    /// <param name="parametersJson">
+    ///     The malformed parameters JSON, or <see langword="null" /> when parameters are omitted.
+    /// </param>
+    [Theory]
+    [InlineData("comparisons.listTargets", null)]
+    [InlineData("comparisons.listTargets", "null")]
+    [InlineData("comparisons.listTargets", "{}")]
+    [InlineData("comparisons.listTargets", """{"path":null}""")]
+    [InlineData("comparisons.listTargets", """{"Path":"/selected"}""")]
+    [InlineData("comparisons.listTargets", """{"path":"/selected","query":null}""")]
+    [InlineData("comparisons.listTargets", """{"path":"/selected","after":null}""")]
+    [InlineData(
+        "comparisons.listTargets",
+        """{"path":"/selected","targetSetToken":null}""")]
+    [InlineData("comparisons.listTargets", """{"path":"/selected","extra":true}""")]
+    [InlineData("comparisons.listTargets", """{"path":"/first","path":"/second"}""")]
+    [InlineData("comparisons.prepare", null)]
+    [InlineData("comparisons.prepare", "[]")]
+    [InlineData("comparisons.prepare", """{"path":"/selected"}""")]
+    [InlineData("comparisons.prepare", """{"path":"/selected","target":null}""")]
+    [InlineData("comparisons.prepare", """{"path":"/selected","Target":"refs/heads/topic"}""")]
+    [InlineData(
+        "comparisons.prepare",
+        """{"path":"/selected","target":"refs/heads/topic","extra":true}""")]
+    [InlineData("comparisons.checkFreshness", null)]
+    [InlineData("comparisons.checkFreshness", "false")]
+    [InlineData(
+        "comparisons.checkFreshness",
+        """{"path":"/selected","target":"refs/heads/topic"}""")]
+    [InlineData(
+        "comparisons.checkFreshness",
+        """{"path":"/selected","target":"refs/heads/topic","freshnessToken":null}""")]
+    [InlineData(
+        "comparisons.checkFreshness",
+        """{"path":"/selected","target":"refs/heads/topic","FreshnessToken":"0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"}""")]
+    public async Task ProcessAsyncRejectsMalformedComparisonParametersBeforeCoreIo(
+        string action,
+        string? parametersJson)
+    {
+        var comparison = new ComparisonProcessorFixture();
+        var processor = CreateProcessor(comparisonFixture: comparison);
+
+        var response = await processor.ProcessAsync(
+            CreateRequest(
+                action: action,
+                parameters: parametersJson is null ? default : Parse(parametersJson)),
+            TestContext.Current.CancellationToken);
+
+        var error = Assert.Single(Assert.IsType<ProtocolErrorResponse>(response).Errors);
+        Assert.Equal(ErrorType.Validation, error.Type);
+        Assert.Equal("protocol.invalidRequest", error.Code);
+        Assert.Empty(comparison.Paths);
+        Assert.Empty(comparison.Commands);
+    }
+
+    /// <summary>
+    ///     Verifies target discovery receives the exact bound values and maps a concrete target-page result.
+    /// </summary>
+    [Fact]
+    public async Task ProcessAsyncDispatchesListTargetsAndMapsConcretePage()
+    {
+        var comparison = new ComparisonProcessorFixture();
+        comparison.EnqueueInspection();
+        comparison.EnqueueTargets(
+            ComparisonProcessorFixture.Target(
+                "refs/heads/topic",
+                ComparisonProcessorFixture.TargetRevision),
+            ComparisonProcessorFixture.Target("refs/remotes/origin/main"));
+        var processor = CreateProcessor(comparisonFixture: comparison);
+
+        var response = await processor.ProcessAsync(
+            CreateRequest(
+                action: "comparisons.listTargets",
+                parameters: Parse("""{"path":"/selected","query":"topic"}""")),
+            TestContext.Current.CancellationToken);
+
+        var result = Assert.IsType<ProtocolResultResponse<ComparisonTargetPageResult>>(response);
+        var target = Assert.Single(result.Result!.Targets);
+        Assert.Equal(ComparisonTargetKindResult.Local, target.Kind);
+        Assert.Equal("topic", target.Name);
+        Assert.Equal("refs/heads/topic", target.FullName);
+        Assert.Equal(ComparisonProcessorFixture.TargetRevision, target.Revision);
+        Assert.Equal("/selected", comparison.Paths[0]);
+        Assert.Equal(2, comparison.Paths.Count);
+        Assert.Contains(
+            comparison.Commands,
+            command => command.Arguments.Contains("for-each-ref", StringComparer.Ordinal));
+    }
+
+    /// <summary>
+    ///     Verifies comparison preparation receives the exact target and maps repository and readiness facts.
+    /// </summary>
+    [Fact]
+    public async Task ProcessAsyncDispatchesPrepareAndReusesRepositoryMapper()
+    {
+        var comparison = new ComparisonProcessorFixture();
+        comparison.EnqueuePreparation();
+        var processor = CreateProcessor(comparisonFixture: comparison);
+
+        var response = await processor.ProcessAsync(
+            CreateRequest(
+                action: "comparisons.prepare",
+                parameters: Parse(
+                    """{"path":"/selected","target":"refs/heads/topic"}""")),
+            TestContext.Current.CancellationToken);
+
+        var result = Assert.IsType<ProtocolResultResponse<ComparisonPrepareResult>>(response);
+        Assert.Equal(
+            RepositoryResult.FromDescriptor(
+                new ChangeLens.Core.Repositories.Models.RepositoryDescriptor(
+                    "change_lens",
+                    ComparisonProcessorFixture.CanonicalPath,
+                    new ChangeLens.Core.Repositories.Models.BranchRepositoryHead(
+                        "main",
+                        ComparisonProcessorFixture.HeadRevision))),
+            result.Result!.Repository);
+        Assert.Equal("refs/heads/topic", result.Result.Target.FullName);
+        Assert.Equal(ComparisonProcessorFixture.MergeBaseRevision, result.Result.MergeBaseRevision);
+        Assert.Equal(5, result.Result.CurrentWorkCommitCount);
+        Assert.Equal(3, result.Result.TargetOnlyCommitCount);
+        Assert.Equal(1, result.Result.UncommittedFileTotal);
+        Assert.IsType<ReadyComparisonReadinessResult>(result.Result.Readiness);
+    }
+
+    /// <summary>
+    ///     Verifies freshness checking receives the exact target and token and maps the tagged state.
+    /// </summary>
+    [Fact]
+    public async Task ProcessAsyncDispatchesCheckFreshnessAndMapsTaggedState()
+    {
+        var comparison = new ComparisonProcessorFixture();
+        comparison.EnqueueFreshnessCheck();
+        var processor = CreateProcessor(comparisonFixture: comparison);
+
+        var response = await processor.ProcessAsync(
+            CreateRequest(
+                action: "comparisons.checkFreshness",
+                parameters: Parse(
+                    $$"""{"path":"/selected","target":"refs/heads/topic","freshnessToken":"{{Token}}"}""")),
+            TestContext.Current.CancellationToken);
+
+        var result = Assert.IsType<ProtocolResultResponse<ComparisonFreshnessResult>>(response);
+        Assert.IsType<StaleComparisonFreshnessResult>(result.Result);
+        Assert.Equal("/selected", comparison.Paths[0]);
+        Assert.Equal(2, comparison.Paths.Count);
+        Assert.Contains(
+            comparison.Commands,
+            command => command.Arguments.Contains("for-each-ref", StringComparer.Ordinal));
+    }
+
+    /// <summary>
+    ///     Verifies comparison Core failures retain category, code, message, and request correlation.
+    /// </summary>
+    [Fact]
+    public async Task ProcessAsyncPreservesComparisonCoreFailure()
+    {
+        var sourceError = OperationError.Unauthorized(
+            "Repository access was denied.",
+            "repository.accessDenied");
+        var comparison = new ComparisonProcessorFixture();
+        comparison.EnqueuePath((_, _) => Task.FromResult(Result.Fail<string>(sourceError)));
+        var processor = CreateProcessor(comparisonFixture: comparison);
+
+        var response = await processor.ProcessAsync(
+            CreateRequest(
+                action: "comparisons.listTargets",
+                parameters: Parse("""{"path":"/selected"}""")),
+            TestContext.Current.CancellationToken);
+
+        var errorResponse = Assert.IsType<ProtocolErrorResponse>(response);
+        Assert.Equal("request-1", errorResponse.RequestId);
+        var error = Assert.Single(errorResponse.Errors);
+        Assert.Equal(sourceError.Type, error.Type);
+        Assert.Equal(sourceError.Code, error.Code);
+        Assert.Equal(sourceError.Message, error.Message);
+    }
+
+    /// <summary>
+    ///     Verifies caller cancellation remains exception-based for every comparison action.
+    /// </summary>
+    /// <param name="action">The fixed comparison action.</param>
+    /// <param name="parametersJson">The valid comparison parameters.</param>
+    [Theory]
+    [InlineData("comparisons.listTargets", """{"path":"/selected"}""")]
+    [InlineData(
+        "comparisons.prepare",
+        """{"path":"/selected","target":"refs/heads/topic"}""")]
+    [InlineData(
+        "comparisons.checkFreshness",
+        """{"path":"/selected","target":"refs/heads/topic","freshnessToken":"0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"}""")]
+    public async Task ProcessAsyncPreservesComparisonCancellation(
+        string action,
+        string parametersJson)
+    {
+        using var source = new CancellationTokenSource();
+        source.Cancel();
+        var processor = CreateProcessor(comparisonFixture: new ComparisonProcessorFixture());
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(
+            () => processor.ProcessAsync(
+                CreateRequest(action: action, parameters: Parse(parametersJson)),
+                source.Token));
+    }
+
+    /// <summary>
+    ///     Verifies unexpected comparison failures are logged once and sanitized without logging parameters.
+    /// </summary>
+    [Fact]
+    public async Task ProcessAsyncSanitizesUnexpectedComparisonException()
+    {
+        const string sensitivePath = "/sensitive/comparison/path";
+        var comparison = new ComparisonProcessorFixture();
+        comparison.EnqueuePath(
+            (_, _) => throw new InvalidOperationException("sensitive comparison detail"));
+        var logger = new TestLogger<EngineActionProcessor>();
+        var processor = CreateProcessor(logger: logger, comparisonFixture: comparison);
+
+        var response = await processor.ProcessAsync(
+            CreateRequest(
+                action: "comparisons.listTargets",
+                parameters: Parse(
+                    $$"""{"path":"{{sensitivePath}}","query":"sensitive-query"}""")),
+            TestContext.Current.CancellationToken);
+
+        var error = Assert.Single(Assert.IsType<ProtocolErrorResponse>(response).Errors);
+        Assert.Equal(ErrorType.InternalError, error.Type);
+        Assert.Equal("engine.unexpectedFailure", error.Code);
+        Assert.DoesNotContain("sensitive", error.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(1, logger.ErrorCount);
+        Assert.DoesNotContain(
+            "sensitive",
+            logger.LastException!.Message,
+            StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain(
+            logger.Entries,
+            entry => entry.Contains(sensitivePath, StringComparison.Ordinal) ||
+                     entry.Contains("sensitive-query", StringComparison.Ordinal));
+    }
+
+    /// <summary>
+    ///     Verifies comparison actions remain explicit switch branches without dynamic action infrastructure.
+    /// </summary>
+    [Fact]
+    public void ProcessorSourceKeepsThreeExplicitComparisonBranches()
+    {
+        var source = File.ReadAllText(
+            Path.Combine(
+                FindRepositoryRoot(),
+                "src",
+                "engine",
+                "ChangeLens.Engine",
+                "Protocol",
+                "Services",
+                "EngineActionProcessor.cs"));
+
+        Assert.Contains("ComparisonActionConstants.ListTargetsAction =>", source, StringComparison.Ordinal);
+        Assert.Contains("ComparisonActionConstants.PrepareAction =>", source, StringComparison.Ordinal);
+        Assert.Contains("ComparisonActionConstants.CheckFreshnessAction =>", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("IMediator", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("AddKeyed", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("Activator.", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("GetType()", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("Dictionary<string", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("actionRegistry", source, StringComparison.OrdinalIgnoreCase);
+    }
+
     private static EngineActionProcessor CreateProcessor(
         Func<CancellationToken, Task<Result>>? checkStatusAsync = null,
         TestLogger<EngineActionProcessor>? logger = null,
-        RepositoryInspectorFixture? fixture = null)
+        RepositoryInspectorFixture? fixture = null,
+        ComparisonProcessorFixture? comparisonFixture = null)
     {
         fixture ??= new RepositoryInspectorFixture();
+        var serializer = new EngineProtocolSerializer();
+        var targetDiscovery = comparisonFixture?.TargetDiscovery ??
+                              new ChangeLens.Core.Comparisons.Services.GitComparisonTargetDiscovery(
+                                  fixture.Inspector,
+                                  fixture);
+        var preparer = comparisonFixture?.Preparer ??
+                       new ChangeLens.Core.Comparisons.Services.GitComparisonPreparer(
+                           fixture.Inspector,
+                           targetDiscovery,
+                           fixture,
+                           new ComparisonFileSummaryComposer());
+        var freshnessChecker = comparisonFixture?.FreshnessChecker ??
+                               new ChangeLens.Core.Comparisons.Services.GitComparisonFreshnessChecker(
+                                   fixture.Inspector,
+                                   targetDiscovery,
+                                   fixture);
         return new EngineActionProcessor(
             new StubEngineStatusService(checkStatusAsync ?? (_ => Task.FromResult(Result.Success()))),
-            fixture.Inspector,
-            new EngineProtocolSerializer(),
+            comparisonFixture?.RepositoryInspector ?? fixture.Inspector,
+            targetDiscovery,
+            preparer,
+            freshnessChecker,
+            new ComparisonTargetPageBuilder(serializer),
+            serializer,
             logger ?? new TestLogger<EngineActionProcessor>());
     }
 
@@ -398,5 +695,22 @@ public sealed class EngineActionProcessorTests
     {
         using var document = JsonDocument.Parse(json);
         return document.RootElement.Clone();
+    }
+
+    private static string FindRepositoryRoot()
+    {
+        var directory = new DirectoryInfo(AppContext.BaseDirectory);
+
+        while (directory is not null)
+        {
+            if (File.Exists(Path.Combine(directory.FullName, "src", "engine", "ChangeLens.slnx")))
+            {
+                return directory.FullName;
+            }
+
+            directory = directory.Parent;
+        }
+
+        throw new DirectoryNotFoundException("The ChangeLens repository root could not be located.");
     }
 }

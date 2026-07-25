@@ -1,20 +1,31 @@
-use changelens_desktop_lib::configure_desktop;
+use changelens_desktop_lib::comparisons::{
+    ComparisonFreshness, ComparisonService, ComparisonState, ComparisonTargetPage,
+    PreparedComparison,
+};
 use changelens_desktop_lib::engine_protocol::{
-    ActionErrorDetail, ActionErrorKind, EngineActionError, OperationErrorType,
+    ActionErrorDetail, ActionErrorKind, EngineActionError, EngineClient, OperationErrorType,
 };
 use changelens_desktop_lib::engine_status::{EngineStatusService, EngineStatusState};
 use changelens_desktop_lib::repositories::{
     RepositoryDescriptor, RepositoryFolderPicker, RepositoryFolderPickerState, RepositoryHead,
     RepositoryService, RepositoryState,
 };
-use std::path::PathBuf;
+use changelens_desktop_lib::{configure_desktop, handle_desktop_run_event};
+use std::fs;
+use std::path::{Path, PathBuf};
 use std::process::Command;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, OnceLock};
+use std::time::{SystemTime, UNIX_EPOCH};
+use tauri::Manager;
 use tauri::test::{INVOKE_KEY, get_ipc_response, mock_builder, mock_context, noop_assets};
 
 const SHA1_REVISION: &str = "0123456789abcdef0123456789abcdef01234567";
 const DIAGNOSTIC_CHILD_ENVIRONMENT_VARIABLE: &str =
     "CHANGELENS_REPOSITORY_COMMAND_DIAGNOSTIC_CHILD";
+const REPOSITORY_PATH: &str = "/projects/change_lens";
+const COMPARISON_TARGET: &str = "refs/remotes/origin/main";
+const COMPARISON_FRESHNESS_TOKEN: &str =
+    "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
 
 struct SuccessfulEngineStatusService;
 
@@ -38,6 +49,33 @@ struct FixedRepositoryService {
     paths: Arc<Mutex<Vec<String>>>,
     result: Result<RepositoryDescriptor, EngineActionError>,
     panic_on_open: bool,
+}
+
+struct UnusedComparisonService;
+
+impl ComparisonService for UnusedComparisonService {
+    fn list_targets(
+        &self,
+        _path: &str,
+        _query: Option<&str>,
+        _after: Option<&str>,
+        _target_set_token: Option<&str>,
+    ) -> Result<ComparisonTargetPage, EngineActionError> {
+        unreachable!("the repository command test does not list comparison targets")
+    }
+
+    fn prepare(&self, _path: &str, _target: &str) -> Result<PreparedComparison, EngineActionError> {
+        unreachable!("the repository command test does not prepare comparisons")
+    }
+
+    fn check_freshness(
+        &self,
+        _path: &str,
+        _target: &str,
+        _freshness_token: &str,
+    ) -> Result<ComparisonFreshness, EngineActionError> {
+        unreachable!("the repository command test does not check comparison freshness")
+    }
 }
 
 impl RepositoryService for FixedRepositoryService {
@@ -305,6 +343,64 @@ fn rust_errors_are_reported_once_and_engine_operation_errors_are_not_relogged() 
 }
 
 #[test]
+fn engine_backed_states_share_one_process_and_exit_request_runs_graceful_shutdown_handler() {
+    let marker_path = unique_fixture_path("shared-comparison-state");
+    let engine_client = Arc::new(shared_engine_client(&marker_path));
+    let app = configure_desktop(
+        mock_builder(),
+        EngineStatusState::new(engine_client.clone()),
+        RepositoryState::new(engine_client.clone()),
+        RepositoryFolderPickerState::new(Arc::new(FixedRepositoryFolderPicker {
+            result: Ok(None),
+        })),
+        ComparisonState::new(engine_client.clone()),
+    )
+    .build(mock_context(noop_assets()))
+    .expect("the test desktop application should build");
+
+    app.state::<RepositoryState>()
+        .service()
+        .open_repository(REPOSITORY_PATH)
+        .expect("the shared engine should open the repository");
+    let process_id = engine_client
+        .process_id_for_testing()
+        .expect("the repository action must start the shared Engine process");
+
+    app.state::<ComparisonState>()
+        .service()
+        .check_freshness(
+            REPOSITORY_PATH,
+            COMPARISON_TARGET,
+            COMPARISON_FRESHNESS_TOKEN,
+        )
+        .expect("the comparison action should reuse the shared Engine process");
+
+    assert_eq!(engine_client.process_id_for_testing(), Some(process_id));
+
+    let webview = tauri::WebviewWindowBuilder::new(&app, "main", Default::default())
+        .build()
+        .expect("the test webview should build");
+    let shutdown_client = Arc::clone(&engine_client);
+    let close_window = std::thread::spawn(move || {
+        webview
+            .close()
+            .expect("closing the final test window should request application exit");
+    });
+
+    app.run_return(move |_app_handle, event| handle_desktop_run_event(&shutdown_client, &event));
+    close_window
+        .join()
+        .expect("the test window close task should complete");
+
+    assert_eq!(engine_client.process_id_for_testing(), None);
+    assert_eq!(
+        fs::read_to_string(&marker_path).expect("the shared engine must observe graceful EOF"),
+        "eof"
+    );
+    fs::remove_file(&marker_path).expect("the fixture EOF marker should be removed");
+}
+
+#[test]
 fn diagnostic_child_process() {
     if std::env::var_os(DIAGNOSTIC_CHILD_ENVIRONMENT_VARIABLE).is_none() {
         return;
@@ -340,6 +436,7 @@ fn invoke_command(
         EngineStatusState::new(Arc::new(SuccessfulEngineStatusService)),
         RepositoryState::new(repository_service),
         RepositoryFolderPickerState::new(picker),
+        ComparisonState::new(Arc::new(UnusedComparisonService)),
     )
     .build(mock_context(noop_assets()))
     .expect("the test desktop application should build");
@@ -432,4 +529,53 @@ fn detached_repository() -> RepositoryDescriptor {
             revision: SHA1_REVISION.into(),
         },
     }
+}
+
+fn shared_engine_client(marker_path: &Path) -> EngineClient {
+    static FIXTURE_BUILD: OnceLock<()> = OnceLock::new();
+    FIXTURE_BUILD.get_or_init(|| build_dotnet_project(&fixture_project_path()));
+
+    EngineClient::with_engine_path_and_arguments(
+        fixture_dll_path(),
+        vec![
+            "record-eof".into(),
+            marker_path.to_string_lossy().into_owned(),
+        ],
+    )
+}
+
+fn fixture_dll_path() -> PathBuf {
+    fixture_project_path()
+        .parent()
+        .expect("the fixture project must have a parent directory")
+        .join("bin/Debug/net10.0/ChangeLens.EngineProtocolFixture.dll")
+}
+
+fn fixture_project_path() -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR")).join(
+        "../../../tests/integration/desktop/EngineStatus/Fixtures/ChangeLens.EngineProtocolFixture/ChangeLens.EngineProtocolFixture.csproj",
+    )
+}
+
+fn build_dotnet_project(project: &Path) {
+    let status = Command::new("dotnet")
+        .arg("build")
+        .arg(project)
+        .arg("--nologo")
+        .status()
+        .expect("the dotnet CLI should build the fixture project");
+
+    assert!(status.success(), "the fixture project build should pass");
+}
+
+fn unique_fixture_path(name: &str) -> PathBuf {
+    let timestamp = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .expect("the system clock should be after the Unix epoch")
+        .as_nanos();
+
+    std::env::temp_dir().join(format!(
+        "changelens-{name}-{}-{timestamp}.txt",
+        std::process::id()
+    ))
 }

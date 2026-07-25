@@ -1,0 +1,225 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://changelens.dev/contracts/engine-protocol/v1/comparison-prepare.schema.json",
+  "title": "ChangeLens comparison-preparation exchange",
+  "oneOf": [
+    { "$ref": "#/$defs/request" },
+    { "$ref": "#/$defs/branchResult" },
+    { "$ref": "#/$defs/detachedResult" },
+    { "$ref": "https://changelens.dev/contracts/engine-protocol/v1/error-response.schema.json" }
+  ],
+  "$defs": {
+    "request": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["protocolVersion", "requestId", "action", "parameters"],
+      "properties": {
+        "protocolVersion": { "const": 1 },
+        "requestId": { "type": "string", "minLength": 1, "pattern": "\\S" },
+        "action": { "const": "comparisons.prepare" },
+        "parameters": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["path", "target"],
+          "properties": {
+            "path": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 8192,
+              "pattern": "^(?=.*\\S)[^\\u0000]+$"
+            },
+            "target": { "$ref": "#/$defs/refName" }
+          }
+        }
+      }
+    },
+    "branchResult": {
+      "allOf": [
+        { "$ref": "#/$defs/resultBase" },
+        {
+          "properties": {
+            "result": {
+              "allOf": [
+                { "$ref": "#/$defs/preparation" },
+                {
+                  "properties": {
+                    "repository": {
+                      "allOf": [
+                        { "$ref": "#/$defs/repositoryBase" },
+                        {
+                          "properties": {
+                            "head": { "$ref": "#/$defs/branchHead" }
+                          }
+                        }
+                      ]
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "detachedResult": {
+      "allOf": [
+        { "$ref": "#/$defs/resultBase" },
+        {
+          "properties": {
+            "result": {
+              "allOf": [
+                { "$ref": "#/$defs/preparation" },
+                {
+                  "properties": {
+                    "repository": {
+                      "allOf": [
+                        { "$ref": "#/$defs/repositoryBase" },
+                        {
+                          "properties": {
+                            "head": { "$ref": "#/$defs/detachedHead" }
+                          }
+                        }
+                      ]
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "resultBase": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["protocolVersion", "type", "requestId", "result"],
+      "properties": {
+        "protocolVersion": { "const": 1 },
+        "type": { "const": "result" },
+        "requestId": { "type": "string", "minLength": 1, "pattern": "\\S" },
+        "result": {}
+      }
+    },
+    "preparation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "repository",
+        "target",
+        "mergeBaseRevision",
+        "currentWorkCommitCount",
+        "targetOnlyCommitCount",
+        "changedFileTotal",
+        "uncommittedFileTotal",
+        "stagedFileCount",
+        "unstagedFileCount",
+        "untrackedFileCount",
+        "readiness",
+        "freshnessToken"
+      ],
+      "properties": {
+        "repository": {},
+        "target": { "$ref": "#/$defs/targetResult" },
+        "mergeBaseRevision": { "$ref": "#/$defs/revision" },
+        "currentWorkCommitCount": { "$ref": "#/$defs/count" },
+        "targetOnlyCommitCount": { "$ref": "#/$defs/count" },
+        "changedFileTotal": { "$ref": "#/$defs/count" },
+        "uncommittedFileTotal": { "$ref": "#/$defs/count" },
+        "stagedFileCount": { "$ref": "#/$defs/count" },
+        "unstagedFileCount": { "$ref": "#/$defs/count" },
+        "untrackedFileCount": { "$ref": "#/$defs/count" },
+        "readiness": {
+          "oneOf": [
+            { "$ref": "#/$defs/ready" },
+            { "$ref": "#/$defs/empty" },
+            { "$ref": "#/$defs/conflicts" }
+          ]
+        },
+        "freshnessToken": { "$ref": "#/$defs/token" }
+      }
+    },
+    "repositoryBase": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "canonicalPath", "head"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1, "pattern": "\\S" },
+        "canonicalPath": { "type": "string", "minLength": 1, "pattern": "\\S" },
+        "head": {}
+      }
+    },
+    "branchHead": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "name", "revision"],
+      "properties": {
+        "kind": { "const": "branch" },
+        "name": { "type": "string", "minLength": 1, "pattern": "\\S" },
+        "revision": { "$ref": "#/$defs/revision" }
+      }
+    },
+    "detachedHead": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "revision"],
+      "properties": {
+        "kind": { "const": "detached" },
+        "revision": { "$ref": "#/$defs/revision" }
+      }
+    },
+    "targetResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "name", "fullName", "revision"],
+      "properties": {
+        "kind": { "enum": ["local", "remoteTracking"] },
+        "name": { "type": "string", "minLength": 1, "maxLength": 4096 },
+        "fullName": { "$ref": "#/$defs/refName" },
+        "revision": { "$ref": "#/$defs/revision" }
+      }
+    },
+    "ready": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["state"],
+      "properties": {
+        "state": { "const": "ready" }
+      }
+    },
+    "empty": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["state"],
+      "properties": {
+        "state": { "const": "empty" }
+      }
+    },
+    "conflicts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["state", "conflictedFileCount"],
+      "properties": {
+        "state": { "const": "conflicts" },
+        "conflictedFileCount": { "$ref": "#/$defs/count" }
+      }
+    },
+    "count": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "refName": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 4096,
+      "pattern": "^refs/(?:heads|remotes)/[^\\u0000]+$"
+    },
+    "revision": {
+      "type": "string",
+      "pattern": "^(?:[0-9a-f]{40}|[0-9a-f]{64})$"
+    },
+    "token": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    }
+  }
+}

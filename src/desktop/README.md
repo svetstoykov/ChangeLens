@@ -36,6 +36,14 @@ npm run desktop:dev
 
 The command builds `ChangeLens.Engine`, starts Vite, opens the Tauri window, launches the engine as a long-lived child process, and performs the real `engine.checkStatus` readiness action. React changes continue to hot reload inside the native window.
 
+## Comparison setup flow
+
+After readiness, open a repository through the native picker, select a local branch or cached remote-tracking target, prepare the comparison, and check freshness before relying on the displayed comparison facts. Remote-tracking refs are only cached local Git knowledge: ChangeLens never fetches or contacts a remote.
+
+A green freshness result means the displayed aggregate facts still match the repository; it does not promise that unrelated repository data has not changed. Refresh is always explicit. Failed or timed-out actions are never replayed automatically, though a later user action can start a replacement Engine process.
+
+Browser-only Vite has no native bridge and therefore displays safe desktop-boundary errors instead of mock repository or comparison data. Development continues to resolve the Engine from the local build until Phase 1D. Change context is transient UI state, is never logged or persisted, and no analysis action exists in this phase.
+
 Other checks are available through `npm run build`, `npm test`, `npm run typecheck`, `npm run lint`, and `npm run format:check`.
 
 ## HTML mockups

@@ -69,4 +69,9 @@ internal static class GitProcessConstants
     ///     The environment variable that controls the process language.
     /// </summary>
     internal const string LanguageEnvironmentVariable = "LANG";
+
+    /// <summary>
+    ///     The environment variable that disables an external Git diff program.
+    /// </summary>
+    internal const string ExternalDiffEnvironmentVariable = "GIT_EXTERNAL_DIFF";
 }

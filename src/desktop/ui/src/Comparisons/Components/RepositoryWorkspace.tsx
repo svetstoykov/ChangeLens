@@ -6,10 +6,7 @@ import { presentActionError } from "../../Actions/Services/presentActionError";
 import { ComparisonSummary } from "./ComparisonSummary";
 import { FreshnessControl } from "./FreshnessControl";
 import { TargetCombobox } from "./TargetCombobox";
-import { LocalIcon } from "../../Visuals/Components/LocalIcon";
-import branchIcon from "../../assets/branch.svg";
-import detachedIcon from "../../assets/detached.svg";
-import folderIcon from "../../assets/folder.svg";
+import { Icon } from "../../Visuals/Components/Icon";
 
 interface RepositoryWorkspaceProps {
   readonly repository: RepositoryDescriptor;
@@ -34,48 +31,43 @@ export function RepositoryWorkspace({
   const canRetryError =
     errorCode === "comparison.timedOut" ||
     errorCode === "comparison.inspectionFailed";
+  const headName =
+    repository.head.kind === "branch" ? repository.head.name : "Detached HEAD";
 
   return (
     <section
       className="repository-workspace"
       aria-labelledby="repository-workspace-heading"
     >
-      <header className="workspace-heading">
-        <p className="eyebrow">Current change</p>
-        <h2 id="repository-workspace-heading">Prepare the comparison</h2>
-        <p className="workspace-repository-name">
-          <LocalIcon source={folderIcon} />
-          <span>{repository.name}</span>
-        </p>
-        <dl className="workspace-repository-facts">
-          <div>
-            <dt>Repository path</dt>
-            <dd>
-              <code>{repository.canonicalPath}</code>
-            </dd>
-          </div>
-          <div>
-            <dt>HEAD</dt>
-            <dd className="workspace-head">
-              <LocalIcon
-                source={
-                  repository.head.kind === "branch" ? branchIcon : detachedIcon
-                }
-              />
-              <code>
-                {repository.head.kind === "branch"
-                  ? repository.head.name
-                  : "Detached HEAD"}
-              </code>
-            </dd>
-          </div>
-          <div>
-            <dt>Revision</dt>
-            <dd>
-              <code>{repository.head.revision}</code>
-            </dd>
-          </div>
-        </dl>
+      <header className="workspace-hero">
+        <div className="workspace-heading">
+          <p className="eyebrow">
+            <Icon name="currentChange" />
+            Current change
+          </p>
+          <h2 id="repository-workspace-heading">Prepare your comparison</h2>
+          <p className="workspace-description">
+            Choose a baseline and add context before ChangeLens analyzes the
+            work in this repository.
+          </p>
+        </div>
+        <section className="workspace-repository" aria-label="Repository">
+          <span className="workspace-repository-icon">
+            <Icon name="folder" />
+          </span>
+          <span className="workspace-repository-copy">
+            <strong>{repository.name}</strong>
+            <code title={repository.canonicalPath}>
+              {repository.canonicalPath}
+            </code>
+          </span>
+          <span className="workspace-head" title={headName}>
+            <Icon
+              name={repository.head.kind === "branch" ? "branch" : "detached"}
+            />
+            <code>{headName}</code>
+          </span>
+        </section>
       </header>
       <div className="comparison-layout">
         <section className="comparison-setup" aria-label="Comparison setup">
@@ -92,57 +84,79 @@ export function RepositoryWorkspace({
           />
           {error ? (
             <section className="action-alert" role="alert">
-              <strong>{error.title}</strong>
-              <ul>
-                {error.messages.map((message, index) => (
-                  <li
-                    key={`${state.error?.errors[index]?.code ?? "comparison"}-${index}`}
-                  >
-                    {message}
-                  </li>
-                ))}
-              </ul>
-              {errorCode === "comparison.invalidTargetQuery" ? (
-                <button type="button" onClick={controller.resetSearch}>
-                  Reset search
-                </button>
-              ) : null}
-              {canRetryError && state.errorSource === "discovery" ? (
-                <button type="button" onClick={controller.retryDiscovery}>
-                  Retry loading targets
-                </button>
-              ) : null}
-              {canRetryError && state.errorSource === "preparation" ? (
-                <button type="button" onClick={controller.retryPreparation}>
-                  Retry preparation
-                </button>
-              ) : null}
-              {canRetryError && state.errorSource === "refresh" ? (
-                <button type="button" onClick={controller.refresh}>
-                  Retry refresh
-                </button>
-              ) : null}
+              <Icon name="warning" />
+              <div>
+                <strong>{error.title}</strong>
+                <ul>
+                  {error.messages.map((message, index) => (
+                    <li
+                      key={`${state.error?.errors[index]?.code ?? "comparison"}-${index}`}
+                    >
+                      {message}
+                    </li>
+                  ))}
+                </ul>
+                <div className="alert-actions">
+                  {errorCode === "comparison.invalidTargetQuery" ? (
+                    <button type="button" onClick={controller.resetSearch}>
+                      Reset search
+                    </button>
+                  ) : null}
+                  {canRetryError && state.errorSource === "discovery" ? (
+                    <button type="button" onClick={controller.retryDiscovery}>
+                      Retry loading targets
+                    </button>
+                  ) : null}
+                  {canRetryError && state.errorSource === "preparation" ? (
+                    <button type="button" onClick={controller.retryPreparation}>
+                      Retry preparation
+                    </button>
+                  ) : null}
+                  {canRetryError && state.errorSource === "refresh" ? (
+                    <button type="button" onClick={controller.refresh}>
+                      Retry refresh
+                    </button>
+                  ) : null}
+                </div>
+              </div>
             </section>
           ) : null}
           <section
             className="change-context"
             aria-labelledby="change-context-heading"
           >
-            <h3 id="change-context-heading">Change context</h3>
-            <p>
-              Add task details, acceptance criteria, or implementation notes
-              that should remain with this workspace.
-            </p>
-            <label htmlFor="change-context">
-              Describe the change you want to understand (optional)
+            <header className="setup-card-heading">
+              <span className="step-number" aria-hidden="true">
+                2
+              </span>
+              <div>
+                <p className="eyebrow">
+                  Change context{" "}
+                  <span className="optional-badge">Optional</span>
+                </p>
+                <h3 id="change-context-heading">
+                  Tell ChangeLens what matters
+                </h3>
+                <p>
+                  Add the task, acceptance criteria, or implementation notes
+                  that should stay with this workspace.
+                </p>
+              </div>
+            </header>
+            <label className="field-label" htmlFor="change-context">
+              Context for this change
             </label>
             <textarea
               id="change-context"
               value={changeContext}
               onChange={(event) => setChangeContext(event.target.value)}
               rows={8}
-              placeholder="Add local context for this change…"
+              placeholder="For example: add repository intake and compare it with main. Preserve local-only behavior and surface conflicts clearly."
             />
+            <p className="field-help">
+              <Icon name="shield" />
+              Context remains local and is not sent anywhere in this phase.
+            </p>
           </section>
         </section>
         <section
@@ -150,10 +164,16 @@ export function RepositoryWorkspace({
           aria-label="Current change facts"
         >
           {state.isPreparing ? (
-            <p role="status">Preparing comparison…</p>
+            <p className="workspace-progress" role="status">
+              <Icon name="refresh" />
+              Preparing comparison…
+            </p>
           ) : null}
           {state.isRefreshing && !state.isPreparing ? (
-            <p role="status">Refreshing comparison…</p>
+            <p className="workspace-progress" role="status">
+              <Icon name="refresh" />
+              Refreshing comparison…
+            </p>
           ) : null}
           <ComparisonSummary
             preparedComparison={state.preparedComparison}

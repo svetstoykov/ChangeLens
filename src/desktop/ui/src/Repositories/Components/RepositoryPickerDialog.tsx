@@ -4,8 +4,7 @@ import { normalizeActionError } from "../../Actions/Services/normalizeActionErro
 import { presentActionError } from "../../Actions/Services/presentActionError";
 import { repositoryErrorTitles } from "../Constants/repositoryErrorTitles";
 import type { RepositoryDescriptor } from "../Models/RepositoryDescriptor";
-import { LocalIcon } from "../../Visuals/Components/LocalIcon";
-import folderIcon from "../../assets/folder.svg";
+import { Icon } from "../../Visuals/Components/Icon";
 
 type PickerState = "idle" | "choosing" | "opening" | "error";
 
@@ -13,10 +12,8 @@ interface RepositoryPickerDialogProps {
   readonly dismissible: boolean;
   readonly onDismiss: () => void;
   readonly onOpenRepository: (path: string) => Promise<RepositoryDescriptor>;
-  readonly onRepositoryOpened?: (repository: RepositoryDescriptor) => void;
-  readonly selectFolder?: () => Promise<string | null>;
-  readonly selectedPath?: string;
-  readonly state?: PickerState;
+  readonly onRepositoryOpened: (repository: RepositoryDescriptor) => void;
+  readonly selectFolder: () => Promise<string | null>;
 }
 
 export function RepositoryPickerDialog({
@@ -25,17 +22,14 @@ export function RepositoryPickerDialog({
   onOpenRepository,
   onRepositoryOpened,
   selectFolder,
-  selectedPath,
-  state: suppliedState,
 }: RepositoryPickerDialogProps) {
   const dialogRef = useRef<HTMLDialogElement>(null);
   const chooseButtonRef = useRef<HTMLButtonElement>(null);
   const previouslyFocusedElementRef = useRef<HTMLElement | null>(null);
   const interactionGeneration = useRef(0);
-  const [state, setState] = useState<PickerState>(suppliedState ?? "idle");
-  const [path, setPath] = useState(selectedPath);
+  const [state, setState] = useState<PickerState>("idle");
+  const [path, setPath] = useState<string>();
   const [error, setError] = useState<ActionError>();
-  const effectiveState = suppliedState ?? state;
 
   function invalidateInteraction() {
     ++interactionGeneration.current;
@@ -59,11 +53,7 @@ export function RepositoryPickerDialog({
   }, []);
 
   async function chooseFolder() {
-    if (
-      !selectFolder ||
-      effectiveState === "choosing" ||
-      effectiveState === "opening"
-    ) {
+    if (state === "choosing" || state === "opening") {
       return;
     }
 
@@ -84,7 +74,7 @@ export function RepositoryPickerDialog({
       setState("opening");
       const repository = await onOpenRepository(chosenPath);
       if (generation === interactionGeneration.current) {
-        onRepositoryOpened?.(repository);
+        onRepositoryOpened(repository);
       }
     } catch (reason: unknown) {
       if (generation === interactionGeneration.current) {
@@ -104,7 +94,7 @@ export function RepositoryPickerDialog({
   const presentation = error
     ? presentActionError(error, repositoryErrorTitles)
     : undefined;
-  const isBusy = effectiveState === "choosing" || effectiveState === "opening";
+  const isBusy = state === "choosing" || state === "opening";
 
   return (
     <dialog
@@ -113,6 +103,7 @@ export function RepositoryPickerDialog({
       aria-describedby="repository-picker-description"
       aria-modal="true"
       aria-label="Open a repository"
+      data-dismissible={dismissible}
       onCancel={(event) => {
         if (!dismissible) {
           event.preventDefault();
@@ -121,42 +112,83 @@ export function RepositoryPickerDialog({
         dismiss();
       }}
     >
-      <h2>Open a repository</h2>
-      <p id="repository-picker-description">
-        Choose a Git working tree for ChangeLens to inspect locally and
-        read-only.
-      </p>
-      {effectiveState === "opening" && path ? (
-        <p role="status" aria-live="polite">
-          Inspecting repository… <code>{path}</code>
-        </p>
+      <div className="repository-picker-hero">
+        <span className="picker-illustration">
+          <Icon name="folder" />
+        </span>
+        <div>
+          <p className="eyebrow">
+            {dismissible ? "Switch workspace" : "Welcome to ChangeLens"}
+          </p>
+          <h2>
+            {dismissible ? "Open another repository" : "Open a Git repository"}
+          </h2>
+          <p id="repository-picker-description">
+            Choose a local working tree. ChangeLens inspects it read-only and
+            never contacts a remote.
+          </p>
+        </div>
+      </div>
+      <div className="picker-assurances" aria-label="Repository access">
+        <span>
+          <Icon name="shield" />
+          Local inspection
+        </span>
+        <span>
+          <Icon name="check" />
+          Read-only access
+        </span>
+      </div>
+      {state === "opening" && path ? (
+        <div className="picker-progress" role="status" aria-live="polite">
+          <Icon name="refresh" />
+          <span>
+            <strong>Inspecting repository</strong>
+            <code>{path}</code>
+          </span>
+        </div>
       ) : null}
       {presentation ? (
-        <section role="alert">
-          <strong>{presentation.title}</strong>
-          <ul>
-            {presentation.messages.map((message, index) => (
-              <li key={`${error?.errors[index]?.code ?? "error"}-${index}`}>
-                {message}
-              </li>
-            ))}
-          </ul>
+        <section className="picker-error" role="alert">
+          <Icon name="warning" />
+          <div>
+            <strong>{presentation.title}</strong>
+            <ul>
+              {presentation.messages.map((message, index) => (
+                <li key={`${error?.errors[index]?.code ?? "error"}-${index}`}>
+                  {message}
+                </li>
+              ))}
+            </ul>
+          </div>
         </section>
       ) : null}
-      <button
-        ref={chooseButtonRef}
-        type="button"
-        disabled={isBusy}
-        onClick={chooseFolder}
-      >
-        <LocalIcon source={folderIcon} />
-        Choose folder
-      </button>
-      {dismissible ? (
-        <button type="button" disabled={isBusy} onClick={dismiss}>
-          Cancel
+      <footer className="repository-picker-actions">
+        {dismissible ? (
+          <button
+            className="secondary-button"
+            type="button"
+            disabled={isBusy}
+            onClick={dismiss}
+          >
+            Cancel
+          </button>
+        ) : null}
+        <button
+          ref={chooseButtonRef}
+          className="primary-button"
+          type="button"
+          disabled={isBusy}
+          onClick={chooseFolder}
+        >
+          <Icon name={isBusy ? "refresh" : "folder"} />
+          {state === "choosing"
+            ? "Opening folder picker…"
+            : state === "opening"
+              ? "Inspecting repository…"
+              : "Choose repository folder"}
         </button>
-      ) : null}
+      </footer>
     </dialog>
   );
 }

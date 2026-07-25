@@ -1,8 +1,5 @@
 import type { ComparisonFreshnessState } from "../Models/ComparisonWorkspaceState";
-import { LocalIcon } from "../../Visuals/Components/LocalIcon";
-import checkIcon from "../../assets/check.svg";
-import refreshIcon from "../../assets/refresh.svg";
-import warningIcon from "../../assets/warning.svg";
+import { Icon } from "../../Visuals/Components/Icon";
 
 interface FreshnessControlProps {
   readonly freshness: ComparisonFreshnessState;
@@ -26,19 +23,22 @@ export function FreshnessControl({
         : freshness === "stale"
           ? "Stale"
           : "Unknown";
-  const statusIcon = freshness === "current" ? checkIcon : warningIcon;
+  const statusIcon = freshness === "current" ? "check" : "warning";
   return (
     <section
       className="freshness-control"
       aria-label="Comparison freshness"
       data-freshness={freshness}
     >
-      <p>
-        <LocalIcon
-          source={freshness === "checking" ? refreshIcon : statusIcon}
-        />
-        <span>Freshness: {label}</span>
-      </p>
+      <div className="freshness-copy">
+        <span className="freshness-icon">
+          <Icon name={freshness === "checking" ? "refresh" : statusIcon} />
+        </span>
+        <span>
+          <small>Comparison data</small>
+          <strong>{label}</strong>
+        </span>
+      </div>
       <button
         className="icon-button"
         type="button"
@@ -46,7 +46,7 @@ export function FreshnessControl({
         onClick={onRefresh}
         disabled={freshness === "checking" || isBusy}
       >
-        <LocalIcon source={refreshIcon} />
+        <Icon name="refresh" />
       </button>
     </section>
   );

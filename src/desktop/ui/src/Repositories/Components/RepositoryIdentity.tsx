@@ -1,51 +1,43 @@
 import type { RepositoryDescriptor } from "../Models/RepositoryDescriptor";
-import { LocalIcon } from "../../Visuals/Components/LocalIcon";
-import branchIcon from "../../assets/branch.svg";
-import detachedIcon from "../../assets/detached.svg";
-import folderIcon from "../../assets/folder.svg";
+import { Icon } from "../../Visuals/Components/Icon";
 
 interface RepositoryIdentityProps {
   readonly repository: RepositoryDescriptor;
-  readonly repositoryGeneration?: number;
 }
 
-export function RepositoryIdentity({
-  repository,
-  repositoryGeneration,
-}: RepositoryIdentityProps) {
+export function RepositoryIdentity({ repository }: RepositoryIdentityProps) {
   const headName = getHeadName(repository);
 
   return (
-    <section
-      className="repository-identity"
-      aria-label="Open repository"
-      data-repository-generation={repositoryGeneration}
-    >
+    <section className="repository-identity" aria-label="Open repository">
       <div className="repository-identity-heading">
-        <LocalIcon source={folderIcon} />
-        <h2>{repository.name}</h2>
+        <span className="repository-icon">
+          <Icon name="folder" />
+        </span>
+        <div>
+          <p>Open repository</p>
+          <h2 title={repository.name}>{repository.name}</h2>
+        </div>
       </div>
       <dl>
-        <div>
+        <div className="repository-path">
           <dt>Path</dt>
-          <dd>
+          <dd title={repository.canonicalPath}>
             <code>{repository.canonicalPath}</code>
           </dd>
         </div>
         <div>
           <dt>Head</dt>
           <dd className="repository-head">
-            <LocalIcon
-              source={
-                repository.head.kind === "branch" ? branchIcon : detachedIcon
-              }
+            <Icon
+              name={repository.head.kind === "branch" ? "branch" : "detached"}
             />
             <code>{headName}</code>
           </dd>
         </div>
         <div>
           <dt>Revision</dt>
-          <dd>
+          <dd title={repository.head.revision}>
             <code>{repository.head.revision}</code>
           </dd>
         </div>

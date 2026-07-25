@@ -47,7 +47,6 @@ change_lens/
 │       └── ChangeLens.Engine/
 └── tests/
     ├── unit/
-    │   ├── desktop/
     │   └── engine/
     └── integration/
         ├── desktop/
@@ -112,7 +111,7 @@ For every engine-backed action:
 6. Return exactly one correlated result or error. A typed action returns its typed payload; a payload-free action returns `result: null`. Fire-and-forget engine actions are not supported.
 7. Preserve every expected error's `ErrorType`, stable code, safe message, order, and request identifier. An uncoded or unsafe error becomes a sanitized `InternalError` at the Engine boundary. Rust-originated failures use the approved `transport` or `protocol` kind; TypeScript normalizes all rejections to `ActionError`.
 8. Never automatically replay a failed action. A later user- or React-initiated action may restart an invalidated engine process. Every future write specification must define a reconciliation action for uncertain transport outcomes.
-9. Add contract, Engine protocol, Rust process, Tauri command, React client, presentation, logging, and stdout-isolation tests in the same change. Shared JSON fixtures must prove cross-language field names and shapes.
+9. Add contract, Engine protocol, Rust process, Tauri command, logging, and stdout-isolation tests in the same change. Verify the React client and presentation with formatting, linting, type checking, production builds, and focused manual UI checks. Shared JSON fixtures must prove cross-language field names and shapes.
 
 Keep the shared transport deliberately small. Extract only process, correlation, bounded-I/O, common response, and
 error behavior that real actions share. Keep capability arguments, result validation, UI behavior, and stable action
@@ -161,6 +160,7 @@ ChangeLens.Core/
 
 ## React Guidelines
 
+- Do not add React or frontend TypeScript test files, React testing libraries, browser test runners, test scripts, or frontend test configuration. Verify React changes with formatting, linting, type checking, production builds, and focused manual UI checks.
 - Prefer small, focused components with clear responsibilities.
 - Use functional components and hooks.
 - Keep state as local as possible; lift it only when multiple components need it.
@@ -244,13 +244,13 @@ Logging is an important part of ChangeLens correctness, supportability, and audi
 
 ## Testing
 
-Unit tests and integration tests are required.
+Unit tests and integration tests are required for the Engine, Infrastructure, Core, Rust process, and Tauri boundaries. React and frontend TypeScript tests are intentionally excluded.
 
 - Mirror source capability folders in test projects.
 - Unit tests must isolate behavior from real Git repositories, SQLite databases, subprocesses, networks, and unrestricted filesystem access.
 - Integration tests must use controlled fixtures for infrastructure adapters, Engine protocol behavior, lifecycle, and desktop-to-engine communication.
 - Add a concrete test project with the production behavior it verifies.
-- Every bug fix requires a regression test that fails without the fix.
+- Every non-React bug fix requires a regression test that fails without the fix. Verify React bug fixes with the frontend checks and focused manual UI checks defined above.
 - Run the relevant unit and integration suites before claiming completion.
 
 ## Trust and Security Boundaries

@@ -6,7 +6,6 @@ import type { ActionError } from "./Actions/Models/ActionError";
 import { normalizeActionError } from "./Actions/Services/normalizeActionError";
 import { presentActionError } from "./Actions/Services/presentActionError";
 import type { EngineStatusClient } from "./EngineStatus/Interfaces/EngineStatusClient";
-import { RepositoryIdentity } from "./Repositories/Components/RepositoryIdentity";
 import { RepositoryPickerDialog } from "./Repositories/Components/RepositoryPickerDialog";
 import { repositoryErrorTitles } from "./Repositories/Constants/repositoryErrorTitles";
 import type { RepositoryClient } from "./Repositories/Interfaces/RepositoryClient";
@@ -161,7 +160,7 @@ export function App({
   const replacing = state.status === "replacingRepository";
   return (
     <AppShell
-      repositoryIdentity={<RepositoryIdentity repository={state.repository} />}
+      hasRepository
       onOpenAnotherRepository={() =>
         setState({
           status: "replacingRepository",

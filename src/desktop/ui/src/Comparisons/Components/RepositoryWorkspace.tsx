@@ -41,10 +41,6 @@ export function RepositoryWorkspace({
     >
       <header className="workspace-hero">
         <div className="workspace-heading">
-          <p className="eyebrow">
-            <Icon name="currentChange" />
-            Current change
-          </p>
           <h2 id="repository-workspace-heading">Prepare your comparison</h2>
           <p className="workspace-description">
             Choose a baseline and add context before ChangeLens analyzes the

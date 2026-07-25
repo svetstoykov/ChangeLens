@@ -37,6 +37,11 @@ export function RepositoryPickerDialog({
 
   useEffect(() => {
     const dialog = dialogRef.current;
+    if (!dismissible) {
+      chooseButtonRef.current?.focus();
+      return () => invalidateInteraction();
+    }
+
     previouslyFocusedElementRef.current =
       document.activeElement instanceof HTMLElement
         ? document.activeElement
@@ -50,7 +55,7 @@ export function RepositoryPickerDialog({
         previouslyFocusedElementRef.current.focus();
       }
     };
-  }, []);
+  }, [dismissible]);
 
   async function chooseFolder() {
     if (state === "choosing" || state === "opening") {
@@ -96,22 +101,8 @@ export function RepositoryPickerDialog({
     : undefined;
   const isBusy = state === "choosing" || state === "opening";
 
-  return (
-    <dialog
-      className="repository-picker"
-      ref={dialogRef}
-      aria-describedby="repository-picker-description"
-      aria-modal="true"
-      aria-label="Open a repository"
-      data-dismissible={dismissible}
-      onCancel={(event) => {
-        if (!dismissible) {
-          event.preventDefault();
-          return;
-        }
-        dismiss();
-      }}
-    >
+  const content = (
+    <>
       <div className="repository-picker-hero">
         <span className="picker-illustration">
           <Icon name="folder" />
@@ -120,7 +111,7 @@ export function RepositoryPickerDialog({
           <p className="eyebrow">
             {dismissible ? "Switch workspace" : "Welcome to ChangeLens"}
           </p>
-          <h2>
+          <h2 id="repository-picker-heading">
             {dismissible ? "Open another repository" : "Open a Git repository"}
           </h2>
           <p id="repository-picker-description">
@@ -189,6 +180,32 @@ export function RepositoryPickerDialog({
               : "Choose repository folder"}
         </button>
       </footer>
+    </>
+  );
+
+  if (!dismissible) {
+    return (
+      <section
+        className="repository-picker repository-picker-inline"
+        aria-labelledby="repository-picker-heading"
+        aria-describedby="repository-picker-description"
+      >
+        {content}
+      </section>
+    );
+  }
+
+  return (
+    <dialog
+      className="repository-picker"
+      ref={dialogRef}
+      aria-labelledby="repository-picker-heading"
+      aria-describedby="repository-picker-description"
+      aria-modal="true"
+      data-dismissible
+      onCancel={dismiss}
+    >
+      {content}
     </dialog>
   );
 }

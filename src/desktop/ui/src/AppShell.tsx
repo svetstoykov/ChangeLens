@@ -1,18 +1,20 @@
 import type { ReactNode } from "react";
 import { Icon } from "./Visuals/Components/Icon";
+import { useColorTheme } from "./Visuals/Hooks/useColorTheme";
 
 interface AppShellProps {
-  readonly repositoryIdentity?: ReactNode;
+  readonly hasRepository?: boolean;
   readonly onOpenAnotherRepository?: () => void;
   readonly children?: ReactNode;
 }
 
 export function AppShell({
-  repositoryIdentity,
+  hasRepository = false,
   onOpenAnotherRepository,
   children,
 }: AppShellProps) {
-  const hasRepository = repositoryIdentity !== undefined;
+  const { colorTheme, toggleColorTheme } = useColorTheme();
+  const nextTheme = colorTheme === "light" ? "dark" : "light";
 
   return (
     <div className="app-shell" data-has-repository={hasRepository}>
@@ -43,7 +45,6 @@ export function AppShell({
             Understand a repository change with local, evidence-backed analysis.
           </p>
         )}
-        <div className="sidebar-repository">{repositoryIdentity}</div>
         <footer className="sidebar-footer">
           <p className="local-assurance">
             <Icon name="shield" />
@@ -76,6 +77,16 @@ export function AppShell({
           <span>{hasRepository ? "Current change" : "Local workspace"}</span>
         </div>
         <div className="technical-actions">
+          <button
+            className="theme-toggle"
+            type="button"
+            aria-label={`Switch to ${nextTheme} theme`}
+            title={`Switch to ${nextTheme} theme`}
+            onClick={toggleColorTheme}
+          >
+            <Icon name={colorTheme === "light" ? "moon" : "sun"} />
+            <span>{nextTheme} theme</span>
+          </button>
           <span className="privacy-indicator">
             <span aria-hidden="true" />
             Local only

@@ -13,8 +13,10 @@ export type IconName =
   | "folder"
   | "info"
   | "logo"
+  | "moon"
   | "refresh"
   | "shield"
+  | "sun"
   | "warning";
 
 interface IconProps {
@@ -129,6 +131,8 @@ function IconGlyph({ name }: { readonly name: IconName }): ReactNode {
           <path d="m15.3 15.3 4.2 4.2M8 10.5h5M10.5 8v5" />
         </>
       );
+    case "moon":
+      return <path d="M20 15.2A8.5 8.5 0 0 1 8.8 4 8.5 8.5 0 1 0 20 15.2Z" />;
     case "refresh":
       return (
         <>
@@ -142,6 +146,13 @@ function IconGlyph({ name }: { readonly name: IconName }): ReactNode {
         <>
           <path d="M12 3 5 6v5c0 4.6 2.8 8.2 7 10 4.2-1.8 7-5.4 7-10V6l-7-3Z" />
           <path d="m9 12 2 2 4-4" />
+        </>
+      );
+    case "sun":
+      return (
+        <>
+          <circle cx="12" cy="12" r="3.5" />
+          <path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" />
         </>
       );
     case "warning":

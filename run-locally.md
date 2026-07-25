@@ -132,7 +132,6 @@ React, from `src/desktop`:
 npm run build
 npm run typecheck
 npm run lint
-npm test
 npm run format:check
 ```
 

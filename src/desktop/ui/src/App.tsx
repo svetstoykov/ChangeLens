@@ -6,12 +6,12 @@ import type { ActionError } from "./Actions/Models/ActionError";
 import { normalizeActionError } from "./Actions/Services/normalizeActionError";
 import { presentActionError } from "./Actions/Services/presentActionError";
 import type { EngineStatusClient } from "./EngineStatus/Interfaces/EngineStatusClient";
-import { RepositoryIdentity } from "./Repositories/Components/RepositoryIdentity";
 import { RepositoryPickerDialog } from "./Repositories/Components/RepositoryPickerDialog";
 import { repositoryErrorTitles } from "./Repositories/Constants/repositoryErrorTitles";
 import type { RepositoryClient } from "./Repositories/Interfaces/RepositoryClient";
 import type { RepositoryFolderPicker } from "./Repositories/Interfaces/RepositoryFolderPicker";
 import type { RepositoryDescriptor } from "./Repositories/Models/RepositoryDescriptor";
+import { Icon } from "./Visuals/Components/Icon";
 import "./styles.css";
 
 interface AppProps {
@@ -95,7 +95,17 @@ export function App({
   if (state.status === "checkingEngine") {
     return (
       <AppShell>
-        <p role="status">Connecting to the ChangeLens engine…</p>
+        <section className="application-state" role="status">
+          <span className="state-illustration state-illustration-loading">
+            <Icon name="refresh" />
+          </span>
+          <p className="eyebrow">Starting ChangeLens</p>
+          <h2>Connecting to the local engine</h2>
+          <p>
+            Preparing the secure analysis process used to inspect your
+            repository.
+          </p>
+        </section>
       </AppShell>
     );
   }
@@ -103,22 +113,30 @@ export function App({
     const presentation = presentActionError(state.error, repositoryErrorTitles);
     return (
       <AppShell>
-        <section role="alert">
-          <strong>{presentation.title}</strong>
-          <ul>
-            {presentation.messages.map((message, index) => (
-              <li key={`${state.error.errors[index]!.code}-${index}`}>
-                {message}
-              </li>
-            ))}
-          </ul>
+        <section className="application-state application-state-error">
+          <span className="state-illustration">
+            <Icon name="warning" />
+          </span>
+          <p className="eyebrow">Connection problem</p>
+          <h2>{presentation.title}</h2>
+          <div className="state-error-message" role="alert">
+            <ul>
+              {presentation.messages.map((message, index) => (
+                <li key={`${state.error.errors[index]!.code}-${index}`}>
+                  {message}
+                </li>
+              ))}
+            </ul>
+          </div>
           <button
+            className="primary-button"
             type="button"
             onClick={() => {
               setState({ status: "checkingEngine" });
               setRetryGeneration((generation) => generation + 1);
             }}
           >
+            <Icon name="refresh" />
             Retry
           </button>
         </section>
@@ -142,12 +160,7 @@ export function App({
   const replacing = state.status === "replacingRepository";
   return (
     <AppShell
-      repositoryIdentity={
-        <RepositoryIdentity
-          repository={state.repository}
-          repositoryGeneration={state.repositoryGeneration}
-        />
-      }
+      hasRepository
       onOpenAnotherRepository={() =>
         setState({
           status: "replacingRepository",

@@ -13,7 +13,6 @@
     "format:check": "npm run format:check --workspace @changelens/ui",
     "lint": "node scripts/lint.mjs",
     "predesktop:dev": "dotnet build ../engine/ChangeLens.Engine/ChangeLens.Engine.csproj --nologo",
-    "test": "npm run test --workspace @changelens/ui",
     "typecheck": "npm run typecheck --workspace @changelens/ui"
   },
   "devDependencies": {

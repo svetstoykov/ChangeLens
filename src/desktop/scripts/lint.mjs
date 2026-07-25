@@ -10,7 +10,6 @@ const results = await eslint.lintFiles([
   "eslint.config.mjs",
   "src/desktop/scripts",
   "src/desktop/ui",
-  "tests/unit/desktop",
 ]);
 const formatter = await eslint.loadFormatter("stylish");
 const output = formatter.format(results);

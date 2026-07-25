@@ -23,6 +23,11 @@ Before invoking any `superpowers:*` skill, ask the user for permission and brief
 
 Store every artifact created by a `superpowers:*` skill in `docs/superpowers/`. This directory is local workflow material and must remain untracked; never include its contents in a commit.
 
+## UI/UX Validation Boundaries
+
+- The user owns manual UI/UX validation. For each relevant change, provide a concise, change-specific checklist with the expected results; do not perform or claim manual UI/UX testing.
+- Keep agent-run UI/UX validation inside repository command-line tooling. Never launch or control desktop applications, browser applications, or other external systems; invoke operating-system UI automation such as macOS System Events or AppleScript; or alter machine-level or system configuration.
+
 ## Repository Structure
 
 ```text
@@ -47,7 +52,6 @@ change_lens/
 │       └── ChangeLens.Engine/
 └── tests/
     ├── unit/
-    │   ├── desktop/
     │   └── engine/
     └── integration/
         ├── desktop/
@@ -112,7 +116,7 @@ For every engine-backed action:
 6. Return exactly one correlated result or error. A typed action returns its typed payload; a payload-free action returns `result: null`. Fire-and-forget engine actions are not supported.
 7. Preserve every expected error's `ErrorType`, stable code, safe message, order, and request identifier. An uncoded or unsafe error becomes a sanitized `InternalError` at the Engine boundary. Rust-originated failures use the approved `transport` or `protocol` kind; TypeScript normalizes all rejections to `ActionError`.
 8. Never automatically replay a failed action. A later user- or React-initiated action may restart an invalidated engine process. Every future write specification must define a reconciliation action for uncertain transport outcomes.
-9. Add contract, Engine protocol, Rust process, Tauri command, React client, presentation, logging, and stdout-isolation tests in the same change. Shared JSON fixtures must prove cross-language field names and shapes.
+9. Add contract, Engine protocol, Rust process, Tauri command, logging, and stdout-isolation tests in the same change. Verify the React client and presentation with formatting, linting, type checking, and production builds, then provide a focused manual UI/UX checklist for the user. Shared JSON fixtures must prove cross-language field names and shapes.
 
 Keep the shared transport deliberately small. Extract only process, correlation, bounded-I/O, common response, and
 error behavior that real actions share. Keep capability arguments, result validation, UI behavior, and stable action
@@ -161,6 +165,15 @@ ChangeLens.Core/
 
 ## React Guidelines
 
+- Treat `src/desktop/ui/mockups` as directional references for visual character, hierarchy, density, and interaction patterns, not as pixel-perfect specifications.
+- Prefer accessibility, actual product behavior, and consistency with the production visual system over literal mockup replication. Do not add unavailable navigation, controls, data, or capabilities solely to resemble a mockup.
+- Aim for a clinical, calm, code-native interface that feels like a precise engineering instrument rather than a generic web dashboard.
+- Use IBM Plex Sans for interface prose and IBM Plex Mono for repository-derived values, paths, revisions, symbols, evidence, and compact technical metadata.
+- Prefer cool layered surfaces, fine structural outlines, restrained radii, and minimal elevation. Reserve prominent shadows for temporary overlays.
+- Use semantic colors consistently: blue for actions and selection, teal for verified facts, violet for inference, amber for warnings, red for critical findings, and slate for unknown information.
+- Preserve responsive behavior, keyboard access, visible focus, readable contrast, reduced-motion support, and explicit loading, empty, error, and success states.
+- When a mockup conflicts with this file or `docs/product/ui-visual-direction.md`, follow this file first and the product visual-direction document second.
+- Do not add React or frontend TypeScript test files, React testing libraries, browser test runners, test scripts, or frontend test configuration. Verify React changes with formatting, linting, type checking, and production builds, then provide a focused manual UI/UX checklist for the user.
 - Prefer small, focused components with clear responsibilities.
 - Use functional components and hooks.
 - Keep state as local as possible; lift it only when multiple components need it.
@@ -175,6 +188,7 @@ ChangeLens.Core/
 - Avoid premature memoization. Add `useMemo`, `useCallback`, or `React.memo` only when there is a measured need.
 - Keep forms controlled when validation or dynamic behaviour requires it.
 - Reuse existing components and patterns before introducing new abstractions.
+- Do not use single-edge borders or inset edge shadows as decorative emphasis or active-state indicators. Prefer spacing, color, typography, a full outline, or a background treatment.
 - Maintain accessibility: semantic HTML, labels, keyboard support, and appropriate ARIA attributes.
 - Keep TypeScript types explicit at component boundaries; avoid `any`.
 
@@ -244,13 +258,13 @@ Logging is an important part of ChangeLens correctness, supportability, and audi
 
 ## Testing
 
-Unit tests and integration tests are required.
+Unit tests and integration tests are required for the Engine, Infrastructure, Core, Rust process, and Tauri boundaries. React and frontend TypeScript tests are intentionally excluded.
 
 - Mirror source capability folders in test projects.
 - Unit tests must isolate behavior from real Git repositories, SQLite databases, subprocesses, networks, and unrestricted filesystem access.
 - Integration tests must use controlled fixtures for infrastructure adapters, Engine protocol behavior, lifecycle, and desktop-to-engine communication.
 - Add a concrete test project with the production behavior it verifies.
-- Every bug fix requires a regression test that fails without the fix.
+- Every non-React bug fix requires a regression test that fails without the fix. Verify React bug fixes with the frontend checks and provide the focused manual UI/UX checklist defined above.
 - Run the relevant unit and integration suites before claiming completion.
 
 ## Trust and Security Boundaries

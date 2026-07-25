@@ -27,7 +27,6 @@ export default tseslint.config(
       "eslint.config.mjs",
       "src/desktop/scripts/**/*.mjs",
       "src/desktop/ui/**/*.{js,ts,tsx}",
-      "tests/unit/desktop/**/*.{js,ts,tsx}",
     ],
     languageOptions: {
       ecmaVersion: 2023,

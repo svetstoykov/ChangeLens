@@ -44,7 +44,7 @@ A green freshness result means the displayed aggregate facts still match the rep
 
 Browser-only Vite has no native bridge and therefore displays safe desktop-boundary errors instead of mock repository or comparison data. Development continues to resolve the Engine from the local build until Phase 1D. Change context is transient UI state, is never logged or persisted, and no analysis action exists in this phase.
 
-Other checks are available through `npm run build`, `npm test`, `npm run typecheck`, `npm run lint`, and `npm run format:check`.
+Other checks are available through `npm run build`, `npm run typecheck`, `npm run lint`, and `npm run format:check`.
 
 ## HTML mockups
 

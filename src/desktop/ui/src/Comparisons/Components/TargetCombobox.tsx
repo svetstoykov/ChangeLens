@@ -1,8 +1,6 @@
 import { useId, useState } from "react";
 import type { ComparisonTarget } from "../Models/ComparisonTarget";
-import { LocalIcon } from "../../Visuals/Components/LocalIcon";
-import branchIcon from "../../assets/branch.svg";
-import chevronDownIcon from "../../assets/chevron-down.svg";
+import { Icon } from "../../Visuals/Components/Icon";
 
 interface TargetComboboxProps {
   readonly targets: readonly ComparisonTarget[];
@@ -53,124 +51,172 @@ export function TargetCombobox({
     <section
       className="target-combobox"
       aria-labelledby="comparison-target-heading"
+      onBlur={(event) => {
+        if (
+          !(event.relatedTarget instanceof Node) ||
+          !event.currentTarget.contains(event.relatedTarget)
+        ) {
+          setExpanded(false);
+          setActiveIndex(-1);
+        }
+      }}
     >
-      <p className="eyebrow">Target comparison</p>
-      <h3 id="comparison-target-heading">Comparison target</h3>
-      <p className="section-description">
-        Targets are local branches or cached remote-tracking references.
-        ChangeLens does not use the network.
-      </p>
-      <label htmlFor={`${listId}-input`}>Find a target</label>
-      <div className="combobox-field">
-        <LocalIcon source={branchIcon} />
-        <input
-          id={`${listId}-input`}
-          role="combobox"
-          aria-autocomplete="list"
-          aria-controls={listId}
-          aria-expanded={expanded}
-          aria-activedescendant={
-            expanded && activeIndex >= 0
-              ? `${listId}-option-${activeIndex}`
-              : undefined
-          }
-          value={query}
-          onChange={(event) => {
-            onQueryChange(event.target.value);
-            setExpanded(true);
-            setActiveIndex(-1);
-          }}
-          onFocus={() => setExpanded(true)}
-          onKeyDown={(event) => {
-            switch (event.key) {
-              case "ArrowDown":
-                event.preventDefault();
-                moveActive(activeIndex + 1);
-                break;
-              case "ArrowUp":
-                event.preventDefault();
-                moveActive(activeIndex - 1);
-                break;
-              case "Home":
-                event.preventDefault();
-                moveActive(0);
-                break;
-              case "End":
-                event.preventDefault();
-                moveActive(targets.length - 1);
-                break;
-              case "Enter":
-                event.preventDefault();
-                chooseActive();
-                break;
-              case "Escape":
-                setExpanded(false);
-                setActiveIndex(-1);
-                break;
-            }
-          }}
-        />
-        <LocalIcon source={chevronDownIcon} />
-      </div>
-      {selectedTarget ? (
-        <p className="selected-target" aria-live="polite">
-          Selected: <code>{selectedTarget.name}</code>
-        </p>
-      ) : (
-        <p className="selected-target" aria-live="polite">
-          Select a comparison target to continue.
-        </p>
-      )}
-      {expanded ? (
-        <div
-          className="target-listbox"
-          id={listId}
-          role="listbox"
-          aria-label="Comparison targets"
-        >
-          <TargetGroup
-            id={listId}
-            label="Local branches"
-            targets={localTargets}
-            startIndex={0}
-            activeIndex={activeIndex}
-            selectedTarget={selectedTarget}
-            onSelect={(target) => {
-              onSelect(target);
-              setActiveIndex(-1);
-              setExpanded(false);
-            }}
-          />
-          <TargetGroup
-            id={listId}
-            label="Cached remote branches"
-            targets={remoteTargets}
-            startIndex={localTargets.length}
-            activeIndex={activeIndex}
-            selectedTarget={selectedTarget}
-            onSelect={(target) => {
-              onSelect(target);
-              setActiveIndex(-1);
-              setExpanded(false);
-            }}
-          />
-          {targets.length === 0 && !isDiscovering ? (
-            <p>No supported comparison targets match this search.</p>
-          ) : null}
-          {nextCursor !== null ? (
-            <button type="button" onClick={onLoadMore} disabled={isDiscovering}>
-              Load more targets
-            </button>
-          ) : null}
+      <header className="setup-card-heading">
+        <span className="step-number" aria-hidden="true">
+          1
+        </span>
+        <div>
+          <p className="eyebrow">Comparison target</p>
+          <h3 id="comparison-target-heading">Choose your baseline</h3>
+          <p className="section-description">
+            Compare the current work against a local or cached remote branch. No
+            network access is used.
+          </p>
         </div>
-      ) : null}
-      {unsupportedTargetCount > 0 ? (
-        <p>
-          {unsupportedTargetCount} unsupported target
-          {unsupportedTargetCount === 1 ? " is" : "s are"} not shown.
-        </p>
-      ) : null}
-      {isDiscovering ? <p role="status">Loading comparison targets…</p> : null}
+      </header>
+      <label className="field-label" htmlFor={`${listId}-input`}>
+        Search branches
+      </label>
+      <div className="combobox">
+        <div className="combobox-field" data-expanded={expanded}>
+          <Icon name="branch" />
+          <input
+            id={`${listId}-input`}
+            role="combobox"
+            aria-autocomplete="list"
+            aria-controls={listId}
+            aria-expanded={expanded}
+            aria-activedescendant={
+              expanded && activeIndex >= 0
+                ? `${listId}-option-${activeIndex}`
+                : undefined
+            }
+            autoComplete="off"
+            placeholder="Search local and cached remote branches"
+            value={query}
+            onChange={(event) => {
+              onQueryChange(event.target.value);
+              setExpanded(true);
+              setActiveIndex(-1);
+            }}
+            onFocus={() => setExpanded(true)}
+            onKeyDown={(event) => {
+              switch (event.key) {
+                case "ArrowDown":
+                  event.preventDefault();
+                  moveActive(activeIndex + 1);
+                  break;
+                case "ArrowUp":
+                  event.preventDefault();
+                  moveActive(activeIndex - 1);
+                  break;
+                case "Home":
+                  event.preventDefault();
+                  moveActive(0);
+                  break;
+                case "End":
+                  event.preventDefault();
+                  moveActive(targets.length - 1);
+                  break;
+                case "Enter":
+                  event.preventDefault();
+                  chooseActive();
+                  break;
+                case "Escape":
+                  setExpanded(false);
+                  setActiveIndex(-1);
+                  break;
+              }
+            }}
+          />
+          <Icon name="chevronDown" className="combobox-chevron" />
+        </div>
+        {expanded ? (
+          <div
+            className="target-listbox"
+            id={listId}
+            role="listbox"
+            aria-label="Comparison targets"
+          >
+            <TargetGroup
+              id={listId}
+              label="Local branches"
+              targets={localTargets}
+              startIndex={0}
+              activeIndex={activeIndex}
+              selectedTarget={selectedTarget}
+              onSelect={(target) => {
+                onSelect(target);
+                setActiveIndex(-1);
+                setExpanded(false);
+              }}
+            />
+            <TargetGroup
+              id={listId}
+              label="Cached remote branches"
+              targets={remoteTargets}
+              startIndex={localTargets.length}
+              activeIndex={activeIndex}
+              selectedTarget={selectedTarget}
+              onSelect={(target) => {
+                onSelect(target);
+                setActiveIndex(-1);
+                setExpanded(false);
+              }}
+            />
+            {targets.length === 0 && !isDiscovering ? (
+              <div className="target-empty">
+                <Icon name="info" />
+                <p>No supported targets match this search.</p>
+              </div>
+            ) : null}
+            {nextCursor !== null ? (
+              <button
+                className="load-more-button"
+                type="button"
+                onClick={onLoadMore}
+                disabled={isDiscovering}
+              >
+                Load more targets
+              </button>
+            ) : null}
+          </div>
+        ) : null}
+      </div>
+      <div
+        className="selected-target"
+        data-selected={selectedTarget !== null}
+        aria-live="polite"
+      >
+        <span className="selected-target-icon">
+          <Icon name={selectedTarget ? "check" : "compare"} />
+        </span>
+        <span>
+          <small>{selectedTarget ? "Selected baseline" : "Next step"}</small>
+          {selectedTarget ? (
+            <code>{selectedTarget.name}</code>
+          ) : (
+            <strong>Choose a branch to prepare the comparison</strong>
+          )}
+        </span>
+      </div>
+      <footer className="target-meta">
+        {unsupportedTargetCount > 0 ? (
+          <p>
+            <Icon name="info" />
+            {unsupportedTargetCount} unsupported target
+            {unsupportedTargetCount === 1 ? " is" : "s are"} hidden.
+          </p>
+        ) : (
+          <span />
+        )}
+        {isDiscovering ? (
+          <p className="inline-progress" role="status">
+            <Icon name="refresh" />
+            Loading targets…
+          </p>
+        ) : null}
+      </footer>
     </section>
   );
 }
@@ -211,8 +257,11 @@ function TargetGroup({
             onMouseDown={(event) => event.preventDefault()}
             onClick={() => onSelect(target)}
           >
-            <LocalIcon source={branchIcon} />
+            <Icon name="branch" />
             <code>{target.name}</code>
+            {target.fullName === selectedTarget?.fullName ? (
+              <Icon name="check" className="option-check" />
+            ) : null}
           </button>
         );
       })}

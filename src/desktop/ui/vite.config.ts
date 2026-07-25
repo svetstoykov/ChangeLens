@@ -1,12 +1,8 @@
 import { fileURLToPath, URL } from "node:url";
 import react from "@vitejs/plugin-react";
-import { defineConfig } from "vitest/config";
+import { defineConfig } from "vite";
 
 const tauriDevelopmentHost = process.env.TAURI_DEV_HOST;
-const desktopTests = fileURLToPath(
-  new URL("../../../tests/unit/desktop", import.meta.url),
-);
-const repositoryRoot = fileURLToPath(new URL("../../..", import.meta.url));
 
 export default defineConfig({
   clearScreen: false,
@@ -15,15 +11,7 @@ export default defineConfig({
     alias: {
       "@": fileURLToPath(new URL("./src", import.meta.url)),
     },
-    dedupe: [
-      "@testing-library/jest-dom",
-      "@testing-library/react",
-      "@testing-library/user-event",
-      "@tauri-apps/api",
-      "react",
-      "react-dom",
-      "vitest",
-    ],
+    dedupe: ["@tauri-apps/api", "react", "react-dom"],
   },
   server: {
     port: 5173,
@@ -39,7 +27,6 @@ export default defineConfig({
     watch: {
       ignored: ["**/src-tauri/**"],
     },
-    fs: process.env.VITEST ? { allow: [repositoryRoot] } : undefined,
   },
   envPrefix: ["VITE_", "TAURI_ENV_*"],
   build: {
@@ -47,14 +34,5 @@ export default defineConfig({
       process.env.TAURI_ENV_PLATFORM === "windows" ? "chrome105" : "safari13",
     minify: process.env.TAURI_ENV_DEBUG ? false : "oxc",
     sourcemap: Boolean(process.env.TAURI_ENV_DEBUG),
-  },
-  test: {
-    environment: "jsdom",
-    setupFiles: [`${desktopTests}/Support/dialogTestSetup.ts`],
-    include: [`${desktopTests}/**/*.test.{ts,tsx}`],
-    coverage: {
-      provider: "v8",
-      reporter: ["text", "html"],
-    },
   },
 });

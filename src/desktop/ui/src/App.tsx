@@ -399,14 +399,17 @@ export function App({
             else setState({ status: "selectingRepository" });
           }}
         />
-      ) : workspace && comparisonClient ? (
-        <RepositoryWorkspace
-          key={workspace.generation}
-          repository={workspace.repository}
-          preferredTarget={workspace.preferredTarget}
-          comparisonClient={comparisonClient}
-          onRepositoryRefreshed={handleRepositoryRefreshed}
-        />
+      ) : null}
+      {workspace && comparisonClient ? (
+        <div hidden={showingHistory}>
+          <RepositoryWorkspace
+            key={workspace.generation}
+            repository={workspace.repository}
+            preferredTarget={workspace.preferredTarget}
+            comparisonClient={comparisonClient}
+            onRepositoryRefreshed={handleRepositoryRefreshed}
+          />
+        </div>
       ) : null}
     </AppShell>
   );

@@ -8,11 +8,12 @@ use crate::repositories::{
 use tauri::State;
 
 #[tauri::command]
-pub(crate) async fn select_repository_folder(
+pub(crate) async fn select_repository_folder<R: tauri::Runtime>(
+    window: tauri::WebviewWindow<R>,
     state: State<'_, RepositoryFolderPickerState>,
 ) -> Result<Option<String>, EngineActionError> {
     let folder_picker = state.picker();
-    let result = match await_action_task(move || folder_picker.select_folder()).await {
+    let result = match await_action_task(move || folder_picker.select_folder(&window)).await {
         Ok(Some(path)) => path.into_os_string().into_string().map(Some).map_err(|_| {
             EngineActionError::transport(
                 None,

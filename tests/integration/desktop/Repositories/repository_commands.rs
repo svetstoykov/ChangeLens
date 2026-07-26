@@ -16,9 +16,11 @@ use changelens_desktop_lib::repositories::{
 use changelens_desktop_lib::{
     configure_desktop, configure_desktop_with_preferences, handle_desktop_run_event,
 };
+use raw_window_handle::HasWindowHandle;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
 use std::time::{SystemTime, UNIX_EPOCH};
 use tauri::Manager;
@@ -44,9 +46,28 @@ struct FixedRepositoryFolderPicker {
     result: Result<Option<PathBuf>, EngineActionError>,
 }
 
+struct WindowOwnedRepositoryFolderPicker {
+    received_window_owner: Arc<AtomicBool>,
+}
+
 impl RepositoryFolderPicker for FixedRepositoryFolderPicker {
-    fn select_folder(&self) -> Result<Option<PathBuf>, EngineActionError> {
+    fn select_folder(
+        &self,
+        _owner: &dyn HasWindowHandle,
+    ) -> Result<Option<PathBuf>, EngineActionError> {
         self.result.clone()
+    }
+}
+
+impl RepositoryFolderPicker for WindowOwnedRepositoryFolderPicker {
+    fn select_folder(
+        &self,
+        owner: &dyn HasWindowHandle,
+    ) -> Result<Option<PathBuf>, EngineActionError> {
+        self.received_window_owner
+            .store(owner.window_handle().is_ok(), Ordering::SeqCst);
+
+        Ok(None)
     }
 }
 
@@ -177,6 +198,27 @@ fn picker_cancellation_serializes_as_successful_null() {
     .expect("picker cancellation should be a successful command result");
 
     assert_eq!(response, serde_json::Value::Null);
+}
+
+#[test]
+fn picker_receives_the_invoking_window_as_its_owner() {
+    let received_window_owner = Arc::new(AtomicBool::new(false));
+
+    let response = invoke_command(
+        "select_repository_folder",
+        tauri::ipc::InvokeBody::default(),
+        Arc::new(WindowOwnedRepositoryFolderPicker {
+            received_window_owner: Arc::clone(&received_window_owner),
+        }),
+        repository_returning(Ok(branch_repository())),
+    )
+    .expect("the picker command should complete");
+
+    assert_eq!(response, serde_json::Value::Null);
+    assert!(
+        received_window_owner.load(Ordering::SeqCst),
+        "the native folder picker should receive the window that invoked the command"
+    );
 }
 
 #[test]

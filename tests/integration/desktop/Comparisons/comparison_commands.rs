@@ -11,6 +11,7 @@ use changelens_desktop_lib::repositories::{
     RepositoryDescriptor, RepositoryFolderPicker, RepositoryFolderPickerState, RepositoryHead,
     RepositoryService, RepositoryState,
 };
+use raw_window_handle::HasWindowHandle;
 use std::path::PathBuf;
 use std::process::Command;
 use std::sync::{Arc, Mutex};
@@ -37,7 +38,10 @@ impl EngineStatusService for SuccessfulEngineStatusService {
 struct UnusedRepositoryFolderPicker;
 
 impl RepositoryFolderPicker for UnusedRepositoryFolderPicker {
-    fn select_folder(&self) -> Result<Option<PathBuf>, EngineActionError> {
+    fn select_folder(
+        &self,
+        _owner: &dyn HasWindowHandle,
+    ) -> Result<Option<PathBuf>, EngineActionError> {
         unreachable!("the comparison command test does not select repository folders")
     }
 }

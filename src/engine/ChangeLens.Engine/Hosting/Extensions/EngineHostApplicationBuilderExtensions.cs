@@ -1,17 +1,23 @@
+using ChangeLens.Core.Comparisons.Interfaces;
 using ChangeLens.Core.Comparisons.Services;
 using ChangeLens.Core.EngineStatus.Interfaces;
 using ChangeLens.Core.EngineStatus.Services;
+using ChangeLens.Core.Git.Interfaces;
 using ChangeLens.Core.Git.Services;
 using ChangeLens.Core.LocalState.Interfaces;
+using ChangeLens.Engine.Comparisons.Interfaces;
 using ChangeLens.Engine.Comparisons.Services;
 using ChangeLens.Engine.Logging.Extensions;
 using ChangeLens.Engine.Protocol.Interfaces;
 using ChangeLens.Engine.Protocol.Services;
+using ChangeLens.Engine.Preferences.Interfaces;
 using ChangeLens.Engine.Preferences.Services;
 using ChangeLens.Engine.Repositories.Constants;
+using ChangeLens.Engine.Repositories.Interfaces;
 using ChangeLens.Engine.Repositories.Services;
 using ChangeLens.Infrastructure.FileSystem.Services;
 using ChangeLens.Infrastructure.Git.Services;
+using ChangeLens.Infrastructure.LocalState.Interfaces;
 using ChangeLens.Infrastructure.LocalState.Services;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -38,7 +44,7 @@ internal static class EngineHostApplicationBuilderExtensions
         builder.Services.AddSingleton<TextReader>(_ => Console.In);
         builder.Services.AddSingleton<TextWriter>(_ => Console.Out);
         builder.Services.AddSingleton<TimeProvider>(TimeProvider.System);
-        builder.Services.AddSingleton(
+        builder.Services.AddSingleton<ILocalStateDatabase>(
             serviceProvider =>
                 new SqliteLocalStateDatabase(
                     builder.Configuration[
@@ -46,7 +52,8 @@ internal static class EngineHostApplicationBuilderExtensions
                     serviceProvider.GetRequiredService<
                         Microsoft.Extensions.Logging.ILogger<SqliteLocalStateDatabase>>()));
         builder.Services.AddSingleton<ILocalStateInitializer>(
-            serviceProvider => serviceProvider.GetRequiredService<SqliteLocalStateDatabase>());
+            serviceProvider => serviceProvider.GetRequiredService<ILocalStateDatabase>() as ILocalStateInitializer
+                ?? throw new InvalidOperationException("The local-state database must provide lifecycle initialization."));
         builder.Services.AddSingleton<IRepositoryHistoryStore, SqliteRepositoryHistoryStore>();
         builder.Services.AddSingleton<
             IColorThemePreferenceStore,
@@ -55,8 +62,8 @@ internal static class EngineHostApplicationBuilderExtensions
             ICanonicalRepositoryPathKeyProvider,
             CanonicalRepositoryPathKeyProvider>();
         builder.Services.AddSingleton<IEngineStatusService, EngineStatusService>();
-        builder.Services.AddSingleton<PhysicalRepositoryPathResolver>();
-        builder.Services.AddSingleton(
+        builder.Services.AddSingleton<IRepositoryPathResolver, PhysicalRepositoryPathResolver>();
+        builder.Services.AddSingleton<IGitCommandRunner>(
             _ =>
             {
                 var configuredExecutable =
@@ -67,36 +74,17 @@ internal static class EngineHostApplicationBuilderExtensions
                     : configuredExecutable;
                 return new GitCliCommandRunner(executable, []);
             });
-        builder.Services.AddSingleton(
-            serviceProvider =>
-                new GitRepositoryInspector(
-                    serviceProvider.GetRequiredService<GitCliCommandRunner>(),
-                    serviceProvider.GetRequiredService<PhysicalRepositoryPathResolver>()));
-        builder.Services.AddSingleton<ComparisonFileSummaryComposer>();
-        builder.Services.AddSingleton(
-            serviceProvider =>
-                new GitComparisonTargetDiscovery(
-                    serviceProvider.GetRequiredService<GitRepositoryInspector>(),
-                    serviceProvider.GetRequiredService<GitCliCommandRunner>()));
-        builder.Services.AddSingleton(
-            serviceProvider =>
-                new GitComparisonPreparer(
-                    serviceProvider.GetRequiredService<GitRepositoryInspector>(),
-                    serviceProvider.GetRequiredService<GitComparisonTargetDiscovery>(),
-                    serviceProvider.GetRequiredService<GitCliCommandRunner>(),
-                    serviceProvider.GetRequiredService<ComparisonFileSummaryComposer>()));
-        builder.Services.AddSingleton(
-            serviceProvider =>
-                new GitComparisonFreshnessChecker(
-                    serviceProvider.GetRequiredService<GitRepositoryInspector>(),
-                    serviceProvider.GetRequiredService<GitComparisonTargetDiscovery>(),
-                    serviceProvider.GetRequiredService<GitCliCommandRunner>()));
-        builder.Services.AddSingleton<EngineProtocolSerializer>();
-        builder.Services.AddSingleton<ComparisonTargetPageBuilder>();
-        builder.Services.AddSingleton<RepositoryHistoryService>();
-        builder.Services.AddSingleton<ColorThemePreferenceService>();
+        builder.Services.AddSingleton<IGitRepositoryInspector, GitRepositoryInspector>();
+        builder.Services.AddSingleton<IComparisonFileSummaryComposer, ComparisonFileSummaryComposer>();
+        builder.Services.AddSingleton<IGitComparisonTargetDiscovery, GitComparisonTargetDiscovery>();
+        builder.Services.AddSingleton<IGitComparisonPreparer, GitComparisonPreparer>();
+        builder.Services.AddSingleton<IGitComparisonFreshnessChecker, GitComparisonFreshnessChecker>();
+        builder.Services.AddSingleton<IEngineProtocolSerializer, EngineProtocolSerializer>();
+        builder.Services.AddSingleton<IComparisonTargetPageBuilder, ComparisonTargetPageBuilder>();
+        builder.Services.AddSingleton<IRepositoryHistoryService, RepositoryHistoryService>();
+        builder.Services.AddSingleton<IColorThemePreferenceService, ColorThemePreferenceService>();
         builder.Services.AddSingleton<IEngineProtocolTransport, EngineProtocolTransport>();
-        builder.Services.AddSingleton<EngineActionProcessor>();
+        builder.Services.AddSingleton<IEngineActionProcessor, EngineActionProcessor>();
         builder.Services.AddHostedService<EngineProtocolHost>();
     }
 }

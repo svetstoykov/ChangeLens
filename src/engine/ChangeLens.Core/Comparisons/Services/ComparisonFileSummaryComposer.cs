@@ -1,4 +1,5 @@
 using ChangeLens.Core.Comparisons.Constants;
+using ChangeLens.Core.Comparisons.Interfaces;
 using ChangeLens.Core.Comparisons.Models;
 using ChangeLens.Core.Results.Models;
 
@@ -10,16 +11,9 @@ namespace ChangeLens.Core.Comparisons.Services;
 /// <remarks>
 ///     The service is stateless and thread-safe and can be registered with any dependency-injection lifetime.
 /// </remarks>
-public sealed class ComparisonFileSummaryComposer
+public sealed class ComparisonFileSummaryComposer : IComparisonFileSummaryComposer
 {
-    /// <summary>
-    ///     Composes a summary from committed and working-tree file facts.
-    /// </summary>
-    /// <param name="records">The file facts to compose. Cannot be <see langword="null" />.</param>
-    /// <returns>A result containing distinct lineage and category counts.</returns>
-    /// <exception cref="ArgumentNullException">
-    ///     <paramref name="records" /> is <see langword="null" />.
-    /// </exception>
+    /// <inheritdoc />
     public Result<ComparisonFileSummary> Compose(
         IReadOnlyList<ComparisonFileRecord> records)
     {

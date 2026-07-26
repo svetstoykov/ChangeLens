@@ -1,6 +1,7 @@
 using ChangeLens.Core.LocalState.Interfaces;
 using ChangeLens.Core.LocalState.Models;
 using ChangeLens.Core.Results.Models;
+using ChangeLens.Engine.Preferences.Interfaces;
 
 namespace ChangeLens.Engine.Preferences.Services;
 
@@ -8,22 +9,13 @@ namespace ChangeLens.Engine.Preferences.Services;
 ///     Provides the approved color-theme preference use cases.
 /// </summary>
 /// <param name="store">The durable color-theme preference store.</param>
-internal sealed class ColorThemePreferenceService(IColorThemePreferenceStore store)
+internal sealed class ColorThemePreferenceService(IColorThemePreferenceStore store) : IColorThemePreferenceService
 {
-    /// <summary>
-    ///     Asynchronously gets the explicit color-theme preference.
-    /// </summary>
-    /// <param name="cancellationToken">A <see cref="CancellationToken" /> to observe.</param>
-    /// <returns>A task whose result contains the preference, or <see langword="null" />.</returns>
-    internal Task<Result<ColorTheme?>> GetAsync(CancellationToken cancellationToken) =>
+    /// <inheritdoc />
+    public Task<Result<ColorTheme?>> GetAsync(CancellationToken cancellationToken) =>
         store.GetAsync(cancellationToken);
 
-    /// <summary>
-    ///     Asynchronously stores the explicit color-theme preference.
-    /// </summary>
-    /// <param name="colorTheme">The theme to store.</param>
-    /// <param name="cancellationToken">A <see cref="CancellationToken" /> to observe.</param>
-    /// <returns>A task that represents the asynchronous operation.</returns>
-    internal Task<Result> SetAsync(ColorTheme colorTheme, CancellationToken cancellationToken) =>
+    /// <inheritdoc />
+    public Task<Result> SetAsync(ColorTheme colorTheme, CancellationToken cancellationToken) =>
         store.SetAsync(colorTheme, cancellationToken);
 }

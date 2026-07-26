@@ -2,6 +2,7 @@ using ChangeLens.Core.LocalState.Constants;
 using ChangeLens.Core.LocalState.Interfaces;
 using ChangeLens.Core.Results.Models;
 using ChangeLens.Infrastructure.LocalState.Constants;
+using ChangeLens.Infrastructure.LocalState.Interfaces;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Logging;
 
@@ -14,7 +15,7 @@ namespace ChangeLens.Infrastructure.LocalState.Services;
 ///     The Engine registers this service as a singleton. Initialization is serialized and cached after success.
 ///     Store operations use independent bounded connections.
 /// </remarks>
-public sealed class SqliteLocalStateDatabase : ILocalStateInitializer
+public sealed class SqliteLocalStateDatabase : ILocalStateInitializer, ILocalStateDatabase
 {
     private readonly string _directoryPath;
     private readonly string _databasePath;
@@ -124,11 +125,7 @@ public sealed class SqliteLocalStateDatabase : ILocalStateInitializer
         }
     }
 
-    /// <summary>
-    ///     Asynchronously opens one configured connection with required foreign-key enforcement.
-    /// </summary>
-    /// <param name="cancellationToken">A <see cref="CancellationToken" /> to observe.</param>
-    /// <returns>A task whose result contains the open connection.</returns>
+    /// <inheritdoc />
     public async Task<SqliteConnection> OpenConnectionAsync(CancellationToken cancellationToken)
     {
         var connection = new SqliteConnection(_connectionString);

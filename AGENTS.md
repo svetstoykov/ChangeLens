@@ -143,7 +143,10 @@ ChangeLens.Core/
 
 - Mirror a capability path across Core, Engine, Infrastructure, and tests when that capability spans those boundaries.
 - Never create project-wide `Models`, `Services`, or `Interfaces` dumping grounds.
-- Use interfaces and dependency injection for replaceable behavior and external boundaries.
+- Every injected domain, Core, application, Infrastructure, provider, adapter, or process-boundary service must depend on
+  and be registered through a capability-specific interface. Concrete classes may be injected only when they are immutable
+  value models, framework-owned types, or genuine stateless language-level utilities for which an interface would add no
+  boundary. Do not inject concrete service implementations merely because there is currently one implementation.
 - Do not use `object`, `dynamic`, `Result<object?>`, untyped dictionaries, or equivalent weakly typed catch-all values
   as application input or output contracts. Use a concrete type, generic type, or explicit polymorphic abstraction.
   Framework-required signatures and exceptional boundary cases must be discussed and documented before use.

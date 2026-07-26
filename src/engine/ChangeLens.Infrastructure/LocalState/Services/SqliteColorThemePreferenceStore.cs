@@ -1,6 +1,7 @@
 using ChangeLens.Core.LocalState.Interfaces;
 using ChangeLens.Core.LocalState.Models;
 using ChangeLens.Core.Results.Models;
+using ChangeLens.Infrastructure.LocalState.Interfaces;
 
 namespace ChangeLens.Infrastructure.LocalState.Services;
 
@@ -8,7 +9,7 @@ namespace ChangeLens.Infrastructure.LocalState.Services;
 ///     Stores the explicit color-theme preference in SQLite local state.
 /// </summary>
 /// <param name="database">The required SQLite local-state database.</param>
-public sealed class SqliteColorThemePreferenceStore(SqliteLocalStateDatabase database)
+public sealed class SqliteColorThemePreferenceStore(ILocalStateDatabase database)
     : IColorThemePreferenceStore
 {
     /// <inheritdoc />

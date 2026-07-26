@@ -3,6 +3,7 @@ using System.Diagnostics;
 using System.Security.Cryptography;
 using System.Text;
 using ChangeLens.Core.Comparisons.Constants;
+using ChangeLens.Core.Comparisons.Interfaces;
 using ChangeLens.Core.Comparisons.Models;
 using ChangeLens.Core.Git.Interfaces;
 using ChangeLens.Core.Git.Models;
@@ -32,8 +33,9 @@ namespace ChangeLens.Core.Comparisons.Services;
 ///     <paramref name="commandRunner" /> is <see langword="null" />.
 /// </exception>
 public sealed class GitComparisonTargetDiscovery(
-    GitRepositoryInspector repositoryInspector,
+    IGitRepositoryInspector repositoryInspector,
     IGitCommandRunner commandRunner)
+    : IGitComparisonTargetDiscovery
 {
     private static readonly OperationError TimedOutError = OperationError.Timeout(
         "Comparison inspection exceeded its allowed time.",
@@ -48,30 +50,13 @@ public sealed class GitComparisonTargetDiscovery(
             "Git comparison inspection failed.",
             ComparisonErrorCode.InspectionFailed);
 
-    private readonly GitRepositoryInspector _repositoryInspector =
+    private readonly IGitRepositoryInspector _repositoryInspector =
         repositoryInspector ?? throw new ArgumentNullException(nameof(repositoryInspector));
 
     private readonly IGitCommandRunner _commandRunner =
         commandRunner ?? throw new ArgumentNullException(nameof(commandRunner));
 
-    /// <summary>
-    ///     Asynchronously lists supported comparison targets for a selected repository.
-    /// </summary>
-    /// <param name="path">The selected repository directory path.</param>
-    /// <param name="query">The exact optional target-name query.</param>
-    /// <param name="after">The exact full-ref continuation cursor, or <see langword="null" />.</param>
-    /// <param name="targetSetToken">
-    ///     The target-set token paired with <paramref name="after" />, or <see langword="null" />.
-    /// </param>
-    /// <param name="cancellationToken">
-    ///     A <see cref="CancellationToken" /> to observe while waiting for the task to complete.
-    /// </param>
-    /// <returns>
-    ///     A task that represents the asynchronous operation. The task result contains the ordered target set.
-    /// </returns>
-    /// <exception cref="OperationCanceledException">
-    ///     The <paramref name="cancellationToken" /> is canceled.
-    /// </exception>
+    /// <inheritdoc />
     public async Task<Result<ComparisonTargetSet>> ListAsync(
         string? path,
         string? query,
@@ -126,33 +111,8 @@ public sealed class GitComparisonTargetDiscovery(
         }
     }
 
-    /// <summary>
-    ///     Asynchronously lists targets for an already inspected repository within a shared action budget.
-    /// </summary>
-    /// <param name="repository">The inspected repository descriptor. Cannot be <see langword="null" />.</param>
-    /// <param name="query">The exact optional target-name query.</param>
-    /// <param name="after">The exact full-ref continuation cursor, or <see langword="null" />.</param>
-    /// <param name="targetSetToken">
-    ///     The target-set token paired with <paramref name="after" />, or <see langword="null" />.
-    /// </param>
-    /// <param name="startedAt">The monotonic timestamp at which the owning action began.</param>
-    /// <param name="totalBudget">The positive total budget owned by the calling action.</param>
-    /// <param name="cancellationToken">
-    ///     A <see cref="CancellationToken" /> to observe while waiting for the task to complete.
-    /// </param>
-    /// <returns>
-    ///     A task that represents the asynchronous operation. The task result contains the ordered target set.
-    /// </returns>
-    /// <exception cref="ArgumentNullException">
-    ///     <paramref name="repository" /> is <see langword="null" />.
-    /// </exception>
-    /// <exception cref="ArgumentOutOfRangeException">
-    ///     <paramref name="totalBudget" /> is less than or equal to <see cref="TimeSpan.Zero" />.
-    /// </exception>
-    /// <exception cref="OperationCanceledException">
-    ///     The <paramref name="cancellationToken" /> is canceled.
-    /// </exception>
-    internal async Task<Result<ComparisonTargetSet>> ListForRepositoryAsync(
+    /// <inheritdoc />
+    public async Task<Result<ComparisonTargetSet>> ListForRepositoryAsync(
         RepositoryDescriptor repository,
         string? query,
         string? after,

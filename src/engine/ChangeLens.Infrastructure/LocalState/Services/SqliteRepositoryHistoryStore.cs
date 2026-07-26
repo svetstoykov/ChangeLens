@@ -2,6 +2,7 @@ using ChangeLens.Core.LocalState.Interfaces;
 using ChangeLens.Core.LocalState.Models;
 using ChangeLens.Core.Results.Models;
 using ChangeLens.Infrastructure.LocalState.Constants;
+using ChangeLens.Infrastructure.LocalState.Interfaces;
 using Microsoft.Data.Sqlite;
 
 namespace ChangeLens.Infrastructure.LocalState.Services;
@@ -13,7 +14,7 @@ namespace ChangeLens.Infrastructure.LocalState.Services;
 ///     The Engine registers this stateless implementation as a singleton. Each operation uses its own connection.
 /// </remarks>
 /// <param name="database">The required SQLite local-state database.</param>
-public sealed class SqliteRepositoryHistoryStore(SqliteLocalStateDatabase database)
+public sealed class SqliteRepositoryHistoryStore(ILocalStateDatabase database)
     : IRepositoryHistoryStore
 {
     /// <inheritdoc />

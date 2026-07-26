@@ -1,21 +1,26 @@
 using System.Diagnostics;
 using System.Text.Json;
 using ChangeLens.Core.Comparisons.Models;
+using ChangeLens.Core.Comparisons.Interfaces;
 using ChangeLens.Core.Comparisons.Services;
 using ChangeLens.Core.EngineStatus.Interfaces;
 using ChangeLens.Core.Git.Services;
 using ChangeLens.Core.LocalState.Models;
 using ChangeLens.Core.Results.Models;
 using ChangeLens.Engine.Comparisons.Constants;
+using ChangeLens.Engine.Comparisons.Interfaces;
 using ChangeLens.Engine.Comparisons.Models;
 using ChangeLens.Engine.Comparisons.Services;
 using ChangeLens.Engine.EngineStatus.Constants;
 using ChangeLens.Engine.Protocol.Constants;
+using ChangeLens.Engine.Protocol.Interfaces;
 using ChangeLens.Engine.Protocol.Models;
 using ChangeLens.Engine.Preferences.Constants;
+using ChangeLens.Engine.Preferences.Interfaces;
 using ChangeLens.Engine.Preferences.Models;
 using ChangeLens.Engine.Preferences.Services;
 using ChangeLens.Engine.Repositories.Constants;
+using ChangeLens.Engine.Repositories.Interfaces;
 using ChangeLens.Engine.Repositories.Models;
 using ChangeLens.Engine.Repositories.Services;
 using Microsoft.Extensions.Logging;
@@ -45,33 +50,17 @@ namespace ChangeLens.Engine.Protocol.Services;
 /// <param name="logger">The logger for action outcomes. Cannot be <see langword="null" />.</param>
 internal sealed class EngineActionProcessor(
     IEngineStatusService engineStatusService,
-    RepositoryHistoryService repositoryHistoryService,
-    ColorThemePreferenceService colorThemePreferenceService,
-    GitComparisonTargetDiscovery comparisonTargetDiscovery,
-    GitComparisonPreparer comparisonPreparer,
-    GitComparisonFreshnessChecker comparisonFreshnessChecker,
-    ComparisonTargetPageBuilder comparisonTargetPageBuilder,
-    EngineProtocolSerializer protocolSerializer,
-    ILogger<EngineActionProcessor> logger)
+    IRepositoryHistoryService repositoryHistoryService,
+    IColorThemePreferenceService colorThemePreferenceService,
+    IGitComparisonTargetDiscovery comparisonTargetDiscovery,
+    IGitComparisonPreparer comparisonPreparer,
+    IGitComparisonFreshnessChecker comparisonFreshnessChecker,
+    IComparisonTargetPageBuilder comparisonTargetPageBuilder,
+    IEngineProtocolSerializer protocolSerializer,
+    ILogger<EngineActionProcessor> logger) : IEngineActionProcessor
 {
-    /// <summary>
-    ///     Asynchronously processes one validated common request envelope.
-    /// </summary>
-    /// <param name="request">The request to process. Cannot be <see langword="null" />.</param>
-    /// <param name="cancellationToken">
-    ///     A <see cref="CancellationToken" /> to observe while waiting for the action.
-    /// </param>
-    /// <returns>
-    ///     A task that represents the asynchronous operation. The task result contains one correlated protocol
-    ///     response.
-    /// </returns>
-    /// <exception cref="ArgumentNullException">
-    ///     <paramref name="request" /> is <see langword="null" />.
-    /// </exception>
-    /// <exception cref="OperationCanceledException">
-    ///     The <paramref name="cancellationToken" /> is canceled.
-    /// </exception>
-    internal async Task<ProtocolResponse> ProcessAsync(
+    /// <inheritdoc />
+    public async Task<ProtocolResponse> ProcessAsync(
         EngineProtocolRequest request,
         CancellationToken cancellationToken)
     {

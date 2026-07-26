@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { ActionError } from "../../Actions/Models/ActionError";
 import { normalizeActionError } from "../../Actions/Services/normalizeActionError";
 import type { RepositoryDescriptor } from "../../Repositories/Models/RepositoryDescriptor";
 import type { ComparisonClient } from "../Interfaces/ComparisonClient";
@@ -8,6 +9,7 @@ import type { ComparisonTarget } from "../Models/ComparisonTarget";
 interface UseComparisonControllerOptions {
   readonly repository: RepositoryDescriptor;
   readonly comparisonClient: ComparisonClient;
+  readonly preferredTarget: string | null;
   readonly onRepositoryRefreshed: (repository: RepositoryDescriptor) => void;
 }
 
@@ -42,6 +44,7 @@ const initialState: ComparisonWorkspaceState = {
 export function useComparisonController({
   repository,
   comparisonClient,
+  preferredTarget,
   onRepositoryRefreshed,
 }: UseComparisonControllerOptions): ComparisonController {
   const [state, setState] = useState<ComparisonWorkspaceState>(initialState);
@@ -170,7 +173,9 @@ export function useComparisonController({
             ? mergeTargets(current.targets, page.targets)
             : page.targets;
           const suggested =
-            current.selectedTarget === null && !appendPage
+            preferredTarget === null &&
+            current.selectedTarget === null &&
+            !appendPage
               ? page.suggestedTarget
               : null;
           updateState((value) => ({
@@ -223,7 +228,13 @@ export function useComparisonController({
 
       await requestPage(append, append);
     },
-    [comparisonClient, prepare, repository.canonicalPath, updateState],
+    [
+      comparisonClient,
+      preferredTarget,
+      prepare,
+      repository.canonicalPath,
+      updateState,
+    ],
   );
 
   useEffect(() => {
@@ -233,7 +244,63 @@ export function useComparisonController({
     refreshEpochRef.current += 1;
     stateRef.current = initialState;
     setState(initialState);
-    void discover("");
+    if (preferredTarget === null) {
+      void discover("");
+    } else {
+      void (async () => {
+        try {
+          let after: string | undefined;
+          let targetSetToken: string | undefined;
+          let exactTarget: ComparisonTarget | undefined;
+          const query = preferredTarget.split("/").at(-1) ?? preferredTarget;
+          do {
+            const page = await comparisonClient.listTargets({
+              path: repository.canonicalPath,
+              query,
+              ...(after === undefined ? {} : { after }),
+              ...(targetSetToken === undefined ? {} : { targetSetToken }),
+            });
+            exactTarget = page.targets.find(
+              (target) => target.fullName === preferredTarget,
+            );
+            after = page.nextCursor ?? undefined;
+            targetSetToken = page.targetSetToken;
+          } while (exactTarget === undefined && after !== undefined);
+
+          if (exactTarget) {
+            updateState((current) => ({
+              ...current,
+              targets: [exactTarget],
+              selectedTarget: exactTarget,
+              isDiscovering: false,
+            }));
+            await prepare(exactTarget);
+          } else {
+            await discover("");
+            updateState((current) => ({
+              ...current,
+              error: new ActionError("operation", [
+                {
+                  type: "NotFound",
+                  code: "comparison.targetUnavailable",
+                  message:
+                    "The saved comparison target is unavailable. Choose another target.",
+                },
+              ]),
+              errorSource: "preparation",
+              isDiscovering: false,
+            }));
+          }
+        } catch (reason: unknown) {
+          updateState((current) => ({
+            ...current,
+            error: normalizeActionError(reason),
+            errorSource: "preparation",
+            isDiscovering: false,
+          }));
+        }
+      })();
+    }
 
     return () => {
       discoveryEpochRef.current += 1;
@@ -244,7 +311,14 @@ export function useComparisonController({
         window.clearTimeout(queryTimerRef.current);
       }
     };
-  }, [discover, repository.canonicalPath]);
+  }, [
+    comparisonClient,
+    discover,
+    preferredTarget,
+    prepare,
+    repository.canonicalPath,
+    updateState,
+  ]);
 
   const selectTarget = useCallback(
     (target: ComparisonTarget) => {

@@ -1,5 +1,6 @@
 using System.Text.Json;
 using ChangeLens.Core.Repositories.Models;
+using ChangeLens.Core.LocalState.Models;
 using ChangeLens.Core.Results.Models;
 using ChangeLens.Engine.Protocol.Services;
 using ChangeLens.Engine.Repositories.Models;
@@ -50,7 +51,16 @@ public sealed class RepositoryOpenResultTests
     {
         var response = ProtocolResponseFactory.FromResult(
             requestId,
-            Result.Success(RepositoryOpenResult.FromDescriptor(descriptor)));
+            Result.Success(
+                RepositoryOpenResult.FromOpenedRepository(
+                    new OpenedRepository(
+                        new RepositoryHistoryEntry(
+                            Guid.Parse("01234567-89ab-cdef-0123-456789abcdef"),
+                            descriptor.CanonicalPath,
+                            descriptor.Name,
+                            1785031200000,
+                            null),
+                        descriptor))));
         var serialized = _serializer.SerializeResponse(response);
         Assert.True(serialized.IsSuccess);
         using var actual = JsonDocument.Parse(serialized.Data!);

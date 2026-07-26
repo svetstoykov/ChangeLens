@@ -1,0 +1,8 @@
+{
+  "protocolVersion": 1,
+  "requestId": "desktop-8",
+  "action": "preferences.setColorTheme",
+  "parameters": {
+    "colorTheme": "dark"
+  }
+}

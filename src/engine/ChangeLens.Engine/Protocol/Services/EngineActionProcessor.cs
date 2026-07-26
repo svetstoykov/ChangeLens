@@ -4,6 +4,7 @@ using ChangeLens.Core.Comparisons.Models;
 using ChangeLens.Core.Comparisons.Services;
 using ChangeLens.Core.EngineStatus.Interfaces;
 using ChangeLens.Core.Git.Services;
+using ChangeLens.Core.LocalState.Models;
 using ChangeLens.Core.Results.Models;
 using ChangeLens.Engine.Comparisons.Constants;
 using ChangeLens.Engine.Comparisons.Models;
@@ -11,8 +12,12 @@ using ChangeLens.Engine.Comparisons.Services;
 using ChangeLens.Engine.EngineStatus.Constants;
 using ChangeLens.Engine.Protocol.Constants;
 using ChangeLens.Engine.Protocol.Models;
+using ChangeLens.Engine.Preferences.Constants;
+using ChangeLens.Engine.Preferences.Models;
+using ChangeLens.Engine.Preferences.Services;
 using ChangeLens.Engine.Repositories.Constants;
 using ChangeLens.Engine.Repositories.Models;
+using ChangeLens.Engine.Repositories.Services;
 using Microsoft.Extensions.Logging;
 
 namespace ChangeLens.Engine.Protocol.Services;
@@ -40,7 +45,8 @@ namespace ChangeLens.Engine.Protocol.Services;
 /// <param name="logger">The logger for action outcomes. Cannot be <see langword="null" />.</param>
 internal sealed class EngineActionProcessor(
     IEngineStatusService engineStatusService,
-    GitRepositoryInspector gitRepositoryInspector,
+    RepositoryHistoryService repositoryHistoryService,
+    ColorThemePreferenceService colorThemePreferenceService,
     GitComparisonTargetDiscovery comparisonTargetDiscovery,
     GitComparisonPreparer comparisonPreparer,
     GitComparisonFreshnessChecker comparisonFreshnessChecker,
@@ -123,35 +129,66 @@ internal sealed class EngineActionProcessor(
     /// <returns>
     ///     A task that represents the asynchronous operation. The task result contains the selected action response.
     /// </returns>
-    private Task<ProtocolResponse> ProcessKnownVersionAsync(
+    private async Task<ProtocolResponse> ProcessKnownVersionAsync(
         EngineProtocolRequest request,
-        CancellationToken cancellationToken) =>
-        request.Action switch
+        CancellationToken cancellationToken)
+    {
+        if (request.Action != EngineStatusActionConstants.CheckStatusAction &&
+            IsKnownAction(request.Action))
+        {
+            var readinessResult = await engineStatusService.CheckStatusAsync(cancellationToken);
+            if (readinessResult.IsFailure)
+            {
+                return ProtocolResponseFactory.FromResult(request.RequestId, readinessResult);
+            }
+        }
+
+        return request.Action switch
         {
             RepositoryActionConstants.OpenAction =>
-                this.ProcessRepositoryOpenAsync(request, cancellationToken),
+                await this.ProcessRepositoryOpenAsync(request, cancellationToken),
+            RepositoryActionConstants.RestoreLastAction
+                when request.Parameters.ValueKind == JsonValueKind.Undefined =>
+                await this.ProcessRepositoryRestoreLastAsync(request, cancellationToken),
+            RepositoryActionConstants.RestoreLastAction =>
+                NoParametersAccepted(request, RepositoryActionConstants.RestoreLastAction),
+            RepositoryActionConstants.ListRecentAction
+                when request.Parameters.ValueKind == JsonValueKind.Undefined =>
+                await this.ProcessRepositoryListRecentAsync(request, cancellationToken),
+            RepositoryActionConstants.ListRecentAction =>
+                NoParametersAccepted(request, RepositoryActionConstants.ListRecentAction),
+            RepositoryActionConstants.RemoveRecentAction =>
+                await this.ProcessRepositoryRemoveRecentAsync(request, cancellationToken),
             ComparisonActionConstants.ListTargetsAction =>
-                this.ProcessComparisonListTargetsAsync(request, cancellationToken),
+                await this.ProcessComparisonListTargetsAsync(request, cancellationToken),
             ComparisonActionConstants.PrepareAction =>
-                this.ProcessComparisonPrepareAsync(request, cancellationToken),
+                await this.ProcessComparisonPrepareAsync(request, cancellationToken),
             ComparisonActionConstants.CheckFreshnessAction =>
-                this.ProcessComparisonCheckFreshnessAsync(request, cancellationToken),
+                await this.ProcessComparisonCheckFreshnessAsync(request, cancellationToken),
             EngineStatusActionConstants.CheckStatusAction
                 when request.Parameters.ValueKind == JsonValueKind.Undefined =>
-                this.ProcessCheckStatusAsync(request, cancellationToken),
-            EngineStatusActionConstants.CheckStatusAction => Task.FromResult(
+                await this.ProcessCheckStatusAsync(request, cancellationToken),
+            EngineStatusActionConstants.CheckStatusAction =>
                 ProtocolResponseFactory.FromError(
                     request.RequestId,
                     OperationError.Validation(
                         "The engine.checkStatus action does not accept parameters.",
-                        EngineErrorCode.InvalidRequest))),
-            _ => Task.FromResult(
+                        EngineErrorCode.InvalidRequest)),
+            PreferenceActionConstants.GetColorThemeAction
+                when request.Parameters.ValueKind == JsonValueKind.Undefined =>
+                await this.ProcessGetColorThemeAsync(request, cancellationToken),
+            PreferenceActionConstants.GetColorThemeAction =>
+                NoParametersAccepted(request, PreferenceActionConstants.GetColorThemeAction),
+            PreferenceActionConstants.SetColorThemeAction =>
+                await this.ProcessSetColorThemeAsync(request, cancellationToken),
+            _ =>
                 ProtocolResponseFactory.FromError(
                     request.RequestId,
                     OperationError.NotFound(
                         $"The action '{request.Action}' is not recognized.",
-                        EngineErrorCode.UnknownAction))),
+                        EngineErrorCode.UnknownAction)),
         };
+    }
 
     /// <summary>
     ///     Asynchronously binds and executes the repository-open action.
@@ -184,19 +221,19 @@ internal sealed class EngineActionProcessor(
             return ProtocolResponseFactory.CreateError(request.RequestId, parametersResult.Errors);
         }
 
-        var inspectionResult = await gitRepositoryInspector.InspectAsync(
+        var openResult = await repositoryHistoryService.OpenAsync(
             parametersResult.Data!.Path,
             cancellationToken);
-        if (inspectionResult.IsFailure)
+        if (openResult.IsFailure)
         {
             return ProtocolResponseFactory.FromResult(
                 request.RequestId,
-                Result.ErrorFromResult<RepositoryOpenResult>(inspectionResult));
+                Result.ErrorFromResult<RepositoryOpenResult>(openResult));
         }
 
         return ProtocolResponseFactory.FromResult(
             request.RequestId,
-            Result.Success(RepositoryOpenResult.FromDescriptor(inspectionResult.Data!)));
+            Result.Success(RepositoryOpenResult.FromOpenedRepository(openResult.Data!)));
     }
 
     /// <summary>
@@ -280,6 +317,17 @@ internal sealed class EngineActionProcessor(
                 Result.ErrorFromResult<ComparisonPrepareResult>(preparationResult));
         }
 
+        var preferenceResult = await repositoryHistoryService.SavePreferredTargetAsync(
+            preparationResult.Data!.Repository.CanonicalPath,
+            preparationResult.Data.Target.FullName,
+            cancellationToken);
+        if (preferenceResult.IsFailure)
+        {
+            return ProtocolResponseFactory.FromResult(
+                request.RequestId,
+                Result.ErrorFromResult<ComparisonPrepareResult>(preferenceResult));
+        }
+
         return ProtocolResponseFactory.FromResult(
             request.RequestId,
             Result.Success(
@@ -357,6 +405,125 @@ internal sealed class EngineActionProcessor(
         return ProtocolResponseFactory.FromResult(request.RequestId, result);
     }
 
+    private async Task<ProtocolResponse> ProcessRepositoryRestoreLastAsync(
+        EngineProtocolRequest request,
+        CancellationToken cancellationToken)
+    {
+        var restorationResult = await repositoryHistoryService.RestoreLastAsync(cancellationToken);
+        if (restorationResult.IsFailure)
+        {
+            return ProtocolResponseFactory.FromResult(
+                request.RequestId,
+                Result.ErrorFromResult<RepositoryRestoreResult>(restorationResult));
+        }
+
+        RepositoryRestoreResult result = restorationResult.Data!.HistoryEntry is null
+            ? new NoRepositoryRestoreResult()
+            : new RestoredRepositoryResult(
+                restorationResult.Data.HistoryEntry.RepositoryId,
+                RepositoryResult.FromDescriptor(restorationResult.Data.Repository!),
+                restorationResult.Data.HistoryEntry.PreferredTargetFullName);
+        return ProtocolResponseFactory.FromResult(request.RequestId, Result.Success(result));
+    }
+
+    private async Task<ProtocolResponse> ProcessRepositoryListRecentAsync(
+        EngineProtocolRequest request,
+        CancellationToken cancellationToken)
+    {
+        var listResult = await repositoryHistoryService.ListRecentAsync(cancellationToken);
+        return listResult.IsFailure
+            ? ProtocolResponseFactory.FromResult(
+                request.RequestId,
+                Result.ErrorFromResult<RepositoryListRecentResult>(listResult))
+            : ProtocolResponseFactory.FromResult(
+                request.RequestId,
+                Result.Success(RepositoryListRecentResult.FromSnapshot(listResult.Data!)));
+    }
+
+    private async Task<ProtocolResponse> ProcessRepositoryRemoveRecentAsync(
+        EngineProtocolRequest request,
+        CancellationToken cancellationToken)
+    {
+        if (request.Parameters.ValueKind == JsonValueKind.Undefined)
+        {
+            return MissingParameters(request.RequestId, RepositoryActionConstants.RemoveRecentAction);
+        }
+
+        var parametersResult =
+            protocolSerializer.DeserializeParameters<RepositoryRemoveRecentParameters>(
+                request.Parameters,
+                RepositoryActionConstants.RemoveRecentAction);
+        if (parametersResult.IsFailure ||
+            !Guid.TryParseExact(parametersResult.Data?.RepositoryId, "D", out var repositoryId) ||
+            !string.Equals(
+                parametersResult.Data.RepositoryId,
+                repositoryId.ToString("D"),
+                StringComparison.Ordinal))
+        {
+            return ProtocolResponseFactory.FromError(
+                request.RequestId,
+                OperationError.Validation(
+                    "The repositories.removeRecent parameters are invalid.",
+                    EngineErrorCode.InvalidRequest));
+        }
+
+        var result = await repositoryHistoryService.RemoveRecentAsync(
+            repositoryId,
+            cancellationToken);
+        return ProtocolResponseFactory.FromResult(request.RequestId, result);
+    }
+
+    private async Task<ProtocolResponse> ProcessGetColorThemeAsync(
+        EngineProtocolRequest request,
+        CancellationToken cancellationToken)
+    {
+        var preferenceResult = await colorThemePreferenceService.GetAsync(cancellationToken);
+        if (preferenceResult.IsFailure)
+        {
+            return ProtocolResponseFactory.FromResult(
+                request.RequestId,
+                Result.ErrorFromResult<ColorThemePreferenceResult>(preferenceResult));
+        }
+
+        var value = preferenceResult.Data switch
+        {
+            ColorTheme.Light => ColorThemeResultValue.Light,
+            ColorTheme.Dark => ColorThemeResultValue.Dark,
+            null => (ColorThemeResultValue?)null,
+            _ => throw new InvalidOperationException("The color-theme preference is not supported."),
+        };
+        return ProtocolResponseFactory.FromResult(
+            request.RequestId,
+            Result.Success(new ColorThemePreferenceResult(value)));
+    }
+
+    private async Task<ProtocolResponse> ProcessSetColorThemeAsync(
+        EngineProtocolRequest request,
+        CancellationToken cancellationToken)
+    {
+        if (request.Parameters.ValueKind == JsonValueKind.Undefined)
+        {
+            return MissingParameters(request.RequestId, PreferenceActionConstants.SetColorThemeAction);
+        }
+
+        var parametersResult = protocolSerializer.DeserializeParameters<ColorThemeSetParameters>(
+            request.Parameters,
+            PreferenceActionConstants.SetColorThemeAction);
+        if (parametersResult.IsFailure)
+        {
+            return ProtocolResponseFactory.CreateError(request.RequestId, parametersResult.Errors);
+        }
+
+        var theme = parametersResult.Data!.ColorTheme switch
+        {
+            ColorThemeResultValue.Light => ColorTheme.Light,
+            ColorThemeResultValue.Dark => ColorTheme.Dark,
+            _ => throw new InvalidOperationException("The color-theme preference is not supported."),
+        };
+        var result = await colorThemePreferenceService.SetAsync(theme, cancellationToken);
+        return ProtocolResponseFactory.FromResult(request.RequestId, result);
+    }
+
     /// <summary>
     ///     Creates the standard validation failure for a parameterized action with omitted parameters.
     /// </summary>
@@ -369,6 +536,26 @@ internal sealed class EngineActionProcessor(
             OperationError.Validation(
                 $"The {action} action requires parameters.",
                 EngineErrorCode.InvalidRequest));
+
+    private static ProtocolResponse NoParametersAccepted(
+        EngineProtocolRequest request,
+        string action) =>
+        ProtocolResponseFactory.FromError(
+            request.RequestId,
+            OperationError.Validation(
+                $"The {action} action does not accept parameters.",
+                EngineErrorCode.InvalidRequest));
+
+    private static bool IsKnownAction(string action) =>
+        action is RepositoryActionConstants.OpenAction or
+            RepositoryActionConstants.RestoreLastAction or
+            RepositoryActionConstants.ListRecentAction or
+            RepositoryActionConstants.RemoveRecentAction or
+            ComparisonActionConstants.ListTargetsAction or
+            ComparisonActionConstants.PrepareAction or
+            ComparisonActionConstants.CheckFreshnessAction or
+            PreferenceActionConstants.GetColorThemeAction or
+            PreferenceActionConstants.SetColorThemeAction;
 
     /// <summary>
     ///     Determines whether an action belongs to the comparison boundary with restricted diagnostic context.

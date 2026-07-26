@@ -2,13 +2,17 @@ using ChangeLens.Core.Comparisons.Services;
 using ChangeLens.Core.EngineStatus.Interfaces;
 using ChangeLens.Core.EngineStatus.Services;
 using ChangeLens.Core.Git.Services;
+using ChangeLens.Core.LocalState.Interfaces;
 using ChangeLens.Engine.Comparisons.Services;
 using ChangeLens.Engine.Logging.Extensions;
 using ChangeLens.Engine.Protocol.Interfaces;
 using ChangeLens.Engine.Protocol.Services;
+using ChangeLens.Engine.Preferences.Services;
 using ChangeLens.Engine.Repositories.Constants;
+using ChangeLens.Engine.Repositories.Services;
 using ChangeLens.Infrastructure.FileSystem.Services;
 using ChangeLens.Infrastructure.Git.Services;
+using ChangeLens.Infrastructure.LocalState.Services;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 
@@ -33,6 +37,23 @@ internal static class EngineHostApplicationBuilderExtensions
         builder.AddEngineLogging();
         builder.Services.AddSingleton<TextReader>(_ => Console.In);
         builder.Services.AddSingleton<TextWriter>(_ => Console.Out);
+        builder.Services.AddSingleton<TimeProvider>(TimeProvider.System);
+        builder.Services.AddSingleton(
+            serviceProvider =>
+                new SqliteLocalStateDatabase(
+                    builder.Configuration[
+                        "ChangeLens:LocalState:Directory"],
+                    serviceProvider.GetRequiredService<
+                        Microsoft.Extensions.Logging.ILogger<SqliteLocalStateDatabase>>()));
+        builder.Services.AddSingleton<ILocalStateInitializer>(
+            serviceProvider => serviceProvider.GetRequiredService<SqliteLocalStateDatabase>());
+        builder.Services.AddSingleton<IRepositoryHistoryStore, SqliteRepositoryHistoryStore>();
+        builder.Services.AddSingleton<
+            IColorThemePreferenceStore,
+            SqliteColorThemePreferenceStore>();
+        builder.Services.AddSingleton<
+            ICanonicalRepositoryPathKeyProvider,
+            CanonicalRepositoryPathKeyProvider>();
         builder.Services.AddSingleton<IEngineStatusService, EngineStatusService>();
         builder.Services.AddSingleton<PhysicalRepositoryPathResolver>();
         builder.Services.AddSingleton(
@@ -72,6 +93,8 @@ internal static class EngineHostApplicationBuilderExtensions
                     serviceProvider.GetRequiredService<GitCliCommandRunner>()));
         builder.Services.AddSingleton<EngineProtocolSerializer>();
         builder.Services.AddSingleton<ComparisonTargetPageBuilder>();
+        builder.Services.AddSingleton<RepositoryHistoryService>();
+        builder.Services.AddSingleton<ColorThemePreferenceService>();
         builder.Services.AddSingleton<IEngineProtocolTransport, EngineProtocolTransport>();
         builder.Services.AddSingleton<EngineActionProcessor>();
         builder.Services.AddHostedService<EngineProtocolHost>();

@@ -315,6 +315,10 @@ public sealed class EngineStatusProtocolTests
             RedirectStandardError = redirectStandardError,
             UseShellExecute = false,
         };
+        startInfo.Environment["ChangeLens__LocalState__Directory"] = Path.Combine(
+            Path.GetTempPath(),
+            "ChangeLens.Engine.IntegrationTests",
+            Guid.NewGuid().ToString("N"));
 
         if (logDirectory is not null)
         {

@@ -1,0 +1,8 @@
+{
+  "protocolVersion": 1,
+  "type": "result",
+  "requestId": "desktop-7",
+  "result": {
+    "colorTheme": "dark"
+  }
+}

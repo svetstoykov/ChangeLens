@@ -36,6 +36,12 @@ while (await Console.In.ReadLineAsync() is { } requestLine)
                 requestLine + Environment.NewLine);
         }
     }
+    else if (action is "repositories.restoreLast" or "repositories.listRecent" or
+             "repositories.removeRecent" or "preferences.getColorTheme" or
+             "preferences.setColorTheme")
+    {
+        ValidateLocalStateRequest(requestLine, requestId, action);
+    }
     else if (action is "comparisons.listTargets" or "comparisons.prepare" or "comparisons.checkFreshness")
     {
         ValidateComparisonRequest(requestLine, request.RootElement, requestId, action);
@@ -156,6 +162,14 @@ while (await Console.In.ReadLineAsync() is { } requestLine)
         continue;
     }
 
+    if (action is "repositories.restoreLast" or "repositories.listRecent" or
+        "repositories.removeRecent" or "preferences.getColorTheme" or
+        "preferences.setColorTheme")
+    {
+        await WriteLocalStateResultAsync(requestId, action);
+        continue;
+    }
+
     if (action.StartsWith("comparisons.", StringComparison.Ordinal))
     {
         if (mode == "comparison-ordered-error-once" && requestCount == 1)
@@ -271,12 +285,14 @@ async Task WriteRepositoryResultAsync(string requestId, string fixtureMode, int 
         requestId,
         result = new
         {
+            repositoryId = "01234567-89ab-cdef-0123-456789abcdef",
             repository = new
             {
                 name,
                 canonicalPath,
                 head,
             },
+            preferredTarget = (string?)null,
         },
     });
 }
@@ -303,6 +319,80 @@ async Task WriteOrderedErrorAsync(string requestId)
                 message = "The second fixture value conflicts with current state.",
             },
         },
+    });
+}
+
+static void ValidateLocalStateRequest(string requestLine, string requestId, string action)
+{
+    object? expectedParameters = action switch
+    {
+        "repositories.removeRecent" => new
+        {
+            repositoryId = "01234567-89ab-cdef-0123-456789abcdef",
+        },
+        "preferences.setColorTheme" => new
+        {
+            colorTheme = "dark",
+        },
+        _ => null,
+    };
+    var expectedRequest = expectedParameters is null
+        ? JsonSerializer.Serialize(new
+        {
+            protocolVersion = 1,
+            requestId,
+            action,
+        })
+        : JsonSerializer.Serialize(new
+        {
+            protocolVersion = 1,
+            requestId,
+            action,
+            parameters = expectedParameters,
+        });
+
+    if (requestLine != expectedRequest)
+    {
+        throw new InvalidOperationException("The local-state request does not match the expected shape.");
+    }
+}
+
+async Task WriteLocalStateResultAsync(string requestId, string action)
+{
+    object? result = action switch
+    {
+        "repositories.restoreLast" => new
+        {
+            state = "none",
+        },
+        "repositories.listRecent" => new
+        {
+            lastRepositoryId = "01234567-89ab-cdef-0123-456789abcdef",
+            repositories = new[]
+            {
+                new
+                {
+                    repositoryId = "01234567-89ab-cdef-0123-456789abcdef",
+                    name = "change_lens",
+                    canonicalPath = "/projects/change_lens",
+                    lastOpenedAtUnixMilliseconds = 1785081600000L,
+                    preferredTarget = "refs/remotes/origin/main",
+                },
+            },
+        },
+        "preferences.getColorTheme" => new
+        {
+            colorTheme = "dark",
+        },
+        _ => null,
+    };
+
+    await WriteJsonAsync(new
+    {
+        protocolVersion = 1,
+        type = "result",
+        requestId,
+        result,
     });
 }
 

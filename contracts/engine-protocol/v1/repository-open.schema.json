@@ -65,6 +65,10 @@
       "type": "string",
       "pattern": "^(?:[0-9a-f]{40}|[0-9a-f]{64})$"
     },
+    "repositoryId": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+    },
     "branchResult": {
       "type": "object",
       "additionalProperties": false,
@@ -76,13 +80,20 @@
         "result": {
           "type": "object",
           "additionalProperties": false,
-          "required": ["repository"],
+          "required": ["repositoryId", "repository", "preferredTarget"],
           "properties": {
+            "repositoryId": { "$ref": "#/$defs/repositoryId" },
             "repository": {
               "allOf": [
                 { "$ref": "#/$defs/repositoryBase" },
                 { "properties": { "head": { "$ref": "#/$defs/branchHead" } } }
               ]
+            },
+            "preferredTarget": {
+              "type": ["string", "null"],
+              "minLength": 1,
+              "maxLength": 4096,
+              "pattern": "\\S"
             }
           }
         }
@@ -99,13 +110,20 @@
         "result": {
           "type": "object",
           "additionalProperties": false,
-          "required": ["repository"],
+          "required": ["repositoryId", "repository", "preferredTarget"],
           "properties": {
+            "repositoryId": { "$ref": "#/$defs/repositoryId" },
             "repository": {
               "allOf": [
                 { "$ref": "#/$defs/repositoryBase" },
                 { "properties": { "head": { "$ref": "#/$defs/detachedHead" } } }
               ]
+            },
+            "preferredTarget": {
+              "type": ["string", "null"],
+              "minLength": 1,
+              "maxLength": 4096,
+              "pattern": "\\S"
             }
           }
         }

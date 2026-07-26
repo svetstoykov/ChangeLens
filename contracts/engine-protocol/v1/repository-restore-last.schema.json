@@ -1,0 +1,95 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://changelens.dev/contracts/engine-protocol/v1/repository-restore-last.schema.json",
+  "oneOf": [
+    { "$ref": "#/$defs/request" },
+    { "$ref": "#/$defs/noneResult" },
+    { "$ref": "#/$defs/restoredResult" },
+    { "$ref": "https://changelens.dev/contracts/engine-protocol/v1/error-response.schema.json" }
+  ],
+  "$defs": {
+    "request": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["protocolVersion", "requestId", "action"],
+      "properties": {
+        "protocolVersion": { "const": 1 },
+        "requestId": { "type": "string", "minLength": 1, "pattern": "\\S" },
+        "action": { "const": "repositories.restoreLast" }
+      }
+    },
+    "noneResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["protocolVersion", "type", "requestId", "result"],
+      "properties": {
+        "protocolVersion": { "const": 1 },
+        "type": { "const": "result" },
+        "requestId": { "type": "string", "minLength": 1, "pattern": "\\S" },
+        "result": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["state"],
+          "properties": { "state": { "const": "none" } }
+        }
+      }
+    },
+    "branchHead": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "name", "revision"],
+      "properties": {
+        "kind": { "const": "branch" },
+        "name": { "type": "string", "minLength": 1, "pattern": "\\S" },
+        "revision": { "type": "string", "pattern": "^(?:[0-9a-f]{40}|[0-9a-f]{64})$" }
+      }
+    },
+    "detachedHead": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "revision"],
+      "properties": {
+        "kind": { "const": "detached" },
+        "revision": { "type": "string", "pattern": "^(?:[0-9a-f]{40}|[0-9a-f]{64})$" }
+      }
+    },
+    "restoredResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["protocolVersion", "type", "requestId", "result"],
+      "properties": {
+        "protocolVersion": { "const": 1 },
+        "type": { "const": "result" },
+        "requestId": { "type": "string", "minLength": 1, "pattern": "\\S" },
+        "result": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["state", "repositoryId", "repository", "preferredTarget"],
+          "properties": {
+            "state": { "const": "restored" },
+            "repositoryId": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+            },
+            "repository": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["name", "canonicalPath", "head"],
+              "properties": {
+                "name": { "type": "string", "minLength": 1, "pattern": "\\S" },
+                "canonicalPath": { "type": "string", "minLength": 1, "pattern": "\\S" },
+                "head": {
+                  "oneOf": [
+                    { "$ref": "#/$defs/branchHead" },
+                    { "$ref": "#/$defs/detachedHead" }
+                  ]
+                }
+              }
+            },
+            "preferredTarget": { "type": ["string", "null"], "pattern": "\\S" }
+          }
+        }
+      }
+    }
+  }
+}

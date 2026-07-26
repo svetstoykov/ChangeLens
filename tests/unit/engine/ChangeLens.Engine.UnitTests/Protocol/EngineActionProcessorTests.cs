@@ -5,7 +5,9 @@ using ChangeLens.Engine.Comparisons.Models;
 using ChangeLens.Engine.Comparisons.Services;
 using ChangeLens.Engine.Protocol.Models;
 using ChangeLens.Engine.Protocol.Services;
+using ChangeLens.Engine.Preferences.Services;
 using ChangeLens.Engine.Repositories.Models;
+using ChangeLens.Engine.Repositories.Services;
 using ChangeLens.Engine.UnitTests.Comparisons.Support;
 using ChangeLens.Engine.UnitTests.EngineStatus.Support;
 using ChangeLens.Engine.UnitTests.Repositories.Support;
@@ -260,10 +262,12 @@ public sealed class EngineActionProcessorTests
         var result = Assert.IsType<ProtocolResultResponse<RepositoryOpenResult>>(response);
         Assert.Equal(
             new RepositoryOpenResult(
+                Guid.Parse("01234567-89ab-cdef-0123-456789abcdef"),
                 new RepositoryResult(
                     "change_lens",
                     "/projects/change_lens",
-                    new BranchRepositoryHeadResult("main", Revision))),
+                    new BranchRepositoryHeadResult("main", Revision)),
+                null),
             result.Result);
     }
 
@@ -284,10 +288,12 @@ public sealed class EngineActionProcessorTests
         var result = Assert.IsType<ProtocolResultResponse<RepositoryOpenResult>>(response);
         Assert.Equal(
             new RepositoryOpenResult(
+                Guid.Parse("01234567-89ab-cdef-0123-456789abcdef"),
                 new RepositoryResult(
                     "change_lens",
                     "/projects/change_lens",
-                    new DetachedRepositoryHeadResult(Revision))),
+                    new DetachedRepositoryHeadResult(Revision)),
+                null),
             result.Result);
     }
 
@@ -665,7 +671,12 @@ public sealed class EngineActionProcessorTests
                                    fixture);
         return new EngineActionProcessor(
             new StubEngineStatusService(checkStatusAsync ?? (_ => Task.FromResult(Result.Success()))),
-            comparisonFixture?.RepositoryInspector ?? fixture.Inspector,
+            new RepositoryHistoryService(
+                comparisonFixture?.RepositoryInspector ?? fixture.Inspector,
+                new StubRepositoryHistoryStore(),
+                new StubCanonicalRepositoryPathKeyProvider(),
+                TimeProvider.System),
+            new ColorThemePreferenceService(new StubColorThemePreferenceStore()),
             targetDiscovery,
             preparer,
             freshnessChecker,

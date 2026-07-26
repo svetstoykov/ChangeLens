@@ -10,18 +10,21 @@ import { Icon } from "../../Visuals/Components/Icon";
 
 interface RepositoryWorkspaceProps {
   readonly repository: RepositoryDescriptor;
+  readonly preferredTarget: string | null;
   readonly comparisonClient: ComparisonClient;
   readonly onRepositoryRefreshed: (repository: RepositoryDescriptor) => void;
 }
 
 export function RepositoryWorkspace({
   repository,
+  preferredTarget,
   comparisonClient,
   onRepositoryRefreshed,
 }: RepositoryWorkspaceProps) {
   const [changeContext, setChangeContext] = useState("");
   const controller = useComparisonController({
     repository,
+    preferredTarget,
     comparisonClient,
     onRepositoryRefreshed,
   });

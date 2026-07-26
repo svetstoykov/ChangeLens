@@ -28,6 +28,16 @@ public sealed class EngineProtocolContractTests
     [InlineData("repository-open.schema.json", "repositories-open.request.json")]
     [InlineData("repository-open.schema.json", "repositories-open.branch.result.json")]
     [InlineData("repository-open.schema.json", "repositories-open.detached.result.json")]
+    [InlineData("repository-restore-last.schema.json", "repositories-restore-last.request.json")]
+    [InlineData("repository-restore-last.schema.json", "repositories-restore-last.none.result.json")]
+    [InlineData("repository-list-recent.schema.json", "repositories-list-recent.request.json")]
+    [InlineData("repository-list-recent.schema.json", "repositories-list-recent.result.json")]
+    [InlineData("repository-remove-recent.schema.json", "repositories-remove-recent.request.json")]
+    [InlineData("repository-remove-recent.schema.json", "repositories-remove-recent.result.json")]
+    [InlineData("preference-color-theme.schema.json", "preferences-get-color-theme.request.json")]
+    [InlineData("preference-color-theme.schema.json", "preferences-get-color-theme.result.json")]
+    [InlineData("preference-color-theme.schema.json", "preferences-set-color-theme.request.json")]
+    [InlineData("preference-color-theme.schema.json", "preferences-set-color-theme.result.json")]
     [InlineData(
         "comparison-list-targets.schema.json",
         "comparisons-list-targets.request.json")]
@@ -383,6 +393,10 @@ public sealed class EngineProtocolContractTests
             "error-response.schema.json",
             "payload-free-result.schema.json",
             "repository-open.schema.json",
+            "repository-restore-last.schema.json",
+            "repository-list-recent.schema.json",
+            "repository-remove-recent.schema.json",
+            "preference-color-theme.schema.json",
             "comparison-list-targets.schema.json",
             "comparison-prepare.schema.json",
             "comparison-check-freshness.schema.json",

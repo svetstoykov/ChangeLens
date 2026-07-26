@@ -34,6 +34,27 @@ where
     Ok(value)
 }
 
+pub(super) fn deserialize_repository_id<'de, D>(deserializer: D) -> Result<String, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let value = String::deserialize(deserializer)?;
+    let bytes = value.as_bytes();
+    let valid = bytes.len() == 36
+        && [8, 13, 18, 23].iter().all(|index| bytes[*index] == b'-')
+        && bytes.iter().enumerate().all(|(index, byte)| {
+            [8, 13, 18, 23].contains(&index) || matches!(byte, b'0'..=b'9' | b'a'..=b'f')
+        });
+
+    if !valid {
+        return Err(D::Error::custom(
+            "repository identifiers must be lowercase hyphenated GUIDs",
+        ));
+    }
+
+    Ok(value)
+}
+
 #[cfg(test)]
 mod tests {
     use super::{deserialize_non_blank, deserialize_revision};

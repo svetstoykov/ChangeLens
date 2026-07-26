@@ -2,15 +2,12 @@ using System.Diagnostics;
 using System.Text.Json;
 using ChangeLens.Core.Comparisons.Models;
 using ChangeLens.Core.Comparisons.Interfaces;
-using ChangeLens.Core.Comparisons.Services;
 using ChangeLens.Core.EngineStatus.Interfaces;
-using ChangeLens.Core.Git.Services;
 using ChangeLens.Core.LocalState.Models;
 using ChangeLens.Core.Results.Models;
 using ChangeLens.Engine.Comparisons.Constants;
 using ChangeLens.Engine.Comparisons.Interfaces;
 using ChangeLens.Engine.Comparisons.Models;
-using ChangeLens.Engine.Comparisons.Services;
 using ChangeLens.Engine.EngineStatus.Constants;
 using ChangeLens.Engine.Protocol.Constants;
 using ChangeLens.Engine.Protocol.Interfaces;
@@ -18,11 +15,9 @@ using ChangeLens.Engine.Protocol.Models;
 using ChangeLens.Engine.Preferences.Constants;
 using ChangeLens.Engine.Preferences.Interfaces;
 using ChangeLens.Engine.Preferences.Models;
-using ChangeLens.Engine.Preferences.Services;
 using ChangeLens.Engine.Repositories.Constants;
 using ChangeLens.Engine.Repositories.Interfaces;
 using ChangeLens.Engine.Repositories.Models;
-using ChangeLens.Engine.Repositories.Services;
 using Microsoft.Extensions.Logging;
 
 namespace ChangeLens.Engine.Protocol.Services;
@@ -35,7 +30,6 @@ namespace ChangeLens.Engine.Protocol.Services;
 ///     singleton-safe collaborators and does not maintain mutable state.
 /// </remarks>
 /// <param name="engineStatusService">The engine-status capability. Cannot be <see langword="null" />.</param>
-/// <param name="gitRepositoryInspector">The Git repository inspection capability. Cannot be <see langword="null" />.</param>
 /// <param name="comparisonTargetDiscovery">
 ///     The comparison-target discovery capability. Cannot be <see langword="null" />.
 /// </param>

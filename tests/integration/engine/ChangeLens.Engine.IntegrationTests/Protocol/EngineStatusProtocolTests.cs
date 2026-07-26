@@ -183,16 +183,6 @@ public sealed class EngineStatusProtocolTests
         "{\"protocolVersion\":1,\"requestId\":\"id\",\"action\":\"unknown\"}",
         "NotFound",
         "protocol.unknownAction")]
-    [InlineData(
-        "{\"protocolVersion\":1,\"requestId\":\"id\",\"action\":\"engine.checkStatus\"," +
-        "\"parameters\":null}",
-        "Validation",
-        "protocol.invalidRequest")]
-    [InlineData(
-        "{\"protocolVersion\":1,\"requestId\":\"id\",\"action\":\"engine.checkStatus\"," +
-        "\"parameters\":{}}",
-        "Validation",
-        "protocol.invalidRequest")]
     public async Task EngineReturnsStructuredErrorForKnownProtocolFailure(
         string request,
         string expectedType,
@@ -210,6 +200,29 @@ public sealed class EngineStatusProtocolTests
         Assert.Equal(expectedType, error.GetProperty("type").GetString());
         Assert.Equal(expectedCode, error.GetProperty("code").GetString());
         Assert.False(string.IsNullOrWhiteSpace(error.GetProperty("message").GetString()));
+    }
+
+    /// <summary>
+    ///     Verifies that status accepts and ignores supplied parameters.
+    /// </summary>
+    /// <param name="parametersJson">The explicitly supplied parameters value.</param>
+    /// <returns>A task that represents the asynchronous test.</returns>
+    [Theory]
+    [InlineData("null")]
+    [InlineData("{}")]
+    public async Task EngineProcessesStatusWithIgnoredParameters(string parametersJson)
+    {
+        using var engine = StartEngine();
+
+        await engine.StandardInput.WriteLineAsync(
+            $"{{\"protocolVersion\":1,\"requestId\":\"id\",\"action\":\"engine.checkStatus\",\"parameters\":{parametersJson}}}");
+        using var response = await ReadResponseAsync(engine);
+
+        var root = response.RootElement;
+        Assert.Equal(1, root.GetProperty("protocolVersion").GetInt32());
+        Assert.Equal("result", root.GetProperty("type").GetString());
+        Assert.Equal("id", root.GetProperty("requestId").GetString());
+        Assert.Equal(JsonValueKind.Null, root.GetProperty("result").ValueKind);
     }
 
     /// <summary>
@@ -315,6 +328,10 @@ public sealed class EngineStatusProtocolTests
             RedirectStandardError = redirectStandardError,
             UseShellExecute = false,
         };
+        startInfo.Environment["ChangeLens__LocalState__Directory"] = Path.Combine(
+            Path.GetTempPath(),
+            "ChangeLens.Engine.IntegrationTests",
+            Guid.NewGuid().ToString("N"));
 
         if (logDirectory is not null)
         {

@@ -239,6 +239,10 @@ public sealed class ComparisonCapacityProtocolTests
             "ChangeLens.Engine.dll");
         Assert.True(File.Exists(engineDll), "The built Engine DLL must exist before the capacity test starts.");
         var startInfo = new ProcessStartInfo("dotnet") { RedirectStandardInput = true, RedirectStandardOutput = true, UseShellExecute = false };
+        startInfo.Environment["ChangeLens__LocalState__Directory"] = Path.Combine(
+            Path.GetTempPath(),
+            "ChangeLens.Engine.IntegrationTests",
+            Guid.NewGuid().ToString("N"));
         startInfo.ArgumentList.Add(engineDll);
         return Process.Start(startInfo) ?? throw new InvalidOperationException("The Engine did not start.");
     }

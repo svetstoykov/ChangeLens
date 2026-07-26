@@ -5,6 +5,8 @@ using ChangeLens.Engine.Hosting.Constants;
 using ChangeLens.Engine.Protocol.Interfaces;
 using ChangeLens.Engine.Protocol.Models;
 using ChangeLens.Engine.Protocol.Services;
+using ChangeLens.Engine.Preferences.Services;
+using ChangeLens.Engine.Repositories.Services;
 using ChangeLens.Engine.UnitTests.Comparisons.Support;
 using ChangeLens.Engine.UnitTests.EngineStatus.Support;
 using ChangeLens.Engine.UnitTests.Support;
@@ -213,7 +215,12 @@ public sealed class EngineProtocolHostTests
             transport,
             new EngineActionProcessor(
                 new StubEngineStatusService(checkStatusAsync),
-                comparison.RepositoryInspector,
+                new RepositoryHistoryService(
+                    comparison.RepositoryInspector,
+                    new StubRepositoryHistoryStore(),
+                    new StubCanonicalRepositoryPathKeyProvider(),
+                    TimeProvider.System),
+                new ColorThemePreferenceService(new StubColorThemePreferenceStore()),
                 comparison.TargetDiscovery,
                 comparison.Preparer,
                 comparison.FreshnessChecker,

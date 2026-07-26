@@ -20,13 +20,27 @@ impl RepositoryState {
 mod tests {
     use super::RepositoryState;
     use crate::engine_protocol::{EngineActionError, EngineClient};
-    use crate::repositories::{RepositoryDescriptor, RepositoryService};
+    use crate::repositories::{
+        RepositoryDescriptor, RepositoryHistory, RepositoryRestoreResult, RepositoryService,
+    };
     use std::sync::Arc;
 
     struct RepositoryServiceFixture;
 
     impl RepositoryService for RepositoryServiceFixture {
         fn open_repository(&self, _path: &str) -> Result<RepositoryDescriptor, EngineActionError> {
+            unreachable!("the state test does not execute repository actions")
+        }
+
+        fn restore_last_repository(&self) -> Result<RepositoryRestoreResult, EngineActionError> {
+            unreachable!("the state test does not execute repository actions")
+        }
+
+        fn list_recent_repositories(&self) -> Result<RepositoryHistory, EngineActionError> {
+            unreachable!("the state test does not execute repository actions")
+        }
+
+        fn remove_recent_repository(&self, _repository_id: &str) -> Result<(), EngineActionError> {
             unreachable!("the state test does not execute repository actions")
         }
     }

@@ -6,14 +6,21 @@ use changelens_desktop_lib::engine_protocol::{
     ActionErrorDetail, ActionErrorKind, EngineActionError, EngineClient, OperationErrorType,
 };
 use changelens_desktop_lib::engine_status::{EngineStatusService, EngineStatusState};
-use changelens_desktop_lib::repositories::{
-    RepositoryDescriptor, RepositoryFolderPicker, RepositoryFolderPickerState, RepositoryHead,
-    RepositoryService, RepositoryState,
+use changelens_desktop_lib::preferences::{
+    ColorTheme, ColorThemePreference, ColorThemePreferenceService, PreferenceState,
 };
-use changelens_desktop_lib::{configure_desktop, handle_desktop_run_event};
+use changelens_desktop_lib::repositories::{
+    RecentRepository, RepositoryDescriptor, RepositoryFolderPicker, RepositoryFolderPickerState,
+    RepositoryHead, RepositoryHistory, RepositoryRestoreResult, RepositoryService, RepositoryState,
+};
+use changelens_desktop_lib::{
+    configure_desktop, configure_desktop_with_preferences, handle_desktop_run_event,
+};
+use raw_window_handle::HasWindowHandle;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
 use std::time::{SystemTime, UNIX_EPOCH};
 use tauri::Manager;
@@ -39,9 +46,28 @@ struct FixedRepositoryFolderPicker {
     result: Result<Option<PathBuf>, EngineActionError>,
 }
 
+struct WindowOwnedRepositoryFolderPicker {
+    received_window_owner: Arc<AtomicBool>,
+}
+
 impl RepositoryFolderPicker for FixedRepositoryFolderPicker {
-    fn select_folder(&self) -> Result<Option<PathBuf>, EngineActionError> {
+    fn select_folder(
+        &self,
+        _owner: &dyn HasWindowHandle,
+    ) -> Result<Option<PathBuf>, EngineActionError> {
         self.result.clone()
+    }
+}
+
+impl RepositoryFolderPicker for WindowOwnedRepositoryFolderPicker {
+    fn select_folder(
+        &self,
+        owner: &dyn HasWindowHandle,
+    ) -> Result<Option<PathBuf>, EngineActionError> {
+        self.received_window_owner
+            .store(owner.window_handle().is_ok(), Ordering::SeqCst);
+
+        Ok(None)
     }
 }
 
@@ -49,6 +75,61 @@ struct FixedRepositoryService {
     paths: Arc<Mutex<Vec<String>>>,
     result: Result<RepositoryDescriptor, EngineActionError>,
     panic_on_open: bool,
+}
+
+struct LocalStateRepositoryService {
+    removed_ids: Arc<Mutex<Vec<String>>>,
+}
+
+struct FixedColorThemePreferenceService {
+    set_themes: Arc<Mutex<Vec<ColorTheme>>>,
+}
+
+impl ColorThemePreferenceService for FixedColorThemePreferenceService {
+    fn get_color_theme(&self) -> Result<ColorThemePreference, EngineActionError> {
+        Ok(ColorThemePreference {
+            color_theme: Some(ColorTheme::Dark),
+        })
+    }
+
+    fn set_color_theme(&self, color_theme: ColorTheme) -> Result<(), EngineActionError> {
+        self.set_themes
+            .lock()
+            .expect("the recorded color themes should be available")
+            .push(color_theme);
+        Ok(())
+    }
+}
+
+impl RepositoryService for LocalStateRepositoryService {
+    fn open_repository(&self, _path: &str) -> Result<RepositoryDescriptor, EngineActionError> {
+        unreachable!("the local-state command fixture does not open repositories")
+    }
+
+    fn restore_last_repository(&self) -> Result<RepositoryRestoreResult, EngineActionError> {
+        Ok(RepositoryRestoreResult::None)
+    }
+
+    fn list_recent_repositories(&self) -> Result<RepositoryHistory, EngineActionError> {
+        Ok(RepositoryHistory {
+            last_repository_id: Some("01234567-89ab-cdef-0123-456789abcdef".into()),
+            repositories: vec![RecentRepository {
+                repository_id: "01234567-89ab-cdef-0123-456789abcdef".into(),
+                name: "change_lens".into(),
+                canonical_path: REPOSITORY_PATH.into(),
+                last_opened_at_unix_milliseconds: 1_785_081_600_000,
+                preferred_target: Some(COMPARISON_TARGET.into()),
+            }],
+        })
+    }
+
+    fn remove_recent_repository(&self, repository_id: &str) -> Result<(), EngineActionError> {
+        self.removed_ids
+            .lock()
+            .expect("the removed repository identifiers should be available")
+            .push(repository_id.to_owned());
+        Ok(())
+    }
 }
 
 struct UnusedComparisonService;
@@ -117,6 +198,27 @@ fn picker_cancellation_serializes_as_successful_null() {
     .expect("picker cancellation should be a successful command result");
 
     assert_eq!(response, serde_json::Value::Null);
+}
+
+#[test]
+fn picker_receives_the_invoking_window_as_its_owner() {
+    let received_window_owner = Arc::new(AtomicBool::new(false));
+
+    let response = invoke_command(
+        "select_repository_folder",
+        tauri::ipc::InvokeBody::default(),
+        Arc::new(WindowOwnedRepositoryFolderPicker {
+            received_window_owner: Arc::clone(&received_window_owner),
+        }),
+        repository_returning(Ok(branch_repository())),
+    )
+    .expect("the picker command should complete");
+
+    assert_eq!(response, serde_json::Value::Null);
+    assert!(
+        received_window_owner.load(Ordering::SeqCst),
+        "the native folder picker should receive the window that invoked the command"
+    );
 }
 
 #[test]
@@ -203,13 +305,17 @@ fn repository_open_forwards_the_exact_path_and_returns_a_branch() {
     assert_eq!(
         response,
         serde_json::json!({
-            "name": "change_lens",
-            "canonicalPath": "/projects/change_lens",
-            "head": {
-                "kind": "branch",
-                "name": "main",
-                "revision": SHA1_REVISION,
+            "repositoryId": "00000000-0000-0000-0000-000000000000",
+            "repository": {
+                "name": "change_lens",
+                "canonicalPath": "/projects/change_lens",
+                "head": {
+                    "kind": "branch",
+                    "name": "main",
+                    "revision": SHA1_REVISION,
+                },
             },
+            "preferredTarget": null,
         })
     );
 }
@@ -229,13 +335,104 @@ fn repository_open_returns_a_detached_head_shape() {
     assert_eq!(
         response,
         serde_json::json!({
-            "name": "change_lens",
-            "canonicalPath": "/projects/change_lens",
-            "head": {
-                "kind": "detached",
-                "revision": SHA1_REVISION,
+            "repositoryId": "00000000-0000-0000-0000-000000000000",
+            "repository": {
+                "name": "change_lens",
+                "canonicalPath": "/projects/change_lens",
+                "head": {
+                    "kind": "detached",
+                    "revision": SHA1_REVISION,
+                },
             },
+            "preferredTarget": null,
         })
+    );
+}
+
+#[test]
+fn repository_history_commands_expose_typed_arguments_and_results() {
+    let removed_ids = Arc::new(Mutex::new(Vec::new()));
+    let service = Arc::new(LocalStateRepositoryService {
+        removed_ids: Arc::clone(&removed_ids),
+    });
+
+    let restore = invoke_command(
+        "repository_restore_last",
+        tauri::ipc::InvokeBody::default(),
+        picker_returning(Ok(None)),
+        service.clone(),
+    )
+    .expect("repository restoration should return a tagged result");
+    assert_eq!(restore, serde_json::json!({"state": "none"}));
+
+    let history = invoke_command(
+        "repository_list_recent",
+        tauri::ipc::InvokeBody::default(),
+        picker_returning(Ok(None)),
+        service.clone(),
+    )
+    .expect("recent repositories should return typed history");
+    assert_eq!(
+        history,
+        serde_json::json!({
+            "lastRepositoryId": "01234567-89ab-cdef-0123-456789abcdef",
+            "repositories": [{
+                "repositoryId": "01234567-89ab-cdef-0123-456789abcdef",
+                "name": "change_lens",
+                "canonicalPath": REPOSITORY_PATH,
+                "lastOpenedAtUnixMilliseconds": 1_785_081_600_000_u64,
+                "preferredTarget": COMPARISON_TARGET,
+            }],
+        })
+    );
+
+    let removal = invoke_command(
+        "repository_remove_recent",
+        tauri::ipc::InvokeBody::Json(serde_json::json!({
+            "repositoryId": "01234567-89ab-cdef-0123-456789abcdef",
+        })),
+        picker_returning(Ok(None)),
+        service,
+    )
+    .expect("repository removal should return a payload-free result");
+    assert_eq!(removal, serde_json::Value::Null);
+    assert_eq!(
+        removed_ids
+            .lock()
+            .expect("the removed repository identifiers should be available")
+            .as_slice(),
+        ["01234567-89ab-cdef-0123-456789abcdef"]
+    );
+}
+
+#[test]
+fn preference_commands_expose_typed_arguments_and_results() {
+    let set_themes = Arc::new(Mutex::new(Vec::new()));
+    let service = Arc::new(FixedColorThemePreferenceService {
+        set_themes: Arc::clone(&set_themes),
+    });
+
+    let get_result = invoke_preference_command(
+        "preference_get_color_theme",
+        tauri::ipc::InvokeBody::default(),
+        service.clone(),
+    )
+    .expect("the color-theme read should return a typed result");
+    assert_eq!(get_result, serde_json::json!({"colorTheme": "dark"}));
+
+    let set_result = invoke_preference_command(
+        "preference_set_color_theme",
+        tauri::ipc::InvokeBody::Json(serde_json::json!({"colorTheme": "light"})),
+        service,
+    )
+    .expect("the color-theme write should return a payload-free result");
+    assert_eq!(set_result, serde_json::Value::Null);
+    assert_eq!(
+        set_themes
+            .lock()
+            .expect("the recorded color themes should be available")
+            .as_slice(),
+        [ColorTheme::Light]
     );
 }
 
@@ -437,6 +634,44 @@ fn invoke_command(
         RepositoryState::new(repository_service),
         RepositoryFolderPickerState::new(picker),
         ComparisonState::new(Arc::new(UnusedComparisonService)),
+    )
+    .build(mock_context(noop_assets()))
+    .expect("the test desktop application should build");
+    let webview = tauri::WebviewWindowBuilder::new(&app, "main", Default::default())
+        .build()
+        .expect("the test webview should build");
+    let request = tauri::webview::InvokeRequest {
+        cmd: command.into(),
+        callback: tauri::ipc::CallbackFn(0),
+        error: tauri::ipc::CallbackFn(1),
+        url: if cfg!(any(windows, target_os = "android")) {
+            "http://tauri.localhost"
+        } else {
+            "tauri://localhost"
+        }
+        .parse()
+        .expect("the test IPC URL should be valid"),
+        body,
+        headers: Default::default(),
+        invoke_key: INVOKE_KEY.to_string(),
+    };
+
+    get_ipc_response(&webview, request)
+        .map(|body| body.deserialize().expect("the success body should be JSON"))
+}
+
+fn invoke_preference_command(
+    command: &str,
+    body: tauri::ipc::InvokeBody,
+    preference_service: Arc<dyn ColorThemePreferenceService>,
+) -> Result<serde_json::Value, serde_json::Value> {
+    let app = configure_desktop_with_preferences(
+        mock_builder(),
+        EngineStatusState::new(Arc::new(SuccessfulEngineStatusService)),
+        RepositoryState::new(repository_returning(Ok(branch_repository()))),
+        RepositoryFolderPickerState::new(picker_returning(Ok(None))),
+        ComparisonState::new(Arc::new(UnusedComparisonService)),
+        PreferenceState::new(preference_service),
     )
     .build(mock_context(noop_assets()))
     .expect("the test desktop application should build");

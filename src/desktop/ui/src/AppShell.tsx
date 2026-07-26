@@ -1,19 +1,30 @@
 import type { ReactNode } from "react";
 import { Icon } from "./Visuals/Components/Icon";
-import { useColorTheme } from "./Visuals/Hooks/useColorTheme";
+import type { ColorTheme } from "./Visuals/Models/ColorTheme";
 
 interface AppShellProps {
   readonly hasRepository?: boolean;
   readonly onOpenAnotherRepository?: () => void;
+  readonly onShowRepositories?: () => void;
+  readonly onShowCurrentChange?: () => void;
+  readonly currentDestination?: "change" | "repositories";
+  readonly showRepositoryNavigation?: boolean;
+  readonly colorTheme: ColorTheme;
+  readonly onToggleColorTheme: () => void;
   readonly children?: ReactNode;
 }
 
 export function AppShell({
   hasRepository = false,
   onOpenAnotherRepository,
+  onShowRepositories,
+  onShowCurrentChange,
+  currentDestination = "change",
+  showRepositoryNavigation = hasRepository,
+  colorTheme,
+  onToggleColorTheme,
   children,
 }: AppShellProps) {
-  const { colorTheme, toggleColorTheme } = useColorTheme();
   const nextTheme = colorTheme === "light" ? "dark" : "light";
 
   return (
@@ -28,17 +39,42 @@ export function AppShell({
             <span>Local change intelligence</span>
           </div>
         </div>
-        {hasRepository ? (
+        {showRepositoryNavigation ? (
           <nav aria-label="ChangeLens workspace">
-            <span className="current-navigation-item" aria-current="page">
+            {hasRepository ? (
+              <button
+                className="current-navigation-item"
+                aria-current={
+                  currentDestination === "change" ? "page" : undefined
+                }
+                type="button"
+                onClick={onShowCurrentChange}
+              >
+                <span className="navigation-icon">
+                  <Icon name="currentChange" />
+                </span>
+                <span>
+                  <strong>Current change</strong>
+                  <small>Prepare comparison</small>
+                </span>
+              </button>
+            ) : null}
+            <button
+              className="current-navigation-item"
+              aria-current={
+                currentDestination === "repositories" ? "page" : undefined
+              }
+              type="button"
+              onClick={onShowRepositories}
+            >
               <span className="navigation-icon">
-                <Icon name="currentChange" />
+                <Icon name="folder" />
               </span>
               <span>
-                <strong>Current change</strong>
-                <small>Prepare comparison</small>
+                <strong>Repositories</strong>
+                <small>Recent local worktrees</small>
               </span>
-            </span>
+            </button>
           </nav>
         ) : (
           <p className="sidebar-introduction">
@@ -82,7 +118,7 @@ export function AppShell({
             type="button"
             aria-label={`Switch to ${nextTheme} theme`}
             title={`Switch to ${nextTheme} theme`}
-            onClick={toggleColorTheme}
+            onClick={onToggleColorTheme}
           >
             <Icon name={colorTheme === "light" ? "moon" : "sun"} />
             <span>{nextTheme} theme</span>

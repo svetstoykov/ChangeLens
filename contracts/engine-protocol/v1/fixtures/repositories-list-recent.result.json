@@ -1,0 +1,17 @@
+{
+  "protocolVersion": 1,
+  "type": "result",
+  "requestId": "desktop-5",
+  "result": {
+    "lastRepositoryId": "01234567-89ab-cdef-0123-456789abcdef",
+    "repositories": [
+      {
+        "repositoryId": "01234567-89ab-cdef-0123-456789abcdef",
+        "name": "change_lens",
+        "canonicalPath": "/projects/change_lens",
+        "lastOpenedAtUnixMilliseconds": 1785031200000,
+        "preferredTarget": "refs/remotes/origin/main"
+      }
+    ]
+  }
+}

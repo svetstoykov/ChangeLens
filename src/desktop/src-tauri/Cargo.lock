@@ -320,6 +320,7 @@ name = "changelens-desktop"
 version = "0.1.0"
 dependencies = [
  "native-dialog",
+ "raw-window-handle",
  "serde",
  "serde_json",
  "tauri",

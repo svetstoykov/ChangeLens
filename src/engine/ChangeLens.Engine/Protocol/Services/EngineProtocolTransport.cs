@@ -21,7 +21,7 @@ namespace ChangeLens.Engine.Protocol.Services;
 internal sealed class EngineProtocolTransport(
     TextReader input,
     TextWriter output,
-    EngineProtocolSerializer protocolSerializer,
+    IEngineProtocolSerializer protocolSerializer,
     ILogger<EngineProtocolTransport> logger) : IEngineProtocolTransport
 {
     /// <summary>

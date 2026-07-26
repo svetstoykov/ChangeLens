@@ -21,7 +21,7 @@ namespace ChangeLens.Engine.Protocol.Services;
 /// </param>
 internal sealed class EngineProtocolHost(
     IEngineProtocolTransport protocolTransport,
-    EngineActionProcessor actionProcessor,
+    IEngineActionProcessor actionProcessor,
     ILogger<EngineProtocolHost> logger,
     IHostApplicationLifetime applicationLifetime) : BackgroundService
 {

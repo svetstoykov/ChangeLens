@@ -9,11 +9,21 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 #[test]
 fn checks_status_with_the_real_dotnet_engine() {
     build_dotnet_project(&engine_project_path());
-    let engine_client = EngineClient::new();
+    let local_state_directory = unique_fixture_path("engine-local-state");
+    let engine_client = EngineClient::with_engine_path_and_arguments(
+        engine_dll_path(),
+        vec![format!(
+            "--ChangeLens:LocalState:Directory={}",
+            local_state_directory.display()
+        )],
+    );
 
     engine_client
         .check_status()
         .expect("the controlled .NET engine should report ready status");
+    drop(engine_client);
+    fs::remove_dir_all(local_state_directory)
+        .expect("the controlled local-state directory should be removable");
 }
 
 #[test]
@@ -296,6 +306,13 @@ fn fixture_dll_path() -> PathBuf {
 fn engine_project_path() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../../engine/ChangeLens.Engine/ChangeLens.Engine.csproj")
+}
+
+fn engine_dll_path() -> PathBuf {
+    engine_project_path()
+        .parent()
+        .expect("the Engine project must have a parent directory")
+        .join("bin/Debug/net10.0/ChangeLens.Engine.dll")
 }
 
 fn fixture_project_path() -> PathBuf {

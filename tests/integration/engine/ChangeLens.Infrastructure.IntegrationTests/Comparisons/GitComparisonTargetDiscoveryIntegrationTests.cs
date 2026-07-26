@@ -1,5 +1,6 @@
 using ChangeLens.Core.Comparisons.Models;
 using ChangeLens.Core.Comparisons.Services;
+using ChangeLens.Core.Git.Services;
 using ChangeLens.Infrastructure.FileSystem.Services;
 using ChangeLens.Infrastructure.Git.Services;
 using ChangeLens.Infrastructure.IntegrationTests.Git.Support;
@@ -129,7 +130,7 @@ public sealed class GitComparisonTargetDiscoveryIntegrationTests
         var before = RepositoryStateSnapshot.Capture(repository.RootPath);
         var runner = new GitCliCommandRunner();
         var discovery = new GitComparisonTargetDiscovery(
-            new(
+            new GitRepositoryInspector(
                 runner,
                 new PhysicalRepositoryPathResolver()),
             runner);

@@ -3,6 +3,7 @@ using System.Diagnostics;
 using System.Security.Cryptography;
 using System.Text;
 using ChangeLens.Core.Comparisons.Constants;
+using ChangeLens.Core.Comparisons.Interfaces;
 using ChangeLens.Core.Comparisons.Models;
 using ChangeLens.Core.Git.Interfaces;
 using ChangeLens.Core.Git.Models;
@@ -33,9 +34,10 @@ namespace ChangeLens.Core.Comparisons.Services;
 ///     <paramref name="commandRunner" /> is <see langword="null" />.
 /// </exception>
 public sealed class GitComparisonFreshnessChecker(
-    GitRepositoryInspector repositoryInspector,
-    GitComparisonTargetDiscovery targetDiscovery,
+    IGitRepositoryInspector repositoryInspector,
+    IGitComparisonTargetDiscovery targetDiscovery,
     IGitCommandRunner commandRunner)
+    : IGitComparisonFreshnessChecker
 {
     private static readonly UTF8Encoding StrictUtf8 = new(false, true);
 
@@ -60,31 +62,16 @@ public sealed class GitComparisonFreshnessChecker(
         "The selected comparison target is not supported.",
         ComparisonErrorCode.TargetInvalid);
 
-    private readonly GitRepositoryInspector _repositoryInspector =
+    private readonly IGitRepositoryInspector _repositoryInspector =
         repositoryInspector ?? throw new ArgumentNullException(nameof(repositoryInspector));
 
-    private readonly GitComparisonTargetDiscovery _targetDiscovery =
+    private readonly IGitComparisonTargetDiscovery _targetDiscovery =
         targetDiscovery ?? throw new ArgumentNullException(nameof(targetDiscovery));
 
     private readonly IGitCommandRunner _commandRunner =
         commandRunner ?? throw new ArgumentNullException(nameof(commandRunner));
 
-    /// <summary>
-    ///     Asynchronously checks whether a prepared comparison freshness token remains current.
-    /// </summary>
-    /// <param name="path">The selected repository directory path.</param>
-    /// <param name="target">The exact full local or cached remote-tracking reference.</param>
-    /// <param name="freshnessToken">The lowercase SHA-256 token from comparison preparation.</param>
-    /// <param name="cancellationToken">
-    ///     A <see cref="CancellationToken" /> to observe while waiting for the task to complete.
-    /// </param>
-    /// <returns>
-    ///     A task that represents the asynchronous operation. The task result contains whether the prepared
-    ///     comparison remains current.
-    /// </returns>
-    /// <exception cref="OperationCanceledException">
-    ///     The <paramref name="cancellationToken" /> is canceled.
-    /// </exception>
+    /// <inheritdoc />
     public async Task<Result<ComparisonFreshnessState>> CheckAsync(
         string? path,
         string? target,

@@ -1,7 +1,9 @@
 using ChangeLens.Core.Comparisons.Models;
 using ChangeLens.Core.Results.Models;
 using ChangeLens.Engine.Comparisons.Constants;
+using ChangeLens.Engine.Comparisons.Interfaces;
 using ChangeLens.Engine.Comparisons.Models;
+using ChangeLens.Engine.Protocol.Interfaces;
 using ChangeLens.Engine.Protocol.Services;
 
 namespace ChangeLens.Engine.Comparisons.Services;
@@ -22,26 +24,18 @@ namespace ChangeLens.Engine.Comparisons.Services;
 /// <exception cref="ArgumentNullException">
 ///     <paramref name="protocolSerializer" /> is <see langword="null" />.
 /// </exception>
-internal sealed class ComparisonTargetPageBuilder(EngineProtocolSerializer protocolSerializer)
+internal sealed class ComparisonTargetPageBuilder(IEngineProtocolSerializer protocolSerializer) : IComparisonTargetPageBuilder
 {
     /// <summary>
     ///     Provides stable correlation overhead when classifying serializer-unsupported descriptors.
     /// </summary>
     private const string DescriptorMeasurementRequestId = "comparison-target-page";
 
-    private readonly EngineProtocolSerializer _protocolSerializer =
+    private readonly IEngineProtocolSerializer _protocolSerializer =
         protocolSerializer ?? throw new ArgumentNullException(nameof(protocolSerializer));
 
-    /// <summary>
-    ///     Builds one deterministic target page after measuring complete correlated response envelopes.
-    /// </summary>
-    /// <param name="requestId">The request identifier. Cannot be <see langword="null" />.</param>
-    /// <param name="targetSet">The ordered Core target set. Cannot be <see langword="null" />.</param>
-    /// <returns>The bounded target page or a protocol serialization failure.</returns>
-    /// <exception cref="ArgumentNullException">
-    ///     <paramref name="requestId" /> or <paramref name="targetSet" /> is <see langword="null" />.
-    /// </exception>
-    internal Result<ComparisonTargetPageResult> Build(
+    /// <inheritdoc />
+    public Result<ComparisonTargetPageResult> Build(
         string requestId,
         ComparisonTargetSet targetSet)
     {

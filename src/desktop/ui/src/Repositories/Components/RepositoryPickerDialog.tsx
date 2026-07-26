@@ -3,7 +3,7 @@ import type { ActionError } from "../../Actions/Models/ActionError";
 import { normalizeActionError } from "../../Actions/Services/normalizeActionError";
 import { presentActionError } from "../../Actions/Services/presentActionError";
 import { repositoryErrorTitles } from "../Constants/repositoryErrorTitles";
-import type { RepositoryDescriptor } from "../Models/RepositoryDescriptor";
+import type { OpenedRepository } from "../Models/OpenedRepository";
 import { Icon } from "../../Visuals/Components/Icon";
 
 type PickerState = "idle" | "choosing" | "opening" | "error";
@@ -11,8 +11,8 @@ type PickerState = "idle" | "choosing" | "opening" | "error";
 interface RepositoryPickerDialogProps {
   readonly dismissible: boolean;
   readonly onDismiss: () => void;
-  readonly onOpenRepository: (path: string) => Promise<RepositoryDescriptor>;
-  readonly onRepositoryOpened: (repository: RepositoryDescriptor) => void;
+  readonly onOpenRepository: (path: string) => Promise<OpenedRepository>;
+  readonly onRepositoryOpened: (repository: OpenedRepository) => void;
   readonly selectFolder: () => Promise<string | null>;
 }
 

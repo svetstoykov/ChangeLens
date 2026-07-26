@@ -11,6 +11,7 @@ use changelens_desktop_lib::repositories::{
     RepositoryDescriptor, RepositoryFolderPicker, RepositoryFolderPickerState, RepositoryService,
     RepositoryState,
 };
+use raw_window_handle::HasWindowHandle;
 use std::path::PathBuf;
 use std::sync::Arc;
 use tauri::test::{INVOKE_KEY, get_ipc_response, mock_builder, mock_context, noop_assets};
@@ -28,7 +29,10 @@ impl EngineStatusService for FixedEngineStatusService {
 struct UnusedRepositoryFolderPicker;
 
 impl RepositoryFolderPicker for UnusedRepositoryFolderPicker {
-    fn select_folder(&self) -> Result<Option<PathBuf>, EngineActionError> {
+    fn select_folder(
+        &self,
+        _owner: &dyn HasWindowHandle,
+    ) -> Result<Option<PathBuf>, EngineActionError> {
         unreachable!("the engine status test does not open a folder picker")
     }
 }

@@ -28,6 +28,16 @@ public sealed class EngineProtocolContractTests
     [InlineData("repository-open.schema.json", "repositories-open.request.json")]
     [InlineData("repository-open.schema.json", "repositories-open.branch.result.json")]
     [InlineData("repository-open.schema.json", "repositories-open.detached.result.json")]
+    [InlineData("repository-restore-last.schema.json", "repositories-restore-last.request.json")]
+    [InlineData("repository-restore-last.schema.json", "repositories-restore-last.none.result.json")]
+    [InlineData("repository-list-recent.schema.json", "repositories-list-recent.request.json")]
+    [InlineData("repository-list-recent.schema.json", "repositories-list-recent.result.json")]
+    [InlineData("repository-remove-recent.schema.json", "repositories-remove-recent.request.json")]
+    [InlineData("repository-remove-recent.schema.json", "repositories-remove-recent.result.json")]
+    [InlineData("preference-color-theme.schema.json", "preferences-get-color-theme.request.json")]
+    [InlineData("preference-color-theme.schema.json", "preferences-get-color-theme.result.json")]
+    [InlineData("preference-color-theme.schema.json", "preferences-set-color-theme.request.json")]
+    [InlineData("preference-color-theme.schema.json", "preferences-set-color-theme.result.json")]
     [InlineData(
         "comparison-list-targets.schema.json",
         "comparisons-list-targets.request.json")]
@@ -139,6 +149,33 @@ public sealed class EngineProtocolContractTests
         using var fixture = JsonDocument.Parse(File.ReadAllText(FixturePath(fixtureFileName)));
 
         var result = Schemas[schemaFileName].Evaluate(fixture.RootElement);
+
+        Assert.True(result.IsValid);
+    }
+
+    /// <summary>
+    ///     Verifies that inputless actions accept ignored parameters.
+    /// </summary>
+    /// <param name="schemaFileName">The schema used to validate the request.</param>
+    /// <param name="json">The inputless action request with an ignored parameters value.</param>
+    [Theory]
+    [InlineData(
+        "engine-status.schema.json",
+        """{"protocolVersion":1,"requestId":"id","action":"engine.checkStatus","parameters":{"ignored":true}}""")]
+    [InlineData(
+        "repository-restore-last.schema.json",
+        """{"protocolVersion":1,"requestId":"id","action":"repositories.restoreLast","parameters":null}""")]
+    [InlineData(
+        "repository-list-recent.schema.json",
+        """{"protocolVersion":1,"requestId":"id","action":"repositories.listRecent","parameters":[]}""")]
+    [InlineData(
+        "preference-color-theme.schema.json",
+        """{"protocolVersion":1,"requestId":"id","action":"preferences.getColorTheme","parameters":"ignored"}""")]
+    public void InputlessActionSchemasAcceptIgnoredParameters(string schemaFileName, string json)
+    {
+        using var instance = JsonDocument.Parse(json);
+
+        var result = Schemas[schemaFileName].Evaluate(instance.RootElement);
 
         Assert.True(result.IsValid);
     }
@@ -383,6 +420,10 @@ public sealed class EngineProtocolContractTests
             "error-response.schema.json",
             "payload-free-result.schema.json",
             "repository-open.schema.json",
+            "repository-restore-last.schema.json",
+            "repository-list-recent.schema.json",
+            "repository-remove-recent.schema.json",
+            "preference-color-theme.schema.json",
             "comparison-list-targets.schema.json",
             "comparison-prepare.schema.json",
             "comparison-check-freshness.schema.json",

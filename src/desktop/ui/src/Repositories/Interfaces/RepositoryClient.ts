@@ -1,5 +1,5 @@
-import type { RepositoryDescriptor } from "../Models/RepositoryDescriptor";
+import type { OpenedRepository } from "../Models/OpenedRepository";
 
 export interface RepositoryClient {
-  openRepository(path: string): Promise<RepositoryDescriptor>;
+  openRepository(path: string): Promise<OpenedRepository>;
 }

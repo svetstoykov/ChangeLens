@@ -1,0 +1,5 @@
+{
+  "protocolVersion": 1,
+  "requestId": "desktop-7",
+  "action": "preferences.getColorTheme"
+}

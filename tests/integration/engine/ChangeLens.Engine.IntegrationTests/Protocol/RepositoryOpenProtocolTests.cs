@@ -14,6 +14,115 @@ namespace ChangeLens.Engine.IntegrationTests.Protocol;
 public sealed class RepositoryOpenProtocolTests
 {
     /// <summary>
+    ///     Verifies repository history, preferred target, theme, restoration, and removal in one real Engine process.
+    /// </summary>
+    [Fact]
+    public async Task EnginePersistsAndReconcilesPhaseOneLocalStateActions()
+    {
+        var temporaryRoot = CreateTemporaryRoot();
+
+        try
+        {
+            var repositoryPath = InitializeRepository(temporaryRoot, "durable repository");
+            RunGitChecked(["-C", repositoryPath, "branch", "baseline"]);
+            File.WriteAllText(Path.Combine(repositoryPath, "current.txt"), "current work\n");
+            RunGitChecked(["-C", repositoryPath, "add", "--", "current.txt"]);
+            RunGitChecked(
+                [
+                    "-C",
+                    repositoryPath,
+                    "commit",
+                    "--quiet",
+                    "--no-gpg-sign",
+                    "-m",
+                    "current work",
+                ]);
+            using var engine = StartEngine();
+
+            await engine.StandardInput.WriteLineAsync(
+                CreateOpenRequest("open", repositoryPath));
+            using var openResponse = await ReadResponseAsync(engine);
+            var repositoryId = openResponse.RootElement
+                .GetProperty("result")
+                .GetProperty("repositoryId")
+                .GetString();
+            Assert.False(string.IsNullOrWhiteSpace(repositoryId));
+
+            await engine.StandardInput.WriteLineAsync(
+                JsonSerializer.Serialize(
+                    new
+                    {
+                        protocolVersion = 1,
+                        requestId = "prepare",
+                        action = "comparisons.prepare",
+                        parameters = new
+                        {
+                            path = repositoryPath,
+                            target = "refs/heads/baseline",
+                        },
+                    }));
+            using var prepareResponse = await ReadResponseAsync(engine);
+            Assert.Equal("result", prepareResponse.RootElement.GetProperty("type").GetString());
+
+            await engine.StandardInput.WriteLineAsync(
+                """{"protocolVersion":1,"requestId":"list","action":"repositories.listRecent"}""");
+            using var listResponse = await ReadResponseAsync(engine);
+            var listResult = listResponse.RootElement.GetProperty("result");
+            Assert.Equal(repositoryId, listResult.GetProperty("lastRepositoryId").GetString());
+            var recent = Assert.Single(listResult.GetProperty("repositories").EnumerateArray());
+            Assert.Equal("refs/heads/baseline", recent.GetProperty("preferredTarget").GetString());
+
+            await engine.StandardInput.WriteLineAsync(
+                """{"protocolVersion":1,"requestId":"set-theme","action":"preferences.setColorTheme","parameters":{"colorTheme":"dark"}}""");
+            using var setThemeResponse = await ReadResponseAsync(engine);
+            Assert.Equal(JsonValueKind.Null, setThemeResponse.RootElement.GetProperty("result").ValueKind);
+
+            await engine.StandardInput.WriteLineAsync(
+                """{"protocolVersion":1,"requestId":"get-theme","action":"preferences.getColorTheme"}""");
+            using var getThemeResponse = await ReadResponseAsync(engine);
+            Assert.Equal(
+                "dark",
+                getThemeResponse.RootElement
+                    .GetProperty("result")
+                    .GetProperty("colorTheme")
+                    .GetString());
+
+            await engine.StandardInput.WriteLineAsync(
+                """{"protocolVersion":1,"requestId":"restore","action":"repositories.restoreLast"}""");
+            using var restoreResponse = await ReadResponseAsync(engine);
+            var restoreResult = restoreResponse.RootElement.GetProperty("result");
+            Assert.Equal("restored", restoreResult.GetProperty("state").GetString());
+            Assert.Equal(repositoryId, restoreResult.GetProperty("repositoryId").GetString());
+
+            await engine.StandardInput.WriteLineAsync(
+                JsonSerializer.Serialize(
+                    new
+                    {
+                        protocolVersion = 1,
+                        requestId = "remove",
+                        action = "repositories.removeRecent",
+                        parameters = new { repositoryId },
+                    }));
+            using var removeResponse = await ReadResponseAsync(engine);
+            Assert.Equal(JsonValueKind.Null, removeResponse.RootElement.GetProperty("result").ValueKind);
+
+            await engine.StandardInput.WriteLineAsync(
+                """{"protocolVersion":1,"requestId":"list-empty","action":"repositories.listRecent"}""");
+            engine.StandardInput.Close();
+            using var emptyListResponse = await ReadResponseAsync(engine);
+            await WaitForExitAsync(engine);
+            var emptyList = emptyListResponse.RootElement.GetProperty("result");
+            Assert.Equal(JsonValueKind.Null, emptyList.GetProperty("lastRepositoryId").ValueKind);
+            Assert.Empty(emptyList.GetProperty("repositories").EnumerateArray());
+            Assert.Equal(0, engine.ExitCode);
+        }
+        finally
+        {
+            DeleteTemporaryRoot(temporaryRoot);
+        }
+    }
+
+    /// <summary>
     ///     Verifies exact branch result values and JSON property names for a controlled repository.
     /// </summary>
     [Fact]
@@ -376,7 +485,10 @@ public sealed class RepositoryOpenProtocolTests
         Assert.Equal(1, root.GetProperty("protocolVersion").GetInt32());
         Assert.Equal("result", root.GetProperty("type").GetString());
         Assert.Equal(requestId, root.GetProperty("requestId").GetString());
-        AssertExactProperties(root.GetProperty("result"), "repository");
+        var result = root.GetProperty("result");
+        AssertExactProperties(result, "repositoryId", "repository", "preferredTarget");
+        Assert.True(Guid.TryParseExact(result.GetProperty("repositoryId").GetString(), "D", out _));
+        Assert.Equal(JsonValueKind.Null, result.GetProperty("preferredTarget").ValueKind);
     }
 
     private static void AssertExactProperties(JsonElement element, params string[] expectedNames)
@@ -598,6 +710,10 @@ public sealed class RepositoryOpenProtocolTests
             RedirectStandardError = redirectStandardError,
             UseShellExecute = false,
         };
+        startInfo.Environment["ChangeLens__LocalState__Directory"] = Path.Combine(
+            Path.GetTempPath(),
+            "ChangeLens.Engine.IntegrationTests",
+            Guid.NewGuid().ToString("N"));
 
         if (logDirectory is not null)
         {

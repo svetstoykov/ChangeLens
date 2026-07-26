@@ -1,4 +1,6 @@
 using ChangeLens.Core.EngineStatus.Services;
+using ChangeLens.Core.Results.Models;
+using ChangeLens.Core.UnitTests.EngineStatus.Support;
 using Xunit;
 
 namespace ChangeLens.Core.UnitTests.EngineStatus.Services;
@@ -15,7 +17,8 @@ public sealed class EngineStatusServiceTests
     [Fact]
     public async Task CheckStatusAsyncReturnsSuccess()
     {
-        var service = new EngineStatusService();
+        var service = new EngineStatusService(
+            new StubLocalStateInitializer(_ => Task.FromResult(Result.Success())));
 
         var result = await service.CheckStatusAsync(TestContext.Current.CancellationToken);
 
@@ -32,7 +35,13 @@ public sealed class EngineStatusServiceTests
     {
         using var cancellation = new CancellationTokenSource();
         await cancellation.CancelAsync();
-        var service = new EngineStatusService();
+        var service = new EngineStatusService(
+            new StubLocalStateInitializer(
+                token =>
+                {
+                    token.ThrowIfCancellationRequested();
+                    return Task.FromResult(Result.Success());
+                }));
 
         await Assert.ThrowsAsync<OperationCanceledException>(
             () => service.CheckStatusAsync(cancellation.Token));

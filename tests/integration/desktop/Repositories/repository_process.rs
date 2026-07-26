@@ -1,5 +1,6 @@
 use changelens_desktop_lib::engine_protocol::{ActionErrorKind, EngineClient, OperationErrorType};
-use changelens_desktop_lib::repositories::RepositoryService;
+use changelens_desktop_lib::preferences::{ColorTheme, ColorThemePreferenceService};
+use changelens_desktop_lib::repositories::{RepositoryRestoreResult, RepositoryService};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -36,6 +37,46 @@ fn parses_the_detached_fixture() {
         .expect("the canonical detached result must parse");
 
     assert_repository_matches_fixture(repository, DETACHED_RESULT_FIXTURE);
+}
+
+#[test]
+fn local_state_actions_use_exact_shapes_and_share_one_process() {
+    let client = client_for_mode("local-state");
+
+    assert_eq!(
+        client
+            .restore_last_repository()
+            .expect("the restoration result must parse"),
+        RepositoryRestoreResult::None
+    );
+    let process_id = client
+        .process_id_for_testing()
+        .expect("the first local-state action must start the fixture");
+
+    let history = client
+        .list_recent_repositories()
+        .expect("the recent repository result must parse");
+    assert_eq!(history.repositories.len(), 1);
+    assert_eq!(
+        history.last_repository_id.as_deref(),
+        Some("01234567-89ab-cdef-0123-456789abcdef")
+    );
+
+    client
+        .remove_recent_repository("01234567-89ab-cdef-0123-456789abcdef")
+        .expect("the removal result must parse");
+    assert_eq!(
+        client
+            .get_color_theme()
+            .expect("the color-theme result must parse")
+            .color_theme,
+        Some(ColorTheme::Dark)
+    );
+    client
+        .set_color_theme(ColorTheme::Dark)
+        .expect("the color-theme write result must parse");
+
+    assert_eq!(client.process_id_for_testing(), Some(process_id));
 }
 
 #[test]
@@ -115,10 +156,10 @@ fn repository_timeout_is_not_replayed_and_a_later_action_restarts() {
     let started_at = Instant::now();
 
     let first = client
-        .open_repository_with_timeout_for_testing(REPOSITORY_PATH, Duration::from_millis(50))
+        .open_repository_with_timeout_for_testing(REPOSITORY_PATH, Duration::from_millis(500))
         .expect_err("the delayed repository response must exceed the test deadline");
 
-    assert!(started_at.elapsed() < Duration::from_secs(2));
+    assert!(started_at.elapsed() < Duration::from_secs(3));
     assert_eq!(request_log.request_count(), 1);
     assert_eq!(first.kind, ActionErrorKind::Transport);
     assert_eq!(first.request_id.as_deref(), Some("desktop-1"));

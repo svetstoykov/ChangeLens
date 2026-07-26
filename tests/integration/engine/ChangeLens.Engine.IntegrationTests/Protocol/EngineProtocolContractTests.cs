@@ -154,6 +154,33 @@ public sealed class EngineProtocolContractTests
     }
 
     /// <summary>
+    ///     Verifies that inputless actions accept ignored parameters.
+    /// </summary>
+    /// <param name="schemaFileName">The schema used to validate the request.</param>
+    /// <param name="json">The inputless action request with an ignored parameters value.</param>
+    [Theory]
+    [InlineData(
+        "engine-status.schema.json",
+        """{"protocolVersion":1,"requestId":"id","action":"engine.checkStatus","parameters":{"ignored":true}}""")]
+    [InlineData(
+        "repository-restore-last.schema.json",
+        """{"protocolVersion":1,"requestId":"id","action":"repositories.restoreLast","parameters":null}""")]
+    [InlineData(
+        "repository-list-recent.schema.json",
+        """{"protocolVersion":1,"requestId":"id","action":"repositories.listRecent","parameters":[]}""")]
+    [InlineData(
+        "preference-color-theme.schema.json",
+        """{"protocolVersion":1,"requestId":"id","action":"preferences.getColorTheme","parameters":"ignored"}""")]
+    public void InputlessActionSchemasAcceptIgnoredParameters(string schemaFileName, string json)
+    {
+        using var instance = JsonDocument.Parse(json);
+
+        var result = Schemas[schemaFileName].Evaluate(instance.RootElement);
+
+        Assert.True(result.IsValid);
+    }
+
+    /// <summary>
     ///     Verifies that the shared error schema rejects empty and malformed error collections.
     /// </summary>
     /// <param name="json">The invalid error response.</param>

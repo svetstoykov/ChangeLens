@@ -43,7 +43,7 @@ public sealed class EngineActionProcessorTests
     }
 
     /// <summary>
-    ///     Verifies that status rejects every supplied parameters value without calling Core.
+    ///     Verifies that status ignores every supplied parameters value.
     /// </summary>
     /// <param name="parametersJson">The explicitly supplied parameters value.</param>
     [Theory]
@@ -53,7 +53,7 @@ public sealed class EngineActionProcessorTests
     [InlineData("false")]
     [InlineData("1")]
     [InlineData("\"value\"")]
-    public async Task ProcessAsyncRejectsEverySuppliedStatusParametersValue(string parametersJson)
+    public async Task ProcessAsyncIgnoresEverySuppliedStatusParametersValue(string parametersJson)
     {
         var callCount = 0;
         var processor = CreateProcessor(
@@ -67,11 +67,30 @@ public sealed class EngineActionProcessorTests
             CreateRequest(parameters: Parse(parametersJson)),
             TestContext.Current.CancellationToken);
 
-        var errorResponse = Assert.IsType<ProtocolErrorResponse>(response);
-        var error = Assert.Single(errorResponse.Errors);
-        Assert.Equal(ErrorType.Validation, error.Type);
-        Assert.Equal("protocol.invalidRequest", error.Code);
-        Assert.Equal(0, callCount);
+        Assert.IsNotType<ProtocolErrorResponse>(response);
+        Assert.Equal(1, callCount);
+    }
+
+    /// <summary>
+    ///     Verifies that other inputless actions ignore supplied parameters.
+    /// </summary>
+    /// <param name="action">The inputless action to process.</param>
+    /// <param name="parametersJson">The explicitly supplied parameters value.</param>
+    [Theory]
+    [InlineData("repositories.restoreLast", "{}")]
+    [InlineData("repositories.listRecent", "null")]
+    [InlineData("preferences.getColorTheme", "[]")]
+    public async Task ProcessAsyncIgnoresSuppliedParametersForInputlessAction(
+        string action,
+        string parametersJson)
+    {
+        var processor = CreateProcessor();
+
+        var response = await processor.ProcessAsync(
+            CreateRequest(action: action, parameters: Parse(parametersJson)),
+            TestContext.Current.CancellationToken);
+
+        Assert.IsNotType<ProtocolErrorResponse>(response);
     }
 
     /// <summary>

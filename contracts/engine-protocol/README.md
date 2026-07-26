@@ -6,9 +6,8 @@ Version 1 requests use an action envelope containing `protocolVersion`, `request
 protocol version, request identifier, and fixed action name; React does not create protocol messages directly.
 
 Version 1 currently implements `engine.checkStatus`, `repositories.open`, `comparisons.listTargets`,
-`comparisons.prepare`, and `comparisons.checkFreshness`. The `engine.checkStatus` action takes no input, so its request
-has no `parameters` property. Every other implemented action has a strict capability-specific `parameters` object.
-Add `parameters` to an action request only when that action has real input.
+`comparisons.prepare`, and `comparisons.checkFreshness`. Actions without input ignore an optional `parameters` value.
+Actions with input require a strict capability-specific `parameters` object.
 
 The `repositories.open` result describes a repository and its current head. Its `head` is a strict tagged union: a
 branch head has `kind: "branch"`, a non-empty branch name, and a lowercase 40- or 64-character revision; a detached

@@ -136,16 +136,10 @@ internal sealed class EngineActionProcessor(
         {
             RepositoryActionConstants.OpenAction =>
                 await this.ProcessRepositoryOpenAsync(request, cancellationToken),
-            RepositoryActionConstants.RestoreLastAction
-                when request.Parameters.ValueKind == JsonValueKind.Undefined =>
-                await this.ProcessRepositoryRestoreLastAsync(request, cancellationToken),
             RepositoryActionConstants.RestoreLastAction =>
-                NoParametersAccepted(request, RepositoryActionConstants.RestoreLastAction),
-            RepositoryActionConstants.ListRecentAction
-                when request.Parameters.ValueKind == JsonValueKind.Undefined =>
-                await this.ProcessRepositoryListRecentAsync(request, cancellationToken),
+                await this.ProcessRepositoryRestoreLastAsync(request, cancellationToken),
             RepositoryActionConstants.ListRecentAction =>
-                NoParametersAccepted(request, RepositoryActionConstants.ListRecentAction),
+                await this.ProcessRepositoryListRecentAsync(request, cancellationToken),
             RepositoryActionConstants.RemoveRecentAction =>
                 await this.ProcessRepositoryRemoveRecentAsync(request, cancellationToken),
             ComparisonActionConstants.ListTargetsAction =>
@@ -154,20 +148,10 @@ internal sealed class EngineActionProcessor(
                 await this.ProcessComparisonPrepareAsync(request, cancellationToken),
             ComparisonActionConstants.CheckFreshnessAction =>
                 await this.ProcessComparisonCheckFreshnessAsync(request, cancellationToken),
-            EngineStatusActionConstants.CheckStatusAction
-                when request.Parameters.ValueKind == JsonValueKind.Undefined =>
-                await this.ProcessCheckStatusAsync(request, cancellationToken),
             EngineStatusActionConstants.CheckStatusAction =>
-                ProtocolResponseFactory.FromError(
-                    request.RequestId,
-                    OperationError.Validation(
-                        "The engine.checkStatus action does not accept parameters.",
-                        EngineErrorCode.InvalidRequest)),
-            PreferenceActionConstants.GetColorThemeAction
-                when request.Parameters.ValueKind == JsonValueKind.Undefined =>
-                await this.ProcessGetColorThemeAsync(request, cancellationToken),
+                await this.ProcessCheckStatusAsync(request, cancellationToken),
             PreferenceActionConstants.GetColorThemeAction =>
-                NoParametersAccepted(request, PreferenceActionConstants.GetColorThemeAction),
+                await this.ProcessGetColorThemeAsync(request, cancellationToken),
             PreferenceActionConstants.SetColorThemeAction =>
                 await this.ProcessSetColorThemeAsync(request, cancellationToken),
             _ =>
@@ -524,15 +508,6 @@ internal sealed class EngineActionProcessor(
             requestId,
             OperationError.Validation(
                 $"The {action} action requires parameters.",
-                EngineErrorCode.InvalidRequest));
-
-    private static ProtocolResponse NoParametersAccepted(
-        EngineProtocolRequest request,
-        string action) =>
-        ProtocolResponseFactory.FromError(
-            request.RequestId,
-            OperationError.Validation(
-                $"The {action} action does not accept parameters.",
                 EngineErrorCode.InvalidRequest));
 
     private static bool IsKnownAction(string action) =>

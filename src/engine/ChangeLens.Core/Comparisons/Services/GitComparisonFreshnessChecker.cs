@@ -97,7 +97,7 @@ public sealed class GitComparisonFreshnessChecker(
 
         try
         {
-            var repositoryResult = await InspectRepositoryAsync(
+            var repositoryResult = await this.InspectRepositoryAsync(
                 path,
                 startedAt,
                 actionCancellation.Token);
@@ -107,7 +107,7 @@ public sealed class GitComparisonFreshnessChecker(
             }
 
             var repository = repositoryResult.Data!;
-            var targetsResult = await _targetDiscovery.ListForRepositoryAsync(
+            var targetsResult = await this._targetDiscovery.ListForRepositoryAsync(
                 repository,
                 null,
                 null,
@@ -127,7 +127,7 @@ public sealed class GitComparisonFreshnessChecker(
                 return Result.Success(ComparisonFreshnessState.Stale);
             }
 
-            var checkFormatResult = await RunAsync(
+            var checkFormatResult = await this.RunAsync(
                 repository.CanonicalPath,
                 startedAt,
                 ["check-ref-format", target!],
@@ -148,7 +148,7 @@ public sealed class GitComparisonFreshnessChecker(
                 return InspectionFailed<ComparisonFreshnessState>();
             }
 
-            var targetRevisionResult = await RunAsync(
+            var targetRevisionResult = await this.RunAsync(
                 repository.CanonicalPath,
                 startedAt,
                 ["rev-parse", "--verify", target + "^{commit}"],
@@ -169,7 +169,7 @@ public sealed class GitComparisonFreshnessChecker(
                 return Result.ErrorFromResult<ComparisonFreshnessState>(parsedTargetRevision);
             }
 
-            var statusResult = await RunAsync(
+            var statusResult = await this.RunAsync(
                 repository.CanonicalPath,
                 startedAt,
                 StatusArguments(),
@@ -222,7 +222,7 @@ public sealed class GitComparisonFreshnessChecker(
         var remaining = Remaining(startedAt);
         return remaining <= TimeSpan.Zero
             ? Result.Fail<RepositoryDescriptor>(TimedOutError)
-            : await _repositoryInspector.InspectAsync(
+            : await this._repositoryInspector.InspectAsync(
                 path,
                 remaining,
                 ComparisonErrors(),
@@ -255,7 +255,7 @@ public sealed class GitComparisonFreshnessChecker(
             return Task.FromResult(Result.Fail<GitCommandOutput>(TimedOutError));
         }
 
-        return _commandRunner.RunAsync(
+        return this._commandRunner.RunAsync(
             new GitCommand(
                 DirectArguments(canonicalPath, subcommandArguments),
                 remaining,

@@ -42,7 +42,7 @@ public sealed class ComparisonTargetPageBuilderTests
             "refs/remotes/origin/main");
         var targetSet = new ComparisonTargetSet([local, remote], remote, Token, 2);
 
-        var result = CreateBuilder().Build("request-order", targetSet);
+        var result = this.CreateBuilder().Build("request-order", targetSet);
 
         Assert.True(result.IsSuccess);
         Assert.Equal(
@@ -62,7 +62,7 @@ public sealed class ComparisonTargetPageBuilderTests
     [Fact]
     public void BuildReturnsSuccessfulEmptyPage()
     {
-        var result = CreateBuilder().Build(
+        var result = this.CreateBuilder().Build(
             "request-empty",
             new ComparisonTargetSet([], null, Token, 3));
 
@@ -85,7 +85,7 @@ public sealed class ComparisonTargetPageBuilderTests
     [InlineData(true)]
     public void BuildRejectsFinalEnvelopeBeyondBudget(bool includeUnsupportedTarget)
     {
-        var boundaryLength = FindLargestEscapedRequestIdLengthWithinBudget();
+        var boundaryLength = this.FindLargestEscapedRequestIdLengthWithinBudget();
         var withinBudgetRequestId = "request-" + new string('\u0001', boundaryLength);
         var beyondBudgetRequestId = withinBudgetRequestId + "\u0001";
         IReadOnlyList<ComparisonTargetDescriptor> targets = includeUnsupportedTarget
@@ -97,16 +97,15 @@ public sealed class ComparisonTargetPageBuilderTests
             ]
             : [];
 
-        var withinBudget = CreateBuilder().Build(
+        var withinBudget = this.CreateBuilder().Build(
             withinBudgetRequestId,
             new ComparisonTargetSet([], null, Token, 0));
-        var beyondBudget = CreateBuilder().Build(
+        var beyondBudget = this.CreateBuilder().Build(
             beyondBudgetRequestId,
             new ComparisonTargetSet(targets, null, Token, 0));
 
         Assert.True(withinBudget.IsSuccess);
-        Assert.True(
-            Measure(withinBudgetRequestId, withinBudget.Data!) <= TargetPageBudgetBytes);
+        Assert.True(this.Measure(withinBudgetRequestId, withinBudget.Data!) <= TargetPageBudgetBytes);
         var error = Assert.Single(beyondBudget.Errors);
         Assert.Equal("comparison.tooLarge", error.Code);
     }
@@ -117,11 +116,11 @@ public sealed class ComparisonTargetPageBuilderTests
     [Fact]
     public void BuildRejectsRequestEnvelopeThatCannotFitFirstSupportedTarget()
     {
-        var boundaryLength = FindLargestEscapedRequestIdLengthWithinBudget();
+        var boundaryLength = this.FindLargestEscapedRequestIdLengthWithinBudget();
         var requestId = "request-" + new string('\u0001', boundaryLength);
         var target = Target(ComparisonTargetKind.Local, "small", "refs/heads/small");
 
-        var result = CreateBuilder().Build(
+        var result = this.CreateBuilder().Build(
             requestId,
             new ComparisonTargetSet([target], null, Token, 3));
 
@@ -142,7 +141,7 @@ public sealed class ComparisonTargetPageBuilderTests
             "refs/heads/" + oversizedName);
         var supported = Target(ComparisonTargetKind.Local, "small", "refs/heads/small");
 
-        var result = CreateBuilder().Build(
+        var result = this.CreateBuilder().Build(
             "request-oversized",
             new ComparisonTargetSet([oversized, supported], null, Token, 4));
 
@@ -151,7 +150,7 @@ public sealed class ComparisonTargetPageBuilderTests
         Assert.Equal(supported.FullName, emitted.FullName);
         Assert.Null(result.Data.NextCursor);
         Assert.Equal(5, result.Data.UnsupportedTargetCount);
-        var json = Serialize("request-oversized", result.Data);
+        var json = this.Serialize("request-oversized", result.Data);
         Assert.DoesNotContain(oversizedName, json, StringComparison.Ordinal);
         Assert.True(System.Text.Encoding.UTF8.GetByteCount(json) <= TargetPageBudgetBytes);
     }
@@ -168,7 +167,7 @@ public sealed class ComparisonTargetPageBuilderTests
             "refs/heads/" + new string('\u0001', 4_085));
         var supported = Target(ComparisonTargetKind.Local, "small", "refs/heads/small");
 
-        var result = CreateBuilder().Build(
+        var result = this.CreateBuilder().Build(
             "request-cursor-heavy",
             new ComparisonTargetSet([cursorHeavy, supported], null, Token, 0));
 
@@ -194,7 +193,7 @@ public sealed class ComparisonTargetPageBuilderTests
                 })
             .ToArray();
 
-        var result = CreateBuilder().Build(
+        var result = this.CreateBuilder().Build(
             "request-capacity-identifier-with-real-envelope-cost",
             new ComparisonTargetSet(targets, null, Token, 0));
 
@@ -202,7 +201,7 @@ public sealed class ComparisonTargetPageBuilderTests
         Assert.NotEmpty(result.Data!.Targets);
         Assert.True(result.Data.Targets.Count < targets.Length);
         Assert.Equal(result.Data.Targets[^1].FullName, result.Data.NextCursor);
-        var json = Serialize("request-capacity-identifier-with-real-envelope-cost", result.Data);
+        var json = this.Serialize("request-capacity-identifier-with-real-envelope-cost", result.Data);
         Assert.True(System.Text.Encoding.UTF8.GetByteCount(json) <= TargetPageBudgetBytes);
         using var parsed = JsonDocument.Parse(json);
         Assert.Equal(JsonValueKind.Object, parsed.RootElement.ValueKind);
@@ -240,13 +239,13 @@ public sealed class ComparisonTargetPageBuilderTests
 
         while (remaining.Count > 0)
         {
-            var result = CreateBuilder().Build(
+            var result = this.CreateBuilder().Build(
                 "request-repeat",
                 new ComparisonTargetSet(remaining, null, Token, 0));
             Assert.True(result.IsSuccess);
             Assert.NotEmpty(result.Data!.Targets);
             emitted.AddRange(result.Data.Targets.Select(target => target.FullName));
-            var json = Serialize("request-repeat", result.Data);
+            var json = this.Serialize("request-repeat", result.Data);
             Assert.True(System.Text.Encoding.UTF8.GetByteCount(json) <= TargetPageBudgetBytes);
             using var parsed = JsonDocument.Parse(json);
 
@@ -303,7 +302,7 @@ public sealed class ComparisonTargetPageBuilderTests
 
         while (remaining.Count > 0)
         {
-            var result = CreateBuilder().Build(
+            var result = this.CreateBuilder().Build(
                 "request-stable-count",
                 new ComparisonTargetSet(remaining, null, Token, 3)
                 {
@@ -345,12 +344,12 @@ public sealed class ComparisonTargetPageBuilderTests
             escapedName,
             "refs/heads/" + escapedName);
 
-        var result = CreateBuilder().Build(
+        var result = this.CreateBuilder().Build(
             "request-escaped-\u0001",
             new ComparisonTargetSet([target], null, Token, 0));
 
         Assert.True(result.IsSuccess);
-        var json = Serialize("request-escaped-\u0001", result.Data!);
+        var json = this.Serialize("request-escaped-\u0001", result.Data!);
         using var document = JsonDocument.Parse(json);
         var emitted = document.RootElement
             .GetProperty("result")
@@ -363,12 +362,12 @@ public sealed class ComparisonTargetPageBuilderTests
         Assert.True(System.Text.Encoding.UTF8.GetByteCount(json) <= TargetPageBudgetBytes);
     }
 
-    private ComparisonTargetPageBuilder CreateBuilder() => new(_serializer);
+    private ComparisonTargetPageBuilder CreateBuilder() => new(this._serializer);
 
     private string Serialize(string requestId, ComparisonTargetPageResult result)
     {
         var response = ProtocolResponseFactory.CreateWithValue(requestId, result);
-        var serialization = _serializer.SerializeResponse(response);
+        var serialization = this._serializer.SerializeResponse(response);
         Assert.True(serialization.IsSuccess);
         return serialization.Data!;
     }
@@ -376,7 +375,7 @@ public sealed class ComparisonTargetPageBuilderTests
     private int Measure(string requestId, ComparisonTargetPageResult result)
     {
         var response = ProtocolResponseFactory.CreateWithValue(requestId, result);
-        var measurement = _serializer.GetSerializedUtf8ByteCount(response);
+        var measurement = this._serializer.GetSerializedUtf8ByteCount(response);
         Assert.True(measurement.IsSuccess);
         return measurement.Data;
     }
@@ -391,7 +390,7 @@ public sealed class ComparisonTargetPageBuilderTests
         {
             var midpoint = low + (high - low + 1) / 2;
             var requestId = "request-" + new string('\u0001', midpoint);
-            if (Measure(requestId, page) <= TargetPageBudgetBytes)
+            if (this.Measure(requestId, page) <= TargetPageBudgetBytes)
             {
                 low = midpoint;
             }

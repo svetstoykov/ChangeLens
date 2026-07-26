@@ -35,8 +35,8 @@ internal sealed class TemporaryGitRepository : IDisposable
         bool createInitialCommit)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(directoryName);
-        _temporaryDirectory = new TemporaryDirectory();
-        RootPath = Path.Combine(_temporaryDirectory.DirectoryPath, directoryName);
+        this._temporaryDirectory = new TemporaryDirectory();
+        this.RootPath = Path.Combine(this._temporaryDirectory.DirectoryPath, directoryName);
 
         var initArguments = new List<string> { "init" };
         if (!bare)
@@ -54,7 +54,7 @@ internal sealed class TemporaryGitRepository : IDisposable
             initArguments.Add("--bare");
         }
 
-        initArguments.Add(RootPath);
+        initArguments.Add(this.RootPath);
         RunGitChecked(initArguments);
 
         if (bare)
@@ -62,10 +62,10 @@ internal sealed class TemporaryGitRepository : IDisposable
             return;
         }
 
-        ConfigureRepository(RootPath);
+        ConfigureRepository(this.RootPath);
         if (createInitialCommit)
         {
-            CommitFixture(RootPath, "fixture.txt", "initial fixture content\n", "initial commit");
+            CommitFixture(this.RootPath, "fixture.txt", "initial fixture content\n", "initial commit");
         }
     }
 
@@ -78,7 +78,7 @@ internal sealed class TemporaryGitRepository : IDisposable
     ///     Gets the full committed HEAD object identifier.
     /// </summary>
     internal string Revision =>
-        RunGitChecked(["-C", RootPath, "rev-parse", "--verify", "HEAD"]).StandardOutput.Trim();
+        RunGitChecked(["-C", this.RootPath, "rev-parse", "--verify", "HEAD"]).StandardOutput.Trim();
 
     /// <summary>
     ///     Creates a controlled bare repository.
@@ -116,7 +116,7 @@ internal sealed class TemporaryGitRepository : IDisposable
     /// </summary>
     /// <returns>The full nested-directory path.</returns>
     internal string CreateNestedDirectory() =>
-        Directory.CreateDirectory(Path.Combine(RootPath, "nested", "directory")).FullName;
+        Directory.CreateDirectory(Path.Combine(this.RootPath, "nested", "directory")).FullName;
 
     /// <summary>
     ///     Creates a local branch at the current committed revision without checking it out.
@@ -125,7 +125,7 @@ internal sealed class TemporaryGitRepository : IDisposable
     internal void CreateLocalBranch(string branchName)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(branchName);
-        RunGitChecked(["-C", RootPath, "branch", branchName, Revision]);
+        RunGitChecked(["-C", this.RootPath, "branch", branchName, this.Revision]);
     }
 
     /// <summary>
@@ -141,11 +141,9 @@ internal sealed class TemporaryGitRepository : IDisposable
         ArgumentException.ThrowIfNullOrWhiteSpace(branchName);
         RunGitChecked(
             [
-                "-C",
-                RootPath,
+                "-C", this.RootPath,
                 "update-ref",
-                $"refs/remotes/{remoteName}/{branchName}",
-                Revision,
+                $"refs/remotes/{remoteName}/{branchName}", this.Revision,
             ]);
     }
 
@@ -162,8 +160,7 @@ internal sealed class TemporaryGitRepository : IDisposable
         ArgumentException.ThrowIfNullOrWhiteSpace(branchName);
         RunGitChecked(
             [
-                "-C",
-                RootPath,
+                "-C", this.RootPath,
                 "symbolic-ref",
                 $"refs/remotes/{remoteName}/HEAD",
                 $"refs/remotes/{remoteName}/{branchName}",
@@ -186,32 +183,28 @@ internal sealed class TemporaryGitRepository : IDisposable
         ArgumentException.ThrowIfNullOrWhiteSpace(remoteBranchName);
         RunGitChecked(
             [
-                "-C",
-                RootPath,
+                "-C", this.RootPath,
                 "config",
                 $"remote.{remoteName}.url",
                 $"https://example.invalid/{remoteName}.git",
             ]);
         RunGitChecked(
             [
-                "-C",
-                RootPath,
+                "-C", this.RootPath,
                 "config",
                 $"remote.{remoteName}.fetch",
                 $"+refs/heads/*:refs/remotes/{remoteName}/*",
             ]);
         RunGitChecked(
             [
-                "-C",
-                RootPath,
+                "-C", this.RootPath,
                 "config",
                 $"branch.{branchName}.remote",
                 remoteName,
             ]);
         RunGitChecked(
             [
-                "-C",
-                RootPath,
+                "-C", this.RootPath,
                 "config",
                 $"branch.{branchName}.merge",
                 $"refs/heads/{remoteBranchName}",
@@ -223,7 +216,7 @@ internal sealed class TemporaryGitRepository : IDisposable
     /// </summary>
     internal void CheckoutDetached()
     {
-        RunGitChecked(["-C", RootPath, "checkout", "--detach", "--quiet"]);
+        RunGitChecked(["-C", this.RootPath, "checkout", "--detach", "--quiet"]);
     }
 
     /// <summary>
@@ -233,7 +226,7 @@ internal sealed class TemporaryGitRepository : IDisposable
     internal void CheckoutBranch(string branchName)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(branchName);
-        RunGitChecked(["-C", RootPath, "checkout", "--quiet", branchName]);
+        RunGitChecked(["-C", this.RootPath, "checkout", "--quiet", branchName]);
     }
 
     /// <summary>
@@ -250,12 +243,12 @@ internal sealed class TemporaryGitRepository : IDisposable
         ArgumentException.ThrowIfNullOrWhiteSpace(relativePath);
         ArgumentNullException.ThrowIfNull(content);
         ArgumentException.ThrowIfNullOrWhiteSpace(message);
-        var filePath = Path.Combine(RootPath, relativePath);
+        var filePath = Path.Combine(this.RootPath, relativePath);
         Directory.CreateDirectory(Path.GetDirectoryName(filePath)!);
         File.WriteAllText(filePath, content);
-        RunGitChecked(["-C", RootPath, "add", "--", relativePath]);
+        RunGitChecked(["-C", this.RootPath, "add", "--", relativePath]);
         RunGitChecked(
-            ["-C", RootPath, "commit", "--quiet", "--no-gpg-sign", "-m", message]);
+            ["-C", this.RootPath, "commit", "--quiet", "--no-gpg-sign", "-m", message]);
     }
 
     /// <summary>
@@ -269,7 +262,7 @@ internal sealed class TemporaryGitRepository : IDisposable
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(relativePath);
         ArgumentNullException.ThrowIfNull(content);
-        var filePath = Path.Combine(RootPath, relativePath);
+        var filePath = Path.Combine(this.RootPath, relativePath);
         Directory.CreateDirectory(Path.GetDirectoryName(filePath)!);
         File.WriteAllText(filePath, content);
     }
@@ -281,7 +274,7 @@ internal sealed class TemporaryGitRepository : IDisposable
     internal void Stage(string relativePath)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(relativePath);
-        RunGitChecked(["-C", RootPath, "add", "--", relativePath]);
+        RunGitChecked(["-C", this.RootPath, "add", "--", relativePath]);
     }
 
     /// <summary>
@@ -295,7 +288,7 @@ internal sealed class TemporaryGitRepository : IDisposable
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(sourcePath);
         ArgumentException.ThrowIfNullOrWhiteSpace(destinationPath);
-        RunGitChecked(["-C", RootPath, "mv", "--", sourcePath, destinationPath]);
+        RunGitChecked(["-C", this.RootPath, "mv", "--", sourcePath, destinationPath]);
     }
 
     /// <summary>
@@ -305,7 +298,7 @@ internal sealed class TemporaryGitRepository : IDisposable
     internal void Remove(string relativePath)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(relativePath);
-        RunGitChecked(["-C", RootPath, "rm", "--quiet", "--", relativePath]);
+        RunGitChecked(["-C", this.RootPath, "rm", "--quiet", "--", relativePath]);
     }
 
     /// <summary>
@@ -319,10 +312,10 @@ internal sealed class TemporaryGitRepository : IDisposable
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(relativePath);
         ArgumentException.ThrowIfNullOrWhiteSpace(targetPath);
-        var filePath = Path.Combine(RootPath, relativePath);
+        var filePath = Path.Combine(this.RootPath, relativePath);
         File.Delete(filePath);
         File.CreateSymbolicLink(filePath, targetPath);
-        Stage(relativePath);
+        this.Stage(relativePath);
     }
 
     /// <summary>
@@ -333,11 +326,11 @@ internal sealed class TemporaryGitRepository : IDisposable
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(branchName);
         var tree = RunGitChecked(
-            ["-C", RootPath, "rev-parse", "--verify", "HEAD^{tree}"]).StandardOutput.Trim();
+            ["-C", this.RootPath, "rev-parse", "--verify", "HEAD^{tree}"]).StandardOutput.Trim();
         var commit = RunGitChecked(
-            ["-C", RootPath, "commit-tree", tree, "-m", "unrelated root"]).StandardOutput.Trim();
+            ["-C", this.RootPath, "commit-tree", tree, "-m", "unrelated root"]).StandardOutput.Trim();
         RunGitChecked(
-            ["-C", RootPath, "update-ref", $"refs/heads/{branchName}", commit]);
+            ["-C", this.RootPath, "update-ref", $"refs/heads/{branchName}", commit]);
     }
 
     /// <summary>
@@ -347,17 +340,16 @@ internal sealed class TemporaryGitRepository : IDisposable
     internal void CreateCrissCrossHistory(string targetBranchName)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(targetBranchName);
-        var root = Revision;
+        var root = this.Revision;
         var tree = RunGitChecked(
-            ["-C", RootPath, "rev-parse", "--verify", "HEAD^{tree}"]).StandardOutput.Trim();
+            ["-C", this.RootPath, "rev-parse", "--verify", "HEAD^{tree}"]).StandardOutput.Trim();
         var firstCurrent = RunGitChecked(
-            ["-C", RootPath, "commit-tree", tree, "-p", root, "-m", "first current"]).StandardOutput.Trim();
+            ["-C", this.RootPath, "commit-tree", tree, "-p", root, "-m", "first current"]).StandardOutput.Trim();
         var firstTarget = RunGitChecked(
-            ["-C", RootPath, "commit-tree", tree, "-p", root, "-m", "first target"]).StandardOutput.Trim();
+            ["-C", this.RootPath, "commit-tree", tree, "-p", root, "-m", "first target"]).StandardOutput.Trim();
         var current = RunGitChecked(
             [
-                "-C",
-                RootPath,
+                "-C", this.RootPath,
                 "commit-tree",
                 tree,
                 "-p",
@@ -369,8 +361,7 @@ internal sealed class TemporaryGitRepository : IDisposable
             ]).StandardOutput.Trim();
         var target = RunGitChecked(
             [
-                "-C",
-                RootPath,
+                "-C", this.RootPath,
                 "commit-tree",
                 tree,
                 "-p",
@@ -380,9 +371,9 @@ internal sealed class TemporaryGitRepository : IDisposable
                 "-m",
                 "merge target",
             ]).StandardOutput.Trim();
-        RunGitChecked(["-C", RootPath, "update-ref", "refs/heads/main", current, root]);
+        RunGitChecked(["-C", this.RootPath, "update-ref", "refs/heads/main", current, root]);
         RunGitChecked(
-            ["-C", RootPath, "update-ref", $"refs/heads/{targetBranchName}", target]);
+            ["-C", this.RootPath, "update-ref", $"refs/heads/{targetBranchName}", target]);
     }
 
     /// <summary>
@@ -393,7 +384,7 @@ internal sealed class TemporaryGitRepository : IDisposable
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(branchName);
         var output = RunGit(
-            ["-C", RootPath, "merge", "--no-commit", "--no-ff", branchName]);
+            ["-C", this.RootPath, "merge", "--no-commit", "--no-ff", branchName]);
         if (output.ExitCode == 0)
         {
             throw new InvalidOperationException(
@@ -407,9 +398,9 @@ internal sealed class TemporaryGitRepository : IDisposable
     /// <returns>The full linked-worktree path.</returns>
     internal string CreateLinkedWorktree()
     {
-        var worktreePath = Path.Combine(_temporaryDirectory.DirectoryPath, "linked worktree");
+        var worktreePath = Path.Combine(this._temporaryDirectory.DirectoryPath, "linked worktree");
         RunGitChecked(
-            ["-C", RootPath, "worktree", "add", "--quiet", "-b", "linked-branch", worktreePath]);
+            ["-C", this.RootPath, "worktree", "add", "--quiet", "-b", "linked-branch", worktreePath]);
         return worktreePath;
     }
 
@@ -419,17 +410,16 @@ internal sealed class TemporaryGitRepository : IDisposable
     /// <returns>The full submodule working-tree path.</returns>
     internal string CreateSubmodule()
     {
-        var sourcePath = Path.Combine(_temporaryDirectory.DirectoryPath, "submodule source");
+        var sourcePath = Path.Combine(this._temporaryDirectory.DirectoryPath, "submodule source");
         RunGitChecked(["init", "--initial-branch=main", sourcePath]);
         ConfigureRepository(sourcePath);
         CommitFixture(sourcePath, "submodule.txt", "submodule fixture content\n", "submodule initial commit");
 
         const string submoduleDirectoryName = "child module";
-        var submodulePath = Path.Combine(RootPath, submoduleDirectoryName);
+        var submodulePath = Path.Combine(this.RootPath, submoduleDirectoryName);
         RunGitChecked(
             [
-                "-C",
-                RootPath,
+                "-C", this.RootPath,
                 "-c",
                 "protocol.file.allow=always",
                 "submodule",
@@ -438,7 +428,7 @@ internal sealed class TemporaryGitRepository : IDisposable
                 sourcePath,
                 submoduleDirectoryName,
             ]);
-        RunGitChecked(["-C", RootPath, "commit", "--quiet", "--no-gpg-sign", "-m", "add submodule"]);
+        RunGitChecked(["-C", this.RootPath, "commit", "--quiet", "--no-gpg-sign", "-m", "add submodule"]);
         return submodulePath;
     }
 
@@ -497,7 +487,7 @@ internal sealed class TemporaryGitRepository : IDisposable
     /// </summary>
     public void Dispose()
     {
-        _temporaryDirectory.Dispose();
+        this._temporaryDirectory.Dispose();
     }
 
     private static void ConfigureRepository(string repositoryPath)

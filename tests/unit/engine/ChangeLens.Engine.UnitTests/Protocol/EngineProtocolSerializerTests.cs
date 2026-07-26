@@ -22,7 +22,7 @@ public sealed class EngineProtocolSerializerTests
     [Fact]
     public void DeserializeRequestBindsActionEnvelope()
     {
-        var result = _serializer.DeserializeRequest(
+        var result = this._serializer.DeserializeRequest(
             """{"protocolVersion":1,"requestId":"request-bind","action":"engine.checkStatus","parameters":{}}""");
 
         Assert.True(result.IsSuccess);
@@ -39,7 +39,7 @@ public sealed class EngineProtocolSerializerTests
     [Fact]
     public void DeserializeRequestKeepsMissingParametersUndefined()
     {
-        var result = _serializer.DeserializeRequest(
+        var result = this._serializer.DeserializeRequest(
             """{"protocolVersion":1,"requestId":"request-omitted","action":"engine.checkStatus"}""");
 
         Assert.True(result.IsSuccess);
@@ -52,7 +52,7 @@ public sealed class EngineProtocolSerializerTests
     [Fact]
     public void DeserializeRequestKeepsExplicitNullParametersPresent()
     {
-        var result = _serializer.DeserializeRequest(
+        var result = this._serializer.DeserializeRequest(
             """{"protocolVersion":1,"requestId":"request-null","action":"engine.checkStatus","parameters":null}""");
 
         Assert.True(result.IsSuccess);
@@ -65,7 +65,7 @@ public sealed class EngineProtocolSerializerTests
     [Fact]
     public void DeserializeRequestReturnsMalformedInputForInvalidJson()
     {
-        var result = _serializer.DeserializeRequest("not-json");
+        var result = this._serializer.DeserializeRequest("not-json");
 
         var error = Assert.Single(result.Errors);
         Assert.Equal(ErrorType.MalformedInput, error.Type);
@@ -90,7 +90,7 @@ public sealed class EngineProtocolSerializerTests
     [InlineData("{\"protocolVersion\":1,\"requestId\":\"id\",\"action\":\"engine.checkStatus\",\"extra\":true}")]
     public void DeserializeRequestRejectsInvalidEnvelopeShape(string requestLine)
     {
-        var result = _serializer.DeserializeRequest(requestLine);
+        var result = this._serializer.DeserializeRequest(requestLine);
 
         var error = Assert.Single(result.Errors);
         Assert.Equal(ErrorType.Validation, error.Type);
@@ -105,7 +105,7 @@ public sealed class EngineProtocolSerializerTests
     {
         using var document = JsonDocument.Parse("""{"repositoryId":"repository-1"}""");
 
-        var result = _serializer.DeserializeParameters<FixturePayload>(
+        var result = this._serializer.DeserializeParameters<FixturePayload>(
             document.RootElement,
             "engine.checkStatus");
 
@@ -127,7 +127,7 @@ public sealed class EngineProtocolSerializerTests
     {
         using var document = JsonDocument.Parse(parametersJson);
 
-        var result = _serializer.DeserializeParameters<RepositoryOpenParameters>(
+        var result = this._serializer.DeserializeParameters<RepositoryOpenParameters>(
             document.RootElement,
             "repositories.open");
 
@@ -144,7 +144,7 @@ public sealed class EngineProtocolSerializerTests
     {
         using var document = JsonDocument.Parse("""{"path":"/repository"}""");
 
-        var result = _serializer.DeserializeParameters<RepositoryOpenParameters>(
+        var result = this._serializer.DeserializeParameters<RepositoryOpenParameters>(
             document.RootElement,
             "repositories.open");
 
@@ -161,7 +161,7 @@ public sealed class EngineProtocolSerializerTests
         var path = new string('a', 8_193);
         using var document = JsonDocument.Parse(JsonSerializer.Serialize(new { path }));
 
-        var result = _serializer.DeserializeParameters<RepositoryOpenParameters>(
+        var result = this._serializer.DeserializeParameters<RepositoryOpenParameters>(
             document.RootElement,
             "repositories.open");
 
@@ -179,7 +179,7 @@ public sealed class EngineProtocolSerializerTests
             "request-error",
             [OperationError.Validation("Invalid.", "fixture.invalid")]);
 
-        var result = _serializer.SerializeResponse(response);
+        var result = this._serializer.SerializeResponse(response);
 
         Assert.True(result.IsSuccess);
         Assert.Contains("\"type\":\"Validation\"", result.Data, StringComparison.Ordinal);
@@ -195,8 +195,8 @@ public sealed class EngineProtocolSerializerTests
             "request-κόσμε",
             [OperationError.Validation("Quoted \"value\".", "fixture.invalid")]);
 
-        var serialization = _serializer.SerializeResponse(response);
-        var measurement = _serializer.GetSerializedUtf8ByteCount(response);
+        var serialization = this._serializer.SerializeResponse(response);
+        var measurement = this._serializer.GetSerializedUtf8ByteCount(response);
 
         Assert.True(serialization.IsSuccess);
         Assert.True(measurement.IsSuccess);
@@ -213,7 +213,7 @@ public sealed class EngineProtocolSerializerTests
     {
         var response = ProtocolResponseFactory.CreateWithValue("request-unsupported", (Action)(() => { }));
 
-        var result = _serializer.SerializeResponse(response);
+        var result = this._serializer.SerializeResponse(response);
 
         var error = Assert.Single(result.Errors);
         Assert.Equal(ErrorType.InternalError, error.Type);

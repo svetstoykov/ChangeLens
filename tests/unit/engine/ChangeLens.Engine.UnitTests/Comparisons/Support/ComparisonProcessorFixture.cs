@@ -38,24 +38,16 @@ internal sealed class ComparisonProcessorFixture
     /// </summary>
     internal ComparisonProcessorFixture()
     {
-        TargetDiscovery = new GitComparisonTargetDiscovery(
-            _repositoryFixture.Inspector,
-            _repositoryFixture);
-        Preparer = new GitComparisonPreparer(
-            _repositoryFixture.Inspector,
-            TargetDiscovery,
-            _repositoryFixture,
+        this.TargetDiscovery = new GitComparisonTargetDiscovery(this._repositoryFixture.Inspector, this._repositoryFixture);
+        this.Preparer = new GitComparisonPreparer(this._repositoryFixture.Inspector, this.TargetDiscovery, this._repositoryFixture,
             new ComparisonFileSummaryComposer());
-        FreshnessChecker = new GitComparisonFreshnessChecker(
-            _repositoryFixture.Inspector,
-            TargetDiscovery,
-            _repositoryFixture);
+        this.FreshnessChecker = new GitComparisonFreshnessChecker(this._repositoryFixture.Inspector, this.TargetDiscovery, this._repositoryFixture);
     }
 
     /// <summary>
     ///     Gets the repository inspector used by repository-open processor tests.
     /// </summary>
-    internal GitRepositoryInspector RepositoryInspector => _repositoryFixture.Inspector;
+    internal GitRepositoryInspector RepositoryInspector => this._repositoryFixture.Inspector;
 
     /// <summary>
     ///     Gets the comparison-target discovery service.
@@ -75,12 +67,12 @@ internal sealed class ComparisonProcessorFixture
     /// <summary>
     ///     Gets the received Git commands in call order.
     /// </summary>
-    internal List<GitCommand> Commands => _repositoryFixture.Commands;
+    internal List<GitCommand> Commands => this._repositoryFixture.Commands;
 
     /// <summary>
     ///     Gets the received selected paths in call order.
     /// </summary>
-    internal List<string> Paths => _repositoryFixture.Paths;
+    internal List<string> Paths => this._repositoryFixture.Paths;
 
     /// <summary>
     ///     Queues a path-resolution callback.
@@ -88,7 +80,7 @@ internal sealed class ComparisonProcessorFixture
     /// <param name="result">The callback invoked by the next path-resolution call.</param>
     internal void EnqueuePath(
         Func<string, CancellationToken, Task<Result<string>>> result) =>
-        _repositoryFixture.EnqueuePath(result);
+        this._repositoryFixture.EnqueuePath(result);
 
     /// <summary>
     ///     Queues a complete successful repository inspection.
@@ -99,14 +91,14 @@ internal sealed class ComparisonProcessorFixture
         string branchName = "main",
         string revision = HeadRevision)
     {
-        _repositoryFixture.EnqueuePath(Result.Success<string>("/physical/selection"));
-        _repositoryFixture.EnqueuePath(Result.Success<string>(CanonicalPath));
-        _repositoryFixture.EnqueueCommand(Output("git version 2.51.0\n"));
-        _repositoryFixture.EnqueueCommand(Output("true\n"));
-        _repositoryFixture.EnqueueCommand(Output("false\n"));
-        _repositoryFixture.EnqueueCommand(Output(CanonicalPath + "\n"));
-        _repositoryFixture.EnqueueCommand(Output(revision + "\n"));
-        _repositoryFixture.EnqueueCommand(Output(branchName + "\n"));
+        this._repositoryFixture.EnqueuePath(Result.Success<string>("/physical/selection"));
+        this._repositoryFixture.EnqueuePath(Result.Success<string>(CanonicalPath));
+        this._repositoryFixture.EnqueueCommand(Output("git version 2.51.0\n"));
+        this._repositoryFixture.EnqueueCommand(Output("true\n"));
+        this._repositoryFixture.EnqueueCommand(Output("false\n"));
+        this._repositoryFixture.EnqueueCommand(Output(CanonicalPath + "\n"));
+        this._repositoryFixture.EnqueueCommand(Output(revision + "\n"));
+        this._repositoryFixture.EnqueueCommand(Output(branchName + "\n"));
     }
 
     /// <summary>
@@ -114,7 +106,7 @@ internal sealed class ComparisonProcessorFixture
     /// </summary>
     /// <param name="records">The complete records without their final line feeds.</param>
     internal void EnqueueTargets(params string[] records) =>
-        _repositoryFixture.EnqueueCommand(
+        this._repositoryFixture.EnqueueCommand(
             Output(string.Concat(records.Select(record => record + "\n"))));
 
     /// <summary>
@@ -122,19 +114,19 @@ internal sealed class ComparisonProcessorFixture
     /// </summary>
     internal void EnqueuePreparation()
     {
-        EnqueueInspection();
-        EnqueueTargets(Target("refs/heads/topic", TargetRevision));
-        _repositoryFixture.EnqueueCommand(Output(string.Empty));
-        _repositoryFixture.EnqueueCommand(Output(TargetRevision + "\n"));
-        _repositoryFixture.EnqueueCommand(Output("? local.cs\0"));
-        _repositoryFixture.EnqueueCommand(Output(MergeBaseRevision + "\n"));
-        _repositoryFixture.EnqueueCommand(Output("3\t5\n"));
-        _repositoryFixture.EnqueueCommand(Output(string.Empty));
-        _repositoryFixture.EnqueueCommand(Output("? local.cs\0"));
-        _repositoryFixture.EnqueueCommand(Output(HeadRevision + "\n"));
-        _repositoryFixture.EnqueueCommand(Output("main\n"));
-        _repositoryFixture.EnqueueCommand(Output(TargetRevision + "\n"));
-        EnqueueTargets(Target("refs/heads/topic", TargetRevision));
+        this.EnqueueInspection();
+        this.EnqueueTargets(Target("refs/heads/topic", TargetRevision));
+        this._repositoryFixture.EnqueueCommand(Output(string.Empty));
+        this._repositoryFixture.EnqueueCommand(Output(TargetRevision + "\n"));
+        this._repositoryFixture.EnqueueCommand(Output("? local.cs\0"));
+        this._repositoryFixture.EnqueueCommand(Output(MergeBaseRevision + "\n"));
+        this._repositoryFixture.EnqueueCommand(Output("3\t5\n"));
+        this._repositoryFixture.EnqueueCommand(Output(string.Empty));
+        this._repositoryFixture.EnqueueCommand(Output("? local.cs\0"));
+        this._repositoryFixture.EnqueueCommand(Output(HeadRevision + "\n"));
+        this._repositoryFixture.EnqueueCommand(Output("main\n"));
+        this._repositoryFixture.EnqueueCommand(Output(TargetRevision + "\n"));
+        this.EnqueueTargets(Target("refs/heads/topic", TargetRevision));
     }
 
     /// <summary>
@@ -142,11 +134,11 @@ internal sealed class ComparisonProcessorFixture
     /// </summary>
     internal void EnqueueFreshnessCheck()
     {
-        EnqueueInspection();
-        EnqueueTargets(Target("refs/heads/topic", TargetRevision));
-        _repositoryFixture.EnqueueCommand(Output(string.Empty));
-        _repositoryFixture.EnqueueCommand(Output(TargetRevision + "\n"));
-        _repositoryFixture.EnqueueCommand(Output("? local.cs\0"));
+        this.EnqueueInspection();
+        this.EnqueueTargets(Target("refs/heads/topic", TargetRevision));
+        this._repositoryFixture.EnqueueCommand(Output(string.Empty));
+        this._repositoryFixture.EnqueueCommand(Output(TargetRevision + "\n"));
+        this._repositoryFixture.EnqueueCommand(Output("? local.cs\0"));
     }
 
     /// <summary>

@@ -27,8 +27,8 @@ internal sealed class TestHostApplicationLifetime : IHostApplicationLifetime
     /// <inheritdoc />
     public void StopApplication()
     {
-        StopRequested = true;
-        _stopRequested.TrySetResult();
+        this.StopRequested = true;
+        this._stopRequested.TrySetResult();
     }
 
     /// <summary>
@@ -36,6 +36,5 @@ internal sealed class TestHostApplicationLifetime : IHostApplicationLifetime
     /// </summary>
     /// <param name="cancellationToken">A <see cref="CancellationToken" /> to observe while waiting.</param>
     /// <returns>A task that represents the asynchronous wait.</returns>
-    internal Task WaitForStopAsync(CancellationToken cancellationToken) =>
-        _stopRequested.Task.WaitAsync(cancellationToken);
+    internal Task WaitForStopAsync(CancellationToken cancellationToken) => this._stopRequested.Task.WaitAsync(cancellationToken);
 }

@@ -25,9 +25,9 @@ public sealed class GitCommandErrorPolicy
         ArgumentNullException.ThrowIfNull(timedOut);
         ArgumentNullException.ThrowIfNull(outputLimitExceeded);
         ArgumentNullException.ThrowIfNull(inspectionFailed);
-        TimedOut = timedOut;
-        OutputLimitExceeded = outputLimitExceeded;
-        InspectionFailed = inspectionFailed;
+        this.TimedOut = timedOut;
+        this.OutputLimitExceeded = outputLimitExceeded;
+        this.InspectionFailed = inspectionFailed;
     }
 
     /// <summary>

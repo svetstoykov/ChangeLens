@@ -38,14 +38,14 @@ internal sealed class TestLogger<T> : ILogger<T>
         Exception? exception,
         Func<TState, Exception?, string> formatter)
     {
-        Entries.Add(formatter(state, exception));
+        this.Entries.Add(formatter(state, exception));
 
         if (logLevel < LogLevel.Error)
         {
             return;
         }
 
-        ErrorCount++;
-        LastException = exception;
+        this.ErrorCount++;
+        this.LastException = exception;
     }
 }

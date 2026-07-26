@@ -35,18 +35,18 @@ public sealed class SqliteLocalStateDatabase : ILocalStateInitializer, ILocalSta
     /// <param name="logger">The local-state lifecycle logger.</param>
     public SqliteLocalStateDatabase(string? configuredDirectory, ILogger<SqliteLocalStateDatabase> logger)
     {
-        _logger = logger;
-        _directoryPath = string.IsNullOrWhiteSpace(configuredDirectory)
+        this._logger = logger;
+        this._directoryPath = string.IsNullOrWhiteSpace(configuredDirectory)
             ? Path.Combine(
                 Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
                 LocalStateConstants.ProductName)
             : Path.GetFullPath(configuredDirectory);
-        _databasePath = Path.Combine(_directoryPath, LocalStateConstants.DatabaseFileName);
-        _contextOptions = new DbContextOptionsBuilder<ChangeLensLocalStateDbContext>()
+        this._databasePath = Path.Combine(this._directoryPath, LocalStateConstants.DatabaseFileName);
+        this._contextOptions = new DbContextOptionsBuilder<ChangeLensLocalStateDbContext>()
             .UseSqlite(
                 new SqliteConnectionStringBuilder
                 {
-                    DataSource = _databasePath,
+                    DataSource = this._databasePath,
                     Mode = SqliteOpenMode.ReadWriteCreate,
                     Cache = SqliteCacheMode.Private,
                     DefaultTimeout = LocalStateConstants.CommandTimeoutSeconds,
@@ -57,24 +57,24 @@ public sealed class SqliteLocalStateDatabase : ILocalStateInitializer, ILocalSta
     /// <inheritdoc />
     public async Task<Result> InitializeAsync(CancellationToken cancellationToken)
     {
-        if (_isReady)
+        if (this._isReady)
         {
-            return await VerifyReadAsync(cancellationToken);
+            return await this.VerifyReadAsync(cancellationToken);
         }
 
-        await _initializationLock.WaitAsync(cancellationToken);
+        await this._initializationLock.WaitAsync(cancellationToken);
         try
         {
-            if (_isReady)
+            if (this._isReady)
             {
-                return await VerifyReadAsync(cancellationToken);
+                return await this.VerifyReadAsync(cancellationToken);
             }
 
             try
             {
-                Directory.CreateDirectory(_directoryPath);
-                var databaseExisted = File.Exists(_databasePath);
-                await using var context = await CreateContextAsync(cancellationToken);
+                Directory.CreateDirectory(this._directoryPath);
+                var databaseExisted = File.Exists(this._databasePath);
+                await using var context = await this.CreateContextAsync(cancellationToken);
                 var preparation = await PrepareExistingDatabaseAsync(context, databaseExisted, cancellationToken);
                 if (preparation.IsFailure)
                 {
@@ -88,15 +88,15 @@ public sealed class SqliteLocalStateDatabase : ILocalStateInitializer, ILocalSta
                     return verification;
                 }
 
-                _isReady = true;
-                _logger.LogInformation(
+                this._isReady = true;
+                this._logger.LogInformation(
                     "Local state is ready at schema version {SchemaVersion}.",
                     LocalStateConstants.CurrentSchemaVersion);
                 return Result.Success();
             }
             catch (Exception exception) when (IsExpectedAccessFailure(exception))
             {
-                _logger.LogInformation(
+                this._logger.LogInformation(
                     "Local-state readiness failed with error {ErrorCode}.",
                     LocalStateErrorCode.Unavailable);
                 return Unavailable(exception);
@@ -104,14 +104,14 @@ public sealed class SqliteLocalStateDatabase : ILocalStateInitializer, ILocalSta
         }
         finally
         {
-            _initializationLock.Release();
+            this._initializationLock.Release();
         }
     }
 
     /// <inheritdoc />
     public async Task<ChangeLensLocalStateDbContext> CreateContextAsync(CancellationToken cancellationToken)
     {
-        var context = new ChangeLensLocalStateDbContext(_contextOptions);
+        var context = new ChangeLensLocalStateDbContext(this._contextOptions);
         await context.Database.OpenConnectionAsync(cancellationToken);
         await context.Database.ExecuteSqlRawAsync(
             "PRAGMA foreign_keys = ON; PRAGMA busy_timeout = 5000;",
@@ -170,7 +170,7 @@ public sealed class SqliteLocalStateDatabase : ILocalStateInitializer, ILocalSta
     {
         try
         {
-            await using var context = await CreateContextAsync(cancellationToken);
+            await using var context = await this.CreateContextAsync(cancellationToken);
             return await VerifySchemaAsync(context, cancellationToken);
         }
         catch (Exception exception) when (IsExpectedAccessFailure(exception))

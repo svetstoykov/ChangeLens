@@ -19,8 +19,7 @@ internal sealed class StubRepositoryPathResolver : IRepositoryPathResolver
     ///     Adds a fixed path result to the queue.
     /// </summary>
     /// <param name="result">The result returned by the next call.</param>
-    internal void Enqueue(Result<string> result) =>
-        _results.Enqueue((_, _) => Task.FromResult(result));
+    internal void Enqueue(Result<string> result) => this._results.Enqueue((_, _) => Task.FromResult(result));
 
     /// <summary>
     ///     Adds a path callback to the queue.
@@ -28,14 +27,14 @@ internal sealed class StubRepositoryPathResolver : IRepositoryPathResolver
     /// <param name="result">The callback invoked by the next call. Cannot be <see langword="null" />.</param>
     internal void Enqueue(
         Func<string, CancellationToken, Task<Result<string>>> result) =>
-        _results.Enqueue(result);
+        this._results.Enqueue(result);
 
     /// <inheritdoc />
     public Task<Result<string>> ResolveAsync(
         string path,
         CancellationToken cancellationToken)
     {
-        Paths.Add(path);
-        return _results.Dequeue()(path, cancellationToken);
+        this.Paths.Add(path);
+        return this._results.Dequeue()(path, cancellationToken);
     }
 }

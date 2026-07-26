@@ -52,17 +52,17 @@ public sealed class GitCommand
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maximumStandardOutputBytes);
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maximumStandardErrorBytes);
         ArgumentNullException.ThrowIfNull(errorPolicy);
-        _arguments = Array.AsReadOnly(copiedArguments);
-        Timeout = timeout;
-        MaximumStandardOutputBytes = maximumStandardOutputBytes;
-        MaximumStandardErrorBytes = maximumStandardErrorBytes;
-        ErrorPolicy = errorPolicy;
+        this._arguments = Array.AsReadOnly(copiedArguments);
+        this.Timeout = timeout;
+        this.MaximumStandardOutputBytes = maximumStandardOutputBytes;
+        this.MaximumStandardErrorBytes = maximumStandardErrorBytes;
+        this.ErrorPolicy = errorPolicy;
     }
 
     /// <summary>
     ///     Gets the copied, read-only Git argument sequence.
     /// </summary>
-    public IReadOnlyList<string> Arguments => _arguments;
+    public IReadOnlyList<string> Arguments => this._arguments;
 
     /// <summary>
     ///     Gets the time allowed for the process to complete.

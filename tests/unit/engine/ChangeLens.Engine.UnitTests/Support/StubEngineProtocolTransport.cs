@@ -30,7 +30,7 @@ internal sealed class StubEngineProtocolTransport(
     /// <inheritdoc />
     public Task<Result<EngineProtocolRequest?>> ReadAsync(CancellationToken cancellationToken)
     {
-        ReadCount++;
+        this.ReadCount++;
         return readAsync(cancellationToken);
     }
 
@@ -39,7 +39,7 @@ internal sealed class StubEngineProtocolTransport(
         ProtocolResponse response,
         CancellationToken cancellationToken)
     {
-        WriteCount++;
+        this.WriteCount++;
         return writeAsync(response, cancellationToken);
     }
 }

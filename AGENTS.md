@@ -164,6 +164,8 @@ ChangeLens.Core/
 - Keep production executable `Program.cs` files limited to host creation, one named composition extension call,
   host construction and disposal, and one named run extension call. Put service registration, configuration, and
   lifecycle or exception orchestration in capability-owned extension methods.
+- In C# code, explicitly qualify instance members with `this.`. Apply this to instance fields, properties, methods,
+  events, and other member access even when the qualification is not required for disambiguation.
 - Prefer the smallest design that fully preserves correctness, consistency, and important behavior.
 
 ## React Guidelines

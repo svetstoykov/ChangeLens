@@ -49,7 +49,7 @@ internal sealed class EngineProtocolTransport(
     {
         try
         {
-            var lineResult = await ReadBoundedLineAsync(cancellationToken);
+            var lineResult = await this.ReadBoundedLineAsync(cancellationToken);
             if (lineResult.IsFailure)
             {
                 logger.LogInformation(
@@ -153,12 +153,12 @@ internal sealed class EngineProtocolTransport(
 
         while (true)
         {
-            if (_readOffset == _readCount)
+            if (this._readOffset == this._readCount)
             {
-                _readCount = await input.ReadAsync(_readBuffer.AsMemory(), cancellationToken);
-                _readOffset = 0;
+                this._readCount = await input.ReadAsync(this._readBuffer.AsMemory(), cancellationToken);
+                this._readOffset = 0;
 
-                if (_readCount == 0)
+                if (this._readCount == 0)
                 {
                     if (builder.Length == 0 && !tooLarge)
                     {
@@ -169,11 +169,11 @@ internal sealed class EngineProtocolTransport(
                 }
             }
 
-            var character = _readBuffer[_readOffset++];
+            var character = this._readBuffer[this._readOffset++];
 
-            if (_skipLineFeed)
+            if (this._skipLineFeed)
             {
-                _skipLineFeed = false;
+                this._skipLineFeed = false;
                 if (character == '\n')
                 {
                     continue;
@@ -182,7 +182,7 @@ internal sealed class EngineProtocolTransport(
 
             if (character == '\r')
             {
-                _skipLineFeed = true;
+                this._skipLineFeed = true;
                 return CompleteLine(builder, tooLarge);
             }
 

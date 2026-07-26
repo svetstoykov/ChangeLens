@@ -19,7 +19,7 @@ internal sealed class RepositoryInspectorFixture : IGitCommandRunner, IRepositor
     /// </summary>
     internal RepositoryInspectorFixture()
     {
-        Inspector = new GitRepositoryInspector(this, this);
+        this.Inspector = new GitRepositoryInspector(this, this);
     }
 
     /// <summary>
@@ -41,8 +41,7 @@ internal sealed class RepositoryInspectorFixture : IGitCommandRunner, IRepositor
     ///     Queues a fixed path-resolution result.
     /// </summary>
     /// <param name="result">The result returned by the next path-resolution call.</param>
-    internal void EnqueuePath(Result<string> result) =>
-        _pathResults.Enqueue((_, _) => Task.FromResult(result));
+    internal void EnqueuePath(Result<string> result) => this._pathResults.Enqueue((_, _) => Task.FromResult(result));
 
     /// <summary>
     ///     Queues a path-resolution callback.
@@ -50,14 +49,13 @@ internal sealed class RepositoryInspectorFixture : IGitCommandRunner, IRepositor
     /// <param name="result">The callback invoked by the next path-resolution call.</param>
     internal void EnqueuePath(
         Func<string, CancellationToken, Task<Result<string>>> result) =>
-        _pathResults.Enqueue(result);
+        this._pathResults.Enqueue(result);
 
     /// <summary>
     ///     Queues a fixed Git command result.
     /// </summary>
     /// <param name="result">The result returned by the next Git command.</param>
-    internal void EnqueueCommand(Result<GitCommandOutput> result) =>
-        _commandResults.Enqueue((_, _) => Task.FromResult(result));
+    internal void EnqueueCommand(Result<GitCommandOutput> result) => this._commandResults.Enqueue((_, _) => Task.FromResult(result));
 
     /// <summary>
     ///     Queues a Git command callback.
@@ -65,7 +63,7 @@ internal sealed class RepositoryInspectorFixture : IGitCommandRunner, IRepositor
     /// <param name="result">The callback invoked by the next Git command.</param>
     internal void EnqueueCommand(
         Func<GitCommand, CancellationToken, Task<Result<GitCommandOutput>>> result) =>
-        _commandResults.Enqueue(result);
+        this._commandResults.Enqueue(result);
 
     /// <summary>
     ///     Queues a complete successful repository inspection.
@@ -76,14 +74,14 @@ internal sealed class RepositoryInspectorFixture : IGitCommandRunner, IRepositor
     /// </param>
     internal void EnqueueSuccessfulInspection(string revision, string? branchName)
     {
-        EnqueuePath(Result.Success<string>("/physical/selection"));
-        EnqueuePath(Result.Success<string>("/projects/change_lens"));
-        EnqueueCommand(Output("git version 2.51.0\n"));
-        EnqueueCommand(Output("true\n"));
-        EnqueueCommand(Output("false\n"));
-        EnqueueCommand(Output("/reported/change_lens\n"));
-        EnqueueCommand(Output(revision + "\n"));
-        EnqueueCommand(
+        this.EnqueuePath(Result.Success<string>("/physical/selection"));
+        this.EnqueuePath(Result.Success<string>("/projects/change_lens"));
+        this.EnqueueCommand(Output("git version 2.51.0\n"));
+        this.EnqueueCommand(Output("true\n"));
+        this.EnqueueCommand(Output("false\n"));
+        this.EnqueueCommand(Output("/reported/change_lens\n"));
+        this.EnqueueCommand(Output(revision + "\n"));
+        this.EnqueueCommand(
             branchName is null
                 ? Output(string.Empty, exitCode: 1)
                 : Output(branchName + "\n"));
@@ -94,8 +92,8 @@ internal sealed class RepositoryInspectorFixture : IGitCommandRunner, IRepositor
         GitCommand command,
         CancellationToken cancellationToken)
     {
-        Commands.Add(command);
-        return _commandResults.Dequeue()(command, cancellationToken);
+        this.Commands.Add(command);
+        return this._commandResults.Dequeue()(command, cancellationToken);
     }
 
     /// <inheritdoc />
@@ -103,8 +101,8 @@ internal sealed class RepositoryInspectorFixture : IGitCommandRunner, IRepositor
         string path,
         CancellationToken cancellationToken)
     {
-        Paths.Add(path);
-        return _pathResults.Dequeue()(path, cancellationToken);
+        this.Paths.Add(path);
+        return this._pathResults.Dequeue()(path, cancellationToken);
     }
 
     private static Result<GitCommandOutput> Output(string standardOutput, int exitCode = 0) =>

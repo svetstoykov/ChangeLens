@@ -36,20 +36,15 @@ internal sealed class ComparisonGitFixture
     /// </summary>
     internal ComparisonGitFixture()
     {
-        Runner = new StubGitCommandRunner();
-        Resolver = new StubRepositoryPathResolver();
-        Discovery = new GitComparisonTargetDiscovery(
-            new GitRepositoryInspector(Runner, Resolver),
-            Runner);
-        Preparer = new GitComparisonPreparer(
-            new GitRepositoryInspector(Runner, Resolver),
-            Discovery,
-            Runner,
+        this.Runner = new StubGitCommandRunner();
+        this.Resolver = new StubRepositoryPathResolver();
+        this.Discovery = new GitComparisonTargetDiscovery(
+            new GitRepositoryInspector(this.Runner, this.Resolver), this.Runner);
+        this.Preparer = new GitComparisonPreparer(
+            new GitRepositoryInspector(this.Runner, this.Resolver), this.Discovery, this.Runner,
             new ComparisonFileSummaryComposer());
-        FreshnessChecker = new GitComparisonFreshnessChecker(
-            new GitRepositoryInspector(Runner, Resolver),
-            Discovery,
-            Runner);
+        this.FreshnessChecker = new GitComparisonFreshnessChecker(
+            new GitRepositoryInspector(this.Runner, this.Resolver), this.Discovery, this.Runner);
     }
 
     /// <summary>
@@ -85,14 +80,14 @@ internal sealed class ComparisonGitFixture
         string branchName = "main",
         string revision = Sha1Revision)
     {
-        Resolver.Enqueue(Result.Success<string>("/physical/selection"));
-        Resolver.Enqueue(Result.Success<string>(CanonicalPath));
-        Runner.Enqueue(Output("git version 2.51.0\n"));
-        Runner.Enqueue(Output("true\n"));
-        Runner.Enqueue(Output("false\n"));
-        Runner.Enqueue(Output(CanonicalPath + "\n"));
-        Runner.Enqueue(Output(revision + "\n"));
-        Runner.Enqueue(Output(branchName + "\n"));
+        this.Resolver.Enqueue(Result.Success<string>("/physical/selection"));
+        this.Resolver.Enqueue(Result.Success<string>(CanonicalPath));
+        this.Runner.Enqueue(Output("git version 2.51.0\n"));
+        this.Runner.Enqueue(Output("true\n"));
+        this.Runner.Enqueue(Output("false\n"));
+        this.Runner.Enqueue(Output(CanonicalPath + "\n"));
+        this.Runner.Enqueue(Output(revision + "\n"));
+        this.Runner.Enqueue(Output(branchName + "\n"));
     }
 
     /// <summary>
@@ -100,22 +95,21 @@ internal sealed class ComparisonGitFixture
     /// </summary>
     internal void EnqueueDetachedInspection()
     {
-        Resolver.Enqueue(Result.Success<string>("/physical/selection"));
-        Resolver.Enqueue(Result.Success<string>(CanonicalPath));
-        Runner.Enqueue(Output("git version 2.51.0\n"));
-        Runner.Enqueue(Output("true\n"));
-        Runner.Enqueue(Output("false\n"));
-        Runner.Enqueue(Output(CanonicalPath + "\n"));
-        Runner.Enqueue(Output(Sha1Revision + "\n"));
-        Runner.Enqueue(Output(string.Empty, exitCode: 1));
+        this.Resolver.Enqueue(Result.Success<string>("/physical/selection"));
+        this.Resolver.Enqueue(Result.Success<string>(CanonicalPath));
+        this.Runner.Enqueue(Output("git version 2.51.0\n"));
+        this.Runner.Enqueue(Output("true\n"));
+        this.Runner.Enqueue(Output("false\n"));
+        this.Runner.Enqueue(Output(CanonicalPath + "\n"));
+        this.Runner.Enqueue(Output(Sha1Revision + "\n"));
+        this.Runner.Enqueue(Output(string.Empty, exitCode: 1));
     }
 
     /// <summary>
     ///     Queues strictly formatted comparison-ref records.
     /// </summary>
     /// <param name="records">The complete record lines without their final line feeds.</param>
-    internal void EnqueueTargets(params string[] records) =>
-        Runner.Enqueue(Output(string.Concat(records.Select(record => record + "\n"))));
+    internal void EnqueueTargets(params string[] records) => this.Runner.Enqueue(Output(string.Concat(records.Select(record => record + "\n"))));
 
     /// <summary>
     ///     Queues a complete stable comparison preparation with controlled fact output.
@@ -134,19 +128,19 @@ internal sealed class ComparisonGitFixture
         string workingTree = "",
         string branchName = "main")
     {
-        EnqueueInspection(branchName);
-        EnqueueTargets(Target("refs/heads/topic", targetRevision));
-        Runner.Enqueue(Output(string.Empty));
-        Runner.Enqueue(Output(targetRevision + "\n"));
-        Runner.Enqueue(Output(workingTree));
-        Runner.Enqueue(Output(mergeBaseRevision + "\n"));
-        Runner.Enqueue(Output(counts));
-        Runner.Enqueue(Output(committedFiles));
-        Runner.Enqueue(Output(workingTree));
-        Runner.Enqueue(Output(Sha1Revision + "\n"));
-        Runner.Enqueue(Output(branchName + "\n"));
-        Runner.Enqueue(Output(targetRevision + "\n"));
-        EnqueueTargets(Target("refs/heads/topic", targetRevision));
+        this.EnqueueInspection(branchName);
+        this.EnqueueTargets(Target("refs/heads/topic", targetRevision));
+        this.Runner.Enqueue(Output(string.Empty));
+        this.Runner.Enqueue(Output(targetRevision + "\n"));
+        this.Runner.Enqueue(Output(workingTree));
+        this.Runner.Enqueue(Output(mergeBaseRevision + "\n"));
+        this.Runner.Enqueue(Output(counts));
+        this.Runner.Enqueue(Output(committedFiles));
+        this.Runner.Enqueue(Output(workingTree));
+        this.Runner.Enqueue(Output(Sha1Revision + "\n"));
+        this.Runner.Enqueue(Output(branchName + "\n"));
+        this.Runner.Enqueue(Output(targetRevision + "\n"));
+        this.EnqueueTargets(Target("refs/heads/topic", targetRevision));
     }
 
     /// <summary>
@@ -159,14 +153,14 @@ internal sealed class ComparisonGitFixture
     internal void EnqueuePreparationWithCommittedFailure(OperationError failure)
     {
         ArgumentNullException.ThrowIfNull(failure);
-        EnqueueInspection();
-        EnqueueTargets(Target("refs/heads/topic", OtherSha1Revision));
-        Runner.Enqueue(Output(string.Empty));
-        Runner.Enqueue(Output(OtherSha1Revision + "\n"));
-        Runner.Enqueue(Output(string.Empty));
-        Runner.Enqueue(Output(BaseSha1Revision + "\n"));
-        Runner.Enqueue(Output("0\t0\n"));
-        Runner.Enqueue(Result.Fail<GitCommandOutput>(failure));
+        this.EnqueueInspection();
+        this.EnqueueTargets(Target("refs/heads/topic", OtherSha1Revision));
+        this.Runner.Enqueue(Output(string.Empty));
+        this.Runner.Enqueue(Output(OtherSha1Revision + "\n"));
+        this.Runner.Enqueue(Output(string.Empty));
+        this.Runner.Enqueue(Output(BaseSha1Revision + "\n"));
+        this.Runner.Enqueue(Output("0\t0\n"));
+        this.Runner.Enqueue(Result.Fail<GitCommandOutput>(failure));
     }
 
     /// <summary>
@@ -180,11 +174,11 @@ internal sealed class ComparisonGitFixture
         string workingTree = "",
         string branchName = "main")
     {
-        EnqueueInspection(branchName);
-        EnqueueTargets(Target("refs/heads/topic", targetRevision));
-        Runner.Enqueue(Output(string.Empty));
-        Runner.Enqueue(Output(targetRevision + "\n"));
-        Runner.Enqueue(Output(workingTree));
+        this.EnqueueInspection(branchName);
+        this.EnqueueTargets(Target("refs/heads/topic", targetRevision));
+        this.Runner.Enqueue(Output(string.Empty));
+        this.Runner.Enqueue(Output(targetRevision + "\n"));
+        this.Runner.Enqueue(Output(workingTree));
     }
 
     /// <summary>

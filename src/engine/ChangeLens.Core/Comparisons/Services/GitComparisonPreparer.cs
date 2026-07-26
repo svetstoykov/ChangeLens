@@ -113,7 +113,7 @@ public sealed class GitComparisonPreparer(
 
         try
         {
-            var repositoryResult = await InspectRepositoryAsync(
+            var repositoryResult = await this.InspectRepositoryAsync(
                 path,
                 startedAt,
                 actionCancellation.Token);
@@ -123,7 +123,7 @@ public sealed class GitComparisonPreparer(
             }
 
             var beginningRepository = repositoryResult.Data!;
-            var beginningTargetsResult = await _targetDiscovery.ListForRepositoryAsync(
+            var beginningTargetsResult = await this._targetDiscovery.ListForRepositoryAsync(
                 beginningRepository,
                 null,
                 null,
@@ -143,7 +143,7 @@ public sealed class GitComparisonPreparer(
                 return Result.Fail<PreparedComparison>(TargetInvalidError);
             }
 
-            var checkResult = await RunAsync(
+            var checkResult = await this.RunAsync(
                 beginningRepository.CanonicalPath,
                 startedAt,
                 ["check-ref-format", target!],
@@ -163,7 +163,7 @@ public sealed class GitComparisonPreparer(
                 return InspectionFailed<PreparedComparison>();
             }
 
-            var targetRevisionResult = await RunAsync(
+            var targetRevisionResult = await this.RunAsync(
                 beginningRepository.CanonicalPath,
                 startedAt,
                 ["rev-parse", "--verify", target + "^{commit}"],
@@ -189,7 +189,7 @@ public sealed class GitComparisonPreparer(
                 Revision = parsedTargetRevision.Data!,
             };
 
-            var beginningStatusResult = await RunAsync(
+            var beginningStatusResult = await this.RunAsync(
                 beginningRepository.CanonicalPath,
                 startedAt,
                 StatusArguments(),
@@ -206,7 +206,7 @@ public sealed class GitComparisonPreparer(
                 return Result.ErrorFromResult<PreparedComparison>(parsedBeginningStatus);
             }
 
-            var mergeBaseResult = await RunAsync(
+            var mergeBaseResult = await this.RunAsync(
                 beginningRepository.CanonicalPath,
                 startedAt,
                 [
@@ -244,7 +244,7 @@ public sealed class GitComparisonPreparer(
             }
 
             var mergeBaseRevision = parsedMergeBases.Data[0];
-            var commitCountsResult = await RunAsync(
+            var commitCountsResult = await this.RunAsync(
                 beginningRepository.CanonicalPath,
                 startedAt,
                 [
@@ -269,7 +269,7 @@ public sealed class GitComparisonPreparer(
                 return Result.ErrorFromResult<PreparedComparison>(parsedCommitCounts);
             }
 
-            var committedFilesResult = await RunAsync(
+            var committedFilesResult = await this.RunAsync(
                 beginningRepository.CanonicalPath,
                 startedAt,
                 [
@@ -298,7 +298,7 @@ public sealed class GitComparisonPreparer(
                 return Result.ErrorFromResult<PreparedComparison>(parsedCommittedFiles);
             }
 
-            var summaryResult = _fileSummaryComposer.Compose(
+            var summaryResult = this._fileSummaryComposer.Compose(
                 ComposeFileRecords(
                     parsedCommittedFiles.Data!,
                     parsedBeginningStatus.Data!));
@@ -307,7 +307,7 @@ public sealed class GitComparisonPreparer(
                 return Result.ErrorFromResult<PreparedComparison>(summaryResult);
             }
 
-            var endingStatusResult = await RunAsync(
+            var endingStatusResult = await this.RunAsync(
                 beginningRepository.CanonicalPath,
                 startedAt,
                 StatusArguments(),
@@ -324,7 +324,7 @@ public sealed class GitComparisonPreparer(
                 return Result.ErrorFromResult<PreparedComparison>(parsedEndingStatus);
             }
 
-            var endingRevisionResult = await RunAsync(
+            var endingRevisionResult = await this.RunAsync(
                 beginningRepository.CanonicalPath,
                 startedAt,
                 ["rev-parse", "--verify", "HEAD^{commit}"],
@@ -340,7 +340,7 @@ public sealed class GitComparisonPreparer(
                 return Result.ErrorFromResult<PreparedComparison>(parsedEndingRevision);
             }
 
-            var endingHeadResult = await RunAsync(
+            var endingHeadResult = await this.RunAsync(
                 beginningRepository.CanonicalPath,
                 startedAt,
                 ["symbolic-ref", "--quiet", "--short", "HEAD"],
@@ -363,7 +363,7 @@ public sealed class GitComparisonPreparer(
                 Head = parsedEndingHead.Data!,
             };
 
-            var endingTargetRevisionResult = await RunAsync(
+            var endingTargetRevisionResult = await this.RunAsync(
                 beginningRepository.CanonicalPath,
                 startedAt,
                 ["rev-parse", "--verify", target + "^{commit}"],
@@ -393,7 +393,7 @@ public sealed class GitComparisonPreparer(
                 endingTargetRevision = parsedEndingTargetRevision.Data!;
             }
 
-            var endingTargetsResult = await _targetDiscovery.ListForRepositoryAsync(
+            var endingTargetsResult = await this._targetDiscovery.ListForRepositoryAsync(
                 endingRepository,
                 null,
                 null,
@@ -473,7 +473,7 @@ public sealed class GitComparisonPreparer(
         var remaining = Remaining(startedAt);
         return remaining <= TimeSpan.Zero
             ? Result.Fail<RepositoryDescriptor>(TimedOutError)
-            : await _repositoryInspector.InspectAsync(
+            : await this._repositoryInspector.InspectAsync(
                 path,
                 remaining,
                 ComparisonErrors(),
@@ -506,7 +506,7 @@ public sealed class GitComparisonPreparer(
             return Task.FromResult(Result.Fail<GitCommandOutput>(TimedOutError));
         }
 
-        return _commandRunner.RunAsync(
+        return this._commandRunner.RunAsync(
             new GitCommand(
                 DirectArguments(canonicalPath, subcommandArguments),
                 remaining,

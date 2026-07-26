@@ -10,11 +10,11 @@ internal sealed class TemporaryDirectory : IDisposable
     /// </summary>
     public TemporaryDirectory()
     {
-        DirectoryPath = Path.Combine(
+        this.DirectoryPath = Path.Combine(
             Path.GetTempPath(),
             "ChangeLens.Infrastructure.IntegrationTests",
             Guid.NewGuid().ToString("N"));
-        Directory.CreateDirectory(DirectoryPath);
+        Directory.CreateDirectory(this.DirectoryPath);
     }
 
     /// <summary>
@@ -29,9 +29,9 @@ internal sealed class TemporaryDirectory : IDisposable
     {
         try
         {
-            if (Directory.Exists(DirectoryPath))
+            if (Directory.Exists(this.DirectoryPath))
             {
-                Directory.Delete(DirectoryPath, recursive: true);
+                Directory.Delete(this.DirectoryPath, recursive: true);
             }
         }
         catch (Exception exception) when (

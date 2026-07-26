@@ -6,11 +6,11 @@ namespace ChangeLens.Infrastructure.LocalState.Persistence;
 public sealed class ChangeLensLocalStateDbContext(
     DbContextOptions<ChangeLensLocalStateDbContext> options) : DbContext(options)
 {
-    internal DbSet<LocalStateMetadata> Metadata => Set<LocalStateMetadata>();
+    internal DbSet<LocalStateMetadata> Metadata => this.Set<LocalStateMetadata>();
 
-    internal DbSet<RepositoryLocalState> Repositories => Set<RepositoryLocalState>();
+    internal DbSet<RepositoryLocalState> Repositories => this.Set<RepositoryLocalState>();
 
-    internal DbSet<ApplicationLocalState> ApplicationState => Set<ApplicationLocalState>();
+    internal DbSet<ApplicationLocalState> ApplicationState => this.Set<ApplicationLocalState>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

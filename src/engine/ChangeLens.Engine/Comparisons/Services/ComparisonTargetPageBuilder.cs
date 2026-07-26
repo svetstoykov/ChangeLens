@@ -218,7 +218,7 @@ internal sealed class ComparisonTargetPageBuilder(IEngineProtocolSerializer prot
             nextCursor,
             targetSetToken,
             unsupportedTargetCount);
-        return _protocolSerializer.GetSerializedUtf8ByteCount(
+        return this._protocolSerializer.GetSerializedUtf8ByteCount(
             ProtocolResponseFactory.CreateWithValue(requestId, page));
     }
 }

@@ -22,16 +22,16 @@ internal sealed class HookedGitCommandRunner(
     /// <summary>
     ///     Gets the number of commands completed by the wrapped runner.
     /// </summary>
-    internal int CompletedCommandCount => _completedCommandCount;
+    internal int CompletedCommandCount => this._completedCommandCount;
 
     /// <inheritdoc />
     public async Task<Result<GitCommandOutput>> RunAsync(
         GitCommand command,
         CancellationToken cancellationToken)
     {
-        var result = await _inner.RunAsync(command, cancellationToken);
-        var completed = Interlocked.Increment(ref _completedCommandCount);
-        await _afterCommand(command, completed, cancellationToken);
+        var result = await this._inner.RunAsync(command, cancellationToken);
+        var completed = Interlocked.Increment(ref this._completedCommandCount);
+        await this._afterCommand(command, completed, cancellationToken);
         return result;
     }
 }

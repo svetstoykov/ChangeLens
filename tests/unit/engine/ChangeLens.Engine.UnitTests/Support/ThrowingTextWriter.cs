@@ -23,7 +23,7 @@ internal sealed class ThrowingTextWriter(
     /// <inheritdoc />
     public override Task FlushAsync(CancellationToken cancellationToken)
     {
-        FlushCount++;
+        this.FlushCount++;
         return flushException is null
             ? base.FlushAsync(cancellationToken)
             : Task.FromException(flushException);

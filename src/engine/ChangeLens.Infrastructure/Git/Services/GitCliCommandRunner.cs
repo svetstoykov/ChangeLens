@@ -117,9 +117,9 @@ public sealed class GitCliCommandRunner : IGitCommandRunner
                 nameof(executableArguments));
         }
 
-        _executablePath = executablePath;
-        _executableArguments = Array.AsReadOnly(copiedArguments);
-        _readBoundedAsync = readBoundedAsync;
+        this._executablePath = executablePath;
+        this._executableArguments = Array.AsReadOnly(copiedArguments);
+        this._readBoundedAsync = readBoundedAsync;
     }
 
     /// <inheritdoc />
@@ -132,7 +132,7 @@ public sealed class GitCliCommandRunner : IGitCommandRunner
 
         using var process = new Process
         {
-            StartInfo = CreateStartInfo(command),
+            StartInfo = this.CreateStartInfo(command),
         };
 
         try
@@ -156,11 +156,11 @@ public sealed class GitCliCommandRunner : IGitCommandRunner
         using var executionCancellation = CancellationTokenSource.CreateLinkedTokenSource(
             cancellationToken,
             timeout.Token);
-        var standardOutputTask = _readBoundedAsync(
+        var standardOutputTask = this._readBoundedAsync(
             process.StandardOutput.BaseStream,
             command.MaximumStandardOutputBytes,
             executionCancellation.Token);
-        var standardErrorTask = _readBoundedAsync(
+        var standardErrorTask = this._readBoundedAsync(
             process.StandardError.BaseStream,
             command.MaximumStandardErrorBytes,
             executionCancellation.Token);
@@ -234,7 +234,7 @@ public sealed class GitCliCommandRunner : IGitCommandRunner
     /// <returns>The configured shell-free process start information.</returns>
     private ProcessStartInfo CreateStartInfo(GitCommand command)
     {
-        var startInfo = new ProcessStartInfo(_executablePath)
+        var startInfo = new ProcessStartInfo(this._executablePath)
         {
             CreateNoWindow = true,
             RedirectStandardError = true,
@@ -242,7 +242,7 @@ public sealed class GitCliCommandRunner : IGitCommandRunner
             UseShellExecute = false,
         };
 
-        foreach (var argument in _executableArguments)
+        foreach (var argument in this._executableArguments)
         {
             startInfo.ArgumentList.Add(argument);
         }

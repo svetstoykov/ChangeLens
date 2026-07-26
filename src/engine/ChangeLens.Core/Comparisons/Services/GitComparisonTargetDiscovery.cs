@@ -85,7 +85,7 @@ public sealed class GitComparisonTargetDiscovery(
 
         try
         {
-            var repositoryResult = await _repositoryInspector.InspectAsync(
+            var repositoryResult = await this._repositoryInspector.InspectAsync(
                 path,
                 remaining,
                 ComparisonErrors(),
@@ -136,7 +136,7 @@ public sealed class GitComparisonTargetDiscovery(
             return TimedOut();
         }
 
-        var commandResult = await _commandRunner.RunAsync(
+        var commandResult = await this._commandRunner.RunAsync(
             new GitCommand(
                 [
                     "-C",

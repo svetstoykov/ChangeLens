@@ -27,7 +27,7 @@ public sealed class RepositoryOpenResultTests
             "/projects/change_lens",
             new BranchRepositoryHead("main", Revision));
 
-        AssertMatchesFixture(descriptor, "desktop-42", "repositories-open.branch.result.json");
+        this.AssertMatchesFixture(descriptor, "desktop-42", "repositories-open.branch.result.json");
     }
 
     /// <summary>
@@ -41,7 +41,7 @@ public sealed class RepositoryOpenResultTests
             "/projects/change_lens",
             new DetachedRepositoryHead(Revision));
 
-        AssertMatchesFixture(descriptor, "desktop-43", "repositories-open.detached.result.json");
+        this.AssertMatchesFixture(descriptor, "desktop-43", "repositories-open.detached.result.json");
     }
 
     private void AssertMatchesFixture(
@@ -61,7 +61,7 @@ public sealed class RepositoryOpenResultTests
                             1785031200000,
                             null),
                         descriptor))));
-        var serialized = _serializer.SerializeResponse(response);
+        var serialized = this._serializer.SerializeResponse(response);
         Assert.True(serialized.IsSuccess);
         using var actual = JsonDocument.Parse(serialized.Data!);
         using var expected = JsonDocument.Parse(

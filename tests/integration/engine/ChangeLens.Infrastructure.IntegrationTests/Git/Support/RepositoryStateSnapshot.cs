@@ -13,9 +13,9 @@ internal sealed class RepositoryStateSnapshot
         IReadOnlyDictionary<string, string> categoryHashes,
         string porcelainStatus)
     {
-        FileHashes = fileHashes;
-        CategoryHashes = categoryHashes;
-        PorcelainStatus = porcelainStatus;
+        this.FileHashes = fileHashes;
+        this.CategoryHashes = categoryHashes;
+        this.PorcelainStatus = porcelainStatus;
     }
 
     /// <summary>

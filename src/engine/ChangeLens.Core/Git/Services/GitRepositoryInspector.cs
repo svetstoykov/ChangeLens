@@ -106,7 +106,7 @@ public sealed class GitRepositoryInspector(
         GitCommandErrorPolicy errorPolicy,
         CancellationToken cancellationToken)
     {
-        var versionResult = await RunAsync(startedAt, totalBudget, errorPolicy, ["--version"], cancellationToken);
+        var versionResult = await this.RunAsync(startedAt, totalBudget, errorPolicy, ["--version"], cancellationToken);
         if (versionResult.IsFailure)
         {
             return Result.ErrorFromResult<RepositoryDescriptor>(versionResult);
@@ -118,7 +118,7 @@ public sealed class GitRepositoryInspector(
             return Result.ErrorFromResult<RepositoryDescriptor>(versionParseResult);
         }
 
-        var insideResult = await RunAsync(
+        var insideResult = await this.RunAsync(
             startedAt, totalBudget, errorPolicy,
             ["-C", selectedPath, "rev-parse", "--is-inside-work-tree"],
             cancellationToken);
@@ -139,7 +139,7 @@ public sealed class GitRepositoryInspector(
             return Result.ErrorFromResult<RepositoryDescriptor>(insideParseResult);
         }
 
-        var bareResult = await RunAsync(
+        var bareResult = await this.RunAsync(
             startedAt, totalBudget, errorPolicy,
             ["-C", selectedPath, "rev-parse", "--is-bare-repository"],
             cancellationToken);
@@ -178,7 +178,7 @@ public sealed class GitRepositoryInspector(
                     RepositoryErrorCode.NotGitRepository));
         }
 
-        var rootResult = await RunAsync(
+        var rootResult = await this.RunAsync(
             startedAt, totalBudget, errorPolicy,
             ["-C", selectedPath, "rev-parse", "--show-toplevel"],
             cancellationToken);
@@ -208,7 +208,7 @@ public sealed class GitRepositoryInspector(
         }
 
         var canonicalRoot = canonicalRootResult.Data!;
-        var revisionResult = await RunAsync(
+        var revisionResult = await this.RunAsync(
             startedAt, totalBudget, errorPolicy,
             ["-C", canonicalRoot, "rev-parse", "--verify", "HEAD^{commit}"],
             cancellationToken);
@@ -229,7 +229,7 @@ public sealed class GitRepositoryInspector(
             return Result.ErrorFromResult<RepositoryDescriptor>(revisionParseResult);
         }
 
-        var headResult = await RunAsync(
+        var headResult = await this.RunAsync(
             startedAt, totalBudget, errorPolicy,
             ["-C", canonicalRoot, "symbolic-ref", "--quiet", "--short", "HEAD"],
             cancellationToken);

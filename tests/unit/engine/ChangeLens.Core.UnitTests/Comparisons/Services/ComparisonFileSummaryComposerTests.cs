@@ -23,7 +23,7 @@ public sealed class ComparisonFileSummaryComposerTests
             Record("file.cs", isUnstaged: true),
         };
 
-        var result = _composer.Compose(records);
+        var result = this._composer.Compose(records);
 
         Assert.True(result.IsSuccess);
         Assert.Equal(1, result.Data!.ChangedFileTotal);
@@ -42,7 +42,7 @@ public sealed class ComparisonFileSummaryComposerTests
             Record("file.cs", isStaged: true, isUnstaged: true),
         };
 
-        var result = _composer.Compose(records);
+        var result = this._composer.Compose(records);
 
         Assert.True(result.IsSuccess);
         Assert.Equal(1, result.Data!.ChangedFileTotal);
@@ -62,7 +62,7 @@ public sealed class ComparisonFileSummaryComposerTests
     [Fact]
     public void ComposeCountsUntrackedFile()
     {
-        var result = _composer.Compose([Record("new.cs", isUntracked: true)]);
+        var result = this._composer.Compose([Record("new.cs", isUntracked: true)]);
 
         Assert.True(result.IsSuccess);
         Assert.Equal(1, result.Data!.ChangedFileTotal);
@@ -76,7 +76,7 @@ public sealed class ComparisonFileSummaryComposerTests
     [Fact]
     public void ComposeCountsUnmergedFile()
     {
-        var result = _composer.Compose([Record("conflict.cs", isConflicted: true)]);
+        var result = this._composer.Compose([Record("conflict.cs", isConflicted: true)]);
 
         Assert.True(result.IsSuccess);
         Assert.Equal(1, result.Data!.ChangedFileTotal);
@@ -96,7 +96,7 @@ public sealed class ComparisonFileSummaryComposerTests
             Record("new.cs", originalPath: "middle.cs", isStaged: true),
         };
 
-        var result = _composer.Compose(records);
+        var result = this._composer.Compose(records);
 
         Assert.True(result.IsSuccess);
         Assert.Equal(1, result.Data!.ChangedFileTotal);
@@ -117,7 +117,7 @@ public sealed class ComparisonFileSummaryComposerTests
             Record("module", isCommitted: true),
         };
 
-        var result = _composer.Compose(records);
+        var result = this._composer.Compose(records);
 
         Assert.True(result.IsSuccess);
         Assert.Equal(3, result.Data!.ChangedFileTotal);
@@ -130,7 +130,7 @@ public sealed class ComparisonFileSummaryComposerTests
     [Fact]
     public void ComposeReturnsZeroForIgnoredOnlyInputAfterFiltering()
     {
-        var result = _composer.Compose([]);
+        var result = this._composer.Compose([]);
 
         Assert.True(result.IsSuccess);
         Assert.Equal(

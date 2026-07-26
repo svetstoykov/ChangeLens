@@ -22,7 +22,7 @@ public class Result<T> : Result
     protected internal Result(T? data, string? successMessage = null)
         : base(successMessage)
     {
-        Data = data;
+        this.Data = data;
     }
 
     /// <summary>

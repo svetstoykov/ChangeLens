@@ -18,9 +18,9 @@ public sealed class OperationError
     {
         ArgumentNullException.ThrowIfNull(message);
 
-        Message = message;
-        Type = type;
-        Code = code;
+        this.Message = message;
+        this.Type = type;
+        this.Code = code;
     }
 
     /// <summary>

@@ -53,13 +53,13 @@ internal sealed class EngineProtocolHost(
 
                 if (writeResult.IsFailure)
                 {
-                    FailProcess(writeResult, "Engine protocol host stopped after protocol output failed.");
+                    this.FailProcess(writeResult, "Engine protocol host stopped after protocol output failed.");
                     break;
                 }
 
                 if (readResult.IsFailure && !CanContinue(readResult))
                 {
-                    FailProcess(readResult, "Engine protocol host stopped after protocol input failed.");
+                    this.FailProcess(readResult, "Engine protocol host stopped after protocol input failed.");
                     break;
                 }
             }

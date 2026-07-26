@@ -16,19 +16,19 @@ public class Result
     /// <param name="successMessage">The success message, or <see langword="null" /> when none applies.</param>
     protected Result(string? successMessage = null)
     {
-        _errorsView = _errors.AsReadOnly();
-        SuccessMessage = successMessage;
+        this._errorsView = this._errors.AsReadOnly();
+        this.SuccessMessage = successMessage;
     }
 
     /// <summary>
     ///     Gets a value indicating whether the operation completed successfully.
     /// </summary>
-    public bool IsSuccess => _errors.Count == 0;
+    public bool IsSuccess => this._errors.Count == 0;
 
     /// <summary>
     ///     Gets a value indicating whether the operation failed.
     /// </summary>
-    public bool IsFailure => !IsSuccess;
+    public bool IsFailure => !this.IsSuccess;
 
     /// <summary>
     ///     Gets the errors produced by the failed operation.
@@ -36,7 +36,7 @@ public class Result
     /// <value>
     ///     The operation errors in their original order, or an empty collection for a successful result.
     /// </value>
-    public IReadOnlyList<OperationError> Errors => _errorsView;
+    public IReadOnlyList<OperationError> Errors => this._errorsView;
 
     /// <summary>
     ///     Gets the message associated with a successful operation.
@@ -139,5 +139,5 @@ public class Result
         return result;
     }
 
-    private void AddError(OperationError error) => _errors.Add(error);
+    private void AddError(OperationError error) => this._errors.Add(error);
 }

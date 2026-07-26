@@ -26,8 +26,9 @@ internal sealed class ComparisonListTargetsParameters
     /// </exception>
     public string? Query
     {
-        get => _query;
-        init => _query = value ?? throw new JsonException(
+        get => this._query;
+        init =>
+            this._query = value ?? throw new JsonException(
             "An explicitly supplied target query cannot be null.");
     }
 
@@ -39,8 +40,9 @@ internal sealed class ComparisonListTargetsParameters
     /// </exception>
     public string? After
     {
-        get => _after;
-        init => _after = value ?? throw new JsonException(
+        get => this._after;
+        init =>
+            this._after = value ?? throw new JsonException(
             "An explicitly supplied target cursor cannot be null.");
     }
 
@@ -52,8 +54,9 @@ internal sealed class ComparisonListTargetsParameters
     /// </exception>
     public string? TargetSetToken
     {
-        get => _targetSetToken;
-        init => _targetSetToken = value ?? throw new JsonException(
+        get => this._targetSetToken;
+        init =>
+            this._targetSetToken = value ?? throw new JsonException(
             "An explicitly supplied target-set token cannot be null.");
     }
 }

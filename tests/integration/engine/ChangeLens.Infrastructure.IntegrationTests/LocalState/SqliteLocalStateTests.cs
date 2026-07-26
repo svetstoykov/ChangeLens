@@ -2,6 +2,7 @@ using ChangeLens.Core.LocalState.Models;
 using ChangeLens.Infrastructure.IntegrationTests.Support;
 using ChangeLens.Infrastructure.LocalState.Services;
 using Microsoft.Data.Sqlite;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 
@@ -131,6 +132,66 @@ public sealed class SqliteLocalStateTests
     }
 
     /// <summary>
+    ///     Verifies that an existing version-one local-state database is adopted by the EF migration history.
+    /// </summary>
+    [Fact]
+    public async Task ExistingVersionOneDatabaseIsAdoptedByEntityFrameworkMigrations()
+    {
+        using var temporaryDirectory = new TemporaryDirectory();
+        var databasePath = Path.Combine(temporaryDirectory.DirectoryPath, "changelens.db");
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using (var connection = new SqliteConnection($"Data Source={databasePath}"))
+        {
+            await connection.OpenAsync(cancellationToken);
+            await using var command = connection.CreateCommand();
+            command.CommandText =
+                """
+                CREATE TABLE local_state_metadata (
+                    singleton_id INTEGER NOT NULL PRIMARY KEY CHECK (singleton_id = 1),
+                    product_name TEXT NOT NULL CHECK (product_name = 'ChangeLens'),
+                    schema_version INTEGER NOT NULL CHECK (schema_version > 0),
+                    created_at_unix_ms INTEGER NOT NULL
+                );
+                CREATE TABLE repositories (
+                    repository_id TEXT NOT NULL PRIMARY KEY,
+                    canonical_path TEXT NOT NULL,
+                    canonical_path_key TEXT NOT NULL UNIQUE,
+                    display_name TEXT NOT NULL,
+                    last_opened_at_unix_ms INTEGER NOT NULL,
+                    preferred_target_full_name TEXT NULL
+                );
+                CREATE TABLE application_state (
+                    singleton_id INTEGER NOT NULL PRIMARY KEY CHECK (singleton_id = 1),
+                    last_repository_id TEXT NULL REFERENCES repositories(repository_id) ON DELETE SET NULL,
+                    color_theme TEXT NULL CHECK (color_theme IS NULL OR color_theme IN ('light', 'dark'))
+                );
+                INSERT INTO local_state_metadata
+                    (singleton_id, product_name, schema_version, created_at_unix_ms)
+                VALUES (1, 'ChangeLens', 1, 100);
+                INSERT INTO application_state (singleton_id, last_repository_id, color_theme)
+                VALUES (1, NULL, 'dark');
+                """;
+            await command.ExecuteNonQueryAsync(cancellationToken);
+        }
+
+        var database = CreateDatabase(temporaryDirectory.DirectoryPath);
+        var result = await database.InitializeAsync(cancellationToken);
+
+        Assert.True(result.IsSuccess);
+        var theme = await new SqliteColorThemePreferenceStore(database).GetAsync(cancellationToken);
+        Assert.Equal(ColorTheme.Dark, theme.Data);
+        await using var verificationConnection =
+            new SqliteConnection($"Data Source={databasePath};Mode=ReadOnly");
+        await verificationConnection.OpenAsync(cancellationToken);
+        await using var verificationCommand = verificationConnection.CreateCommand();
+        verificationCommand.CommandText =
+            "SELECT MigrationId FROM __EFMigrationsHistory;";
+        Assert.Equal(
+            "20260726150843_InitialLocalState",
+            await verificationCommand.ExecuteScalarAsync(cancellationToken));
+    }
+
+    /// <summary>
     ///     Verifies that a newer schema version is rejected and remains unchanged.
     /// </summary>
     [Fact]
@@ -176,10 +237,9 @@ public sealed class SqliteLocalStateTests
         var cancellationToken = TestContext.Current.CancellationToken;
         Assert.True((await database.InitializeAsync(cancellationToken)).IsSuccess);
 
-        await using (var connection = await database.OpenConnectionAsync(cancellationToken))
+        await using (var context = await database.CreateContextAsync(cancellationToken))
         {
-            await using var command = connection.CreateCommand();
-            command.CommandText =
+            await context.Database.ExecuteSqlRawAsync(
                 """
                 INSERT INTO repositories (
                     repository_id,
@@ -189,8 +249,8 @@ public sealed class SqliteLocalStateTests
                     last_opened_at_unix_ms,
                     preferred_target_full_name)
                 VALUES ('not-a-guid', '/projects/invalid', '/projects/invalid', 'invalid', 1, NULL);
-                """;
-            await command.ExecuteNonQueryAsync(cancellationToken);
+                """,
+                cancellationToken);
         }
 
         var result = await new SqliteRepositoryHistoryStore(database)

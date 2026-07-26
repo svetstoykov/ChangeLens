@@ -2,6 +2,7 @@ using ChangeLens.Core.LocalState.Interfaces;
 using ChangeLens.Core.LocalState.Models;
 using ChangeLens.Core.Results.Models;
 using ChangeLens.Infrastructure.LocalState.Interfaces;
+using Microsoft.EntityFrameworkCore;
 
 namespace ChangeLens.Infrastructure.LocalState.Services;
 
@@ -9,28 +10,24 @@ namespace ChangeLens.Infrastructure.LocalState.Services;
 ///     Stores the explicit color-theme preference in SQLite local state.
 /// </summary>
 /// <param name="database">The required SQLite local-state database.</param>
-public sealed class SqliteColorThemePreferenceStore(ILocalStateDatabase database)
-    : IColorThemePreferenceStore
+public sealed class SqliteColorThemePreferenceStore(ILocalStateDatabase database) : IColorThemePreferenceStore
 {
     /// <inheritdoc />
     public async Task<Result<ColorTheme?>> GetAsync(CancellationToken cancellationToken)
     {
         try
         {
-            await using var connection = await database.OpenConnectionAsync(cancellationToken);
-            await using var command = connection.CreateCommand();
-            command.CommandText =
-                "SELECT color_theme FROM application_state WHERE singleton_id = 1;";
-            var value = await command.ExecuteScalarAsync(cancellationToken);
-            return value switch
+            await using var context = await database.CreateContextAsync(cancellationToken);
+            var storedValue = await context.ApplicationState
+                .Where(entry => entry.SingletonId == 1)
+                .Select(entry => entry.ColorTheme)
+                .SingleAsync(cancellationToken);
+            return storedValue switch
             {
-                null or DBNull => Result.Success<ColorTheme?>(null),
+                null => Result.Success<ColorTheme?>(null),
                 "light" => Result.Success<ColorTheme?>(ColorTheme.Light),
                 "dark" => Result.Success<ColorTheme?>(ColorTheme.Dark),
-                _ => Result.Fail<ColorTheme?>(
-                    OperationError.UnprocessableInput(
-                        "The stored color-theme preference is invalid.",
-                        Core.LocalState.Constants.LocalStateErrorCode.Invalid)),
+                _ => SqliteLocalStateDatabase.Invalid<ColorTheme?>(),
             };
         }
         catch (Exception exception) when (SqliteLocalStateDatabase.IsExpectedAccessFailure(exception))
@@ -51,15 +48,12 @@ public sealed class SqliteColorThemePreferenceStore(ILocalStateDatabase database
 
         try
         {
-            await using var connection = await database.OpenConnectionAsync(cancellationToken);
-            await using var transaction = connection.BeginTransaction();
-            await using var command = connection.CreateCommand();
-            command.Transaction = transaction;
-            command.CommandText =
-                "UPDATE application_state SET color_theme = $colorTheme WHERE singleton_id = 1;";
-            command.Parameters.AddWithValue("$colorTheme", storedValue);
-            await command.ExecuteNonQueryAsync(cancellationToken);
-            await transaction.CommitAsync(cancellationToken);
+            await using var context = await database.CreateContextAsync(cancellationToken);
+            var applicationState = await context.ApplicationState.SingleAsync(
+                entry => entry.SingletonId == 1,
+                cancellationToken);
+            applicationState.ColorTheme = storedValue;
+            await context.SaveChangesAsync(cancellationToken);
             return Result.Success();
         }
         catch (Exception exception) when (SqliteLocalStateDatabase.IsExpectedAccessFailure(exception))

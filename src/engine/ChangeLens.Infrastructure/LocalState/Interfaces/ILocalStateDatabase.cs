@@ -1,16 +1,16 @@
-using Microsoft.Data.Sqlite;
+using ChangeLens.Infrastructure.LocalState.Persistence;
 
 namespace ChangeLens.Infrastructure.LocalState.Interfaces;
 
 /// <summary>
-///     Defines controlled connections to the local-state database.
+///     Defines controlled Entity Framework contexts for the local-state database.
 /// </summary>
 public interface ILocalStateDatabase
 {
     /// <summary>
-    ///     Asynchronously opens one configured connection with required foreign-key enforcement.
+    ///     Asynchronously creates one configured context with required foreign-key enforcement.
     /// </summary>
     /// <param name="cancellationToken">A <see cref="CancellationToken" /> to observe.</param>
-    /// <returns>A task whose result contains the open connection.</returns>
-    Task<SqliteConnection> OpenConnectionAsync(CancellationToken cancellationToken);
+    /// <returns>A task whose result contains the configured context.</returns>
+    Task<ChangeLensLocalStateDbContext> CreateContextAsync(CancellationToken cancellationToken);
 }

@@ -3,7 +3,8 @@ using ChangeLens.Core.LocalState.Models;
 using ChangeLens.Core.Results.Models;
 using ChangeLens.Infrastructure.LocalState.Constants;
 using ChangeLens.Infrastructure.LocalState.Interfaces;
-using Microsoft.Data.Sqlite;
+using ChangeLens.Infrastructure.LocalState.Persistence.Entities;
+using Microsoft.EntityFrameworkCore;
 
 namespace ChangeLens.Infrastructure.LocalState.Services;
 
@@ -11,11 +12,10 @@ namespace ChangeLens.Infrastructure.LocalState.Services;
 ///     Stores repository history in the required SQLite local-state database.
 /// </summary>
 /// <remarks>
-///     The Engine registers this stateless implementation as a singleton. Each operation uses its own connection.
+///     The Engine registers this stateless implementation as a singleton. Each operation uses its own Entity Framework context.
 /// </remarks>
 /// <param name="database">The required SQLite local-state database.</param>
-public sealed class SqliteRepositoryHistoryStore(ILocalStateDatabase database)
-    : IRepositoryHistoryStore
+public sealed class SqliteRepositoryHistoryStore(ILocalStateDatabase database) : IRepositoryHistoryStore
 {
     /// <inheritdoc />
     public async Task<Result<RepositoryHistoryEntry>> RecordOpenAsync(
@@ -27,80 +27,45 @@ public sealed class SqliteRepositoryHistoryStore(ILocalStateDatabase database)
     {
         try
         {
-            await using var connection = await database.OpenConnectionAsync(cancellationToken);
-            await using var transaction = connection.BeginTransaction();
-            var existing = await FindByPathKeyAsync(
-                connection,
-                transaction,
-                canonicalPathKey,
+            await using var context = await database.CreateContextAsync(cancellationToken);
+            await using var transaction = await context.Database.BeginTransactionAsync(cancellationToken);
+            var repository = await context.Repositories.SingleOrDefaultAsync(
+                entry => entry.CanonicalPathKey == canonicalPathKey,
                 cancellationToken);
-            var repositoryId = existing?.RepositoryId ?? Guid.NewGuid();
-            var preferredTarget = existing?.PreferredTargetFullName;
-
-            await using (var upsert = connection.CreateCommand())
+            if (repository is null)
             {
-                upsert.Transaction = transaction;
-                upsert.CommandTimeout = LocalStateConstants.CommandTimeoutSeconds;
-                upsert.CommandText =
-                    """
-                    INSERT INTO repositories (
-                        repository_id,
-                        canonical_path,
-                        canonical_path_key,
-                        display_name,
-                        last_opened_at_unix_ms,
-                        preferred_target_full_name)
-                    VALUES ($id, $path, $pathKey, $name, $openedAt, $preferredTarget)
-                    ON CONFLICT(canonical_path_key) DO UPDATE SET
-                        canonical_path = excluded.canonical_path,
-                        display_name = excluded.display_name,
-                        last_opened_at_unix_ms = excluded.last_opened_at_unix_ms;
-                    """;
-                upsert.Parameters.AddWithValue("$id", repositoryId.ToString("D"));
-                upsert.Parameters.AddWithValue("$path", canonicalPath);
-                upsert.Parameters.AddWithValue("$pathKey", canonicalPathKey);
-                upsert.Parameters.AddWithValue("$name", displayName);
-                upsert.Parameters.AddWithValue("$openedAt", openedAtUnixMilliseconds);
-                upsert.Parameters.AddWithValue(
-                    "$preferredTarget",
-                    (object?)preferredTarget ?? DBNull.Value);
-                await upsert.ExecuteNonQueryAsync(cancellationToken);
+                repository = new RepositoryLocalState
+                {
+                    RepositoryId = Guid.NewGuid(),
+                    CanonicalPath = canonicalPath,
+                    CanonicalPathKey = canonicalPathKey,
+                    DisplayName = displayName,
+                    LastOpenedAtUnixMilliseconds = openedAtUnixMilliseconds,
+                };
+                context.Repositories.Add(repository);
+            }
+            else
+            {
+                repository.CanonicalPath = canonicalPath;
+                repository.DisplayName = displayName;
+                repository.LastOpenedAtUnixMilliseconds = openedAtUnixMilliseconds;
             }
 
-            await using (var selectLast = connection.CreateCommand())
-            {
-                selectLast.Transaction = transaction;
-                selectLast.CommandText =
-                    "UPDATE application_state SET last_repository_id = $id WHERE singleton_id = 1;";
-                selectLast.Parameters.AddWithValue("$id", repositoryId.ToString("D"));
-                await selectLast.ExecuteNonQueryAsync(cancellationToken);
-            }
+            var applicationState = await context.ApplicationState.SingleAsync(
+                entry => entry.SingletonId == 1,
+                cancellationToken);
+            applicationState.LastRepositoryId = repository.RepositoryId;
+            await context.SaveChangesAsync(cancellationToken);
 
-            await using (var prune = connection.CreateCommand())
-            {
-                prune.Transaction = transaction;
-                prune.CommandText =
-                    """
-                    DELETE FROM repositories
-                    WHERE repository_id IN (
-                        SELECT repository_id
-                        FROM repositories
-                        ORDER BY last_opened_at_unix_ms DESC, repository_id ASC
-                        LIMIT -1 OFFSET $maximum
-                    );
-                    """;
-                prune.Parameters.AddWithValue("$maximum", LocalStateConstants.MaximumRecentRepositories);
-                await prune.ExecuteNonQueryAsync(cancellationToken);
-            }
-
+            var obsoleteRepositories = await context.Repositories
+                .OrderByDescending(entry => entry.LastOpenedAtUnixMilliseconds)
+                .ThenBy(entry => entry.RepositoryId)
+                .Skip(LocalStateConstants.MaximumRecentRepositories)
+                .ToListAsync(cancellationToken);
+            context.Repositories.RemoveRange(obsoleteRepositories);
+            await context.SaveChangesAsync(cancellationToken);
             await transaction.CommitAsync(cancellationToken);
-            return Result.Success(
-                new RepositoryHistoryEntry(
-                    repositoryId,
-                    canonicalPath,
-                    displayName,
-                    openedAtUnixMilliseconds,
-                    preferredTarget));
+            return Result.Success(ToEntry(repository));
         }
         catch (Exception exception) when (SqliteLocalStateDatabase.IsExpectedAccessFailure(exception))
         {
@@ -113,33 +78,16 @@ public sealed class SqliteRepositoryHistoryStore(ILocalStateDatabase database)
     }
 
     /// <inheritdoc />
-    public async Task<Result<RepositoryHistoryEntry?>> GetLastAsync(
-        CancellationToken cancellationToken)
+    public async Task<Result<RepositoryHistoryEntry?>> GetLastAsync(CancellationToken cancellationToken)
     {
         try
         {
-            await using var connection = await database.OpenConnectionAsync(cancellationToken);
-            await using var command = connection.CreateCommand();
-            command.CommandText =
-                """
-                SELECT
-                    repositories.repository_id,
-                    repositories.canonical_path,
-                    repositories.display_name,
-                    repositories.last_opened_at_unix_ms,
-                    repositories.preferred_target_full_name
-                FROM application_state
-                LEFT JOIN repositories
-                    ON repositories.repository_id = application_state.last_repository_id
-                WHERE application_state.singleton_id = 1;
-                """;
-            await using var reader = await command.ExecuteReaderAsync(cancellationToken);
-            if (!await reader.ReadAsync(cancellationToken) || reader.IsDBNull(0))
-            {
-                return Result.Success<RepositoryHistoryEntry?>(null);
-            }
-
-            return Result.Success<RepositoryHistoryEntry?>(ReadEntry(reader));
+            await using var context = await database.CreateContextAsync(cancellationToken);
+            var applicationState = await context.ApplicationState
+                .Include(entry => entry.LastRepository)
+                .SingleAsync(entry => entry.SingletonId == 1, cancellationToken);
+            return Result.Success<RepositoryHistoryEntry?>(
+                applicationState.LastRepository is null ? null : ToEntry(applicationState.LastRepository));
         }
         catch (Exception exception) when (SqliteLocalStateDatabase.IsExpectedAccessFailure(exception))
         {
@@ -152,43 +100,24 @@ public sealed class SqliteRepositoryHistoryStore(ILocalStateDatabase database)
     }
 
     /// <inheritdoc />
-    public async Task<Result<RepositoryHistorySnapshot>> ListRecentAsync(
-        CancellationToken cancellationToken)
+    public async Task<Result<RepositoryHistorySnapshot>> ListRecentAsync(CancellationToken cancellationToken)
     {
         try
         {
-            await using var connection = await database.OpenConnectionAsync(cancellationToken);
-            Guid? lastRepositoryId;
-            await using (var lastCommand = connection.CreateCommand())
-            {
-                lastCommand.CommandText =
-                    "SELECT last_repository_id FROM application_state WHERE singleton_id = 1;";
-                var value = await lastCommand.ExecuteScalarAsync(cancellationToken);
-                lastRepositoryId = value is string id ? Guid.ParseExact(id, "D") : null;
-            }
-
-            var entries = new List<RepositoryHistoryEntry>();
-            await using var listCommand = connection.CreateCommand();
-            listCommand.CommandText =
-                """
-                SELECT
-                    repository_id,
-                    canonical_path,
-                    display_name,
-                    last_opened_at_unix_ms,
-                    preferred_target_full_name
-                FROM repositories
-                ORDER BY last_opened_at_unix_ms DESC, repository_id ASC
-                LIMIT 20;
-                """;
-            await using var reader = await listCommand.ExecuteReaderAsync(cancellationToken);
-            while (await reader.ReadAsync(cancellationToken))
-            {
-                entries.Add(ReadEntry(reader));
-            }
-
+            await using var context = await database.CreateContextAsync(cancellationToken);
+            var lastRepositoryId = await context.ApplicationState
+                .Where(entry => entry.SingletonId == 1)
+                .Select(entry => entry.LastRepositoryId)
+                .SingleAsync(cancellationToken);
+            var repositories = await context.Repositories
+                .AsNoTracking()
+                .OrderByDescending(entry => entry.LastOpenedAtUnixMilliseconds)
+                .ThenBy(entry => entry.RepositoryId)
+                .Take(LocalStateConstants.MaximumRecentRepositories)
+                .Select(entry => ToEntry(entry))
+                .ToListAsync(cancellationToken);
             return Result.Success(
-                new RepositoryHistorySnapshot(lastRepositoryId, entries.AsReadOnly()));
+                new RepositoryHistorySnapshot(lastRepositoryId, repositories.AsReadOnly()));
         }
         catch (Exception exception) when (SqliteLocalStateDatabase.IsExpectedAccessFailure(exception))
         {
@@ -205,14 +134,16 @@ public sealed class SqliteRepositoryHistoryStore(ILocalStateDatabase database)
     {
         try
         {
-            await using var connection = await database.OpenConnectionAsync(cancellationToken);
-            await using var transaction = connection.BeginTransaction();
-            await using var command = connection.CreateCommand();
-            command.Transaction = transaction;
-            command.CommandText = "DELETE FROM repositories WHERE repository_id = $id;";
-            command.Parameters.AddWithValue("$id", repositoryId.ToString("D"));
-            await command.ExecuteNonQueryAsync(cancellationToken);
-            await transaction.CommitAsync(cancellationToken);
+            await using var context = await database.CreateContextAsync(cancellationToken);
+            var repository = await context.Repositories.SingleOrDefaultAsync(
+                entry => entry.RepositoryId == repositoryId,
+                cancellationToken);
+            if (repository is not null)
+            {
+                context.Repositories.Remove(repository);
+                await context.SaveChangesAsync(cancellationToken);
+            }
+
             return Result.Success();
         }
         catch (Exception exception) when (SqliteLocalStateDatabase.IsExpectedAccessFailure(exception))
@@ -229,20 +160,16 @@ public sealed class SqliteRepositoryHistoryStore(ILocalStateDatabase database)
     {
         try
         {
-            await using var connection = await database.OpenConnectionAsync(cancellationToken);
-            await using var transaction = connection.BeginTransaction();
-            await using var command = connection.CreateCommand();
-            command.Transaction = transaction;
-            command.CommandText =
-                """
-                UPDATE repositories
-                SET preferred_target_full_name = $target
-                WHERE canonical_path_key = $pathKey;
-                """;
-            command.Parameters.AddWithValue("$target", preferredTargetFullName);
-            command.Parameters.AddWithValue("$pathKey", canonicalPathKey);
-            await command.ExecuteNonQueryAsync(cancellationToken);
-            await transaction.CommitAsync(cancellationToken);
+            await using var context = await database.CreateContextAsync(cancellationToken);
+            var repository = await context.Repositories.SingleOrDefaultAsync(
+                entry => entry.CanonicalPathKey == canonicalPathKey,
+                cancellationToken);
+            if (repository is not null)
+            {
+                repository.PreferredTargetFullName = preferredTargetFullName;
+                await context.SaveChangesAsync(cancellationToken);
+            }
+
             return Result.Success();
         }
         catch (Exception exception) when (SqliteLocalStateDatabase.IsExpectedAccessFailure(exception))
@@ -251,35 +178,11 @@ public sealed class SqliteRepositoryHistoryStore(ILocalStateDatabase database)
         }
     }
 
-    private static async Task<RepositoryHistoryEntry?> FindByPathKeyAsync(
-        SqliteConnection connection,
-        SqliteTransaction transaction,
-        string canonicalPathKey,
-        CancellationToken cancellationToken)
-    {
-        await using var command = connection.CreateCommand();
-        command.Transaction = transaction;
-        command.CommandText =
-            """
-            SELECT
-                repository_id,
-                canonical_path,
-                display_name,
-                last_opened_at_unix_ms,
-                preferred_target_full_name
-            FROM repositories
-            WHERE canonical_path_key = $pathKey;
-            """;
-        command.Parameters.AddWithValue("$pathKey", canonicalPathKey);
-        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
-        return await reader.ReadAsync(cancellationToken) ? ReadEntry(reader) : null;
-    }
-
-    private static RepositoryHistoryEntry ReadEntry(SqliteDataReader reader) =>
+    private static RepositoryHistoryEntry ToEntry(RepositoryLocalState repository) =>
         new(
-            Guid.ParseExact(reader.GetString(0), "D"),
-            reader.GetString(1),
-            reader.GetString(2),
-            reader.GetInt64(3),
-            reader.IsDBNull(4) ? null : reader.GetString(4));
+            repository.RepositoryId,
+            repository.CanonicalPath,
+            repository.DisplayName,
+            repository.LastOpenedAtUnixMilliseconds,
+            repository.PreferredTargetFullName);
 }

@@ -6,6 +6,7 @@ using ChangeLens.Infrastructure.FileSystem.Services;
 using ChangeLens.Infrastructure.Git.Services;
 using ChangeLens.Infrastructure.IntegrationTests.Git.Support;
 using ChangeLens.Infrastructure.IntegrationTests.Support;
+using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 using Xunit.Sdk;
 
@@ -236,7 +237,7 @@ public sealed class GitRepositoryInspectorIntegrationTests
     }
 
     private static GitRepositoryInspector CreateInspector() =>
-        new(new GitCliCommandRunner(), new PhysicalRepositoryPathResolver());
+        new(new GitCliCommandRunner(), new PhysicalRepositoryPathResolver(), NullLogger<GitRepositoryInspector>.Instance);
 
     private static async Task<Result<RepositoryDescriptor>> InspectWithoutMutationAsync(
         string selectedPath,

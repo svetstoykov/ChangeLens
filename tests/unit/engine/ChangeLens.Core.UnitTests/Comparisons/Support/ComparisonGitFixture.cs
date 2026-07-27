@@ -3,6 +3,7 @@ using ChangeLens.Core.Git.Models;
 using ChangeLens.Core.Git.Services;
 using ChangeLens.Core.Results.Models;
 using ChangeLens.Core.UnitTests.Git.Support;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace ChangeLens.Core.UnitTests.Comparisons.Support;
 
@@ -39,12 +40,19 @@ internal sealed class ComparisonGitFixture
         this.Runner = new StubGitCommandRunner();
         this.Resolver = new StubRepositoryPathResolver();
         this.Discovery = new GitComparisonTargetDiscovery(
-            new GitRepositoryInspector(this.Runner, this.Resolver), this.Runner);
+            new GitRepositoryInspector(this.Runner, this.Resolver, NullLogger<GitRepositoryInspector>.Instance),
+            this.Runner,
+            NullLogger<GitComparisonTargetDiscovery>.Instance);
         this.Preparer = new GitComparisonPreparer(
-            new GitRepositoryInspector(this.Runner, this.Resolver), this.Discovery, this.Runner,
-            new ComparisonFileSummaryComposer());
+            new GitRepositoryInspector(this.Runner, this.Resolver, NullLogger<GitRepositoryInspector>.Instance),
+            this.Discovery, this.Runner,
+            new ComparisonFileSummaryComposer(),
+            NullLogger<GitComparisonPreparer>.Instance);
         this.FreshnessChecker = new GitComparisonFreshnessChecker(
-            new GitRepositoryInspector(this.Runner, this.Resolver), this.Discovery, this.Runner);
+            new GitRepositoryInspector(this.Runner, this.Resolver, NullLogger<GitRepositoryInspector>.Instance),
+            this.Discovery,
+            this.Runner,
+            NullLogger<GitComparisonFreshnessChecker>.Instance);
     }
 
     /// <summary>

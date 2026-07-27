@@ -5,6 +5,7 @@ using ChangeLens.Engine.Comparisons.Interfaces;
 using ChangeLens.Engine.Comparisons.Models;
 using ChangeLens.Engine.Protocol.Interfaces;
 using ChangeLens.Engine.Protocol.Services;
+using Microsoft.Extensions.Logging;
 
 namespace ChangeLens.Engine.Comparisons.Services;
 
@@ -21,10 +22,13 @@ namespace ChangeLens.Engine.Comparisons.Services;
 ///     </para>
 /// </remarks>
 /// <param name="protocolSerializer">The production protocol serializer. Cannot be <see langword="null" />.</param>
+/// <param name="logger">The logger for target-page bounding outcomes. Cannot be <see langword="null" />.</param>
 /// <exception cref="ArgumentNullException">
-///     <paramref name="protocolSerializer" /> is <see langword="null" />.
+///     <paramref name="protocolSerializer" /> or <paramref name="logger" /> is <see langword="null" />.
 /// </exception>
-internal sealed class ComparisonTargetPageBuilder(IEngineProtocolSerializer protocolSerializer) : IComparisonTargetPageBuilder
+internal sealed class ComparisonTargetPageBuilder(
+    IEngineProtocolSerializer protocolSerializer,
+    ILogger<ComparisonTargetPageBuilder> logger) : IComparisonTargetPageBuilder
 {
     /// <summary>
     ///     Provides stable correlation overhead when classifying serializer-unsupported descriptors.
@@ -33,6 +37,9 @@ internal sealed class ComparisonTargetPageBuilder(IEngineProtocolSerializer prot
 
     private readonly IEngineProtocolSerializer _protocolSerializer =
         protocolSerializer ?? throw new ArgumentNullException(nameof(protocolSerializer));
+
+    private readonly ILogger<ComparisonTargetPageBuilder> _logger =
+        logger ?? throw new ArgumentNullException(nameof(logger));
 
     /// <inheritdoc />
     public Result<ComparisonTargetPageResult> Build(
@@ -78,6 +85,12 @@ internal sealed class ComparisonTargetPageBuilder(IEngineProtocolSerializer prot
                 {
                     serializerUnsupportedFullNames.Add(candidate.FullName);
                     unsupportedTargetCount++;
+                    this._logger.LogDebug(
+                        "Excluded comparison target {FullName} from the page because its serialized size " +
+                        "{SerializedBytes} exceeds the page budget {BudgetBytes}.",
+                        candidate.FullName,
+                        measurement.Data,
+                        ComparisonActionConstants.TargetPageBudgetBytes);
                     continue;
                 }
 
@@ -157,7 +170,7 @@ internal sealed class ComparisonTargetPageBuilder(IEngineProtocolSerializer prot
                 }
             }
 
-            return CreateTooLargeFailure();
+            return this.CreateTooLargeFailure();
         }
 
         if (emitted.Count == supported.Length)
@@ -185,14 +198,20 @@ internal sealed class ComparisonTargetPageBuilder(IEngineProtocolSerializer prot
 
         return finalMeasurement.Data <= ComparisonActionConstants.TargetPageBudgetBytes
             ? Result.Success(page)
-            : CreateTooLargeFailure();
+            : this.CreateTooLargeFailure();
     }
 
-    private static Result<ComparisonTargetPageResult> CreateTooLargeFailure() =>
-        Result.Fail<ComparisonTargetPageResult>(
+    private Result<ComparisonTargetPageResult> CreateTooLargeFailure()
+    {
+        this._logger.LogWarning(
+            "Comparison target page build failed: even a single target exceeds the page budget " +
+            "{BudgetBytes} bytes.",
+            ComparisonActionConstants.TargetPageBudgetBytes);
+        return Result.Fail<ComparisonTargetPageResult>(
             OperationError.UnprocessableInput(
                 "The comparison exceeds the supported local inspection limit.",
                 ComparisonErrorCode.TooLarge));
+    }
 
     /// <summary>
     ///     Measures one tentative complete correlated target-page response.

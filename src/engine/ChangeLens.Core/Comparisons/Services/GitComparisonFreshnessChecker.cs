@@ -11,6 +11,7 @@ using ChangeLens.Core.Git.Parsers;
 using ChangeLens.Core.Git.Services;
 using ChangeLens.Core.Repositories.Models;
 using ChangeLens.Core.Results.Models;
+using Microsoft.Extensions.Logging;
 
 namespace ChangeLens.Core.Comparisons.Services;
 
@@ -29,14 +30,16 @@ namespace ChangeLens.Core.Comparisons.Services;
 /// <param name="repositoryInspector">The repository inspection service. Cannot be <see langword="null" />.</param>
 /// <param name="targetDiscovery">The comparison-target discovery service. Cannot be <see langword="null" />.</param>
 /// <param name="commandRunner">The controlled Git process boundary. Cannot be <see langword="null" />.</param>
+/// <param name="logger">The logger for freshness-check outcomes. Cannot be <see langword="null" />.</param>
 /// <exception cref="ArgumentNullException">
-///     <paramref name="repositoryInspector" />, <paramref name="targetDiscovery" />, or
-///     <paramref name="commandRunner" /> is <see langword="null" />.
+///     <paramref name="repositoryInspector" />, <paramref name="targetDiscovery" />,
+///     <paramref name="commandRunner" />, or <paramref name="logger" /> is <see langword="null" />.
 /// </exception>
 public sealed class GitComparisonFreshnessChecker(
     IGitRepositoryInspector repositoryInspector,
     IGitComparisonTargetDiscovery targetDiscovery,
-    IGitCommandRunner commandRunner)
+    IGitCommandRunner commandRunner,
+    ILogger<GitComparisonFreshnessChecker> logger)
     : IGitComparisonFreshnessChecker
 {
     private static readonly UTF8Encoding StrictUtf8 = new(false, true);
@@ -71,6 +74,9 @@ public sealed class GitComparisonFreshnessChecker(
     private readonly IGitCommandRunner _commandRunner =
         commandRunner ?? throw new ArgumentNullException(nameof(commandRunner));
 
+    private readonly ILogger<GitComparisonFreshnessChecker> _logger =
+        logger ?? throw new ArgumentNullException(nameof(logger));
+
     /// <inheritdoc />
     public async Task<Result<ComparisonFreshnessState>> CheckAsync(
         string? path,
@@ -80,11 +86,17 @@ public sealed class GitComparisonFreshnessChecker(
     {
         if (!IsValidToken(freshnessToken))
         {
+            this._logger.LogDebug(
+                "Rejected comparison freshness check for target {Target}: freshness token shape is not approved.",
+                target);
             return Result.Fail<ComparisonFreshnessState>(InvalidFreshnessTokenError);
         }
 
         if (!IsApprovedTargetShape(target))
         {
+            this._logger.LogDebug(
+                "Rejected comparison freshness check for target {Target}: target shape is not approved.",
+                target);
             return Result.Fail<ComparisonFreshnessState>(TargetInvalidError);
         }
 
@@ -191,14 +203,24 @@ public sealed class GitComparisonFreshnessChecker(
                 resolvedTarget,
                 targetsResult.Data.TargetSetToken,
                 parsedStatus.Data!);
-            return Result.Success(
-                TokensEqual(freshnessToken!, currentToken)
-                    ? ComparisonFreshnessState.Current
-                    : ComparisonFreshnessState.Stale);
+            var state = TokensEqual(freshnessToken!, currentToken)
+                ? ComparisonFreshnessState.Current
+                : ComparisonFreshnessState.Stale;
+            this._logger.LogInformation(
+                "Comparison freshness check for target {Target} resolved to {FreshnessState} in " +
+                "{ElapsedMilliseconds:0.000} ms.",
+                target,
+                state,
+                Stopwatch.GetElapsedTime(startedAt).TotalMilliseconds);
+            return Result.Success(state);
         }
         catch (OperationCanceledException) when (
             !cancellationToken.IsCancellationRequested && deadline.IsCancellationRequested)
         {
+            this._logger.LogWarning(
+                "Comparison freshness check for target {Target} timed out after {ElapsedMilliseconds:0.000} ms.",
+                target,
+                Stopwatch.GetElapsedTime(startedAt).TotalMilliseconds);
             return Result.Fail<ComparisonFreshnessState>(TimedOutError);
         }
     }

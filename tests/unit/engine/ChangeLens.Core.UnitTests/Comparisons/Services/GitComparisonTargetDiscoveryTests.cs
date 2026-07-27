@@ -6,6 +6,7 @@ using ChangeLens.Core.Repositories.Models;
 using ChangeLens.Core.Results.Models;
 using ChangeLens.Core.UnitTests.Comparisons.Support;
 using ChangeLens.Core.UnitTests.Git.Support;
+using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 
 namespace ChangeLens.Core.UnitTests.Comparisons.Services;
@@ -467,8 +468,10 @@ public sealed class GitComparisonTargetDiscoveryTests
         var resolver = new StubRepositoryPathResolver();
         resolver.Enqueue(Result.Fail<string>(error));
         var discovery = new GitComparisonTargetDiscovery(
-            new ChangeLens.Core.Git.Services.GitRepositoryInspector(runner, resolver),
-            runner);
+            new ChangeLens.Core.Git.Services.GitRepositoryInspector(
+                runner, resolver, NullLogger<ChangeLens.Core.Git.Services.GitRepositoryInspector>.Instance),
+            runner,
+            NullLogger<GitComparisonTargetDiscovery>.Instance);
 
         var result = await discovery.ListAsync(
             "/selected",

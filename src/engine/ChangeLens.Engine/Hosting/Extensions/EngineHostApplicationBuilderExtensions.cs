@@ -64,7 +64,7 @@ internal static class EngineHostApplicationBuilderExtensions
         builder.Services.AddSingleton<IEngineStatusService, EngineStatusService>();
         builder.Services.AddSingleton<IRepositoryPathResolver, PhysicalRepositoryPathResolver>();
         builder.Services.AddSingleton<IGitCommandRunner>(
-            _ =>
+            serviceProvider =>
             {
                 var configuredExecutable =
                     builder.Configuration[
@@ -72,7 +72,11 @@ internal static class EngineHostApplicationBuilderExtensions
                 var executable = string.IsNullOrWhiteSpace(configuredExecutable)
                     ? RepositoryInspectionConfigurationConstants.DefaultGitExecutable
                     : configuredExecutable;
-                return new GitCliCommandRunner(executable, []);
+                return new GitCliCommandRunner(
+                    executable,
+                    [],
+                    serviceProvider.GetRequiredService<
+                        Microsoft.Extensions.Logging.ILogger<GitCliCommandRunner>>());
             });
         builder.Services.AddSingleton<IGitRepositoryInspector, GitRepositoryInspector>();
         builder.Services.AddSingleton<IComparisonFileSummaryComposer, ComparisonFileSummaryComposer>();

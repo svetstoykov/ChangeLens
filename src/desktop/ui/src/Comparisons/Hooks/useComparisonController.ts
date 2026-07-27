@@ -314,9 +314,10 @@ export function useComparisonController({
           } while (exactTarget === undefined && after !== undefined);
 
           if (exactTarget) {
+            await discover("");
             updateState((current) => ({
               ...current,
-              targets: [exactTarget],
+              targets: mergeTargets(current.targets, [exactTarget]),
               selectedTarget: exactTarget,
               isDiscovering: false,
             }));

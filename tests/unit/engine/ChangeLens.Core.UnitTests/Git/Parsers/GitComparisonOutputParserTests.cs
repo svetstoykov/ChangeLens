@@ -288,17 +288,21 @@ public sealed class GitComparisonOutputParserTests
     }
 
     /// <summary>
-    ///     Verifies raw rename scores use Git's non-padded percentage form.
+    ///     Verifies raw rename scores below one hundred percent use Git's three-digit padded form.
     /// </summary>
-    [Fact]
-    public void ParseCommittedFilesAcceptsTwoDigitRenameScore()
+    /// <param name="status">The padded raw rename status.</param>
+    [Theory]
+    [InlineData("R050")]
+    [InlineData("R073")]
+    [InlineData("R099")]
+    public void ParseCommittedFilesAcceptsPaddedRenameScore(string status)
     {
         var output = Raw(
             "100644",
             "100644",
             Sha1Revision,
             OtherSha1Revision,
-            "R50",
+            status,
             "new.cs",
             "old.cs");
 
@@ -319,6 +323,8 @@ public sealed class GitComparisonOutputParserTests
     [InlineData(":10064x 100644 " + Sha1Revision + " " + OtherSha1Revision + " M\0file.cs\0")]
     [InlineData(":100644 100644 " + Sha1Revision + " " + OtherSha1Revision + " C100\0new.cs\0old.cs\0")]
     [InlineData(":100644 100644 " + Sha1Revision + " " + OtherSha1Revision + " R999\0new.cs\0old.cs\0")]
+    [InlineData(":100644 100644 " + Sha1Revision + " " + OtherSha1Revision + " R049\0new.cs\0old.cs\0")]
+    [InlineData(":100644 100644 " + Sha1Revision + " " + OtherSha1Revision + " R73\0new.cs\0old.cs\0")]
     [InlineData(":100644 100644 " + Sha1Revision + " " + OtherSha1Revision + " M\0file.cs")]
     [InlineData(":100644 100644 " + Sha1Revision + " " + OtherSha1Revision + " R100\0new.cs\0")]
     [InlineData(":100644 100644 " + Sha1Revision + " " + OtherSha1Revision + " A\0file.cs\0")]
@@ -468,6 +474,7 @@ public sealed class GitComparisonOutputParserTests
     [InlineData("1 M. N... 100644 100644 100644 invalid " + OtherSha1Revision + " file.cs\0")]
     [InlineData("2 M. N... 100644 100644 100644 " + Sha1Revision + " " + OtherSha1Revision + " R100 new.cs\0old.cs\0")]
     [InlineData("2 R. N... 100644 100644 100644 " + Sha1Revision + " " + OtherSha1Revision + " C100 new.cs\0old.cs\0")]
+    [InlineData("2 R. N... 100644 100644 100644 " + Sha1Revision + " " + OtherSha1Revision + " R073 new.cs\0old.cs\0")]
     [InlineData("2 R. N... 100644 100644 100644 " + Sha1Revision + " " + OtherSha1Revision + " R100 new.cs\0")]
     [InlineData("u M. N... 100644 100644 100644 100644 " + Sha1Revision + " " + OtherSha1Revision + " " + Sha1Revision + " file.cs\0")]
     [InlineData("# branch.head main\0")]

@@ -12,15 +12,20 @@ using ChangeLens.Infrastructure.Git.Constants;
 namespace ChangeLens.Infrastructure.Git.Services;
 
 /// <summary>
-///     Runs bounded, read-only Git commands without invoking a shell.
+///     Runs bounded Git commands without invoking a shell, whether they inspect the local repository or contact a
+///     configured remote.
 /// </summary>
 /// <remarks>
 ///     <para>
 ///         This implementation is stateless and safe to register as a singleton.
 ///     </para>
 ///     <para>
-///         Git arguments are passed as distinct process arguments. Paging, prompts, optional locks, and locale-dependent
-///         output are disabled for every execution.
+///         Git arguments are passed as distinct process arguments. Paging, interactive prompts, optional locks, and
+///         locale-dependent output are disabled for every execution, and SSH is forced into batch mode so a missing
+///         credential fails immediately instead of waiting on a prompt no attached terminal can answer. The runner
+///         does not decide which commands are read-only or local; that judgment belongs to the caller supplying
+///         <see cref="GitCommand.Arguments" />, and network commands such as <c>fetch</c> and <c>ls-remote</c> run
+///         through the same bounded process boundary as local inspection commands.
 ///     </para>
 ///     <para>
 ///         Deadlines and caller cancellation cover both process exit and redirected-stream completion. Descendant
@@ -267,6 +272,8 @@ public sealed class GitCliCommandRunner : IGitCommandRunner
         startInfo.Environment[GitProcessConstants.LanguageEnvironmentVariable] =
             GitProcessConstants.InvariantLocaleValue;
         startInfo.Environment[GitProcessConstants.ExternalDiffEnvironmentVariable] = string.Empty;
+        startInfo.Environment[GitProcessConstants.SshCommandEnvironmentVariable] =
+            GitProcessConstants.BatchModeSshCommandValue;
         return startInfo;
     }
 

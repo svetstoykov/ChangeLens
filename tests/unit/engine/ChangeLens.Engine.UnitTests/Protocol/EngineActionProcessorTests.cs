@@ -688,6 +688,10 @@ public sealed class EngineActionProcessorTests
                                    fixture.Inspector,
                                    targetDiscovery,
                                    fixture);
+        var remoteBaselineTracker = comparisonFixture?.RemoteBaselineTracker ??
+                                     new ChangeLens.Core.Git.Services.GitRemoteBaselineTracker(
+                                         fixture.Inspector,
+                                         fixture);
         return new EngineActionProcessor(
             new StubEngineStatusService(checkStatusAsync ?? (_ => Task.FromResult(Result.Success()))),
             new RepositoryHistoryService(
@@ -699,6 +703,7 @@ public sealed class EngineActionProcessorTests
             targetDiscovery,
             preparer,
             freshnessChecker,
+            remoteBaselineTracker,
             new ComparisonTargetPageBuilder(serializer),
             serializer,
             logger ?? new TestLogger<EngineActionProcessor>());

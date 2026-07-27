@@ -3,6 +3,8 @@ using System.Text.Json;
 using ChangeLens.Core.Comparisons.Models;
 using ChangeLens.Core.Comparisons.Interfaces;
 using ChangeLens.Core.EngineStatus.Interfaces;
+using ChangeLens.Core.Git.Interfaces;
+using ChangeLens.Core.Git.Models;
 using ChangeLens.Core.LocalState.Models;
 using ChangeLens.Core.Results.Models;
 using ChangeLens.Engine.Comparisons.Constants;
@@ -37,6 +39,9 @@ namespace ChangeLens.Engine.Protocol.Services;
 /// <param name="comparisonFreshnessChecker">
 ///     The comparison freshness capability. Cannot be <see langword="null" />.
 /// </param>
+/// <param name="remoteBaselineTracker">
+///     The remote baseline detection and refresh capability. Cannot be <see langword="null" />.
+/// </param>
 /// <param name="comparisonTargetPageBuilder">
 ///     The bounded target-page builder. Cannot be <see langword="null" />.
 /// </param>
@@ -49,6 +54,7 @@ internal sealed class EngineActionProcessor(
     IGitComparisonTargetDiscovery comparisonTargetDiscovery,
     IGitComparisonPreparer comparisonPreparer,
     IGitComparisonFreshnessChecker comparisonFreshnessChecker,
+    IGitRemoteBaselineTracker remoteBaselineTracker,
     IComparisonTargetPageBuilder comparisonTargetPageBuilder,
     IEngineProtocolSerializer protocolSerializer,
     ILogger<EngineActionProcessor> logger) : IEngineActionProcessor
@@ -142,6 +148,10 @@ internal sealed class EngineActionProcessor(
                 await this.ProcessComparisonPrepareAsync(request, cancellationToken),
             ComparisonActionConstants.CheckFreshnessAction =>
                 await this.ProcessComparisonCheckFreshnessAsync(request, cancellationToken),
+            ComparisonActionConstants.CheckRemoteBaselineAction =>
+                await this.ProcessComparisonCheckRemoteBaselineAsync(request, cancellationToken),
+            ComparisonActionConstants.RefreshRemoteBaselineAction =>
+                await this.ProcessComparisonRefreshRemoteBaselineAsync(request, cancellationToken),
             EngineStatusActionConstants.CheckStatusAction =>
                 await this.ProcessCheckStatusAsync(request, cancellationToken),
             PreferenceActionConstants.GetColorThemeAction =>
@@ -355,6 +365,106 @@ internal sealed class EngineActionProcessor(
     }
 
     /// <summary>
+    ///     Asynchronously binds and executes a remote-tracking baseline freshness check.
+    /// </summary>
+    /// <param name="request">The current-version remote-baseline-check request. Cannot be <see langword="null" />.</param>
+    /// <param name="cancellationToken">
+    ///     A <see cref="CancellationToken" /> to observe while waiting for the check.
+    /// </param>
+    /// <returns>A task that represents the asynchronous operation and contains the tagged baseline state.</returns>
+    private async Task<ProtocolResponse> ProcessComparisonCheckRemoteBaselineAsync(
+        EngineProtocolRequest request,
+        CancellationToken cancellationToken)
+    {
+        if (request.Parameters.ValueKind == JsonValueKind.Undefined)
+        {
+            return MissingParameters(
+                request.RequestId,
+                ComparisonActionConstants.CheckRemoteBaselineAction);
+        }
+
+        var parametersResult =
+            protocolSerializer.DeserializeParameters<ComparisonCheckRemoteBaselineParameters>(
+                request.Parameters,
+                ComparisonActionConstants.CheckRemoteBaselineAction);
+        if (parametersResult.IsFailure)
+        {
+            return ProtocolResponseFactory.CreateError(request.RequestId, parametersResult.Errors);
+        }
+
+        var parameters = parametersResult.Data!;
+        var checkResult = await remoteBaselineTracker.CheckAsync(
+            parameters.Path,
+            parameters.Target,
+            cancellationToken);
+        if (checkResult.IsFailure)
+        {
+            return ProtocolResponseFactory.FromResult(
+                request.RequestId,
+                Result.ErrorFromResult<RemoteBaselineResult>(checkResult));
+        }
+
+        RemoteBaselineResult result = checkResult.Data! switch
+        {
+            { State: RemoteBaselineState.Current, RemoteRevision: { } revision } =>
+                new CurrentRemoteBaselineResult(revision),
+            { State: RemoteBaselineState.Moved, RemoteRevision: { } revision } =>
+                new MovedRemoteBaselineResult(revision),
+            { State: RemoteBaselineState.NoRemote } => new NoRemoteRemoteBaselineResult(),
+            _ => throw new InvalidOperationException(
+                "The remote baseline check result is not approved for the engine protocol."),
+        };
+        return ProtocolResponseFactory.FromResult(
+            request.RequestId,
+            Result.Success(result));
+    }
+
+    /// <summary>
+    ///     Asynchronously binds and executes a remote-tracking baseline refresh.
+    /// </summary>
+    /// <param name="request">The current-version remote-baseline-refresh request. Cannot be <see langword="null" />.</param>
+    /// <param name="cancellationToken">
+    ///     A <see cref="CancellationToken" /> to observe while waiting for the fetch.
+    /// </param>
+    /// <returns>A task that represents the asynchronous operation and contains the refreshed revision.</returns>
+    private async Task<ProtocolResponse> ProcessComparisonRefreshRemoteBaselineAsync(
+        EngineProtocolRequest request,
+        CancellationToken cancellationToken)
+    {
+        if (request.Parameters.ValueKind == JsonValueKind.Undefined)
+        {
+            return MissingParameters(
+                request.RequestId,
+                ComparisonActionConstants.RefreshRemoteBaselineAction);
+        }
+
+        var parametersResult =
+            protocolSerializer.DeserializeParameters<ComparisonRefreshRemoteBaselineParameters>(
+                request.Parameters,
+                ComparisonActionConstants.RefreshRemoteBaselineAction);
+        if (parametersResult.IsFailure)
+        {
+            return ProtocolResponseFactory.CreateError(request.RequestId, parametersResult.Errors);
+        }
+
+        var parameters = parametersResult.Data!;
+        var refreshResult = await remoteBaselineTracker.RefreshAsync(
+            parameters.Path,
+            parameters.Target,
+            cancellationToken);
+        if (refreshResult.IsFailure)
+        {
+            return ProtocolResponseFactory.FromResult(
+                request.RequestId,
+                Result.ErrorFromResult<ComparisonRefreshRemoteBaselineResult>(refreshResult));
+        }
+
+        return ProtocolResponseFactory.FromResult(
+            request.RequestId,
+            Result.Success(new ComparisonRefreshRemoteBaselineResult(refreshResult.Data!)));
+    }
+
+    /// <summary>
     ///     Asynchronously executes the payload-free engine-status action.
     /// </summary>
     /// <param name="request">The validated status request. Cannot be <see langword="null" />.</param>
@@ -512,6 +622,8 @@ internal sealed class EngineActionProcessor(
             ComparisonActionConstants.ListTargetsAction or
             ComparisonActionConstants.PrepareAction or
             ComparisonActionConstants.CheckFreshnessAction or
+            ComparisonActionConstants.CheckRemoteBaselineAction or
+            ComparisonActionConstants.RefreshRemoteBaselineAction or
             PreferenceActionConstants.GetColorThemeAction or
             PreferenceActionConstants.SetColorThemeAction;
 
@@ -523,7 +635,9 @@ internal sealed class EngineActionProcessor(
     private static bool IsComparisonAction(string action) =>
         action is ComparisonActionConstants.ListTargetsAction or
             ComparisonActionConstants.PrepareAction or
-            ComparisonActionConstants.CheckFreshnessAction;
+            ComparisonActionConstants.CheckFreshnessAction or
+            ComparisonActionConstants.CheckRemoteBaselineAction or
+            ComparisonActionConstants.RefreshRemoteBaselineAction;
 
     /// <summary>
     ///     Logs one successful or expected failed action outcome.

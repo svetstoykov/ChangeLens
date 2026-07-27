@@ -434,6 +434,123 @@ public sealed class GitOutputParserTests
         Assert.Equal(branchName, head.Name);
     }
 
+    /// <summary>
+    ///     Verifies that a slashed branch name resolves to the longest matching configured remote.
+    /// </summary>
+    [Fact]
+    public void ResolveRemoteBranchSelectsLongestMatchingRemoteForSlashedBranch()
+    {
+        var result = GitOutputParser.ResolveRemoteBranch(
+            "refs/remotes/origin/feature/foo",
+            ["origin", "origin-mirror"]);
+
+        Assert.NotNull(result);
+        Assert.Equal("origin", result.Value.Remote);
+        Assert.Equal("feature/foo", result.Value.Branch);
+    }
+
+    /// <summary>
+    ///     Verifies that the longest configured remote name wins when multiple remotes prefix the reference suffix.
+    /// </summary>
+    [Fact]
+    public void ResolveRemoteBranchPrefersLongestRemoteNameOverShorterPrefix()
+    {
+        var result = GitOutputParser.ResolveRemoteBranch(
+            "refs/remotes/origin-mirror/main",
+            ["origin", "origin-mirror"]);
+
+        Assert.NotNull(result);
+        Assert.Equal("origin-mirror", result.Value.Remote);
+        Assert.Equal("main", result.Value.Branch);
+    }
+
+    /// <summary>
+    ///     Verifies that no configured remote yields a null resolution.
+    /// </summary>
+    [Fact]
+    public void ResolveRemoteBranchReturnsNullForNoConfiguredRemotes()
+    {
+        var result = GitOutputParser.ResolveRemoteBranch("refs/remotes/origin/main", []);
+
+        Assert.Null(result);
+    }
+
+    /// <summary>
+    ///     Verifies that a reference with no matching configured remote yields a null resolution.
+    /// </summary>
+    [Fact]
+    public void ResolveRemoteBranchReturnsNullWhenNoRemoteMatches()
+    {
+        var result = GitOutputParser.ResolveRemoteBranch(
+            "refs/remotes/upstream/main",
+            ["origin"]);
+
+        Assert.Null(result);
+    }
+
+    /// <summary>
+    ///     Verifies that a reference outside the remote-tracking namespace yields a null resolution.
+    /// </summary>
+    [Fact]
+    public void ResolveRemoteBranchReturnsNullForNonRemoteTrackingReference()
+    {
+        var result = GitOutputParser.ResolveRemoteBranch("refs/heads/main", ["origin"]);
+
+        Assert.Null(result);
+    }
+
+    /// <summary>
+    ///     Verifies that configured remote names are parsed one per line.
+    /// </summary>
+    [Fact]
+    public void ParseRemoteNamesReturnsEachConfiguredName()
+    {
+        var result = GitOutputParser.ParseRemoteNames(
+            new GitCommandOutput(0, "origin\nupstream\n", string.Empty));
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal(["origin", "upstream"], result.Data);
+    }
+
+    /// <summary>
+    ///     Verifies that empty output parses to zero configured remotes.
+    /// </summary>
+    [Fact]
+    public void ParseRemoteNamesReturnsEmptyForNoConfiguredRemotes()
+    {
+        var result = GitOutputParser.ParseRemoteNames(new GitCommandOutput(0, string.Empty, string.Empty));
+
+        Assert.True(result.IsSuccess);
+        Assert.Empty(result.Data!);
+    }
+
+    /// <summary>
+    ///     Verifies that the advertised revision is parsed for the requested branch.
+    /// </summary>
+    [Fact]
+    public void ParseLsRemoteRevisionReturnsAdvertisedRevision()
+    {
+        var result = GitOutputParser.ParseLsRemoteRevision(
+            new GitCommandOutput(0, Sha1Revision + "\trefs/heads/dev\n", string.Empty),
+            "refs/heads/dev");
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal(Sha1Revision, result.Data);
+    }
+
+    /// <summary>
+    ///     Verifies that a mismatched advertised reference is rejected.
+    /// </summary>
+    [Fact]
+    public void ParseLsRemoteRevisionRejectsMismatchedReference()
+    {
+        var result = GitOutputParser.ParseLsRemoteRevision(
+            new GitCommandOutput(0, Sha1Revision + "\trefs/heads/other\n", string.Empty),
+            "refs/heads/dev");
+
+        AssertInspectionFailure(result);
+    }
+
     private static void AssertInspectionFailure(Result result)
     {
         Assert.True(result.IsFailure);

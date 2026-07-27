@@ -116,7 +116,7 @@ export function RepositoryPickerDialog({
           </h2>
           <p id="repository-picker-description">
             Choose a local working tree. ChangeLens inspects it read-only and
-            never contacts a remote.
+            only contacts a remote to check the branch you pick as a baseline.
           </p>
         </div>
       </div>

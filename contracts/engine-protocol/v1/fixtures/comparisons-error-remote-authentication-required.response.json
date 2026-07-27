@@ -1,0 +1,12 @@
+{
+  "protocolVersion": 1,
+  "type": "error",
+  "requestId": "comparison-error",
+  "errors": [
+    {
+      "type": "Unauthorized",
+      "code": "comparison.remoteAuthenticationRequired",
+      "message": "The remote requires authentication. Run `git fetch <remote> <branch>` in a terminal, then try again."
+    }
+  ]
+}

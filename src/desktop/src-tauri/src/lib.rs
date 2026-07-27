@@ -5,7 +5,8 @@ pub mod preferences;
 pub mod repositories;
 
 use comparisons::{
-    ComparisonState, comparison_check_freshness, comparison_list_targets, comparison_prepare,
+    ComparisonState, comparison_check_freshness, comparison_check_remote_baseline,
+    comparison_list_targets, comparison_prepare, comparison_refresh_remote_baseline,
 };
 use engine_protocol::EngineClient;
 use engine_status::{EngineStatusState, engine_check_status};
@@ -63,6 +64,8 @@ pub fn configure_desktop_with_preferences<R: tauri::Runtime>(
             comparison_list_targets,
             comparison_prepare,
             comparison_check_freshness,
+            comparison_check_remote_baseline,
+            comparison_refresh_remote_baseline,
         ])
 }
 

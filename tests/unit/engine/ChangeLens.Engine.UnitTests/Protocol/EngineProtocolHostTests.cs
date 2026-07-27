@@ -224,6 +224,7 @@ public sealed class EngineProtocolHostTests
                 comparison.TargetDiscovery,
                 comparison.Preparer,
                 comparison.FreshnessChecker,
+                comparison.RemoteBaselineTracker,
                 new ComparisonTargetPageBuilder(serializer),
                 serializer,
                 new TestLogger<EngineActionProcessor>()),

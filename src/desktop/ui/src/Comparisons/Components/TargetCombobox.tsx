@@ -69,8 +69,9 @@ export function TargetCombobox({
           <p className="eyebrow">Comparison target</p>
           <h3 id="comparison-target-heading">Choose your baseline</h3>
           <p className="section-description">
-            Compare the current work against a local or cached remote branch. No
-            network access is used.
+            Compare the current work against a local or cached remote branch.
+            Contacting the server only happens for the branch you select as a
+            baseline, and only to read a single ref.
           </p>
         </div>
       </header>

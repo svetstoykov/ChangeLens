@@ -212,6 +212,75 @@ internal sealed class TemporaryGitRepository : IDisposable
     }
 
     /// <summary>
+    ///     Adds a bare origin remote and establishes the cached remote-tracking baseline via one real push and one
+    ///     real fetch, exactly as a developer's initial clone and first fetch would.
+    /// </summary>
+    /// <param name="bareOrigin">The bare repository acting as the server. Cannot be <see langword="null" />.</param>
+    /// <param name="branchName">The branch pushed and fetched. Cannot be <see langword="null" /> or empty.</param>
+    internal void AddOrigin(
+        TemporaryGitRepository bareOrigin,
+        string branchName = "main")
+    {
+        ArgumentNullException.ThrowIfNull(bareOrigin);
+        ArgumentException.ThrowIfNullOrWhiteSpace(branchName);
+        RunGitChecked(["-C", this.RootPath, "remote", "add", "origin", bareOrigin.RootPath]);
+        RunGitChecked(["-C", this.RootPath, "push", "--quiet", "origin", $"HEAD:refs/heads/{branchName}"]);
+        RunGitChecked(
+            [
+                "-C", this.RootPath,
+                "fetch", "--quiet", "origin", $"{branchName}:refs/remotes/origin/{branchName}",
+            ]);
+    }
+
+    /// <summary>
+    ///     Adds an origin remote pointing at a nonexistent local path and seeds a cached remote-tracking ref without
+    ///     fetching, simulating a repository whose remote has since become unreachable.
+    /// </summary>
+    /// <param name="branchName">The branch given a cached remote-tracking ref. Cannot be <see langword="null" /> or empty.</param>
+    internal void AddUnreachableOrigin(string branchName = "main")
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(branchName);
+        var missingPath = Path.Combine(this._temporaryDirectory.DirectoryPath, "does-not-exist", "origin.git");
+        RunGitChecked(["-C", this.RootPath, "remote", "add", "origin", missingPath]);
+        RunGitChecked(
+            ["-C", this.RootPath, "update-ref", $"refs/remotes/origin/{branchName}", this.Revision]);
+    }
+
+    /// <summary>
+    ///     Pushes one new commit directly into a bare origin from an independent clone, simulating a colleague's
+    ///     push that the caller's own clone has not yet fetched.
+    /// </summary>
+    /// <param name="bareOrigin">The bare repository acting as the server. Cannot be <see langword="null" />.</param>
+    /// <param name="branchName">The branch pushed. Cannot be <see langword="null" /> or empty.</param>
+    /// <param name="relativePath">The repository-relative file path committed. Cannot be <see langword="null" /> or empty.</param>
+    /// <param name="content">The exact file content. Cannot be <see langword="null" />.</param>
+    /// <param name="message">The commit message. Cannot be <see langword="null" /> or empty.</param>
+    /// <returns>The full object identifier of the commit pushed to the bare origin.</returns>
+    internal static string PushBehindCallersBack(
+        TemporaryGitRepository bareOrigin,
+        string branchName,
+        string relativePath,
+        string content,
+        string message)
+    {
+        ArgumentNullException.ThrowIfNull(bareOrigin);
+        ArgumentException.ThrowIfNullOrWhiteSpace(branchName);
+        ArgumentException.ThrowIfNullOrWhiteSpace(relativePath);
+        ArgumentNullException.ThrowIfNull(content);
+        ArgumentException.ThrowIfNullOrWhiteSpace(message);
+
+        using var colleagueDirectory = new TemporaryDirectory();
+        var colleaguePath = Path.Combine(colleagueDirectory.DirectoryPath, "colleague-clone");
+        RunGitChecked(["clone", "--quiet", "--branch", branchName, bareOrigin.RootPath, colleaguePath]);
+        ConfigureRepository(colleaguePath);
+        File.WriteAllText(Path.Combine(colleaguePath, relativePath), content);
+        RunGitChecked(["-C", colleaguePath, "add", "--", relativePath]);
+        RunGitChecked(["-C", colleaguePath, "commit", "--quiet", "--no-gpg-sign", "-m", message]);
+        RunGitChecked(["-C", colleaguePath, "push", "--quiet", "origin", branchName]);
+        return RunGitChecked(["-C", colleaguePath, "rev-parse", "--verify", "HEAD"]).StandardOutput.Trim();
+    }
+
+    /// <summary>
     ///     Detaches HEAD at the current committed revision.
     /// </summary>
     internal void CheckoutDetached()

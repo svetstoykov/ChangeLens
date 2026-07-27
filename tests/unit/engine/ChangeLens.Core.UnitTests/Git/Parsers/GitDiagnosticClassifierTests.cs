@@ -1,3 +1,4 @@
+using ChangeLens.Core.Comparisons.Constants;
 using ChangeLens.Core.Git.Models;
 using ChangeLens.Core.Git.Parsers;
 using ChangeLens.Core.Repositories.Constants;
@@ -118,5 +119,52 @@ public sealed class GitDiagnosticClassifierTests
 
         Assert.Equal(ErrorType.ExternalDependencyFailure, error.Type);
         Assert.Equal(RepositoryErrorCode.InspectionFailed, error.Code);
+    }
+
+    /// <summary>
+    ///     Verifies that reviewed credential diagnostics are classified as remote authentication failures.
+    /// </summary>
+    /// <param name="diagnostic">The reviewed C-locale diagnostic.</param>
+    [Theory]
+    [InlineData("fatal: could not read Username for 'https://example.invalid': terminal prompts disabled")]
+    [InlineData("fatal: could not read Password for 'https://example.invalid': terminal prompts disabled")]
+    [InlineData("fatal: Authentication failed for 'https://example.invalid/repo.git/'")]
+    [InlineData("remote: Invalid username or password.")]
+    [InlineData("git@example.invalid: Permission denied (publickey).")]
+    public void ClassifyRemoteFailureReturnsAuthenticationRequired(string diagnostic)
+    {
+        var error = GitDiagnosticClassifier.ClassifyRemoteFailure(
+            new GitCommandOutput(128, string.Empty, diagnostic));
+
+        Assert.Equal(ErrorType.Unauthorized, error.Type);
+        Assert.Equal(ComparisonErrorCode.RemoteAuthenticationRequired, error.Code);
+        Assert.DoesNotContain("example.invalid", error.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    ///     Verifies that unrecognized remote diagnostics use the generic unreachable failure.
+    /// </summary>
+    [Fact]
+    public void ClassifyRemoteFailureReturnsUnreachableForUnrecognizedDiagnostic()
+    {
+        var error = GitDiagnosticClassifier.ClassifyRemoteFailure(
+            new GitCommandOutput(128, string.Empty, "fatal: Could not resolve host: example.invalid"));
+
+        Assert.Equal(ErrorType.ExternalDependencyFailure, error.Type);
+        Assert.Equal(ComparisonErrorCode.RemoteUnreachable, error.Code);
+        Assert.DoesNotContain("example.invalid", error.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    ///     Verifies that a successful exit code uses the generic unreachable fallback.
+    /// </summary>
+    [Fact]
+    public void ClassifyRemoteFailureReturnsUnreachableForZeroExitCode()
+    {
+        var error = GitDiagnosticClassifier.ClassifyRemoteFailure(
+            new GitCommandOutput(0, string.Empty, "fatal: Authentication failed"));
+
+        Assert.Equal(ErrorType.ExternalDependencyFailure, error.Type);
+        Assert.Equal(ComparisonErrorCode.RemoteUnreachable, error.Code);
     }
 }

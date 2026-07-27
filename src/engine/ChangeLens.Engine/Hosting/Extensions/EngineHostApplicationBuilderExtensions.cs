@@ -79,6 +79,7 @@ internal static class EngineHostApplicationBuilderExtensions
         builder.Services.AddSingleton<IGitComparisonTargetDiscovery, GitComparisonTargetDiscovery>();
         builder.Services.AddSingleton<IGitComparisonPreparer, GitComparisonPreparer>();
         builder.Services.AddSingleton<IGitComparisonFreshnessChecker, GitComparisonFreshnessChecker>();
+        builder.Services.AddSingleton<IGitRemoteBaselineTracker, GitRemoteBaselineTracker>();
         builder.Services.AddSingleton<IEngineProtocolSerializer, EngineProtocolSerializer>();
         builder.Services.AddSingleton<IComparisonTargetPageBuilder, ComparisonTargetPageBuilder>();
         builder.Services.AddSingleton<IRepositoryHistoryService, RepositoryHistoryService>();

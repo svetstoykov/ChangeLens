@@ -20,6 +20,8 @@ interface ComparisonController {
   readonly loadMore: () => void;
   readonly refresh: () => void;
   readonly checkFreshness: () => void;
+  readonly refreshRemoteBaseline: () => void;
+  readonly cancelRemoteBaselineRefresh: () => void;
   readonly resetSearch: () => void;
   readonly retryDiscovery: () => void;
   readonly retryPreparation: () => void;
@@ -30,6 +32,8 @@ const initialState: ComparisonWorkspaceState = {
   selectedTarget: null,
   preparedComparison: null,
   freshness: "unknown",
+  remoteBaseline: "idle",
+  remoteBaselineRevision: null,
   error: null,
   errorSource: null,
   query: "",
@@ -53,6 +57,7 @@ export function useComparisonController({
   const preparationEpochRef = useRef(0);
   const freshnessEpochRef = useRef(0);
   const refreshEpochRef = useRef(0);
+  const remoteBaselineEpochRef = useRef(0);
   const queryTimerRef = useRef<number | undefined>(undefined);
 
   const updateState = useCallback(
@@ -133,6 +138,44 @@ export function useComparisonController({
     ],
   );
 
+  const checkRemoteBaseline = useCallback(
+    async (target: ComparisonTarget) => {
+      if (target.kind !== "remoteTracking") {
+        remoteBaselineEpochRef.current += 1;
+        updateState((current) => ({
+          ...current,
+          remoteBaseline: "idle",
+          remoteBaselineRevision: null,
+        }));
+        return;
+      }
+
+      const remoteBaselineEpoch = ++remoteBaselineEpochRef.current;
+      updateState((current) => ({ ...current, remoteBaseline: "checking" }));
+
+      try {
+        const result = await comparisonClient.checkRemoteBaseline({
+          path: repository.canonicalPath,
+          target: target.fullName,
+        });
+        if (remoteBaselineEpoch !== remoteBaselineEpochRef.current) return;
+        updateState((current) => ({
+          ...current,
+          remoteBaseline: result.state === "noRemote" ? "idle" : result.state,
+          remoteBaselineRevision:
+            result.state === "noRemote" ? null : result.remoteRevision,
+        }));
+      } catch {
+        if (remoteBaselineEpoch !== remoteBaselineEpochRef.current) return;
+        updateState((current) => ({
+          ...current,
+          remoteBaseline: "unreachable",
+        }));
+      }
+    },
+    [comparisonClient, repository.canonicalPath, updateState],
+  );
+
   const discover = useCallback(
     async (query: string, append = false) => {
       async function requestPage(
@@ -192,6 +235,7 @@ export function useComparisonController({
           if (suggested !== null) {
             refreshEpochRef.current += 1;
             void prepare(suggested);
+            void checkRemoteBaseline(suggested);
           }
         } catch (reason: unknown) {
           if (discoveryEpoch !== discoveryEpochRef.current) return;
@@ -229,6 +273,7 @@ export function useComparisonController({
       await requestPage(append, append);
     },
     [
+      checkRemoteBaseline,
       comparisonClient,
       preferredTarget,
       prepare,
@@ -242,6 +287,7 @@ export function useComparisonController({
     preparationEpochRef.current += 1;
     freshnessEpochRef.current += 1;
     refreshEpochRef.current += 1;
+    remoteBaselineEpochRef.current += 1;
     stateRef.current = initialState;
     setState(initialState);
     if (preferredTarget === null) {
@@ -268,12 +314,14 @@ export function useComparisonController({
           } while (exactTarget === undefined && after !== undefined);
 
           if (exactTarget) {
+            await discover("");
             updateState((current) => ({
               ...current,
-              targets: [exactTarget],
+              targets: mergeTargets(current.targets, [exactTarget]),
               selectedTarget: exactTarget,
               isDiscovering: false,
             }));
+            void checkRemoteBaseline(exactTarget);
             await prepare(exactTarget);
           } else {
             await discover("");
@@ -307,11 +355,13 @@ export function useComparisonController({
       preparationEpochRef.current += 1;
       freshnessEpochRef.current += 1;
       refreshEpochRef.current += 1;
+      remoteBaselineEpochRef.current += 1;
       if (queryTimerRef.current !== undefined) {
         window.clearTimeout(queryTimerRef.current);
       }
     };
   }, [
+    checkRemoteBaseline,
     comparisonClient,
     discover,
     preferredTarget,
@@ -324,8 +374,9 @@ export function useComparisonController({
     (target: ComparisonTarget) => {
       refreshEpochRef.current += 1;
       void prepare(target);
+      void checkRemoteBaseline(target);
     },
-    [prepare],
+    [checkRemoteBaseline, prepare],
   );
 
   const setQuery = useCallback(
@@ -438,6 +489,45 @@ export function useComparisonController({
     state.selectedTarget,
   ]);
 
+  const findExactTargetAndPrepare = useCallback(
+    async (
+      target: ComparisonTarget,
+      refreshEpoch: number,
+    ): Promise<boolean> => {
+      let after: string | undefined;
+      let targetSetToken: string | undefined;
+      let exactTarget: ComparisonTarget | undefined;
+      do {
+        const page = await comparisonClient.listTargets({
+          path: repository.canonicalPath,
+          query: target.name,
+          ...(after === undefined ? {} : { after }),
+          ...(targetSetToken === undefined ? {} : { targetSetToken }),
+        });
+        if (refreshEpoch !== refreshEpochRef.current) return true;
+        exactTarget = page.targets.find(
+          (item) => item.fullName === target.fullName,
+        );
+        after = page.nextCursor ?? undefined;
+        targetSetToken = page.targetSetToken;
+      } while (exactTarget === undefined && after !== undefined);
+
+      if (exactTarget === undefined) {
+        updateState((current) => ({
+          ...current,
+          selectedTarget: null,
+          freshness: current.preparedComparison ? "stale" : "unknown",
+          isRefreshing: false,
+        }));
+        return false;
+      }
+
+      await prepare(exactTarget, refreshEpoch);
+      return true;
+    },
+    [comparisonClient, prepare, repository.canonicalPath, updateState],
+  );
+
   const refresh = useCallback(async () => {
     const target = stateRef.current.selectedTarget;
     if (target === null) return;
@@ -455,35 +545,7 @@ export function useComparisonController({
     }));
 
     try {
-      let after: string | undefined;
-      let targetSetToken: string | undefined;
-      let exactTarget: ComparisonTarget | undefined;
-      do {
-        const page = await comparisonClient.listTargets({
-          path: repository.canonicalPath,
-          query: target.name,
-          ...(after === undefined ? {} : { after }),
-          ...(targetSetToken === undefined ? {} : { targetSetToken }),
-        });
-        if (refreshEpoch !== refreshEpochRef.current) return;
-        exactTarget = page.targets.find(
-          (item) => item.fullName === target.fullName,
-        );
-        after = page.nextCursor ?? undefined;
-        targetSetToken = page.targetSetToken;
-      } while (exactTarget === undefined && after !== undefined);
-
-      if (exactTarget === undefined) {
-        updateState((current) => ({
-          ...current,
-          selectedTarget: null,
-          freshness: current.preparedComparison ? "stale" : "unknown",
-          isRefreshing: false,
-        }));
-        return;
-      }
-
-      await prepare(exactTarget, refreshEpoch);
+      await findExactTargetAndPrepare(target, refreshEpoch);
     } catch (reason: unknown) {
       if (refreshEpoch !== refreshEpochRef.current) return;
       updateState((current) => ({
@@ -494,7 +556,66 @@ export function useComparisonController({
         isRefreshing: false,
       }));
     }
-  }, [comparisonClient, prepare, repository.canonicalPath, updateState]);
+  }, [findExactTargetAndPrepare, updateState]);
+
+  const refreshRemoteBaseline = useCallback(async () => {
+    const target = stateRef.current.selectedTarget;
+    if (target === null || target.kind !== "remoteTracking") return;
+
+    const refreshEpoch = ++refreshEpochRef.current;
+    preparationEpochRef.current += 1;
+    freshnessEpochRef.current += 1;
+    updateState((current) => ({
+      ...current,
+      freshness: current.preparedComparison ? "stale" : "unknown",
+      remoteBaseline: "refreshing",
+      error: null,
+      errorSource: null,
+      isPreparing: false,
+      isRefreshing: true,
+    }));
+
+    try {
+      await comparisonClient.refreshRemoteBaseline({
+        path: repository.canonicalPath,
+        target: target.fullName,
+      });
+      if (refreshEpoch !== refreshEpochRef.current) return;
+
+      const remoteBaselineEpoch = ++remoteBaselineEpochRef.current;
+      await findExactTargetAndPrepare(target, refreshEpoch);
+      if (
+        refreshEpoch === refreshEpochRef.current &&
+        remoteBaselineEpoch === remoteBaselineEpochRef.current
+      ) {
+        updateState((current) => ({ ...current, remoteBaseline: "current" }));
+      }
+    } catch (reason: unknown) {
+      if (refreshEpoch !== refreshEpochRef.current) return;
+      updateState((current) => ({
+        ...current,
+        freshness: current.preparedComparison ? "stale" : "unknown",
+        remoteBaseline: "moved",
+        error: normalizeActionError(reason),
+        errorSource: "remoteBaseline",
+        isRefreshing: false,
+      }));
+    }
+  }, [
+    comparisonClient,
+    findExactTargetAndPrepare,
+    repository.canonicalPath,
+    updateState,
+  ]);
+
+  const cancelRemoteBaselineRefresh = useCallback(() => {
+    refreshEpochRef.current += 1;
+    updateState((current) => ({
+      ...current,
+      remoteBaseline: "moved",
+      isRefreshing: false,
+    }));
+  }, [updateState]);
 
   const resetSearch = useCallback(() => {
     if (queryTimerRef.current !== undefined) {
@@ -528,6 +649,8 @@ export function useComparisonController({
     loadMore,
     refresh: () => void refresh(),
     checkFreshness: () => void checkFreshness(),
+    refreshRemoteBaseline: () => void refreshRemoteBaseline(),
+    cancelRemoteBaselineRefresh,
     resetSearch,
     retryDiscovery,
     retryPreparation,

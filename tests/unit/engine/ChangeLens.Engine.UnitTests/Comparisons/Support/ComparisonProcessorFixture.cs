@@ -42,6 +42,7 @@ internal sealed class ComparisonProcessorFixture
         this.Preparer = new GitComparisonPreparer(this._repositoryFixture.Inspector, this.TargetDiscovery, this._repositoryFixture,
             new ComparisonFileSummaryComposer());
         this.FreshnessChecker = new GitComparisonFreshnessChecker(this._repositoryFixture.Inspector, this.TargetDiscovery, this._repositoryFixture);
+        this.RemoteBaselineTracker = new GitRemoteBaselineTracker(this._repositoryFixture.Inspector, this._repositoryFixture);
     }
 
     /// <summary>
@@ -63,6 +64,11 @@ internal sealed class ComparisonProcessorFixture
     ///     Gets the comparison freshness checker.
     /// </summary>
     internal GitComparisonFreshnessChecker FreshnessChecker { get; }
+
+    /// <summary>
+    ///     Gets the remote baseline tracker.
+    /// </summary>
+    internal GitRemoteBaselineTracker RemoteBaselineTracker { get; }
 
     /// <summary>
     ///     Gets the received Git commands in call order.

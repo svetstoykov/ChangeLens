@@ -1,0 +1,9 @@
+{
+  "protocolVersion": 1,
+  "requestId": "remote-baseline-refresh-1",
+  "action": "comparisons.refreshRemoteBaseline",
+  "parameters": {
+    "path": "/projects/change_lens",
+    "target": "refs/remotes/origin/dev"
+  }
+}

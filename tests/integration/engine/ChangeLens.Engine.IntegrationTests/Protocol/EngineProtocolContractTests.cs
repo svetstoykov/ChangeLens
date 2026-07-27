@@ -70,6 +70,51 @@ public sealed class EngineProtocolContractTests
         "comparison-check-freshness.schema.json",
         "comparisons-check-freshness.stale.result.json")]
     [InlineData(
+        "comparison-check-remote-baseline.schema.json",
+        "comparisons-check-remote-baseline.request.json")]
+    [InlineData(
+        "comparison-check-remote-baseline.schema.json",
+        "comparisons-check-remote-baseline.current.result.json")]
+    [InlineData(
+        "comparison-check-remote-baseline.schema.json",
+        "comparisons-check-remote-baseline.moved.result.json")]
+    [InlineData(
+        "comparison-check-remote-baseline.schema.json",
+        "comparisons-check-remote-baseline.no-remote.result.json")]
+    [InlineData(
+        "comparison-refresh-remote-baseline.schema.json",
+        "comparisons-refresh-remote-baseline.request.json")]
+    [InlineData(
+        "comparison-refresh-remote-baseline.schema.json",
+        "comparisons-refresh-remote-baseline.result.json")]
+    [InlineData(
+        "comparison-check-remote-baseline.schema.json",
+        "comparisons-error-target-invalid.response.json")]
+    [InlineData(
+        "comparison-refresh-remote-baseline.schema.json",
+        "comparisons-error-target-invalid.response.json")]
+    [InlineData(
+        "comparison-check-remote-baseline.schema.json",
+        "comparisons-error-remote-unreachable.response.json")]
+    [InlineData(
+        "comparison-refresh-remote-baseline.schema.json",
+        "comparisons-error-remote-unreachable.response.json")]
+    [InlineData(
+        "comparison-check-remote-baseline.schema.json",
+        "comparisons-error-remote-authentication-required.response.json")]
+    [InlineData(
+        "comparison-refresh-remote-baseline.schema.json",
+        "comparisons-error-remote-authentication-required.response.json")]
+    [InlineData(
+        "comparison-check-remote-baseline.schema.json",
+        "comparisons-error-remote-timed-out.response.json")]
+    [InlineData(
+        "comparison-refresh-remote-baseline.schema.json",
+        "comparisons-error-remote-timed-out.response.json")]
+    [InlineData(
+        "comparison-refresh-remote-baseline.schema.json",
+        "comparisons-error-no-remote-configured.response.json")]
+    [InlineData(
         "comparison-list-targets.schema.json",
         "comparisons-error-invalid-target-query.response.json")]
     [InlineData(
@@ -144,6 +189,18 @@ public sealed class EngineProtocolContractTests
     [InlineData(
         "error-response.schema.json",
         "comparisons-error-invalid-freshness-token.response.json")]
+    [InlineData(
+        "error-response.schema.json",
+        "comparisons-error-remote-unreachable.response.json")]
+    [InlineData(
+        "error-response.schema.json",
+        "comparisons-error-remote-authentication-required.response.json")]
+    [InlineData(
+        "error-response.schema.json",
+        "comparisons-error-remote-timed-out.response.json")]
+    [InlineData(
+        "error-response.schema.json",
+        "comparisons-error-no-remote-configured.response.json")]
     public void SharedFixtureMatchesSchema(string schemaFileName, string fixtureFileName)
     {
         using var fixture = JsonDocument.Parse(File.ReadAllText(FixturePath(fixtureFileName)));
@@ -412,6 +469,44 @@ public sealed class EngineProtocolContractTests
         Assert.False(IsContractValid("comparison-check-freshness.schema.json", json));
     }
 
+    /// <summary>
+    ///     Verifies the remote-baseline-check contract rejects malformed requests and result fields.
+    /// </summary>
+    /// <param name="json">The malformed remote-baseline-check exchange.</param>
+    [Theory]
+    [InlineData(
+        """{"protocolVersion":1,"requestId":"id","action":"comparisons.checkRemoteBaseline","parameters":{"path":"/repo"}}""")]
+    [InlineData(
+        """{"protocolVersion":1,"requestId":"id","action":"comparisons.checkRemoteBaseline","parameters":{"path":"/repo","target":"refs/heads/main"}}""")]
+    [InlineData(
+        """{"protocolVersion":1,"requestId":"id","action":"comparisons.checkremotebaseline","parameters":{"path":"/repo","target":"refs/remotes/origin/main"}}""")]
+    [InlineData(
+        """{"protocolVersion":1,"type":"result","requestId":"id","result":{"state":"CURRENT","remoteRevision":"0123456789abcdef0123456789abcdef01234567"}}""")]
+    [InlineData(
+        """{"protocolVersion":1,"type":"result","requestId":"id","result":{"state":"current"}}""")]
+    [InlineData(
+        """{"protocolVersion":1,"type":"result","requestId":"id","result":{"state":"noRemote","remoteRevision":"0123456789abcdef0123456789abcdef01234567"}}""")]
+    public void ComparisonCheckRemoteBaselineSchemaRejectsMalformedMessages(string json)
+    {
+        Assert.False(IsContractValid("comparison-check-remote-baseline.schema.json", json));
+    }
+
+    /// <summary>
+    ///     Verifies the remote-baseline-refresh contract rejects malformed requests and result fields.
+    /// </summary>
+    /// <param name="json">The malformed remote-baseline-refresh exchange.</param>
+    [Theory]
+    [InlineData(
+        """{"protocolVersion":1,"requestId":"id","action":"comparisons.refreshRemoteBaseline","parameters":{"path":"/repo"}}""")]
+    [InlineData(
+        """{"protocolVersion":1,"requestId":"id","action":"comparisons.refreshRemoteBaseline","parameters":{"path":"/repo","target":"refs/heads/main"}}""")]
+    [InlineData(
+        """{"protocolVersion":1,"type":"result","requestId":"id","result":{"remoteRevision":"bad"}}""")]
+    public void ComparisonRefreshRemoteBaselineSchemaRejectsMalformedMessages(string json)
+    {
+        Assert.False(IsContractValid("comparison-refresh-remote-baseline.schema.json", json));
+    }
+
     private static IReadOnlyDictionary<string, JsonSchema> LoadSchemas()
     {
         var names = new[]
@@ -427,6 +522,8 @@ public sealed class EngineProtocolContractTests
             "comparison-list-targets.schema.json",
             "comparison-prepare.schema.json",
             "comparison-check-freshness.schema.json",
+            "comparison-check-remote-baseline.schema.json",
+            "comparison-refresh-remote-baseline.schema.json",
         };
 
         return names.ToDictionary(

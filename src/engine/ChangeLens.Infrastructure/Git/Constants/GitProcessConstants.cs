@@ -74,4 +74,15 @@ internal static class GitProcessConstants
     ///     The environment variable that disables an external Git diff program.
     /// </summary>
     internal const string ExternalDiffEnvironmentVariable = "GIT_EXTERNAL_DIFF";
+
+    /// <summary>
+    ///     The environment variable that controls the SSH command Git invokes for network operations.
+    /// </summary>
+    internal const string SshCommandEnvironmentVariable = "GIT_SSH_COMMAND";
+
+    /// <summary>
+    ///     The SSH command value that fails immediately instead of waiting on a credential prompt that no terminal is
+    ///     attached to answer.
+    /// </summary>
+    internal const string BatchModeSshCommandValue = "ssh -o BatchMode=yes";
 }

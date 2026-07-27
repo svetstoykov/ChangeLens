@@ -1,0 +1,9 @@
+{
+  "protocolVersion": 1,
+  "requestId": "remote-baseline-check-1",
+  "action": "comparisons.checkRemoteBaseline",
+  "parameters": {
+    "path": "/projects/change_lens",
+    "target": "refs/remotes/origin/dev"
+  }
+}

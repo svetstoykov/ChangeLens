@@ -1,0 +1,112 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://changelens.dev/contracts/engine-protocol/v1/comparison-check-remote-baseline.schema.json",
+  "title": "ChangeLens remote-baseline check exchange",
+  "oneOf": [
+    { "$ref": "#/$defs/request" },
+    { "$ref": "#/$defs/currentResult" },
+    { "$ref": "#/$defs/movedResult" },
+    { "$ref": "#/$defs/noRemoteResult" },
+    { "$ref": "https://changelens.dev/contracts/engine-protocol/v1/error-response.schema.json" }
+  ],
+  "$defs": {
+    "request": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["protocolVersion", "requestId", "action", "parameters"],
+      "properties": {
+        "protocolVersion": { "const": 1 },
+        "requestId": { "type": "string", "minLength": 1, "pattern": "\\S" },
+        "action": { "const": "comparisons.checkRemoteBaseline" },
+        "parameters": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["path", "target"],
+          "properties": {
+            "path": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 8192,
+              "pattern": "^(?=.*\\S)[^\\u0000]+$"
+            },
+            "target": { "$ref": "#/$defs/remoteRefName" }
+          }
+        }
+      }
+    },
+    "currentResult": {
+      "allOf": [
+        { "$ref": "#/$defs/resultBase" },
+        {
+          "properties": {
+            "result": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["state", "remoteRevision"],
+              "properties": {
+                "state": { "const": "current" },
+                "remoteRevision": { "$ref": "#/$defs/revision" }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "movedResult": {
+      "allOf": [
+        { "$ref": "#/$defs/resultBase" },
+        {
+          "properties": {
+            "result": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["state", "remoteRevision"],
+              "properties": {
+                "state": { "const": "moved" },
+                "remoteRevision": { "$ref": "#/$defs/revision" }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "noRemoteResult": {
+      "allOf": [
+        { "$ref": "#/$defs/resultBase" },
+        {
+          "properties": {
+            "result": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["state"],
+              "properties": {
+                "state": { "const": "noRemote" }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "resultBase": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["protocolVersion", "type", "requestId", "result"],
+      "properties": {
+        "protocolVersion": { "const": 1 },
+        "type": { "const": "result" },
+        "requestId": { "type": "string", "minLength": 1, "pattern": "\\S" },
+        "result": {}
+      }
+    },
+    "remoteRefName": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 4096,
+      "pattern": "^refs/remotes/[^\\u0000]+$"
+    },
+    "revision": {
+      "type": "string",
+      "pattern": "^(?:[0-9a-f]{40}|[0-9a-f]{64})$"
+    }
+  }
+}

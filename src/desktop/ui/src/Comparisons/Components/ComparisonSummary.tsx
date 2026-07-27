@@ -184,57 +184,73 @@ function RemoteBaselineIndicator({
 }) {
   if (status === "idle" || status === "current") return null;
 
-  if (status === "checking") {
-    return (
-      <p
-        className="remote-baseline-indicator"
-        data-status={status}
-        role="status"
-      >
-        <Icon name="refresh" />
-        <code>{name}</code> · checking…
-      </p>
-    );
-  }
-
-  if (status === "moved") {
-    return (
-      <p
-        className="remote-baseline-indicator"
-        data-status={status}
-        role="status"
-      >
-        <Icon name="warning" />
-        <code>{name}</code> ⚠ moved since last fetch
-        <button type="button" onClick={onRefresh}>
-          Refresh
-        </button>
-      </p>
-    );
-  }
-
-  if (status === "refreshing") {
-    return (
-      <p
-        className="remote-baseline-indicator"
-        data-status={status}
-        role="status"
-      >
-        <Icon name="refresh" />
-        <code>{name}</code> · fetching…
-        <button type="button" onClick={onCancel}>
-          Cancel
-        </button>
-      </p>
-    );
-  }
+  const presentation = describeRemoteBaselineStatus(status);
 
   return (
-    <p className="remote-baseline-indicator" data-status={status} role="status">
-      <Icon name="warning" />
-      <code>{name}</code> · couldn&apos;t check
-    </p>
+    <div className="remote-baseline-notice" data-status={status} role="status">
+      <Icon name={presentation.icon} />
+      <div className="remote-baseline-notice-body">
+        <strong>{presentation.title}</strong>
+        <small>
+          <code>{name}</code> {presentation.detail}
+        </small>
+      </div>
+      {status === "moved" ? (
+        <button
+          type="button"
+          className="remote-baseline-notice-action"
+          onClick={onRefresh}
+        >
+          <Icon name="refresh" />
+          Fetch
+        </button>
+      ) : null}
+      {status === "refreshing" ? (
+        <button
+          type="button"
+          className="remote-baseline-notice-action"
+          onClick={onCancel}
+        >
+          Cancel
+        </button>
+      ) : null}
+    </div>
   );
+}
+
+function describeRemoteBaselineStatus(
+  status: Exclude<RemoteBaselineStatus, "idle" | "current">,
+): {
+  readonly icon: IconName;
+  readonly title: string;
+  readonly detail: string;
+} {
+  switch (status) {
+    case "checking":
+      return {
+        icon: "refresh",
+        title: "Checking the remote baseline",
+        detail: "is being compared with its remote.",
+      };
+    case "moved":
+      return {
+        icon: "warning",
+        title: "Remote baseline moved",
+        detail: "has new commits that are not fetched yet.",
+      };
+    case "refreshing":
+      return {
+        icon: "refresh",
+        title: "Fetching the remote baseline",
+        detail: "is being updated from its remote.",
+      };
+    default:
+      return {
+        icon: "warning",
+        title: "Remote baseline check failed",
+        detail: "could not be checked, so it may be out of date.",
+      };
+  }
 }
 
 function Readiness({

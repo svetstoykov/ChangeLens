@@ -96,7 +96,9 @@ internal static class GitComparisonOutputParser
     /// <exception cref="ArgumentNullException">
     ///     <paramref name="output" /> is <see langword="null" />.
     /// </exception>
-    /// <remarks>Each line is one object identifier terminated by a line feed.</remarks>
+    /// <remarks>
+    ///     Each line is one object identifier; the final line's trailing line feed is optional.
+    /// </remarks>
     internal static Result<IReadOnlyList<string>> ParseMergeBases(GitCommandOutput output)
     {
         ArgumentNullException.ThrowIfNull(output);
@@ -113,22 +115,32 @@ internal static class GitComparisonOutputParser
             return Result.Success<IReadOnlyList<string>>(Array.Empty<string>());
         }
 
-        if (!text.EndsWith('\n') || text.Contains('\r'))
+        if (text.Contains('\r'))
         {
             return InspectionFailed;
         }
 
+        var span = text.EndsWith('\n') ? text.AsSpan()[..^1] : text.AsSpan();
         var revisions = new List<string>();
-        var lines = new GitFieldReader(text);
 
-        while (lines.TryRead('\n', out var line))
+        while (true)
         {
+            var separator = span.IndexOf('\n');
+            var line = separator < 0 ? span : span[..separator];
+
             if (!IsSupportedObjectId(line))
             {
                 return InspectionFailed;
             }
 
             revisions.Add(line.ToString());
+
+            if (separator < 0)
+            {
+                break;
+            }
+
+            span = span[(separator + 1)..];
         }
 
         return Result.Success<IReadOnlyList<string>>(revisions);
@@ -142,20 +154,28 @@ internal static class GitComparisonOutputParser
     /// <exception cref="ArgumentNullException">
     ///     <paramref name="output" /> is <see langword="null" />.
     /// </exception>
-    /// <remarks>The single line is <c>&lt;left&gt;\t&lt;right&gt;\n</c>.</remarks>
+    /// <remarks>
+    ///     The single line is <c>&lt;left&gt;\t&lt;right&gt;</c>, and its trailing line feed is
+    ///     optional.
+    /// </remarks>
     internal static Result<(int TargetOnly, int CurrentWork)> ParseCommitCounts(
         GitCommandOutput output)
     {
         ArgumentNullException.ThrowIfNull(output);
 
-        if (!IsSuccessfulQuietOutput(output) ||
-            !output.StandardOutput.EndsWith('\n') ||
-            output.StandardOutput.Contains('\r'))
+        if (!IsSuccessfulQuietOutput(output) || output.StandardOutput.Contains('\r'))
         {
             return InspectionFailed;
         }
 
-        var line = output.StandardOutput.AsSpan()[..^1];
+        var text = output.StandardOutput;
+        var line = text.EndsWith('\n') ? text.AsSpan()[..^1] : text.AsSpan();
+
+        if (line.Contains('\n'))
+        {
+            return InspectionFailed;
+        }
+
         var separator = line.IndexOf('\t');
 
         if (separator < 0 ||

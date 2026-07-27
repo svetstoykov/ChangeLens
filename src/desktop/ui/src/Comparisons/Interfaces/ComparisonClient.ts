@@ -1,6 +1,7 @@
 import type { ComparisonFreshness } from "../Models/ComparisonFreshness";
 import type { ComparisonTargetPage } from "../Models/ComparisonTargetPage";
 import type { PreparedComparison } from "../Models/PreparedComparison";
+import type { RemoteBaselineState } from "../Models/RemoteBaselineState";
 
 export interface ComparisonClient {
   listTargets(request: {
@@ -20,4 +21,14 @@ export interface ComparisonClient {
     readonly target: string;
     readonly freshnessToken: string;
   }): Promise<ComparisonFreshness>;
+
+  checkRemoteBaseline(request: {
+    readonly path: string;
+    readonly target: string;
+  }): Promise<RemoteBaselineState>;
+
+  refreshRemoteBaseline(request: {
+    readonly path: string;
+    readonly target: string;
+  }): Promise<{ readonly remoteRevision: string }>;
 }

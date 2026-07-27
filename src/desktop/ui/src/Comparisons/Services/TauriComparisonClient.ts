@@ -4,6 +4,7 @@ import type { ComparisonClient } from "../Interfaces/ComparisonClient";
 import type { ComparisonFreshness } from "../Models/ComparisonFreshness";
 import type { ComparisonTargetPage } from "../Models/ComparisonTargetPage";
 import type { PreparedComparison } from "../Models/PreparedComparison";
+import type { RemoteBaselineState } from "../Models/RemoteBaselineState";
 
 export class TauriComparisonClient implements ComparisonClient {
   async listTargets(request: {
@@ -45,6 +46,30 @@ export class TauriComparisonClient implements ComparisonClient {
   }): Promise<ComparisonFreshness> {
     return invoke<ComparisonFreshness>(
       "comparison_check_freshness",
+      request,
+    ).catch((error: unknown) => {
+      throw normalizeActionError(error);
+    });
+  }
+
+  async checkRemoteBaseline(request: {
+    readonly path: string;
+    readonly target: string;
+  }): Promise<RemoteBaselineState> {
+    return invoke<RemoteBaselineState>(
+      "comparison_check_remote_baseline",
+      request,
+    ).catch((error: unknown) => {
+      throw normalizeActionError(error);
+    });
+  }
+
+  async refreshRemoteBaseline(request: {
+    readonly path: string;
+    readonly target: string;
+  }): Promise<{ readonly remoteRevision: string }> {
+    return invoke<{ readonly remoteRevision: string }>(
+      "comparison_refresh_remote_baseline",
       request,
     ).catch((error: unknown) => {
       throw normalizeActionError(error);

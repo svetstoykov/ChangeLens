@@ -1,5 +1,6 @@
 use crate::comparisons::{
-    ComparisonFreshness, ComparisonState, ComparisonTargetPage, PreparedComparison,
+    ComparisonFreshness, ComparisonRefreshRemoteBaselineResult, ComparisonRemoteBaseline,
+    ComparisonState, ComparisonTargetPage, PreparedComparison,
 };
 use crate::engine_protocol::{
     EngineActionError, await_action_task, report_rust_originated_failure,
@@ -59,6 +60,39 @@ pub(crate) async fn comparison_check_freshness(
         comparison_service.check_freshness(&path, &target, &freshness_token)
     })
     .await;
+
+    report_rust_originated_failure(&result);
+
+    result
+}
+
+/// Checks whether a cached remote-tracking comparison baseline matches the server's branch.
+#[tauri::command(rename_all = "camelCase")]
+pub(crate) async fn comparison_check_remote_baseline(
+    state: State<'_, ComparisonState>,
+    path: String,
+    target: String,
+) -> Result<ComparisonRemoteBaseline, EngineActionError> {
+    let comparison_service = state.service();
+    let result =
+        await_action_task(move || comparison_service.check_remote_baseline(&path, &target)).await;
+
+    report_rust_originated_failure(&result);
+
+    result
+}
+
+/// Fetches the selected branch to refresh its cached remote-tracking comparison baseline.
+#[tauri::command(rename_all = "camelCase")]
+pub(crate) async fn comparison_refresh_remote_baseline(
+    state: State<'_, ComparisonState>,
+    path: String,
+    target: String,
+) -> Result<ComparisonRefreshRemoteBaselineResult, EngineActionError> {
+    let comparison_service = state.service();
+    let result =
+        await_action_task(move || comparison_service.refresh_remote_baseline(&path, &target))
+            .await;
 
     report_rust_originated_failure(&result);
 

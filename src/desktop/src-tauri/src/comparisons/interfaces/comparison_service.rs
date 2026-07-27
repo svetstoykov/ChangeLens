@@ -1,4 +1,7 @@
-use crate::comparisons::{ComparisonFreshness, ComparisonTargetPage, PreparedComparison};
+use crate::comparisons::{
+    ComparisonFreshness, ComparisonRefreshRemoteBaselineResult, ComparisonRemoteBaseline,
+    ComparisonTargetPage, PreparedComparison,
+};
 use crate::engine_protocol::EngineActionError;
 
 /// Defines comparison actions provided by the local analysis engine.
@@ -22,4 +25,18 @@ pub trait ComparisonService: Send + Sync {
         target: &str,
         freshness_token: &str,
     ) -> Result<ComparisonFreshness, EngineActionError>;
+
+    /// Checks whether a cached remote-tracking comparison baseline matches the server's branch.
+    fn check_remote_baseline(
+        &self,
+        path: &str,
+        target: &str,
+    ) -> Result<ComparisonRemoteBaseline, EngineActionError>;
+
+    /// Fetches the selected branch to refresh its cached remote-tracking comparison baseline.
+    fn refresh_remote_baseline(
+        &self,
+        path: &str,
+        target: &str,
+    ) -> Result<ComparisonRefreshRemoteBaselineResult, EngineActionError>;
 }

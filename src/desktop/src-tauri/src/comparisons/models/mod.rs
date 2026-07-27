@@ -1,8 +1,12 @@
 mod comparison_check_freshness_parameters;
+mod comparison_check_remote_baseline_parameters;
 mod comparison_freshness;
 mod comparison_list_targets_parameters;
 mod comparison_prepare_parameters;
 mod comparison_readiness;
+mod comparison_refresh_remote_baseline_parameters;
+mod comparison_refresh_remote_baseline_result;
+mod comparison_remote_baseline;
 mod comparison_target;
 mod comparison_target_kind;
 mod comparison_target_page;
@@ -10,10 +14,14 @@ mod prepared_comparison;
 mod validation;
 
 pub(crate) use comparison_check_freshness_parameters::ComparisonCheckFreshnessParameters;
+pub(crate) use comparison_check_remote_baseline_parameters::ComparisonCheckRemoteBaselineParameters;
 pub use comparison_freshness::ComparisonFreshness;
 pub(crate) use comparison_list_targets_parameters::ComparisonListTargetsParameters;
 pub(crate) use comparison_prepare_parameters::ComparisonPrepareParameters;
 pub use comparison_readiness::ComparisonReadiness;
+pub(crate) use comparison_refresh_remote_baseline_parameters::ComparisonRefreshRemoteBaselineParameters;
+pub use comparison_refresh_remote_baseline_result::ComparisonRefreshRemoteBaselineResult;
+pub use comparison_remote_baseline::ComparisonRemoteBaseline;
 pub use comparison_target::ComparisonTarget;
 pub use comparison_target_kind::ComparisonTargetKind;
 pub use comparison_target_page::ComparisonTargetPage;
@@ -22,8 +30,8 @@ pub use prepared_comparison::PreparedComparison;
 #[cfg(test)]
 mod tests {
     use super::{
-        ComparisonFreshness, ComparisonReadiness, ComparisonTargetKind, ComparisonTargetPage,
-        PreparedComparison,
+        ComparisonFreshness, ComparisonReadiness, ComparisonRefreshRemoteBaselineResult,
+        ComparisonRemoteBaseline, ComparisonTargetKind, ComparisonTargetPage, PreparedComparison,
     };
 
     const FIRST_PAGE_FIXTURE: &str = include_str!(concat!(
@@ -54,6 +62,22 @@ mod tests {
         env!("CARGO_MANIFEST_DIR"),
         "/../../../contracts/engine-protocol/v1/fixtures/comparisons-check-freshness.stale.result.json"
     ));
+    const REMOTE_BASELINE_CURRENT_FIXTURE: &str = include_str!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../../contracts/engine-protocol/v1/fixtures/comparisons-check-remote-baseline.current.result.json"
+    ));
+    const REMOTE_BASELINE_MOVED_FIXTURE: &str = include_str!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../../contracts/engine-protocol/v1/fixtures/comparisons-check-remote-baseline.moved.result.json"
+    ));
+    const REMOTE_BASELINE_NO_REMOTE_FIXTURE: &str = include_str!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../../contracts/engine-protocol/v1/fixtures/comparisons-check-remote-baseline.no-remote.result.json"
+    ));
+    const REMOTE_BASELINE_REFRESH_FIXTURE: &str = include_str!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../../contracts/engine-protocol/v1/fixtures/comparisons-refresh-remote-baseline.result.json"
+    ));
 
     #[test]
     fn deserializes_every_shared_comparison_success_fixture() {
@@ -64,6 +88,14 @@ mod tests {
         let conflicts: PreparedComparison = result_from_fixture(CONFLICTS_FIXTURE);
         let current: ComparisonFreshness = result_from_fixture(CURRENT_FIXTURE);
         let stale: ComparisonFreshness = result_from_fixture(STALE_FIXTURE);
+        let remote_baseline_current: ComparisonRemoteBaseline =
+            result_from_fixture(REMOTE_BASELINE_CURRENT_FIXTURE);
+        let remote_baseline_moved: ComparisonRemoteBaseline =
+            result_from_fixture(REMOTE_BASELINE_MOVED_FIXTURE);
+        let remote_baseline_no_remote: ComparisonRemoteBaseline =
+            result_from_fixture(REMOTE_BASELINE_NO_REMOTE_FIXTURE);
+        let remote_baseline_refresh: ComparisonRefreshRemoteBaselineResult =
+            result_from_fixture(REMOTE_BASELINE_REFRESH_FIXTURE);
 
         assert_eq!(first_page.targets.len(), 2);
         assert_eq!(first_page.targets[0].kind, ComparisonTargetKind::Local);
@@ -93,6 +125,23 @@ mod tests {
         );
         assert_eq!(current, ComparisonFreshness::Current);
         assert_eq!(stale, ComparisonFreshness::Stale);
+        assert_eq!(
+            remote_baseline_current,
+            ComparisonRemoteBaseline::Current {
+                remote_revision: "0123456789abcdef0123456789abcdef01234567".to_owned()
+            }
+        );
+        assert_eq!(
+            remote_baseline_moved,
+            ComparisonRemoteBaseline::Moved {
+                remote_revision: "89abcdef0123456789abcdef0123456789abcdef".to_owned()
+            }
+        );
+        assert_eq!(remote_baseline_no_remote, ComparisonRemoteBaseline::NoRemote);
+        assert_eq!(
+            remote_baseline_refresh.remote_revision,
+            "89abcdef0123456789abcdef0123456789abcdef"
+        );
     }
 
     #[test]

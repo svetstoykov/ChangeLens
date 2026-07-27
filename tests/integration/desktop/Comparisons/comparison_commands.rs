@@ -1,5 +1,6 @@
 use changelens_desktop_lib::comparisons::{
-    ComparisonFreshness, ComparisonReadiness, ComparisonService, ComparisonState, ComparisonTarget,
+    ComparisonFreshness, ComparisonReadiness, ComparisonRefreshRemoteBaselineResult,
+    ComparisonRemoteBaseline, ComparisonService, ComparisonState, ComparisonTarget,
     ComparisonTargetKind, ComparisonTargetPage, PreparedComparison,
 };
 use changelens_desktop_lib::configure_desktop;
@@ -22,6 +23,7 @@ const REPOSITORY_PATH: &str = "/projects/change_lens";
 const TARGET: &str = "refs/remotes/origin/main";
 const TARGET_SET_TOKEN: &str = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
 const FRESHNESS_TOKEN: &str = "abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789";
+const REMOTE_REVISION: &str = "89abcdef0123456789abcdef0123456789abcdef";
 const DIAGNOSTIC_CHILD_ENVIRONMENT_VARIABLE: &str =
     "CHANGELENS_COMPARISON_COMMAND_DIAGNOSTIC_CHILD";
 const PANIC_DIAGNOSTIC_CHILD_ENVIRONMENT_VARIABLE: &str =
@@ -59,6 +61,8 @@ struct FixedComparisonService {
     list_result: Result<ComparisonTargetPage, EngineActionError>,
     prepare_result: Result<PreparedComparison, EngineActionError>,
     freshness_result: Result<ComparisonFreshness, EngineActionError>,
+    remote_baseline_result: Result<ComparisonRemoteBaseline, EngineActionError>,
+    refresh_remote_baseline_result: Result<ComparisonRefreshRemoteBaselineResult, EngineActionError>,
     panic_on_call: bool,
 }
 
@@ -112,6 +116,40 @@ impl ComparisonService for BlockingRuntimeProbeComparisonService {
         self.verify_blocking_worker();
 
         Ok(ComparisonFreshness::Current)
+    }
+
+    fn check_remote_baseline(
+        &self,
+        path: &str,
+        target: &str,
+    ) -> Result<ComparisonRemoteBaseline, EngineActionError> {
+        self.record(ComparisonCall::CheckRemoteBaseline {
+            path: path.to_owned(),
+            target: target.to_owned(),
+            thread_id: std::thread::current().id(),
+        });
+        self.verify_blocking_worker();
+
+        Ok(ComparisonRemoteBaseline::Current {
+            remote_revision: REMOTE_REVISION.into(),
+        })
+    }
+
+    fn refresh_remote_baseline(
+        &self,
+        path: &str,
+        target: &str,
+    ) -> Result<ComparisonRefreshRemoteBaselineResult, EngineActionError> {
+        self.record(ComparisonCall::RefreshRemoteBaseline {
+            path: path.to_owned(),
+            target: target.to_owned(),
+            thread_id: std::thread::current().id(),
+        });
+        self.verify_blocking_worker();
+
+        Ok(ComparisonRefreshRemoteBaselineResult {
+            remote_revision: REMOTE_REVISION.into(),
+        })
     }
 }
 
@@ -172,6 +210,34 @@ impl ComparisonService for FixedComparisonService {
         self.panic_if_requested();
         self.freshness_result.clone()
     }
+
+    fn check_remote_baseline(
+        &self,
+        path: &str,
+        target: &str,
+    ) -> Result<ComparisonRemoteBaseline, EngineActionError> {
+        self.record(ComparisonCall::CheckRemoteBaseline {
+            path: path.to_owned(),
+            target: target.to_owned(),
+            thread_id: std::thread::current().id(),
+        });
+        self.panic_if_requested();
+        self.remote_baseline_result.clone()
+    }
+
+    fn refresh_remote_baseline(
+        &self,
+        path: &str,
+        target: &str,
+    ) -> Result<ComparisonRefreshRemoteBaselineResult, EngineActionError> {
+        self.record(ComparisonCall::RefreshRemoteBaseline {
+            path: path.to_owned(),
+            target: target.to_owned(),
+            thread_id: std::thread::current().id(),
+        });
+        self.panic_if_requested();
+        self.refresh_remote_baseline_result.clone()
+    }
 }
 
 impl FixedComparisonService {
@@ -204,6 +270,16 @@ enum ComparisonCall {
         path: String,
         target: String,
         freshness_token: String,
+        thread_id: ThreadId,
+    },
+    CheckRemoteBaseline {
+        path: String,
+        target: String,
+        thread_id: ThreadId,
+    },
+    RefreshRemoteBaseline {
+        path: String,
+        target: String,
         thread_id: ThreadId,
     },
 }
@@ -337,6 +413,65 @@ fn comparison_check_freshness_forwards_exact_camel_case_arguments_and_success_sh
 }
 
 #[test]
+fn comparison_check_remote_baseline_forwards_exact_camel_case_arguments_and_success_shape() {
+    let calls = Arc::new(Mutex::new(Vec::new()));
+    let response = invoke_command(
+        "comparison_check_remote_baseline",
+        tauri::ipc::InvokeBody::Json(serde_json::json!({
+            "path": REPOSITORY_PATH,
+            "target": TARGET,
+        })),
+        comparison_service(Arc::clone(&calls), false),
+    )
+    .expect("the remote-baseline check result should be returned");
+
+    assert_eq!(
+        response,
+        serde_json::json!({ "state": "current", "remoteRevision": REMOTE_REVISION })
+    );
+
+    let calls = calls
+        .lock()
+        .expect("the recorded comparison calls should be available");
+    assert!(matches!(
+        calls.as_slice(),
+        [ComparisonCall::CheckRemoteBaseline {
+            path,
+            target,
+            ..
+        }] if path == REPOSITORY_PATH && target == TARGET
+    ));
+}
+
+#[test]
+fn comparison_refresh_remote_baseline_forwards_exact_camel_case_arguments_and_success_shape() {
+    let calls = Arc::new(Mutex::new(Vec::new()));
+    let response = invoke_command(
+        "comparison_refresh_remote_baseline",
+        tauri::ipc::InvokeBody::Json(serde_json::json!({
+            "path": REPOSITORY_PATH,
+            "target": TARGET,
+        })),
+        comparison_service(Arc::clone(&calls), false),
+    )
+    .expect("the refreshed remote-baseline result should be returned");
+
+    assert_eq!(response, serde_json::json!({ "remoteRevision": REMOTE_REVISION }));
+
+    let calls = calls
+        .lock()
+        .expect("the recorded comparison calls should be available");
+    assert!(matches!(
+        calls.as_slice(),
+        [ComparisonCall::RefreshRemoteBaseline {
+            path,
+            target,
+            ..
+        }] if path == REPOSITORY_PATH && target == TARGET
+    ));
+}
+
+#[test]
 fn comparison_prepare_preserves_ordered_operation_errors_without_relogging() {
     let calls = Arc::new(Mutex::new(Vec::new()));
     let response = invoke_command(
@@ -350,6 +485,12 @@ fn comparison_prepare_preserves_ordered_operation_errors_without_relogging() {
             Ok(target_page()),
             Err(ordered_operation_error()),
             Ok(ComparisonFreshness::Current),
+            Ok(ComparisonRemoteBaseline::Current {
+                remote_revision: REMOTE_REVISION.into(),
+            }),
+            Ok(ComparisonRefreshRemoteBaselineResult {
+                remote_revision: REMOTE_REVISION.into(),
+            }),
             false,
         ),
     )
@@ -468,11 +609,29 @@ fn comparison_commands_run_on_blocking_workers() {
         blocking_runtime_probe_comparison_service(Arc::clone(&calls)),
     )
     .expect("the comparison freshness should be returned");
+    invoke_command(
+        "comparison_check_remote_baseline",
+        tauri::ipc::InvokeBody::Json(serde_json::json!({
+            "path": REPOSITORY_PATH,
+            "target": TARGET,
+        })),
+        blocking_runtime_probe_comparison_service(Arc::clone(&calls)),
+    )
+    .expect("the remote-baseline check result should be returned");
+    invoke_command(
+        "comparison_refresh_remote_baseline",
+        tauri::ipc::InvokeBody::Json(serde_json::json!({
+            "path": REPOSITORY_PATH,
+            "target": TARGET,
+        })),
+        blocking_runtime_probe_comparison_service(Arc::clone(&calls)),
+    )
+    .expect("the refreshed remote-baseline result should be returned");
 
     let calls = calls
         .lock()
         .expect("the recorded comparison calls should be available");
-    assert_eq!(calls.len(), 3);
+    assert_eq!(calls.len(), 5);
     assert!(calls.iter().all(|call| call.thread_id() != calling_thread));
 }
 
@@ -505,6 +664,24 @@ fn configured_application_exposes_only_fixed_comparison_commands() {
         Arc::clone(&service),
     )
     .expect("the freshness command must be registered");
+    invoke_command(
+        "comparison_check_remote_baseline",
+        tauri::ipc::InvokeBody::Json(serde_json::json!({
+            "path": REPOSITORY_PATH,
+            "target": TARGET,
+        })),
+        Arc::clone(&service),
+    )
+    .expect("the check-remote-baseline command must be registered");
+    invoke_command(
+        "comparison_refresh_remote_baseline",
+        tauri::ipc::InvokeBody::Json(serde_json::json!({
+            "path": REPOSITORY_PATH,
+            "target": TARGET,
+        })),
+        Arc::clone(&service),
+    )
+    .expect("the refresh-remote-baseline command must be registered");
 
     let response = invoke_command(
         "engine_action",
@@ -565,6 +742,12 @@ fn comparison_diagnostic_child_process() {
             Ok(target_page()),
             Err(ordered_operation_error()),
             Ok(ComparisonFreshness::Current),
+            Ok(ComparisonRemoteBaseline::Current {
+                remote_revision: REMOTE_REVISION.into(),
+            }),
+            Ok(ComparisonRefreshRemoteBaselineResult {
+                remote_revision: REMOTE_REVISION.into(),
+            }),
             false,
         ),
     )
@@ -593,7 +776,9 @@ impl ComparisonCall {
         match self {
             Self::ListTargets { thread_id, .. }
             | Self::Prepare { thread_id, .. }
-            | Self::CheckFreshness { thread_id, .. } => *thread_id,
+            | Self::CheckFreshness { thread_id, .. }
+            | Self::CheckRemoteBaseline { thread_id, .. }
+            | Self::RefreshRemoteBaseline { thread_id, .. } => *thread_id,
         }
     }
 }
@@ -644,6 +829,12 @@ fn comparison_service(
         Ok(target_page()),
         Ok(prepared_comparison()),
         Ok(ComparisonFreshness::Current),
+        Ok(ComparisonRemoteBaseline::Current {
+            remote_revision: REMOTE_REVISION.into(),
+        }),
+        Ok(ComparisonRefreshRemoteBaselineResult {
+            remote_revision: REMOTE_REVISION.into(),
+        }),
         panic_on_call,
     )
 }
@@ -659,6 +850,8 @@ fn fixed_comparison_service(
     list_result: Result<ComparisonTargetPage, EngineActionError>,
     prepare_result: Result<PreparedComparison, EngineActionError>,
     freshness_result: Result<ComparisonFreshness, EngineActionError>,
+    remote_baseline_result: Result<ComparisonRemoteBaseline, EngineActionError>,
+    refresh_remote_baseline_result: Result<ComparisonRefreshRemoteBaselineResult, EngineActionError>,
     panic_on_call: bool,
 ) -> Arc<dyn ComparisonService> {
     Arc::new(FixedComparisonService {
@@ -666,6 +859,8 @@ fn fixed_comparison_service(
         list_result,
         prepare_result,
         freshness_result,
+        remote_baseline_result,
+        refresh_remote_baseline_result,
         panic_on_call,
     })
 }

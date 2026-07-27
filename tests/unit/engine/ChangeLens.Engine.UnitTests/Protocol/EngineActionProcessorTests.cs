@@ -676,35 +676,40 @@ public sealed class EngineActionProcessorTests
         var targetDiscovery = comparisonFixture?.TargetDiscovery ??
                               new ChangeLens.Core.Comparisons.Services.GitComparisonTargetDiscovery(
                                   fixture.Inspector,
-                                  fixture);
+                                  fixture,
+                                  new TestLogger<ChangeLens.Core.Comparisons.Services.GitComparisonTargetDiscovery>());
         var preparer = comparisonFixture?.Preparer ??
                        new ChangeLens.Core.Comparisons.Services.GitComparisonPreparer(
                            fixture.Inspector,
                            targetDiscovery,
                            fixture,
-                           new ComparisonFileSummaryComposer());
+                           new ComparisonFileSummaryComposer(),
+                           new TestLogger<ChangeLens.Core.Comparisons.Services.GitComparisonPreparer>());
         var freshnessChecker = comparisonFixture?.FreshnessChecker ??
                                new ChangeLens.Core.Comparisons.Services.GitComparisonFreshnessChecker(
                                    fixture.Inspector,
                                    targetDiscovery,
-                                   fixture);
+                                   fixture,
+                                   new TestLogger<ChangeLens.Core.Comparisons.Services.GitComparisonFreshnessChecker>());
         var remoteBaselineTracker = comparisonFixture?.RemoteBaselineTracker ??
                                      new ChangeLens.Core.Git.Services.GitRemoteBaselineTracker(
                                          fixture.Inspector,
-                                         fixture);
+                                         fixture,
+                                         new TestLogger<ChangeLens.Core.Git.Services.GitRemoteBaselineTracker>());
         return new EngineActionProcessor(
             new StubEngineStatusService(checkStatusAsync ?? (_ => Task.FromResult(Result.Success()))),
             new RepositoryHistoryService(
                 comparisonFixture?.RepositoryInspector ?? fixture.Inspector,
                 new StubRepositoryHistoryStore(),
                 new StubCanonicalRepositoryPathKeyProvider(),
-                TimeProvider.System),
+                TimeProvider.System,
+                new TestLogger<RepositoryHistoryService>()),
             new ColorThemePreferenceService(new StubColorThemePreferenceStore()),
             targetDiscovery,
             preparer,
             freshnessChecker,
             remoteBaselineTracker,
-            new ComparisonTargetPageBuilder(serializer),
+            new ComparisonTargetPageBuilder(serializer, new TestLogger<ComparisonTargetPageBuilder>()),
             serializer,
             logger ?? new TestLogger<EngineActionProcessor>());
     }

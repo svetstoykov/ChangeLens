@@ -3,6 +3,7 @@ using ChangeLens.Core.Git.Models;
 using ChangeLens.Core.Git.Services;
 using ChangeLens.Core.Results.Models;
 using ChangeLens.Engine.UnitTests.Repositories.Support;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace ChangeLens.Engine.UnitTests.Comparisons.Support;
 
@@ -38,11 +39,22 @@ internal sealed class ComparisonProcessorFixture
     /// </summary>
     internal ComparisonProcessorFixture()
     {
-        this.TargetDiscovery = new GitComparisonTargetDiscovery(this._repositoryFixture.Inspector, this._repositoryFixture);
+        this.TargetDiscovery = new GitComparisonTargetDiscovery(
+            this._repositoryFixture.Inspector,
+            this._repositoryFixture,
+            NullLogger<GitComparisonTargetDiscovery>.Instance);
         this.Preparer = new GitComparisonPreparer(this._repositoryFixture.Inspector, this.TargetDiscovery, this._repositoryFixture,
-            new ComparisonFileSummaryComposer());
-        this.FreshnessChecker = new GitComparisonFreshnessChecker(this._repositoryFixture.Inspector, this.TargetDiscovery, this._repositoryFixture);
-        this.RemoteBaselineTracker = new GitRemoteBaselineTracker(this._repositoryFixture.Inspector, this._repositoryFixture);
+            new ComparisonFileSummaryComposer(),
+            NullLogger<GitComparisonPreparer>.Instance);
+        this.FreshnessChecker = new GitComparisonFreshnessChecker(
+            this._repositoryFixture.Inspector,
+            this.TargetDiscovery,
+            this._repositoryFixture,
+            NullLogger<GitComparisonFreshnessChecker>.Instance);
+        this.RemoteBaselineTracker = new GitRemoteBaselineTracker(
+            this._repositoryFixture.Inspector,
+            this._repositoryFixture,
+            NullLogger<GitRemoteBaselineTracker>.Instance);
     }
 
     /// <summary>

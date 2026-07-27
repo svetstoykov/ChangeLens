@@ -11,6 +11,7 @@ using ChangeLens.Core.Git.Parsers;
 using ChangeLens.Core.Git.Services;
 using ChangeLens.Core.Repositories.Models;
 using ChangeLens.Core.Results.Models;
+using Microsoft.Extensions.Logging;
 
 namespace ChangeLens.Core.Comparisons.Services;
 
@@ -27,14 +28,18 @@ namespace ChangeLens.Core.Comparisons.Services;
 /// </remarks>
 /// <param name="repositoryInspector">The repository inspection service. Cannot be <see langword="null" />.</param>
 /// <param name="commandRunner">The controlled Git process boundary. Cannot be <see langword="null" />.</param>
+/// <param name="logger">The logger for discovery outcomes. Cannot be <see langword="null" />.</param>
 /// <exception cref="ArgumentNullException">
 ///     <paramref name="repositoryInspector" /> is <see langword="null" />.
 ///     -or-
 ///     <paramref name="commandRunner" /> is <see langword="null" />.
+///     -or-
+///     <paramref name="logger" /> is <see langword="null" />.
 /// </exception>
 public sealed class GitComparisonTargetDiscovery(
     IGitRepositoryInspector repositoryInspector,
-    IGitCommandRunner commandRunner)
+    IGitCommandRunner commandRunner,
+    ILogger<GitComparisonTargetDiscovery> logger)
     : IGitComparisonTargetDiscovery
 {
     private static readonly OperationError TimedOutError = OperationError.Timeout(
@@ -55,6 +60,9 @@ public sealed class GitComparisonTargetDiscovery(
 
     private readonly IGitCommandRunner _commandRunner =
         commandRunner ?? throw new ArgumentNullException(nameof(commandRunner));
+
+    private readonly ILogger<GitComparisonTargetDiscovery> _logger =
+        logger ?? throw new ArgumentNullException(nameof(logger));
 
     /// <inheritdoc />
     public async Task<Result<ComparisonTargetSet>> ListAsync(
@@ -176,6 +184,8 @@ public sealed class GitComparisonTargetDiscovery(
         if (targetSetToken is not null &&
             !TokensEqual(targetSetToken, token))
         {
+            this._logger.LogWarning(
+                "Comparison target set changed since the caller's cached token was issued.");
             return Result.Fail<ComparisonTargetSet>(
                 OperationError.Conflict(
                     "Comparison targets changed. Reload the target list.",
@@ -203,6 +213,12 @@ public sealed class GitComparisonTargetDiscovery(
         var suggestion = query is null && after is null
             ? discovered.SuggestedTarget
             : null;
+        this._logger.LogDebug(
+            "Discovered {TargetCount} comparison targets ({UnsupportedTargetCount} unsupported) for " +
+            "{CanonicalPath}.",
+            discovered.Targets.Count,
+            discovered.UnsupportedTargetCount,
+            repository.CanonicalPath);
         return Result.Success(
             new ComparisonTargetSet(
                 page,

@@ -1,6 +1,8 @@
 using ChangeLens.Core.Git.Interfaces;
 using ChangeLens.Core.Repositories.Constants;
 using ChangeLens.Core.Results.Models;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace ChangeLens.Infrastructure.FileSystem.Services;
 
@@ -18,6 +20,19 @@ namespace ChangeLens.Infrastructure.FileSystem.Services;
 /// </remarks>
 public sealed class PhysicalRepositoryPathResolver : IRepositoryPathResolver
 {
+    private readonly ILogger<PhysicalRepositoryPathResolver> _logger;
+
+    /// <summary>
+    ///     Initializes a new instance of the <see cref="PhysicalRepositoryPathResolver" /> class.
+    /// </summary>
+    /// <param name="logger">
+    ///     The logger for path-resolution failures, or <see langword="null" /> to log nowhere.
+    /// </param>
+    public PhysicalRepositoryPathResolver(ILogger<PhysicalRepositoryPathResolver>? logger = null)
+    {
+        this._logger = logger ?? NullLogger<PhysicalRepositoryPathResolver>.Instance;
+    }
+
     /// <inheritdoc />
     public async Task<Result<string>> ResolveAsync(
         string path,
@@ -44,8 +59,9 @@ public sealed class PhysicalRepositoryPathResolver : IRepositoryPathResolver
 
             return Result.Success<string>(physicalPath);
         }
-        catch (UnauthorizedAccessException)
+        catch (UnauthorizedAccessException exception)
         {
+            this._logger.LogDebug(exception, "Path resolution for {Path} failed: access denied.", path);
             return Result.Fail<string>(
                 OperationError.Unauthorized(
                     "The selected directory cannot be accessed.",
@@ -54,6 +70,7 @@ public sealed class PhysicalRepositoryPathResolver : IRepositoryPathResolver
         catch (Exception exception) when (
             exception is DirectoryNotFoundException or FileNotFoundException)
         {
+            this._logger.LogDebug(exception, "Path resolution for {Path} failed: the directory does not exist.", path);
             return Result.Fail<string>(
                 OperationError.NotFound(
                     "The selected directory does not exist.",
@@ -62,6 +79,7 @@ public sealed class PhysicalRepositoryPathResolver : IRepositoryPathResolver
         catch (Exception exception) when (
             exception is IOException or NotSupportedException or ArgumentException)
         {
+            this._logger.LogWarning(exception, "Path resolution failed unexpectedly.");
             return Result.Fail<string>(
                 OperationError.ExternalDependencyFailure(
                     "The selected directory could not be resolved.",

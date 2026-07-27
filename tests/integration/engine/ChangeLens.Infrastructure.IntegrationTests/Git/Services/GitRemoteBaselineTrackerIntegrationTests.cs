@@ -5,6 +5,7 @@ using ChangeLens.Core.Results.Models;
 using ChangeLens.Infrastructure.FileSystem.Services;
 using ChangeLens.Infrastructure.Git.Services;
 using ChangeLens.Infrastructure.IntegrationTests.Git.Support;
+using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 
 namespace ChangeLens.Infrastructure.IntegrationTests.Git.Services;
@@ -184,8 +185,12 @@ public sealed class GitRemoteBaselineTrackerIntegrationTests
 
     private static GitRemoteBaselineTracker CreateTracker() =>
         new(
-            new GitRepositoryInspector(new GitCliCommandRunner(), new PhysicalRepositoryPathResolver()),
-            new GitCliCommandRunner());
+            new GitRepositoryInspector(
+                new GitCliCommandRunner(),
+                new PhysicalRepositoryPathResolver(),
+                NullLogger<GitRepositoryInspector>.Instance),
+            new GitCliCommandRunner(),
+            NullLogger<GitRemoteBaselineTracker>.Instance);
 
     private static string HeadRevision(string repositoryPath) =>
         TemporaryGitRepository.RunGit(["-C", repositoryPath, "rev-parse", "--verify", "HEAD"]).StandardOutput.Trim();

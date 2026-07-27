@@ -3,6 +3,7 @@ using ChangeLens.Core.LocalState.Models;
 using ChangeLens.Core.Results.Models;
 using ChangeLens.Infrastructure.LocalState.Interfaces;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 
 namespace ChangeLens.Infrastructure.LocalState.Services;
 
@@ -10,7 +11,10 @@ namespace ChangeLens.Infrastructure.LocalState.Services;
 ///     Stores the explicit color-theme preference in SQLite local state.
 /// </summary>
 /// <param name="database">The required SQLite local-state database.</param>
-public sealed class SqliteColorThemePreferenceStore(ILocalStateDatabase database) : IColorThemePreferenceStore
+/// <param name="logger">The logger for color-theme persistence failures.</param>
+public sealed class SqliteColorThemePreferenceStore(
+    ILocalStateDatabase database,
+    ILogger<SqliteColorThemePreferenceStore> logger) : IColorThemePreferenceStore
 {
     /// <inheritdoc />
     public async Task<Result<ColorTheme?>> GetAsync(CancellationToken cancellationToken)
@@ -27,11 +31,12 @@ public sealed class SqliteColorThemePreferenceStore(ILocalStateDatabase database
                 null => Result.Success<ColorTheme?>(null),
                 "light" => Result.Success<ColorTheme?>(ColorTheme.Light),
                 "dark" => Result.Success<ColorTheme?>(ColorTheme.Dark),
-                _ => SqliteLocalStateDatabase.Invalid<ColorTheme?>(),
+                _ => LogInvalidStoredTheme(logger, storedValue),
             };
         }
         catch (Exception exception) when (SqliteLocalStateDatabase.IsExpectedAccessFailure(exception))
         {
+            logger.LogWarning(exception, "Failed to read the stored color-theme preference.");
             return SqliteLocalStateDatabase.Unavailable<ColorTheme?>(exception);
         }
     }
@@ -58,7 +63,18 @@ public sealed class SqliteColorThemePreferenceStore(ILocalStateDatabase database
         }
         catch (Exception exception) when (SqliteLocalStateDatabase.IsExpectedAccessFailure(exception))
         {
+            logger.LogWarning(exception, "Failed to save the color-theme preference {ColorTheme}.", colorTheme);
             return SqliteLocalStateDatabase.Unavailable(exception);
         }
+    }
+
+    private static Result<ColorTheme?> LogInvalidStoredTheme(
+        ILogger<SqliteColorThemePreferenceStore> logger,
+        string? storedValue)
+    {
+        logger.LogWarning(
+            "Stored color-theme preference {StoredValue} is not a recognized value.",
+            storedValue);
+        return SqliteLocalStateDatabase.Invalid<ColorTheme?>();
     }
 }

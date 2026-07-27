@@ -5,6 +5,7 @@ using ChangeLens.Core.Repositories.Constants;
 using ChangeLens.Core.Repositories.Models;
 using ChangeLens.Core.Results.Models;
 using ChangeLens.Core.UnitTests.Git.Support;
+using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 
 namespace ChangeLens.Core.UnitTests.Git.Services;
@@ -31,7 +32,7 @@ public sealed class GitRepositoryInspectorTests
     {
         var runner = new StubGitCommandRunner();
         var resolver = new StubRepositoryPathResolver();
-        var inspector = new GitRepositoryInspector(runner, resolver);
+        var inspector = new GitRepositoryInspector(runner, resolver, NullLogger<GitRepositoryInspector>.Instance);
 
         var result = await inspector.InspectAsync(path, TestContext.Current.CancellationToken);
 
@@ -48,7 +49,7 @@ public sealed class GitRepositoryInspectorTests
     {
         var runner = new StubGitCommandRunner();
         var resolver = new StubRepositoryPathResolver();
-        var inspector = new GitRepositoryInspector(runner, resolver);
+        var inspector = new GitRepositoryInspector(runner, resolver, NullLogger<GitRepositoryInspector>.Instance);
         var path = new string((char)0xD800, 1);
 
         var result = await inspector.InspectAsync(path, TestContext.Current.CancellationToken);
@@ -66,7 +67,7 @@ public sealed class GitRepositoryInspectorTests
     {
         var runner = new StubGitCommandRunner();
         var resolver = new StubRepositoryPathResolver();
-        var inspector = new GitRepositoryInspector(runner, resolver);
+        var inspector = new GitRepositoryInspector(runner, resolver, NullLogger<GitRepositoryInspector>.Instance);
         var path = string.Concat(Enumerable.Repeat("😀", 8_193));
 
         var result = await inspector.InspectAsync(path, TestContext.Current.CancellationToken);
@@ -86,7 +87,7 @@ public sealed class GitRepositoryInspectorTests
         var runner = new StubGitCommandRunner();
         var resolver = new StubRepositoryPathResolver();
         resolver.Enqueue(Result.Fail<string>(error));
-        var inspector = new GitRepositoryInspector(runner, resolver);
+        var inspector = new GitRepositoryInspector(runner, resolver, NullLogger<GitRepositoryInspector>.Instance);
         var path = string.Concat(Enumerable.Repeat("😀", 8_192));
 
         var result = await inspector.InspectAsync(path, TestContext.Current.CancellationToken);
@@ -106,7 +107,7 @@ public sealed class GitRepositoryInspectorTests
         var runner = new StubGitCommandRunner();
         var resolver = new StubRepositoryPathResolver();
         resolver.Enqueue(Result.Fail<string>(error));
-        var inspector = new GitRepositoryInspector(runner, resolver);
+        var inspector = new GitRepositoryInspector(runner, resolver, NullLogger<GitRepositoryInspector>.Instance);
 
         var result = await inspector.InspectAsync("/requested/subdirectory", TestContext.Current.CancellationToken);
 
@@ -126,7 +127,7 @@ public sealed class GitRepositoryInspectorTests
         var resolver = new StubRepositoryPathResolver();
         resolver.Enqueue(Result.Success<string>("/physical/selection"));
         resolver.Enqueue(Result.Success<string>("/physical/root"));
-        var inspector = new GitRepositoryInspector(runner, resolver);
+        var inspector = new GitRepositoryInspector(runner, resolver, NullLogger<GitRepositoryInspector>.Instance);
 
         var result = await inspector.InspectAsync("/requested/subdirectory", TestContext.Current.CancellationToken);
 
@@ -189,7 +190,7 @@ public sealed class GitRepositoryInspectorTests
         runner.Enqueue(Output(Sha1Revision + "\n"));
         runner.Enqueue(Output("main\n"));
         var resolver = RootResolver("/physical/root");
-        var inspector = new GitRepositoryInspector(runner, resolver);
+        var inspector = new GitRepositoryInspector(runner, resolver, NullLogger<GitRepositoryInspector>.Instance);
 
         var result = await inspector.InspectAsync("/requested", TestContext.Current.CancellationToken);
 
@@ -211,7 +212,7 @@ public sealed class GitRepositoryInspectorTests
         resolver.Enqueue(Result.Success<string>("/physical/root"));
         resolver.Enqueue(Result.Success<string>("/physical/selection"));
         resolver.Enqueue(Result.Success<string>("/physical/root"));
-        var inspector = new GitRepositoryInspector(runner, resolver);
+        var inspector = new GitRepositoryInspector(runner, resolver, NullLogger<GitRepositoryInspector>.Instance);
 
         var first = await inspector.InspectAsync("/requested", TestContext.Current.CancellationToken);
         var second = await inspector.InspectAsync("/requested", TestContext.Current.CancellationToken);
@@ -233,7 +234,7 @@ public sealed class GitRepositoryInspectorTests
         runner.Enqueue(Output("false\n"));
         runner.Enqueue(Output("true\n"));
         var resolver = SelectionResolver();
-        var inspector = new GitRepositoryInspector(runner, resolver);
+        var inspector = new GitRepositoryInspector(runner, resolver, NullLogger<GitRepositoryInspector>.Instance);
 
         var result = await inspector.InspectAsync("/requested", TestContext.Current.CancellationToken);
 
@@ -254,7 +255,7 @@ public sealed class GitRepositoryInspectorTests
         runner.Enqueue(Output("false\n"));
         runner.Enqueue(Output("false\n"));
         var resolver = SelectionResolver();
-        var inspector = new GitRepositoryInspector(runner, resolver);
+        var inspector = new GitRepositoryInspector(runner, resolver, NullLogger<GitRepositoryInspector>.Instance);
 
         var result = await inspector.InspectAsync("/requested", TestContext.Current.CancellationToken);
 
@@ -277,7 +278,7 @@ public sealed class GitRepositoryInspectorTests
         runner.Enqueue(Output("/reported/root\n"));
         runner.Enqueue(new GitCommandOutput(128, string.Empty, "fatal: Needed a single revision"));
         var resolver = RootResolver("/physical/root");
-        var inspector = new GitRepositoryInspector(runner, resolver);
+        var inspector = new GitRepositoryInspector(runner, resolver, NullLogger<GitRepositoryInspector>.Instance);
 
         var result = await inspector.InspectAsync("/requested", TestContext.Current.CancellationToken);
 
@@ -298,7 +299,7 @@ public sealed class GitRepositoryInspectorTests
         var resolver = new StubRepositoryPathResolver();
         resolver.Enqueue(Result.Success<string>("/physical/linked-worktree/subdirectory"));
         resolver.Enqueue(Result.Success<string>("/physical/linked-worktree"));
-        var inspector = new GitRepositoryInspector(runner, resolver);
+        var inspector = new GitRepositoryInspector(runner, resolver, NullLogger<GitRepositoryInspector>.Instance);
 
         var result = await inspector.InspectAsync("/selected/link", TestContext.Current.CancellationToken);
 
@@ -325,7 +326,7 @@ public sealed class GitRepositoryInspectorTests
         var resolver = new StubRepositoryPathResolver();
         resolver.Enqueue(Result.Success<string>(root));
         resolver.Enqueue(Result.Success<string>(root));
-        var inspector = new GitRepositoryInspector(runner, resolver);
+        var inspector = new GitRepositoryInspector(runner, resolver, NullLogger<GitRepositoryInspector>.Instance);
 
         var result = await inspector.InspectAsync(root, TestContext.Current.CancellationToken);
 
@@ -349,7 +350,7 @@ public sealed class GitRepositoryInspectorTests
         var resolver = new StubRepositoryPathResolver();
         resolver.Enqueue(Result.Success<string>("/physical/selection"));
         resolver.Enqueue(Result.Fail<string>(error));
-        var inspector = new GitRepositoryInspector(runner, resolver);
+        var inspector = new GitRepositoryInspector(runner, resolver, NullLogger<GitRepositoryInspector>.Instance);
 
         var result = await inspector.InspectAsync("/requested", TestContext.Current.CancellationToken);
 
@@ -375,7 +376,7 @@ public sealed class GitRepositoryInspectorTests
         var runner = new StubGitCommandRunner();
         EnqueueFailureAt(runner, failureIndex, error);
         var resolver = RootResolver("/physical/root");
-        var inspector = new GitRepositoryInspector(runner, resolver);
+        var inspector = new GitRepositoryInspector(runner, resolver, NullLogger<GitRepositoryInspector>.Instance);
 
         var result = await inspector.InspectAsync("/requested", TestContext.Current.CancellationToken);
 
@@ -399,7 +400,7 @@ public sealed class GitRepositoryInspectorTests
         var runner = new StubGitCommandRunner();
         EnqueueMalformedAt(runner, failureIndex);
         var resolver = RootResolver("/physical/root");
-        var inspector = new GitRepositoryInspector(runner, resolver);
+        var inspector = new GitRepositoryInspector(runner, resolver, NullLogger<GitRepositoryInspector>.Instance);
 
         var result = await inspector.InspectAsync("/requested", TestContext.Current.CancellationToken);
 
@@ -417,7 +418,7 @@ public sealed class GitRepositoryInspectorTests
         runner.Enqueue(Output("git version 2.51.0\n"));
         runner.Enqueue(new GitCommandOutput(128, string.Empty, "fatal: not a git repository"));
         var resolver = SelectionResolver();
-        var inspector = new GitRepositoryInspector(runner, resolver);
+        var inspector = new GitRepositoryInspector(runner, resolver, NullLogger<GitRepositoryInspector>.Instance);
 
         var result = await inspector.InspectAsync("/requested", TestContext.Current.CancellationToken);
 
@@ -440,7 +441,7 @@ public sealed class GitRepositoryInspectorTests
             await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
             return Result.Success<string>("/unreachable");
         });
-        var inspector = new GitRepositoryInspector(runner, resolver);
+        var inspector = new GitRepositoryInspector(runner, resolver, NullLogger<GitRepositoryInspector>.Instance);
         using var cancellation = new CancellationTokenSource();
 
         var inspection = inspector.InspectAsync("/requested", cancellation.Token);
@@ -473,7 +474,7 @@ public sealed class GitRepositoryInspectorTests
             await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
             return Result.Success<string>("/unreachable");
         });
-        var inspector = new GitRepositoryInspector(runner, resolver);
+        var inspector = new GitRepositoryInspector(runner, resolver, NullLogger<GitRepositoryInspector>.Instance);
         using var cancellation = new CancellationTokenSource();
 
         var inspection = inspector.InspectAsync("/requested", cancellation.Token);
@@ -615,7 +616,7 @@ public sealed class GitRepositoryInspectorTests
             runner.Enqueue(WaitForCancellationAsync);
         }
 
-        var inspector = new GitRepositoryInspector(runner, resolver);
+        var inspector = new GitRepositoryInspector(runner, resolver, NullLogger<GitRepositoryInspector>.Instance);
         return await inspector.InspectAsync("/requested", CancellationToken.None);
     }
 

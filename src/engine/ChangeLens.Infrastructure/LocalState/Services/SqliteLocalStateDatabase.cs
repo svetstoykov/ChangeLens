@@ -19,6 +19,18 @@ namespace ChangeLens.Infrastructure.LocalState.Services;
 /// </remarks>
 public sealed class SqliteLocalStateDatabase : ILocalStateInitializer, ILocalStateDatabase
 {
+    private static readonly OperationError UnavailableError = OperationError.ExternalDependencyFailure(
+        "ChangeLens local state is unavailable. Review the Engine logs and retry.",
+        LocalStateErrorCode.Unavailable);
+
+    private static readonly OperationError InvalidError = OperationError.UnprocessableInput(
+        "The existing local-state database contains invalid metadata.",
+        LocalStateErrorCode.Invalid);
+
+    private static readonly OperationError InvalidSchemaError = OperationError.UnprocessableInput(
+        "The existing local-state database schema is invalid.",
+        LocalStateErrorCode.Invalid);
+
     private readonly string _directoryPath;
     private readonly string _databasePath;
     private readonly DbContextOptions<ChangeLensLocalStateDbContext> _contextOptions;
@@ -124,10 +136,7 @@ public sealed class SqliteLocalStateDatabase : ILocalStateInitializer, ILocalSta
     /// </summary>
     /// <param name="exception">The expected access exception.</param>
     /// <returns>The stable unavailable result.</returns>
-    internal static Result Unavailable(Exception? exception = null) =>
-        Result.Fail(OperationError.ExternalDependencyFailure(
-            "ChangeLens local state is unavailable. Review the Engine logs and retry.",
-            LocalStateErrorCode.Unavailable));
+    internal static Result Unavailable(Exception? exception = null) => Result.Fail(UnavailableError);
 
     /// <summary>
     ///     Maps an expected SQLite or filesystem access failure to a typed local-state result.
@@ -135,20 +144,14 @@ public sealed class SqliteLocalStateDatabase : ILocalStateInitializer, ILocalSta
     /// <typeparam name="T">The discarded success payload type.</typeparam>
     /// <param name="exception">The expected access exception.</param>
     /// <returns>The stable unavailable result.</returns>
-    internal static Result<T> Unavailable<T>(Exception? exception = null) =>
-        Result.Fail<T>(OperationError.ExternalDependencyFailure(
-            "ChangeLens local state is unavailable. Review the Engine logs and retry.",
-            LocalStateErrorCode.Unavailable));
+    internal static Result<T> Unavailable<T>(Exception? exception = null) => UnavailableError;
 
     /// <summary>
     ///     Maps malformed stored metadata to the stable invalid local-state result.
     /// </summary>
     /// <typeparam name="T">The discarded success payload type.</typeparam>
     /// <returns>The stable invalid local-state result.</returns>
-    internal static Result<T> Invalid<T>() =>
-        Result.Fail<T>(OperationError.UnprocessableInput(
-            "The existing local-state database contains invalid metadata.",
-            LocalStateErrorCode.Invalid));
+    internal static Result<T> Invalid<T>() => InvalidError;
 
     /// <summary>
     ///     Determines whether an exception is an expected local database access failure.
@@ -271,10 +274,7 @@ public sealed class SqliteLocalStateDatabase : ILocalStateInitializer, ILocalSta
         }
     }
 
-    private static Result InvalidSchema() =>
-        Result.Fail(OperationError.UnprocessableInput(
-            "The existing local-state database schema is invalid.",
-            LocalStateErrorCode.Invalid));
+    private static Result InvalidSchema() => Result.Fail(InvalidSchemaError);
 
     private static bool IsBusy(SqliteException exception) => exception.SqliteErrorCode is 5 or 6;
 }

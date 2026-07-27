@@ -18,6 +18,23 @@ internal static class GitComparisonOutputParser
     private static readonly UTF8Encoding StrictUtf8 = new(false, true);
 
     /// <summary>
+    ///     The single error returned whenever Git output does not match the reviewed grammar.
+    /// </summary>
+    private static readonly OperationError InspectionFailed =
+        OperationError.ExternalDependencyFailure(
+            "Git comparison inspection failed.",
+            ComparisonErrorCode.InspectionFailed);
+
+    private static readonly SearchValues<char> LowercaseHex =
+        SearchValues.Create("0123456789abcdef");
+
+    private static readonly SearchValues<char> AsciiDigits =
+        SearchValues.Create("0123456789");
+
+    private static readonly SearchValues<char> ForbiddenReferenceCharacters =
+        SearchValues.Create(" ~^:?*[\\");
+
+    /// <summary>
     ///     Parses reference facts emitted by the approved comparison-target discovery format.
     /// </summary>
     /// <param name="output">The captured Git output. Cannot be <see langword="null" />.</param>
@@ -25,6 +42,11 @@ internal static class GitComparisonOutputParser
     /// <exception cref="ArgumentNullException">
     ///     <paramref name="output" /> is <see langword="null" />.
     /// </exception>
+    /// <remarks>
+    ///     Each line is
+    ///     <c>&lt;refname&gt;\0&lt;oid&gt;\0&lt;type&gt;\0&lt;upstream&gt;\0&lt;text&gt;\0\n</c>,
+    ///     where upstream and text are optional and reference names are unique across the output.
+    /// </remarks>
     internal static Result<IReadOnlyList<GitComparisonTargetRecord>> ParseTargetRecords(
         GitCommandOutput output)
     {
@@ -32,58 +54,38 @@ internal static class GitComparisonOutputParser
 
         if (!IsSuccessfulQuietOutput(output))
         {
-            return InspectionFailure<IReadOnlyList<GitComparisonTargetRecord>>();
+            return InspectionFailed;
         }
 
-        if (output.StandardOutput.Length == 0)
+        var text = output.StandardOutput;
+
+        if (text.Length == 0)
         {
             return Result.Success<IReadOnlyList<GitComparisonTargetRecord>>(
                 Array.Empty<GitComparisonTargetRecord>());
         }
 
-        if (!output.StandardOutput.EndsWith('\n') ||
-            output.StandardOutput.Contains('\r'))
+        if (!text.EndsWith('\n') || text.Contains('\r'))
         {
-            return InspectionFailure<IReadOnlyList<GitComparisonTargetRecord>>();
+            return InspectionFailed;
         }
 
-        var lines = output.StandardOutput.Split('\n');
-        var records = new List<GitComparisonTargetRecord>(lines.Length - 1);
+        var records = new List<GitComparisonTargetRecord>();
         var seenFullNames = new HashSet<string>(StringComparer.Ordinal);
+        var lines = new GitFieldReader(text);
 
-        for (var index = 0; index < lines.Length - 1; index++)
+        while (lines.TryRead('\n', out var line))
         {
-            var line = lines[index];
-
-            if (line.Length == 0 || !line.EndsWith('\0'))
+            if (!TryParseTargetRecord(line, out var record, out var fullName) ||
+                !seenFullNames.Add(fullName))
             {
-                return InspectionFailure<IReadOnlyList<GitComparisonTargetRecord>>();
+                return InspectionFailed;
             }
 
-            var fields = line[..^1].Split('\0');
-            if (fields.Length != 5 ||
-                !IsValidFullReference(fields[0]) ||
-                !IsSupportedObjectId(fields[1]) ||
-                !IsKnownObjectType(fields[2]) ||
-                fields[3].Length > 0 && !IsValidFullReference(fields[3]) ||
-                !IsValidOptionalText(fields[4]) ||
-                !seenFullNames.Add(fields[0]))
-            {
-                return InspectionFailure<IReadOnlyList<GitComparisonTargetRecord>>();
-            }
-
-            records.Add(
-                new GitComparisonTargetRecord(
-                    fields[0],
-                    fields[1],
-                    fields[2],
-                    NullWhenEmpty(fields[3]),
-                    NullWhenEmpty(fields[4])));
+            records.Add(record);
         }
 
-        return lines[^1].Length == 0
-            ? Result.Success<IReadOnlyList<GitComparisonTargetRecord>>(records)
-            : InspectionFailure<IReadOnlyList<GitComparisonTargetRecord>>();
+        return Result.Success<IReadOnlyList<GitComparisonTargetRecord>>(records);
     }
 
     /// <summary>
@@ -94,32 +96,54 @@ internal static class GitComparisonOutputParser
     /// <exception cref="ArgumentNullException">
     ///     <paramref name="output" /> is <see langword="null" />.
     /// </exception>
-    internal static Result<IReadOnlyList<string>> ParseMergeBases(
-        GitCommandOutput output)
+    /// <remarks>
+    ///     Each line is one object identifier; the final line's trailing line feed is optional.
+    /// </remarks>
+    internal static Result<IReadOnlyList<string>> ParseMergeBases(GitCommandOutput output)
     {
         ArgumentNullException.ThrowIfNull(output);
 
         if (!IsSuccessfulQuietOutput(output))
         {
-            return InspectionFailure<IReadOnlyList<string>>();
+            return InspectionFailed;
         }
 
-        if (output.StandardOutput.Length == 0)
+        var text = output.StandardOutput;
+
+        if (text.Length == 0)
         {
             return Result.Success<IReadOnlyList<string>>(Array.Empty<string>());
         }
 
-        if (output.StandardOutput.Contains('\r'))
+        if (text.Contains('\r'))
         {
-            return InspectionFailure<IReadOnlyList<string>>();
+            return InspectionFailed;
         }
 
-        var text = RemoveOneTerminalLineFeed(output.StandardOutput);
-        var revisions = text.Split('\n');
+        var span = text.EndsWith('\n') ? text.AsSpan()[..^1] : text.AsSpan();
+        var revisions = new List<string>();
 
-        return revisions.Length > 0 && revisions.All(IsSupportedObjectId)
-            ? Result.Success<IReadOnlyList<string>>(revisions)
-            : InspectionFailure<IReadOnlyList<string>>();
+        while (true)
+        {
+            var separator = span.IndexOf('\n');
+            var line = separator < 0 ? span : span[..separator];
+
+            if (!IsSupportedObjectId(line))
+            {
+                return InspectionFailed;
+            }
+
+            revisions.Add(line.ToString());
+
+            if (separator < 0)
+            {
+                break;
+            }
+
+            span = span[(separator + 1)..];
+        }
+
+        return Result.Success<IReadOnlyList<string>>(revisions);
     }
 
     /// <summary>
@@ -130,30 +154,38 @@ internal static class GitComparisonOutputParser
     /// <exception cref="ArgumentNullException">
     ///     <paramref name="output" /> is <see langword="null" />.
     /// </exception>
+    /// <remarks>
+    ///     The single line is <c>&lt;left&gt;\t&lt;right&gt;</c>, and its trailing line feed is
+    ///     optional.
+    /// </remarks>
     internal static Result<(int TargetOnly, int CurrentWork)> ParseCommitCounts(
         GitCommandOutput output)
     {
         ArgumentNullException.ThrowIfNull(output);
 
-        if (!IsSuccessfulQuietOutput(output) ||
-            output.StandardOutput.Length == 0 ||
-            output.StandardOutput.Contains('\r'))
+        if (!IsSuccessfulQuietOutput(output) || output.StandardOutput.Contains('\r'))
         {
-            return InspectionFailure<(int TargetOnly, int CurrentWork)>();
+            return InspectionFailed;
         }
 
-        var text = RemoveOneTerminalLineFeed(output.StandardOutput);
-        if (text.Contains('\n'))
+        var text = output.StandardOutput;
+        var line = text.EndsWith('\n') ? text.AsSpan()[..^1] : text.AsSpan();
+
+        if (line.Contains('\n'))
         {
-            return InspectionFailure<(int TargetOnly, int CurrentWork)>();
+            return InspectionFailed;
         }
 
-        var fields = text.Split('\t');
-        return fields.Length == 2 &&
-               TryParseCanonicalCount(fields[0], out var targetOnly) &&
-               TryParseCanonicalCount(fields[1], out var currentWork)
-            ? Result.Success((TargetOnly: targetOnly, CurrentWork: currentWork))
-            : InspectionFailure<(int TargetOnly, int CurrentWork)>();
+        var separator = line.IndexOf('\t');
+
+        if (separator < 0 ||
+            !TryParseCanonicalCount(line[..separator], out var targetOnly) ||
+            !TryParseCanonicalCount(line[(separator + 1)..], out var currentWork))
+        {
+            return InspectionFailed;
+        }
+
+        return Result.Success((TargetOnly: targetOnly, CurrentWork: currentWork));
     }
 
     /// <summary>
@@ -164,6 +196,12 @@ internal static class GitComparisonOutputParser
     /// <exception cref="ArgumentNullException">
     ///     <paramref name="output" /> is <see langword="null" />.
     /// </exception>
+    /// <remarks>
+    ///     Each record is
+    ///     <c>:&lt;srcmode&gt; &lt;dstmode&gt; &lt;srcoid&gt; &lt;dstoid&gt; &lt;status&gt;\0&lt;path&gt;\0</c>,
+    ///     where a rename status emits the original path followed by the current path. Copy
+    ///     statuses are rejected because copy detection is never requested.
+    /// </remarks>
     internal static Result<IReadOnlyList<GitComparisonFileRecord>> ParseCommittedFiles(
         GitCommandOutput output)
     {
@@ -171,43 +209,41 @@ internal static class GitComparisonOutputParser
 
         if (!IsSuccessfulQuietOutput(output))
         {
-            return InspectionFailure<IReadOnlyList<GitComparisonFileRecord>>();
+            return InspectionFailed;
         }
 
         var records = new List<GitComparisonFileRecord>();
-        var position = 0;
+        var reader = new GitFieldReader(output.StandardOutput);
 
-        while (position < output.StandardOutput.Length)
+        while (!reader.IsAtEnd)
         {
-            if (!TryReadNulField(output.StandardOutput, ref position, out var header) ||
-                !TryParseRawHeader(
-                    header,
-                    out var status,
-                    out var isRename))
+            if (!reader.TryReadNulField(out var header) ||
+                !TryParseRawHeader(header, out var isRename))
             {
-                return InspectionFailure<IReadOnlyList<GitComparisonFileRecord>>();
-            }
-
-            if (!TryReadNulField(output.StandardOutput, ref position, out var firstPath) ||
-                firstPath.Length == 0)
-            {
-                return InspectionFailure<IReadOnlyList<GitComparisonFileRecord>>();
+                return InspectionFailed;
             }
 
             if (!isRename)
             {
-                records.Add(new GitComparisonFileRecord(firstPath, null));
+                if (!reader.TryReadNulField(out var path) || path.IsEmpty)
+                {
+                    return InspectionFailed;
+                }
+
+                records.Add(new GitComparisonFileRecord(path.ToString(), null));
                 continue;
             }
 
-            if (!TryReadNulField(output.StandardOutput, ref position, out var currentPath) ||
-                currentPath.Length == 0 ||
-                status[0] != 'R')
+            if (!reader.TryReadNulField(out var originalPath) ||
+                originalPath.IsEmpty ||
+                !reader.TryReadNulField(out var currentPath) ||
+                currentPath.IsEmpty)
             {
-                return InspectionFailure<IReadOnlyList<GitComparisonFileRecord>>();
+                return InspectionFailed;
             }
 
-            records.Add(new GitComparisonFileRecord(currentPath, firstPath));
+            records.Add(
+                new GitComparisonFileRecord(currentPath.ToString(), originalPath.ToString()));
         }
 
         return Result.Success<IReadOnlyList<GitComparisonFileRecord>>(records);
@@ -221,6 +257,14 @@ internal static class GitComparisonOutputParser
     /// <exception cref="ArgumentNullException">
     ///     <paramref name="output" /> is <see langword="null" />.
     /// </exception>
+    /// <remarks>
+    ///     Accepted records, each NUL-terminated:
+    ///     <c>1 &lt;XY&gt; &lt;sub&gt; &lt;mH&gt; &lt;mI&gt; &lt;mW&gt; &lt;hH&gt; &lt;hI&gt; &lt;path&gt;</c>;
+    ///     <c>2 &lt;XY&gt; &lt;sub&gt; &lt;mH&gt; &lt;mI&gt; &lt;mW&gt; &lt;hH&gt; &lt;hI&gt; &lt;Xscore&gt; &lt;path&gt;</c>
+    ///     followed by a separate NUL-terminated original path;
+    ///     <c>u &lt;XY&gt; &lt;sub&gt; &lt;m1&gt; &lt;m2&gt; &lt;m3&gt; &lt;mW&gt; &lt;h1&gt; &lt;h2&gt; &lt;h3&gt; &lt;path&gt;</c>;
+    ///     <c>? &lt;path&gt;</c>; and <c>! &lt;path&gt;</c>.
+    /// </remarks>
     internal static Result<IReadOnlyList<GitWorkingTreeRecord>> ParseWorkingTree(
         GitCommandOutput output)
     {
@@ -228,270 +272,328 @@ internal static class GitComparisonOutputParser
 
         if (!IsSuccessfulQuietOutput(output))
         {
-            return InspectionFailure<IReadOnlyList<GitWorkingTreeRecord>>();
+            return InspectionFailed;
         }
 
         var records = new List<GitWorkingTreeRecord>();
-        var position = 0;
+        var reader = new GitFieldReader(output.StandardOutput);
 
-        while (position < output.StandardOutput.Length)
+        while (!reader.IsAtEnd)
         {
-            if (!TryReadNulField(output.StandardOutput, ref position, out var record) ||
-                record.Length < 3)
+            if (!reader.TryReadNulField(out var entry) ||
+                entry.Length < 3 ||
+                !TryParseWorkingTreeEntry(entry, ref reader, out var record))
             {
-                return InspectionFailure<IReadOnlyList<GitWorkingTreeRecord>>();
+                return InspectionFailed;
             }
 
-            switch (record[0])
-            {
-                case '1':
-                    if (!TryParseOrdinaryRecord(record, out var ordinary))
-                    {
-                        return InspectionFailure<IReadOnlyList<GitWorkingTreeRecord>>();
-                    }
-
-                    records.Add(ordinary);
-                    break;
-                case '2':
-                    if (!TryParseRenameRecord(
-                            output.StandardOutput,
-                            ref position,
-                            record,
-                            out var renamed))
-                    {
-                        return InspectionFailure<IReadOnlyList<GitWorkingTreeRecord>>();
-                    }
-
-                    records.Add(renamed);
-                    break;
-                case 'u':
-                    if (!TryParseUnmergedRecord(record, out var unmerged))
-                    {
-                        return InspectionFailure<IReadOnlyList<GitWorkingTreeRecord>>();
-                    }
-
-                    records.Add(unmerged);
-                    break;
-                case '?':
-                    if (!record.StartsWith("? ", StringComparison.Ordinal) ||
-                        record.Length == 2)
-                    {
-                        return InspectionFailure<IReadOnlyList<GitWorkingTreeRecord>>();
-                    }
-
-                    records.Add(
-                        new GitWorkingTreeRecord(
-                            record[2..],
-                            null,
-                            false,
-                            false,
-                            true,
-                            false,
-                            false));
-                    break;
-                case '!':
-                    if (!record.StartsWith("! ", StringComparison.Ordinal) ||
-                        record.Length == 2)
-                    {
-                        return InspectionFailure<IReadOnlyList<GitWorkingTreeRecord>>();
-                    }
-
-                    records.Add(
-                        new GitWorkingTreeRecord(
-                            record[2..],
-                            null,
-                            false,
-                            false,
-                            false,
-                            false,
-                            true));
-                    break;
-                default:
-                    return InspectionFailure<IReadOnlyList<GitWorkingTreeRecord>>();
-            }
+            records.Add(record);
         }
 
         return Result.Success<IReadOnlyList<GitWorkingTreeRecord>>(records);
     }
 
-    private static bool TryParseOrdinaryRecord(
-        string record,
-        out GitWorkingTreeRecord result)
+    private static bool TryParseTargetRecord(
+        ReadOnlySpan<char> line,
+        out GitComparisonTargetRecord record,
+        out string fullName)
     {
-        result = null!;
+        record = null!;
+        fullName = string.Empty;
 
-        if (!TrySplitPrefix(record, 8, out var fields, out var path) ||
-            fields[0] != "1" ||
-            !IsOrdinaryStatus(fields[1]) ||
-            !IsValidSubmoduleState(fields[2]) ||
-            !IsSupportedMode(fields[3]) ||
-            !IsSupportedMode(fields[4]) ||
-            !IsSupportedMode(fields[5]) ||
-            !IsConsistentSubmoduleState(fields[2], fields[4]) ||
-            !AreCompatibleObjectIds(fields[6], fields[7]) ||
-            !IsConsistentOrdinaryState(
-                fields[1],
-                fields[3],
-                fields[4],
-                fields[5],
-                fields[6],
-                fields[7]) ||
-            path.Length == 0)
+        if (line.IsEmpty || line[^1] != '\0')
         {
             return false;
         }
 
-        result = new GitWorkingTreeRecord(
-            path,
-            null,
-            fields[1][0] != '.',
-            fields[1][1] != '.',
-            false,
-            false,
-            false);
-        return true;
-    }
+        var fields = new GitFieldReader(line[..^1]);
 
-    private static bool TryParseRenameRecord(
-        string output,
-        ref int position,
-        string record,
-        out GitWorkingTreeRecord result)
-    {
-        result = null!;
-
-        if (!TrySplitPrefix(record, 9, out var fields, out var path) ||
-            fields[0] != "2" ||
-            !IsRenameStatus(fields[1]) ||
-            !IsValidSubmoduleState(fields[2]) ||
-            !IsNonzeroSupportedMode(fields[3]) ||
-            !IsNonzeroSupportedMode(fields[4]) ||
-            !IsSameFileType(fields[3], fields[4]) ||
-            !IsConsistentSubmoduleState(fields[2], fields[4]) ||
-            !IsConsistentWorktreeMode(fields[1][1], fields[4], fields[5]) ||
-            !AreCompatibleObjectIds(fields[6], fields[7]) ||
-            IsZeroObjectId(fields[6]) ||
-            IsZeroObjectId(fields[7]) ||
-            !IsCompactRenameScore(fields[8]) ||
-            path.Length == 0 ||
-            !TryReadNulField(output, ref position, out var originalPath) ||
-            originalPath.Length == 0)
+        if (!fields.TryReadNulField(out var name) ||
+            !fields.TryReadNulField(out var objectId) ||
+            !fields.TryReadNulField(out var objectType) ||
+            !fields.TryReadNulField(out var upstream))
         {
             return false;
         }
 
-        result = new GitWorkingTreeRecord(
-            path,
-            originalPath,
-            true,
-            fields[1][1] != '.',
-            false,
-            false,
-            false);
-        return true;
-    }
+        var description = fields.Remainder;
 
-    private static bool TryParseUnmergedRecord(
-        string record,
-        out GitWorkingTreeRecord result)
-    {
-        result = null!;
-
-        if (!TrySplitPrefix(record, 10, out var fields, out var path) ||
-            fields[0] != "u" ||
-            !IsUnmergedStatus(fields[1]) ||
-            !IsValidSubmoduleState(fields[2]) ||
-            !fields.Skip(3).Take(4).All(IsSupportedMode) ||
-            !AreCompatibleObjectIds(fields[7], fields[8], fields[9]) ||
-            !IsConsistentUnmergedStages(
-                fields[1],
-                fields[3],
-                fields[4],
-                fields[5],
-                fields[7],
-                fields[8],
-                fields[9]) ||
-            !IsConsistentSubmoduleState(
-                fields[2],
-                fields[3],
-                fields[4],
-                fields[5],
-                fields[6]) ||
-            path.Length == 0)
+        if (description.Contains('\0') ||
+            !IsValidFullReference(name) ||
+            !IsSupportedObjectId(objectId) ||
+            !IsKnownObjectType(objectType) ||
+            (!upstream.IsEmpty && !IsValidFullReference(upstream)) ||
+            !IsFreeOfControlCharacters(description))
         {
             return false;
         }
 
-        result = new GitWorkingTreeRecord(
-            path,
-            null,
-            true,
-            true,
-            false,
-            true,
-            false);
+        fullName = name.ToString();
+        record = new GitComparisonTargetRecord(
+            fullName,
+            objectId.ToString(),
+            objectType.ToString(),
+            NullWhenEmpty(upstream),
+            NullWhenEmpty(description));
         return true;
     }
 
-    private static bool TryParseRawHeader(
-        string header,
-        out string status,
-        out bool isRename)
+    private static bool TryParseRawHeader(ReadOnlySpan<char> header, out bool isRename)
     {
-        status = string.Empty;
         isRename = false;
-        var fields = header.Split(' ');
+        var fields = new GitFieldReader(header);
 
-        if (fields.Length != 5 ||
-            fields[0].Length != 7 ||
-            fields[0][0] != ':' ||
-            !IsSupportedMode(fields[0][1..]) ||
-            !IsSupportedMode(fields[1]) ||
-            !AreCompatibleObjectIds(fields[2], fields[3]))
+        if (!fields.TryReadWord(out var prefixedSourceMode) ||
+            !fields.TryReadWord(out var targetMode) ||
+            !fields.TryReadWord(out var sourceOid) ||
+            !fields.TryReadWord(out var targetOid))
         {
             return false;
         }
 
-        status = fields[4];
-        var oldMode = fields[0][1..];
-        var newMode = fields[1];
-        var oldRevision = fields[2];
-        var newRevision = fields[3];
+        var status = fields.Remainder;
 
-        switch (status)
+        if (prefixedSourceMode.Length != 7 || prefixedSourceMode[0] != ':')
         {
-            case "A":
-                return oldMode == "000000" &&
-                       IsZeroObjectId(oldRevision) &&
-                       IsNonzeroSupportedMode(newMode) &&
-                       !IsZeroObjectId(newRevision);
-            case "D":
-                return IsNonzeroSupportedMode(oldMode) &&
-                       !IsZeroObjectId(oldRevision) &&
-                       newMode == "000000" &&
-                       IsZeroObjectId(newRevision);
-            case "M":
-                return IsNonzeroSupportedMode(oldMode) &&
-                       IsNonzeroSupportedMode(newMode) &&
-                       IsSameFileType(oldMode, newMode) &&
-                       !IsZeroObjectId(oldRevision) &&
-                       !IsZeroObjectId(newRevision) &&
-                       (oldMode != newMode || oldRevision != newRevision);
-            case "T":
-                return IsNonzeroSupportedMode(oldMode) &&
-                       IsNonzeroSupportedMode(newMode) &&
-                       !IsSameFileType(oldMode, newMode) &&
-                       !IsZeroObjectId(oldRevision) &&
-                       !IsZeroObjectId(newRevision);
-            default:
-                isRename = IsPaddedRenameScore(status);
-                return isRename &&
-                       IsNonzeroSupportedMode(oldMode) &&
-                       IsNonzeroSupportedMode(newMode) &&
-                       IsSameFileType(oldMode, newMode) &&
-                       !IsZeroObjectId(oldRevision) &&
-                       !IsZeroObjectId(newRevision);
+            return false;
         }
+
+        var sourceMode = prefixedSourceMode[1..];
+
+        if (!IsSupportedMode(sourceMode) ||
+            !IsSupportedMode(targetMode) ||
+            !AreCompatibleObjectIds(sourceOid, targetOid))
+        {
+            return false;
+        }
+
+        if (status is "A" or "D" or "M" or "T")
+        {
+            return IsConsistentTransition(status[0], sourceMode, targetMode, sourceOid, targetOid);
+        }
+
+        isRename = IsPaddedRenameScore(status);
+
+        return isRename &&
+               AreBothPresent(sourceMode, targetMode, sourceOid, targetOid) &&
+               IsSameFileType(sourceMode, targetMode);
+    }
+
+    private static bool TryParseWorkingTreeEntry(
+        ReadOnlySpan<char> entry,
+        ref GitFieldReader reader,
+        out GitWorkingTreeRecord record)
+    {
+        record = null!;
+
+        return entry[0] switch
+        {
+            '1' => TryParseOrdinaryEntry(entry, out record),
+            '2' => TryParseRenameEntry(entry, ref reader, out record),
+            'u' => TryParseUnmergedEntry(entry, out record),
+            '?' => TryParsePathOnlyEntry(entry, '?', isUntracked: true, isIgnored: false, out record),
+            '!' => TryParsePathOnlyEntry(entry, '!', isUntracked: false, isIgnored: true, out record),
+            _ => false,
+        };
+    }
+
+    private static bool TryParseOrdinaryEntry(
+        ReadOnlySpan<char> entry,
+        out GitWorkingTreeRecord record)
+    {
+        record = null!;
+        var fields = new GitFieldReader(entry);
+
+        if (!fields.TryReadWord(out var kind) ||
+            !fields.TryReadWord(out var status) ||
+            !fields.TryReadWord(out var submodule) ||
+            !fields.TryReadWord(out var headMode) ||
+            !fields.TryReadWord(out var indexMode) ||
+            !fields.TryReadWord(out var worktreeMode) ||
+            !fields.TryReadWord(out var headOid) ||
+            !fields.TryReadWord(out var indexOid))
+        {
+            return false;
+        }
+
+        var path = fields.Remainder;
+
+        if (kind is not "1" ||
+            path.IsEmpty ||
+            !IsOrdinaryStatus(status) ||
+            !IsValidSubmoduleState(submodule) ||
+            !IsSupportedMode(headMode) ||
+            !IsSupportedMode(indexMode) ||
+            !IsSupportedMode(worktreeMode) ||
+            !AreCompatibleObjectIds(headOid, indexOid))
+        {
+            return false;
+        }
+
+        if (!IsConsistentSubmoduleState(submodule, IsGitlinkMode(indexMode)) ||
+            !IsConsistentIndexState(status[0], headMode, indexMode, headOid, indexOid) ||
+            !IsConsistentWorktreeMode(status[1], indexMode, worktreeMode))
+        {
+            return false;
+        }
+
+        record = new GitWorkingTreeRecord(
+            path.ToString(),
+            null,
+            status[0] != '.',
+            status[1] != '.',
+            false,
+            false,
+            false);
+        return true;
+    }
+
+    private static bool TryParseRenameEntry(
+        ReadOnlySpan<char> entry,
+        ref GitFieldReader reader,
+        out GitWorkingTreeRecord record)
+    {
+        record = null!;
+        var fields = new GitFieldReader(entry);
+
+        if (!fields.TryReadWord(out var kind) ||
+            !fields.TryReadWord(out var status) ||
+            !fields.TryReadWord(out var submodule) ||
+            !fields.TryReadWord(out var headMode) ||
+            !fields.TryReadWord(out var indexMode) ||
+            !fields.TryReadWord(out var worktreeMode) ||
+            !fields.TryReadWord(out var headOid) ||
+            !fields.TryReadWord(out var indexOid) ||
+            !fields.TryReadWord(out var renameScore))
+        {
+            return false;
+        }
+
+        var path = fields.Remainder;
+
+        if (kind is not "2" ||
+            path.IsEmpty ||
+            !IsRenameStatus(status) ||
+            !IsValidSubmoduleState(submodule) ||
+            !IsNonzeroSupportedMode(headMode) ||
+            !IsNonzeroSupportedMode(indexMode) ||
+            !IsSupportedMode(worktreeMode) ||
+            !IsSameFileType(headMode, indexMode) ||
+            !IsCompactRenameScore(renameScore))
+        {
+            return false;
+        }
+
+        if (!AreCompatibleObjectIds(headOid, indexOid) ||
+            IsZeroObjectId(headOid) ||
+            IsZeroObjectId(indexOid) ||
+            !IsConsistentSubmoduleState(submodule, IsGitlinkMode(indexMode)) ||
+            !IsConsistentWorktreeMode(status[1], indexMode, worktreeMode))
+        {
+            return false;
+        }
+
+        if (!reader.TryReadNulField(out var originalPath) || originalPath.IsEmpty)
+        {
+            return false;
+        }
+
+        record = new GitWorkingTreeRecord(
+            path.ToString(),
+            originalPath.ToString(),
+            true,
+            status[1] != '.',
+            false,
+            false,
+            false);
+        return true;
+    }
+
+    private static bool TryParseUnmergedEntry(
+        ReadOnlySpan<char> entry,
+        out GitWorkingTreeRecord record)
+    {
+        record = null!;
+        var fields = new GitFieldReader(entry);
+
+        if (!fields.TryReadWord(out var kind) ||
+            !fields.TryReadWord(out var status) ||
+            !fields.TryReadWord(out var submodule) ||
+            !fields.TryReadWord(out var stageOneMode) ||
+            !fields.TryReadWord(out var stageTwoMode) ||
+            !fields.TryReadWord(out var stageThreeMode) ||
+            !fields.TryReadWord(out var worktreeMode) ||
+            !fields.TryReadWord(out var stageOneOid) ||
+            !fields.TryReadWord(out var stageTwoOid) ||
+            !fields.TryReadWord(out var stageThreeOid))
+        {
+            return false;
+        }
+
+        var path = fields.Remainder;
+
+        if (kind is not "u" ||
+            path.IsEmpty ||
+            !IsUnmergedStatus(status) ||
+            !IsValidSubmoduleState(submodule) ||
+            !IsSupportedMode(stageOneMode) ||
+            !IsSupportedMode(stageTwoMode) ||
+            !IsSupportedMode(stageThreeMode) ||
+            !IsSupportedMode(worktreeMode) ||
+            !AreCompatibleObjectIds(stageOneOid, stageTwoOid, stageThreeOid))
+        {
+            return false;
+        }
+
+        var containsGitlink =
+            IsGitlinkMode(stageOneMode) ||
+            IsGitlinkMode(stageTwoMode) ||
+            IsGitlinkMode(stageThreeMode) ||
+            IsGitlinkMode(worktreeMode);
+
+        if (!IsConsistentSubmoduleState(submodule, containsGitlink) ||
+            !TryGetModeObjectPresence(stageOneMode, stageOneOid, out var stageOne) ||
+            !TryGetModeObjectPresence(stageTwoMode, stageTwoOid, out var stageTwo) ||
+            !TryGetModeObjectPresence(stageThreeMode, stageThreeOid, out var stageThree) ||
+            !IsConsistentUnmergedStages(status, stageOne, stageTwo, stageThree))
+        {
+            return false;
+        }
+
+        record = new GitWorkingTreeRecord(
+            path.ToString(),
+            null,
+            true,
+            true,
+            false,
+            true,
+            false);
+        return true;
+    }
+
+    private static bool TryParsePathOnlyEntry(
+        ReadOnlySpan<char> entry,
+        char marker,
+        bool isUntracked,
+        bool isIgnored,
+        out GitWorkingTreeRecord record)
+    {
+        record = null!;
+
+        if (entry[0] != marker || entry[1] != ' ')
+        {
+            return false;
+        }
+
+        record = new GitWorkingTreeRecord(
+            entry[2..].ToString(),
+            null,
+            false,
+            false,
+            isUntracked,
+            false,
+            isIgnored);
+        return true;
     }
 
     private static bool IsSuccessfulQuietOutput(GitCommandOutput output)
@@ -507,9 +609,7 @@ internal static class GitComparisonOutputParser
         try
         {
             return StrictUtf8.GetByteCount(output.StandardOutput) <=
-                   ComparisonLimits.MaximumFactOutputBytes &&
-                   StrictUtf8.GetByteCount(output.StandardError) <=
-                   ComparisonLimits.MaximumDiagnosticBytes;
+                   ComparisonLimits.MaximumFactOutputBytes;
         }
         catch (EncoderFallbackException)
         {
@@ -517,131 +617,92 @@ internal static class GitComparisonOutputParser
         }
     }
 
-    private static bool TryReadNulField(
-        string text,
-        ref int position,
-        out string field)
-    {
-        var terminator = text.IndexOf('\0', position);
-        if (terminator < 0)
+    /// <summary>
+    ///     Validates the mode and object transition implied by a nonrename raw diff status.
+    /// </summary>
+    /// <param name="status">The raw status character.</param>
+    /// <param name="sourceMode">The source mode.</param>
+    /// <param name="targetMode">The target mode.</param>
+    /// <param name="sourceOid">The source object identifier.</param>
+    /// <param name="targetOid">The target object identifier.</param>
+    /// <returns><see langword="true" /> when the facts agree with the status.</returns>
+    private static bool IsConsistentTransition(
+        char status,
+        ReadOnlySpan<char> sourceMode,
+        ReadOnlySpan<char> targetMode,
+        ReadOnlySpan<char> sourceOid,
+        ReadOnlySpan<char> targetOid) =>
+        status switch
         {
-            field = string.Empty;
-            return false;
-        }
-
-        field = text[position..terminator];
-        position = terminator + 1;
-        return true;
-    }
-
-    private static bool TrySplitPrefix(
-        string value,
-        int fieldCount,
-        out string[] fields,
-        out string remainder)
-    {
-        fields = new string[fieldCount];
-        var position = 0;
-
-        for (var index = 0; index < fieldCount; index++)
-        {
-            var separator = value.IndexOf(' ', position);
-            if (separator < 0)
-            {
-                remainder = string.Empty;
-                return false;
-            }
-
-            fields[index] = value[position..separator];
-            if (fields[index].Length == 0)
-            {
-                remainder = string.Empty;
-                return false;
-            }
-
-            position = separator + 1;
-        }
-
-        remainder = value[position..];
-        return true;
-    }
-
-    private static bool IsOrdinaryStatus(string value) =>
-        value.Length == 2 &&
-        value[0] switch
-        {
-            '.' => value[1] is 'M' or 'T' or 'D',
-            'A' or 'M' or 'T' => value[1] is '.' or 'M' or 'T' or 'D',
-            'D' => value[1] == '.',
+            'A' => IsAbsentMode(sourceMode) &&
+                   IsZeroObjectId(sourceOid) &&
+                   IsNonzeroSupportedMode(targetMode) &&
+                   !IsZeroObjectId(targetOid),
+            'D' => IsNonzeroSupportedMode(sourceMode) &&
+                   !IsZeroObjectId(sourceOid) &&
+                   IsAbsentMode(targetMode) &&
+                   IsZeroObjectId(targetOid),
+            'M' => AreBothPresent(sourceMode, targetMode, sourceOid, targetOid) &&
+                   IsSameFileType(sourceMode, targetMode) &&
+                   (!sourceMode.SequenceEqual(targetMode) || !sourceOid.SequenceEqual(targetOid)),
+            'T' => AreBothPresent(sourceMode, targetMode, sourceOid, targetOid) &&
+                   !IsSameFileType(sourceMode, targetMode),
             _ => false,
         };
 
-    private static bool IsRenameStatus(string value) =>
-        value.Length == 2 &&
-        value[0] == 'R' &&
-        value[1] is '.' or 'M' or 'D' or 'T';
-
-    private static bool IsUnmergedStatus(string value) =>
-        value is "DD" or "AU" or "UD" or "UA" or "DU" or "AA" or "UU";
-
-    private static bool IsValidSubmoduleState(string value) =>
-        value == "N..." ||
-        value.Length == 4 &&
-        value[0] == 'S' &&
-        value[1] is '.' or 'C' &&
-        value[2] is '.' or 'M' &&
-        value[3] is '.' or 'U';
+    private static bool AreBothPresent(
+        ReadOnlySpan<char> sourceMode,
+        ReadOnlySpan<char> targetMode,
+        ReadOnlySpan<char> sourceOid,
+        ReadOnlySpan<char> targetOid) =>
+        IsNonzeroSupportedMode(sourceMode) &&
+        IsNonzeroSupportedMode(targetMode) &&
+        !IsZeroObjectId(sourceOid) &&
+        !IsZeroObjectId(targetOid);
 
     /// <summary>
-    ///     Validates staged object and mode facts plus the unstaged mode transition.
+    ///     Validates the staged half of an ordinary status against the HEAD and index facts.
     /// </summary>
-    /// <param name="status">The two-character ordinary porcelain status.</param>
+    /// <param name="status">The staged status character.</param>
     /// <param name="headMode">The HEAD mode.</param>
     /// <param name="indexMode">The index mode.</param>
-    /// <param name="worktreeMode">The worktree mode.</param>
-    /// <param name="headRevision">The HEAD object identifier.</param>
-    /// <param name="indexRevision">The index object identifier.</param>
+    /// <param name="headOid">The HEAD object identifier.</param>
+    /// <param name="indexOid">The index object identifier.</param>
     /// <returns><see langword="true" /> when the facts agree with the status.</returns>
-    private static bool IsConsistentOrdinaryState(
-        string status,
-        string headMode,
-        string indexMode,
-        string worktreeMode,
-        string headRevision,
-        string indexRevision)
+    private static bool IsConsistentIndexState(
+        char status,
+        ReadOnlySpan<char> headMode,
+        ReadOnlySpan<char> indexMode,
+        ReadOnlySpan<char> headOid,
+        ReadOnlySpan<char> indexOid)
     {
-        if (!TryGetModeObjectPresence(headMode, headRevision, out var headExists) ||
-            !TryGetModeObjectPresence(indexMode, indexRevision, out var indexExists))
+        if (!TryGetModeObjectPresence(headMode, headOid, out var headExists) ||
+            !TryGetModeObjectPresence(indexMode, indexOid, out var indexExists))
         {
             return false;
         }
 
-        var indexConsistent = status[0] switch
+        return status switch
         {
             'A' => !headExists && indexExists,
             'D' => headExists && !indexExists,
             '.' => headExists &&
                    indexExists &&
-                   headMode == indexMode &&
-                   headRevision == indexRevision,
+                   headMode.SequenceEqual(indexMode) &&
+                   headOid.SequenceEqual(indexOid),
             'M' => headExists &&
                    indexExists &&
                    IsSameFileType(headMode, indexMode) &&
-                   (headMode != indexMode || headRevision != indexRevision),
+                   (!headMode.SequenceEqual(indexMode) || !headOid.SequenceEqual(indexOid)),
             'T' => headExists &&
                    indexExists &&
                    !IsSameFileType(headMode, indexMode),
             _ => false,
         };
-
-        var worktreeConsistent =
-            IsConsistentWorktreeMode(status[1], indexMode, worktreeMode);
-
-        return indexConsistent && worktreeConsistent;
     }
 
     /// <summary>
-    ///     Validates an unstaged status against index and worktree mode families.
+    ///     Validates an unstaged status against the index and worktree mode families.
     /// </summary>
     /// <param name="status">The unstaged status character.</param>
     /// <param name="indexMode">The index mode.</param>
@@ -649,70 +710,47 @@ internal static class GitComparisonOutputParser
     /// <returns><see langword="true" /> when the modes agree with the status.</returns>
     private static bool IsConsistentWorktreeMode(
         char status,
-        string indexMode,
-        string worktreeMode)
+        ReadOnlySpan<char> indexMode,
+        ReadOnlySpan<char> worktreeMode)
     {
-        var indexExists = indexMode != "000000";
-        var worktreeExists = worktreeMode != "000000";
+        var indexExists = !IsAbsentMode(indexMode);
+        var worktreeExists = !IsAbsentMode(worktreeMode);
 
         return status switch
         {
-            '.' => indexMode == worktreeMode,
-            'M' => indexExists &&
-                   worktreeExists &&
-                   IsSameFileType(indexMode, worktreeMode),
-            'T' => indexExists &&
-                   worktreeExists &&
-                   !IsSameFileType(indexMode, worktreeMode),
+            '.' => indexMode.SequenceEqual(worktreeMode),
+            'M' => indexExists && worktreeExists && IsSameFileType(indexMode, worktreeMode),
+            'T' => indexExists && worktreeExists && !IsSameFileType(indexMode, worktreeMode),
             'D' => indexExists && !worktreeExists,
             _ => false,
         };
     }
 
     /// <summary>
-    ///     Validates that a porcelain submodule marker matches the relevant Git modes.
+    ///     Validates that a porcelain submodule marker agrees with the observed gitlink modes.
     /// </summary>
     /// <param name="submoduleState">The four-character porcelain submodule state.</param>
-    /// <param name="modes">The modes whose current stages determine whether the entry is a gitlink.</param>
+    /// <param name="containsGitlink">Whether any relevant mode is a gitlink.</param>
     /// <returns><see langword="true" /> when the marker and modes agree.</returns>
     private static bool IsConsistentSubmoduleState(
-        string submoduleState,
-        params string[] modes)
-    {
-        var containsGitlink = modes.Any(mode => mode == "160000");
-        return submoduleState[0] == 'S'
-            ? containsGitlink
-            : !containsGitlink;
-    }
+        ReadOnlySpan<char> submoduleState,
+        bool containsGitlink) =>
+        (submoduleState[0] == 'S') == containsGitlink;
 
     /// <summary>
-    ///     Validates the stage-presence matrix and zero identifiers for an unmerged status.
+    ///     Validates the stage-presence matrix implied by an unmerged conflict code.
     /// </summary>
     /// <param name="status">The two-character unmerged status.</param>
-    /// <param name="stageOneMode">The merge-base stage mode.</param>
-    /// <param name="stageTwoMode">The current-side stage mode.</param>
-    /// <param name="stageThreeMode">The target-side stage mode.</param>
-    /// <param name="stageOneRevision">The merge-base stage object identifier.</param>
-    /// <param name="stageTwoRevision">The current-side stage object identifier.</param>
-    /// <param name="stageThreeRevision">The target-side stage object identifier.</param>
+    /// <param name="stageOne">Whether the merge-base stage is present.</param>
+    /// <param name="stageTwo">Whether the current-side stage is present.</param>
+    /// <param name="stageThree">Whether the target-side stage is present.</param>
     /// <returns><see langword="true" /> when all three stages match the conflict code.</returns>
     private static bool IsConsistentUnmergedStages(
-        string status,
-        string stageOneMode,
-        string stageTwoMode,
-        string stageThreeMode,
-        string stageOneRevision,
-        string stageTwoRevision,
-        string stageThreeRevision)
-    {
-        if (!TryGetModeObjectPresence(stageOneMode, stageOneRevision, out var stageOne) ||
-            !TryGetModeObjectPresence(stageTwoMode, stageTwoRevision, out var stageTwo) ||
-            !TryGetModeObjectPresence(stageThreeMode, stageThreeRevision, out var stageThree))
-        {
-            return false;
-        }
-
-        return status switch
+        ReadOnlySpan<char> status,
+        bool stageOne,
+        bool stageTwo,
+        bool stageThree) =>
+        status switch
         {
             "DD" => stageOne && !stageTwo && !stageThree,
             "AU" => !stageOne && stageTwo && !stageThree,
@@ -723,44 +761,73 @@ internal static class GitComparisonOutputParser
             "UU" => stageOne && stageTwo && stageThree,
             _ => false,
         };
-    }
 
     /// <summary>
-    ///     Resolves whether one Git entry exists while requiring its mode and object identifier to agree.
+    ///     Resolves whether one Git entry exists while requiring its mode and object identifier
+    ///     to agree.
     /// </summary>
     /// <param name="mode">The entry mode.</param>
     /// <param name="revision">The entry object identifier.</param>
     /// <param name="isPresent">Whether the entry is present when the shape is valid.</param>
     /// <returns><see langword="true" /> when zero and nonzero facts are consistent.</returns>
     private static bool TryGetModeObjectPresence(
-        string mode,
-        string revision,
+        ReadOnlySpan<char> mode,
+        ReadOnlySpan<char> revision,
         out bool isPresent)
     {
-        isPresent = mode != "000000";
+        isPresent = !IsAbsentMode(mode);
         return isPresent != IsZeroObjectId(revision);
     }
 
-    private static bool IsSupportedMode(string value) =>
+    private static bool IsOrdinaryStatus(ReadOnlySpan<char> value) =>
+        value.Length == 2 &&
+        value[0] switch
+        {
+            '.' => value[1] is 'M' or 'T' or 'D',
+            'A' or 'M' or 'T' => value[1] is '.' or 'M' or 'T' or 'D',
+            'D' => value[1] == '.',
+            _ => false,
+        };
+
+    private static bool IsRenameStatus(ReadOnlySpan<char> value) =>
+        value.Length == 2 &&
+        value[0] == 'R' &&
+        value[1] is '.' or 'M' or 'D' or 'T';
+
+    private static bool IsUnmergedStatus(ReadOnlySpan<char> value) =>
+        value is "DD" or "AU" or "UD" or "UA" or "DU" or "AA" or "UU";
+
+    private static bool IsValidSubmoduleState(ReadOnlySpan<char> value) =>
+        value is "N..." ||
+        (value.Length == 4 &&
+         value[0] == 'S' &&
+         value[1] is '.' or 'C' &&
+         value[2] is '.' or 'M' &&
+         value[3] is '.' or 'U');
+
+    private static bool IsSupportedMode(ReadOnlySpan<char> value) =>
         value is "000000" or "100644" or "100755" or "120000" or "160000";
 
-    private static bool IsNonzeroSupportedMode(string value) =>
+    private static bool IsNonzeroSupportedMode(ReadOnlySpan<char> value) =>
         value is "100644" or "100755" or "120000" or "160000";
 
+    private static bool IsAbsentMode(ReadOnlySpan<char> value) => value is "000000";
+
+    private static bool IsGitlinkMode(ReadOnlySpan<char> value) => value is "160000";
+
     /// <summary>
-    ///     Determines whether two nonzero modes represent the same Git file type.
+    ///     Determines whether two modes represent the same Git file type.
     /// </summary>
     /// <param name="left">The first six-digit Git mode.</param>
     /// <param name="right">The second six-digit Git mode.</param>
     /// <returns>
-    ///     <see langword="true" /> when both modes represent regular files, symbolic links, or gitlinks of the same type.
+    ///     <see langword="true" /> when both modes represent regular files, symbolic links, or
+    ///     gitlinks of the same type.
     /// </returns>
-    private static bool IsSameFileType(
-        string left,
-        string right) =>
+    private static bool IsSameFileType(ReadOnlySpan<char> left, ReadOnlySpan<char> right) =>
         GetFileType(left) == GetFileType(right);
 
-    private static char GetFileType(string mode) =>
+    private static char GetFileType(ReadOnlySpan<char> mode) =>
         mode switch
         {
             "100644" or "100755" => 'f',
@@ -769,19 +836,28 @@ internal static class GitComparisonOutputParser
             _ => '\0',
         };
 
-    private static bool AreCompatibleObjectIds(params string[] values) =>
-        values.Length > 0 &&
-        values.All(IsSupportedObjectId) &&
-        values.All(value => value.Length == values[0].Length);
+    private static bool AreCompatibleObjectIds(
+        ReadOnlySpan<char> left,
+        ReadOnlySpan<char> right) =>
+        IsSupportedObjectId(left) &&
+        IsSupportedObjectId(right) &&
+        left.Length == right.Length;
 
-    private static bool IsSupportedObjectId(string? value) =>
-        value is { Length: 40 or 64 } &&
-        value.All(character => character is >= '0' and <= '9' or >= 'a' and <= 'f');
+    private static bool AreCompatibleObjectIds(
+        ReadOnlySpan<char> first,
+        ReadOnlySpan<char> second,
+        ReadOnlySpan<char> third) =>
+        AreCompatibleObjectIds(first, second) &&
+        AreCompatibleObjectIds(second, third);
 
-    private static bool IsZeroObjectId(string value) =>
-        value.All(character => character == '0');
+    private static bool IsSupportedObjectId(ReadOnlySpan<char> value) =>
+        value.Length is 40 or 64 &&
+        !value.ContainsAnyExcept(LowercaseHex);
 
-    private static bool IsKnownObjectType(string value) =>
+    private static bool IsZeroObjectId(ReadOnlySpan<char> value) =>
+        !value.IsEmpty && !value.ContainsAnyExcept('0');
+
+    private static bool IsKnownObjectType(ReadOnlySpan<char> value) =>
         value is "blob" or "tree" or "commit" or "tag";
 
     /// <summary>
@@ -789,7 +865,7 @@ internal static class GitComparisonOutputParser
     /// </summary>
     /// <param name="value">The rename field, such as <c>R73</c> or <c>R100</c>.</param>
     /// <returns><see langword="true" /> when the field is a supported unpadded rename score.</returns>
-    private static bool IsCompactRenameScore(string value) =>
+    private static bool IsCompactRenameScore(ReadOnlySpan<char> value) =>
         value.Length is 3 or 4 &&
         value[1] != '0' &&
         IsSupportedRenameScore(value);
@@ -799,117 +875,184 @@ internal static class GitComparisonOutputParser
     /// </summary>
     /// <param name="value">The raw status, such as <c>R073</c> or <c>R100</c>.</param>
     /// <returns><see langword="true" /> when the status is a supported padded rename score.</returns>
-    private static bool IsPaddedRenameScore(string value) =>
+    private static bool IsPaddedRenameScore(ReadOnlySpan<char> value) =>
         value.Length == 4 &&
         IsSupportedRenameScore(value);
 
     /// <summary>
-    ///     Determines whether a rename field names a similarity percentage within the requested bound.
+    ///     Determines whether a rename field names a similarity percentage within the requested
+    ///     bound.
     /// </summary>
-    /// <param name="value">The rename field. Cannot be empty.</param>
-    /// <returns><see langword="true" /> when the field is <c>R</c> followed by a supported percentage.</returns>
-    private static bool IsSupportedRenameScore(string value)
+    /// <param name="value">The rename field.</param>
+    /// <returns>
+    ///     <see langword="true" /> when the field is <c>R</c> followed by a supported percentage.
+    /// </returns>
+    private static bool IsSupportedRenameScore(ReadOnlySpan<char> value)
     {
-        if (value[0] != 'R' ||
-            !value.AsSpan(1).ToString().All(char.IsAsciiDigit))
+        if (value.IsEmpty || value[0] != 'R')
         {
             return false;
         }
 
-        var score = int.Parse(value.AsSpan(1), NumberStyles.None, CultureInfo.InvariantCulture);
-        return score is >= ComparisonLimits.RenameSimilarityPercent and <= 100;
+        var digits = value[1..];
+
+        return !digits.IsEmpty &&
+               !digits.ContainsAnyExcept(AsciiDigits) &&
+               int.TryParse(digits, NumberStyles.None, CultureInfo.InvariantCulture, out var score) &&
+               score is >= ComparisonLimits.RenameSimilarityPercent and <= 100;
     }
 
-    private static bool TryParseCanonicalCount(
-        string value,
-        out int result)
+    /// <summary>
+    ///     Parses a nonnegative decimal count in Git's canonical form.
+    /// </summary>
+    /// <param name="value">The candidate count.</param>
+    /// <param name="result">The parsed count when the form is canonical.</param>
+    /// <returns>
+    ///     <see langword="true" /> when the value is ASCII digits without a sign, whitespace,
+    ///     group separators, redundant leading zeros, or overflow.
+    /// </returns>
+    private static bool TryParseCanonicalCount(ReadOnlySpan<char> value, out int result)
     {
-        result = 0;
-
-        if (value.Length == 0 ||
-            value.Length > 1 && value[0] == '0' ||
-            value.Any(character => !char.IsAsciiDigit(character)))
+        if (int.TryParse(value, NumberStyles.None, CultureInfo.InvariantCulture, out result) &&
+            (value.Length == 1 || value[0] != '0'))
         {
-            return false;
-        }
-
-        try
-        {
-            foreach (var character in value)
-            {
-                result = checked((result * 10) + (character - '0'));
-            }
-
             return true;
         }
-        catch (OverflowException)
-        {
-            result = 0;
-            return false;
-        }
+
+        result = 0;
+        return false;
     }
 
-    private static bool IsValidFullReference(string value)
+    /// <summary>
+    ///     Determines whether a value is a fully qualified Git reference name.
+    /// </summary>
+    /// <param name="value">The candidate reference name.</param>
+    /// <returns><see langword="true" /> when the name matches the accepted shape.</returns>
+    /// <remarks>
+    ///     Accepted shape is <c>refs/&lt;component&gt;(/&lt;component&gt;)*</c>. Every component
+    ///     is nonempty, does not begin with <c>.</c>, and does not end with <c>.lock</c>. The
+    ///     whole name rejects control characters, the characters <c> ~^:?*[\</c>, the sequences
+    ///     <c>..</c>, <c>//</c> and <c>@{</c>, and a trailing <c>/</c> or <c>.</c>.
+    /// </remarks>
+    private static bool IsValidFullReference(ReadOnlySpan<char> value)
     {
-        if (!value.StartsWith("refs/", StringComparison.Ordinal) ||
-            value.Length == "refs/".Length ||
-            value.EndsWith('/') ||
-            value.EndsWith('.') ||
+        const string prefix = "refs/";
+
+        if (!value.StartsWith(prefix, StringComparison.Ordinal) ||
+            value.Length == prefix.Length ||
+            value[^1] is '/' or '.' ||
+            value.ContainsAny(ForbiddenReferenceCharacters) ||
+            !IsFreeOfControlCharacters(value) ||
             value.Contains("..", StringComparison.Ordinal) ||
             value.Contains("//", StringComparison.Ordinal) ||
-            value.Contains("@{", StringComparison.Ordinal) ||
-            value.Any(
-                character =>
-                    char.IsControl(character) ||
-                    character is ' ' or '~' or '^' or ':' or '?' or '*' or '[' or '\\'))
+            value.Contains("@{", StringComparison.Ordinal))
         {
             return false;
         }
 
-        var components = value.Split('/');
-        return components.All(
-                   component =>
-                       component.Length > 0 &&
-                       !component.StartsWith('.') &&
-                       !component.EndsWith(".lock", StringComparison.Ordinal)) &&
-               HasValidScalars(value);
-    }
+        var remaining = value;
 
-    private static bool IsValidOptionalText(string value) =>
-        !value.Any(char.IsControl) &&
-        HasValidScalars(value);
-
-    private static bool HasValidScalars(string value)
-    {
-        var position = 0;
-
-        while (position < value.Length)
+        while (!remaining.IsEmpty)
         {
-            var status = Rune.DecodeFromUtf16(
-                value.AsSpan(position),
-                out _,
-                out var consumed);
+            var separator = remaining.IndexOf('/');
+            var component = separator < 0 ? remaining : remaining[..separator];
 
-            if (status != OperationStatus.Done)
+            if (component.IsEmpty ||
+                component[0] == '.' ||
+                component.EndsWith(".lock", StringComparison.Ordinal))
             {
                 return false;
             }
 
-            position += consumed;
+            remaining = separator < 0 ? default : remaining[(separator + 1)..];
         }
 
         return true;
     }
 
-    private static string RemoveOneTerminalLineFeed(string value) =>
-        value.EndsWith('\n') ? value[..^1] : value;
+    /// <summary>
+    ///     Determines whether a value is free of Unicode control characters.
+    /// </summary>
+    /// <param name="value">The value to inspect.</param>
+    /// <returns><see langword="true" /> when no control character is present.</returns>
+    /// <remarks>
+    ///     Unpaired surrogates are already rejected for the whole payload by
+    ///     <see cref="IsSuccessfulQuietOutput" />, so no per-field scalar validation is performed.
+    /// </remarks>
+    private static bool IsFreeOfControlCharacters(ReadOnlySpan<char> value)
+    {
+        foreach (var character in value)
+        {
+            if (char.IsControl(character))
+            {
+                return false;
+            }
+        }
 
-    private static string? NullWhenEmpty(string value) =>
-        value.Length == 0 ? null : value;
+        return true;
+    }
 
-    private static Result<T> InspectionFailure<T>() =>
-        Result.Fail<T>(
-            OperationError.ExternalDependencyFailure(
-                "Git comparison inspection failed.",
-                ComparisonErrorCode.InspectionFailed));
+    private static string? NullWhenEmpty(ReadOnlySpan<char> value) =>
+        value.IsEmpty ? null : value.ToString();
+
+    /// <summary>
+    ///     Walks delimited Git output without allocating intermediate strings.
+    /// </summary>
+    private ref struct GitFieldReader
+    {
+        private readonly ReadOnlySpan<char> _text;
+        private int _position;
+
+        internal GitFieldReader(ReadOnlySpan<char> text)
+        {
+            _text = text;
+            _position = 0;
+        }
+
+        /// <summary>
+        ///     Gets a value indicating whether every character has been consumed.
+        /// </summary>
+        internal readonly bool IsAtEnd => _position >= _text.Length;
+
+        /// <summary>
+        ///     Gets the unconsumed remainder, which is how trailing fields that may contain the
+        ///     delimiter are read.
+        /// </summary>
+        internal readonly ReadOnlySpan<char> Remainder => _text[_position..];
+
+        /// <summary>
+        ///     Reads the text up to the next delimiter and consumes the delimiter.
+        /// </summary>
+        /// <param name="delimiter">The delimiter that terminates the field.</param>
+        /// <param name="field">The field text, excluding the delimiter.</param>
+        /// <returns><see langword="false" /> when no delimiter remains.</returns>
+        internal bool TryRead(char delimiter, out ReadOnlySpan<char> field)
+        {
+            var offset = Remainder.IndexOf(delimiter);
+            if (offset < 0)
+            {
+                field = default;
+                return false;
+            }
+
+            field = _text.Slice(_position, offset);
+            _position += offset + 1;
+            return true;
+        }
+
+        /// <summary>
+        ///     Reads a NUL-terminated field.
+        /// </summary>
+        /// <param name="field">The field text, excluding the terminator.</param>
+        /// <returns><see langword="false" /> when no terminator remains.</returns>
+        internal bool TryReadNulField(out ReadOnlySpan<char> field) => TryRead('\0', out field);
+
+        /// <summary>
+        ///     Reads a nonempty space-terminated field.
+        /// </summary>
+        /// <param name="field">The field text, excluding the separating space.</param>
+        /// <returns><see langword="false" /> when the field is missing or empty.</returns>
+        internal bool TryReadWord(out ReadOnlySpan<char> field) =>
+            TryRead(' ', out field) && !field.IsEmpty;
+    }
 }

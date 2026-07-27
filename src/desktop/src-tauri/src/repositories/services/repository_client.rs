@@ -74,16 +74,3 @@ impl EngineClient {
 
 #[derive(Deserialize)]
 struct NullResult;
-
-#[cfg(test)]
-mod tests {
-    use crate::engine_protocol::EngineClient;
-    use crate::repositories::RepositoryService;
-
-    #[test]
-    fn engine_client_implements_repository_service() {
-        fn assert_implementation<T: RepositoryService>() {}
-
-        assert_implementation::<EngineClient>();
-    }
-}

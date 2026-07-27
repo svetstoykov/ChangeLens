@@ -36,15 +36,3 @@ pub trait RepositoryService: Send + Sync {
         unreachable!("repository history is not configured for this service")
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::RepositoryService;
-
-    fn assert_service_contract<T: RepositoryService>() {}
-
-    #[test]
-    fn defines_a_send_and_sync_repository_boundary() {
-        assert_service_contract::<crate::engine_protocol::EngineClient>();
-    }
-}

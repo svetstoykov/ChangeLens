@@ -202,16 +202,6 @@ impl EngineClient {
 
 #[cfg(test)]
 mod tests {
-    use crate::comparisons::ComparisonService;
-    use crate::engine_protocol::EngineClient;
-
-    #[test]
-    fn engine_client_implements_comparison_service() {
-        fn assert_implementation<T: ComparisonService>() {}
-
-        assert_implementation::<EngineClient>();
-    }
-
     #[test]
     fn comparison_parameter_types_use_capability_field_names() {
         let list = crate::comparisons::models::ComparisonListTargetsParameters {

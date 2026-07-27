@@ -55,6 +55,14 @@ public sealed class GitComparisonTargetDiscovery(
             "Git comparison inspection failed.",
             ComparisonErrorCode.InspectionFailed);
 
+    private static readonly OperationError TargetsChangedError = OperationError.Conflict(
+        "Comparison targets changed. Reload the target list.",
+        ComparisonErrorCode.TargetsChanged);
+
+    private static readonly OperationError InvalidPageError = OperationError.Validation(
+        "The target page request is invalid.",
+        ComparisonErrorCode.InvalidTargetPage);
+
     private readonly IGitRepositoryInspector _repositoryInspector =
         repositoryInspector ?? throw new ArgumentNullException(nameof(repositoryInspector));
 
@@ -186,10 +194,7 @@ public sealed class GitComparisonTargetDiscovery(
         {
             this._logger.LogWarning(
                 "Comparison target set changed since the caller's cached token was issued.");
-            return Result.Fail<ComparisonTargetSet>(
-                OperationError.Conflict(
-                    "Comparison targets changed. Reload the target list.",
-                    ComparisonErrorCode.TargetsChanged));
+            return TargetsChangedError;
         }
 
         var filtered = query is null
@@ -204,7 +209,7 @@ public sealed class GitComparisonTargetDiscovery(
             var cursorIndex = IndexOfFullName(filtered, after);
             if (cursorIndex < 0)
             {
-                return InvalidPage<ComparisonTargetSet>();
+                return InvalidPageError;
             }
 
             page = filtered.Skip(cursorIndex + 1).ToArray();
@@ -249,7 +254,7 @@ public sealed class GitComparisonTargetDiscovery(
             after is not null && !IsValidCursor(after) ||
             targetSetToken is not null && !IsValidToken(targetSetToken))
         {
-            return InvalidPage();
+            return Result.Fail(InvalidPageError);
         }
 
         return Result.Success();
@@ -468,18 +473,5 @@ public sealed class GitComparisonTargetDiscovery(
     private static GitCommandErrorPolicy ComparisonErrors() =>
         new(TimedOutError, TooLargeError, InspectionFailedError);
 
-    private static Result<ComparisonTargetSet> TimedOut() =>
-        Result.Fail<ComparisonTargetSet>(TimedOutError);
-
-    private static Result InvalidPage() =>
-        Result.Fail(
-            OperationError.Validation(
-                "The target page request is invalid.",
-                ComparisonErrorCode.InvalidTargetPage));
-
-    private static Result<T> InvalidPage<T>() =>
-        Result.Fail<T>(
-            OperationError.Validation(
-                "The target page request is invalid.",
-                ComparisonErrorCode.InvalidTargetPage));
+    private static Result<ComparisonTargetSet> TimedOut() => TimedOutError;
 }

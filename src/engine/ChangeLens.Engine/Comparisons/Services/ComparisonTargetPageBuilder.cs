@@ -35,6 +35,10 @@ internal sealed class ComparisonTargetPageBuilder(
     /// </summary>
     private const string DescriptorMeasurementRequestId = "comparison-target-page";
 
+    private static readonly OperationError TooLargeError = OperationError.UnprocessableInput(
+        "The comparison exceeds the supported local inspection limit.",
+        ComparisonErrorCode.TooLarge);
+
     private readonly IEngineProtocolSerializer _protocolSerializer =
         protocolSerializer ?? throw new ArgumentNullException(nameof(protocolSerializer));
 
@@ -207,10 +211,7 @@ internal sealed class ComparisonTargetPageBuilder(
             "Comparison target page build failed: even a single target exceeds the page budget " +
             "{BudgetBytes} bytes.",
             ComparisonActionConstants.TargetPageBudgetBytes);
-        return Result.Fail<ComparisonTargetPageResult>(
-            OperationError.UnprocessableInput(
-                "The comparison exceeds the supported local inspection limit.",
-                ComparisonErrorCode.TooLarge));
+        return TooLargeError;
     }
 
     /// <summary>

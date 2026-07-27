@@ -44,6 +44,14 @@ internal sealed class EngineProtocolTransport(
     /// </summary>
     private bool _skipLineFeed;
 
+    private static readonly OperationError ReadFailedError = OperationError.ExternalDependencyFailure(
+        "The engine could not read protocol input.",
+        EngineErrorCode.ReadFailed);
+
+    private static readonly OperationError RequestTooLargeError = OperationError.MalformedInput(
+        "The protocol request exceeds the allowed size.",
+        EngineErrorCode.RequestTooLarge);
+
     /// <inheritdoc />
     public async Task<Result<EngineProtocolRequest?>> ReadAsync(CancellationToken cancellationToken)
     {
@@ -89,10 +97,7 @@ internal sealed class EngineProtocolTransport(
                 exception,
                 "Failed to read protocol input with error {ErrorCode}.",
                 EngineErrorCode.ReadFailed);
-            return Result.Fail<EngineProtocolRequest?>(
-                OperationError.ExternalDependencyFailure(
-                    "The engine could not read protocol input.",
-                    EngineErrorCode.ReadFailed));
+            return ReadFailedError;
         }
     }
 
@@ -216,9 +221,6 @@ internal sealed class EngineProtocolTransport(
     /// <returns>The completed line or the request-too-large failure.</returns>
     private static Result<string?> CompleteLine(StringBuilder builder, bool tooLarge) =>
         tooLarge
-            ? Result.Fail<string?>(
-                OperationError.MalformedInput(
-                    "The protocol request exceeds the allowed size.",
-                    EngineErrorCode.RequestTooLarge))
+            ? RequestTooLargeError
             : Result.Success<string?>(builder.ToString());
 }

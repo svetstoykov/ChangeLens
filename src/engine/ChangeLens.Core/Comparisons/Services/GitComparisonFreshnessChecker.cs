@@ -87,17 +87,15 @@ public sealed class GitComparisonFreshnessChecker(
         if (!IsValidToken(freshnessToken))
         {
             this._logger.LogDebug(
-                "Rejected comparison freshness check for target {Target}: freshness token shape is not approved.",
-                target);
-            return Result.Fail<ComparisonFreshnessState>(InvalidFreshnessTokenError);
+                "Rejected comparison freshness check: freshness token shape is not approved.");
+            return InvalidFreshnessTokenError;
         }
 
         if (!IsApprovedTargetShape(target))
         {
             this._logger.LogDebug(
-                "Rejected comparison freshness check for target {Target}: target shape is not approved.",
-                target);
-            return Result.Fail<ComparisonFreshnessState>(TargetInvalidError);
+                "Rejected comparison freshness check: target shape is not approved.");
+            return TargetInvalidError;
         }
 
         cancellationToken.ThrowIfCancellationRequested();
@@ -157,7 +155,7 @@ public sealed class GitComparisonFreshnessChecker(
 
             if (!HasQuietEmptyOutput(checkFormatOutput))
             {
-                return InspectionFailed<ComparisonFreshnessState>();
+                return InspectionFailedError;
             }
 
             var targetRevisionResult = await this.RunAsync(
@@ -221,7 +219,7 @@ public sealed class GitComparisonFreshnessChecker(
                 "Comparison freshness check for target {Target} timed out after {ElapsedMilliseconds:0.000} ms.",
                 target,
                 Stopwatch.GetElapsedTime(startedAt).TotalMilliseconds);
-            return Result.Fail<ComparisonFreshnessState>(TimedOutError);
+            return TimedOutError;
         }
     }
 
@@ -243,7 +241,7 @@ public sealed class GitComparisonFreshnessChecker(
     {
         var remaining = Remaining(startedAt);
         return remaining <= TimeSpan.Zero
-            ? Result.Fail<RepositoryDescriptor>(TimedOutError)
+            ? TimedOutError
             : await this._repositoryInspector.InspectAsync(
                 path,
                 remaining,
@@ -274,7 +272,7 @@ public sealed class GitComparisonFreshnessChecker(
         var remaining = Remaining(startedAt);
         if (remaining <= TimeSpan.Zero)
         {
-            return Task.FromResult(Result.Fail<GitCommandOutput>(TimedOutError));
+            return Task.FromResult<Result<GitCommandOutput>>(TimedOutError);
         }
 
         return this._commandRunner.RunAsync(
@@ -338,7 +336,7 @@ public sealed class GitComparisonFreshnessChecker(
             ? Result.Success<string>(parsed.Data[0])
             : parsed.IsFailure
                 ? Result.ErrorFromResult<string>(parsed)
-                : InspectionFailed<string>();
+                : InspectionFailedError;
     }
 
     /// <summary>
@@ -520,12 +518,4 @@ public sealed class GitComparisonFreshnessChecker(
     /// <returns>The comparison timeout, output-limit, and inspection errors.</returns>
     private static GitCommandErrorPolicy ComparisonErrors() =>
         new(TimedOutError, TooLargeError, InspectionFailedError);
-
-    /// <summary>
-    ///     Creates a typed result containing the stable comparison inspection failure.
-    /// </summary>
-    /// <typeparam name="T">The result payload type.</typeparam>
-    /// <returns>The failed typed result.</returns>
-    private static Result<T> InspectionFailed<T>() =>
-        Result.Fail<T>(InspectionFailedError);
 }

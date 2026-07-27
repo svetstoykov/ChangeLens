@@ -44,6 +44,10 @@ public sealed class GitCliCommandRunner : IGitCommandRunner
         encoderShouldEmitUTF8Identifier: false,
         throwOnInvalidBytes: true);
 
+    private static readonly OperationError UnavailableError = OperationError.ExternalDependencyFailure(
+        "Git is unavailable.",
+        GitErrorCode.Unavailable);
+
     private readonly string _executablePath;
     private readonly ReadOnlyCollection<string> _executableArguments;
     private readonly Func<Stream, int, CancellationToken, Task<byte[]>> _readBoundedAsync;
@@ -219,7 +223,7 @@ public sealed class GitCliCommandRunner : IGitCommandRunner
                     "{ElapsedMilliseconds:0.000} ms.",
                     command.Arguments.Count,
                     Stopwatch.GetElapsedTime(startedAt).TotalMilliseconds);
-                return Result.Fail<GitCommandOutput>(command.ErrorPolicy.OutputLimitExceeded);
+                return command.ErrorPolicy.OutputLimitExceeded;
             }
 
             var standardOutputBytes = await standardOutputTask;
@@ -232,7 +236,7 @@ public sealed class GitCliCommandRunner : IGitCommandRunner
                     "{ElapsedMilliseconds:0.000} ms.",
                     command.Arguments.Count,
                     Stopwatch.GetElapsedTime(startedAt).TotalMilliseconds);
-                return Result.Fail<GitCommandOutput>(command.ErrorPolicy.OutputLimitExceeded);
+                return command.ErrorPolicy.OutputLimitExceeded;
             }
 
             try
@@ -256,7 +260,7 @@ public sealed class GitCliCommandRunner : IGitCommandRunner
                     "Git command with {ArgumentCount} arguments produced output that could not be decoded as " +
                     "UTF-8.",
                     command.Arguments.Count);
-                return Result.Fail<GitCommandOutput>(command.ErrorPolicy.InspectionFailed);
+                return command.ErrorPolicy.InspectionFailed;
             }
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -272,7 +276,7 @@ public sealed class GitCliCommandRunner : IGitCommandRunner
                 "Git command with {ArgumentCount} arguments timed out after {ElapsedMilliseconds:0.000} ms.",
                 command.Arguments.Count,
                 Stopwatch.GetElapsedTime(startedAt).TotalMilliseconds);
-            return Result.Fail<GitCommandOutput>(command.ErrorPolicy.TimedOut);
+            return command.ErrorPolicy.TimedOut;
         }
         catch (Exception exception) when (exception is IOException or InvalidOperationException)
         {
@@ -282,7 +286,7 @@ public sealed class GitCliCommandRunner : IGitCommandRunner
                 "Git command with {ArgumentCount} arguments failed after {ElapsedMilliseconds:0.000} ms.",
                 command.Arguments.Count,
                 Stopwatch.GetElapsedTime(startedAt).TotalMilliseconds);
-            return Result.Fail<GitCommandOutput>(command.ErrorPolicy.InspectionFailed);
+            return command.ErrorPolicy.InspectionFailed;
         }
     }
 
@@ -525,10 +529,5 @@ public sealed class GitCliCommandRunner : IGitCommandRunner
         }
     }
 
-    private static Result<GitCommandOutput> Unavailable() =>
-        Result.Fail<GitCommandOutput>(
-            OperationError.ExternalDependencyFailure(
-                "Git is unavailable.",
-                GitErrorCode.Unavailable));
-
+    private static Result<GitCommandOutput> Unavailable() => UnavailableError;
 }

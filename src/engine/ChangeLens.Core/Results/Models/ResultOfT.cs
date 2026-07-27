@@ -31,4 +31,11 @@ public class Result<T> : Result
     /// <param name="value">The value to use as the successful payload.</param>
     /// <returns>A successful result containing <paramref name="value" />.</returns>
     public static implicit operator Result<T>(T value) => new(value);
+
+    /// <summary>
+    ///     Implicitly converts an error into a failed <see cref="Result{T}" />.
+    /// </summary>
+    /// <param name="error">The error to use as the failure reason. Cannot be <see langword="null" />.</param>
+    /// <returns>A failed result containing <paramref name="error" />.</returns>
+    public static implicit operator Result<T>(OperationError error) => Fail<T>(error);
 }

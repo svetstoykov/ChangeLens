@@ -110,7 +110,7 @@ public sealed class GitComparisonPreparer(
             this._logger.LogDebug(
                 "Rejected comparison preparation for target {Target}: target shape is not approved.",
                 target);
-            return Result.Fail<PreparedComparison>(TargetInvalidError);
+            return TargetInvalidError;
         }
 
         cancellationToken.ThrowIfCancellationRequested();
@@ -153,7 +153,7 @@ public sealed class GitComparisonPreparer(
                     "Rejected comparison preparation for target {Target}: target is not in the discovered " +
                     "target set.",
                     target);
-                return Result.Fail<PreparedComparison>(TargetInvalidError);
+                return TargetInvalidError;
             }
 
             var checkResult = await this.RunAsync(
@@ -171,12 +171,12 @@ public sealed class GitComparisonPreparer(
                 this._logger.LogDebug(
                     "Rejected comparison preparation for target {Target}: target ref format is invalid.",
                     target);
-                return Result.Fail<PreparedComparison>(TargetInvalidError);
+                return TargetInvalidError;
             }
 
             if (!HasQuietEmptyOutput(checkResult.Data))
             {
-                return InspectionFailed<PreparedComparison>();
+                return InspectionFailedError;
             }
 
             var targetRevisionResult = await this.RunAsync(
@@ -195,7 +195,7 @@ public sealed class GitComparisonPreparer(
                     "Comparison preparation for target {Target} could not resolve to a commit; the target may " +
                     "have been removed or moved during preparation.",
                     target);
-                return Result.Fail<PreparedComparison>(TargetUnavailableError);
+                return TargetUnavailableError;
             }
 
             var parsedTargetRevision = ParseSingleRevision(targetRevisionResult.Data);
@@ -246,7 +246,7 @@ public sealed class GitComparisonPreparer(
                 this._logger.LogWarning(
                     "Comparison preparation for target {Target} found no shared history with HEAD.",
                     target);
-                return Result.Fail<PreparedComparison>(UnrelatedHistoryError);
+                return UnrelatedHistoryError;
             }
 
             var parsedMergeBases =
@@ -258,7 +258,7 @@ public sealed class GitComparisonPreparer(
 
             if (parsedMergeBases.Data!.Count == 0)
             {
-                return Result.Fail<PreparedComparison>(UnrelatedHistoryError);
+                return UnrelatedHistoryError;
             }
 
             if (parsedMergeBases.Data.Count != 1)
@@ -268,7 +268,7 @@ public sealed class GitComparisonPreparer(
                     "exactly one is required.",
                     target,
                     parsedMergeBases.Data.Count);
-                return Result.Fail<PreparedComparison>(AmbiguousBaseError);
+                return AmbiguousBaseError;
             }
 
             var mergeBaseRevision = parsedMergeBases.Data[0];
@@ -405,7 +405,7 @@ public sealed class GitComparisonPreparer(
             if (endingTargetRevisionResult.Data!.ExitCode != 0 &&
                 !IsConfirmedMissingTarget(endingTargetRevisionResult.Data))
             {
-                return InspectionFailed<PreparedComparison>();
+                return InspectionFailedError;
             }
 
             if (endingTargetRevisionResult.Data.ExitCode == 0)
@@ -450,7 +450,7 @@ public sealed class GitComparisonPreparer(
                     "while preparing in {ElapsedMilliseconds:0.000} ms.",
                     target,
                     Stopwatch.GetElapsedTime(startedAt).TotalMilliseconds);
-                return Result.Fail<PreparedComparison>(ChangedDuringPreparationError);
+                return ChangedDuringPreparationError;
             }
 
             var endingTarget = resolvedBeginningTarget with
@@ -496,7 +496,7 @@ public sealed class GitComparisonPreparer(
                 "Comparison preparation for target {Target} timed out after {ElapsedMilliseconds:0.000} ms.",
                 target,
                 Stopwatch.GetElapsedTime(startedAt).TotalMilliseconds);
-            return Result.Fail<PreparedComparison>(TimedOutError);
+            return TimedOutError;
         }
     }
 
@@ -518,7 +518,7 @@ public sealed class GitComparisonPreparer(
     {
         var remaining = Remaining(startedAt);
         return remaining <= TimeSpan.Zero
-            ? Result.Fail<RepositoryDescriptor>(TimedOutError)
+            ? TimedOutError
             : await this._repositoryInspector.InspectAsync(
                 path,
                 remaining,
@@ -549,7 +549,7 @@ public sealed class GitComparisonPreparer(
         var remaining = Remaining(startedAt);
         if (remaining <= TimeSpan.Zero)
         {
-            return Task.FromResult(Result.Fail<GitCommandOutput>(TimedOutError));
+            return Task.FromResult<Result<GitCommandOutput>>(TimedOutError);
         }
 
         return this._commandRunner.RunAsync(
@@ -654,7 +654,7 @@ public sealed class GitComparisonPreparer(
             ? Result.Success<string>(parsed.Data[0])
             : parsed.IsFailure
                 ? Result.ErrorFromResult<string>(parsed)
-                : InspectionFailed<string>();
+                : InspectionFailedError;
     }
 
     /// <summary>
@@ -672,7 +672,7 @@ public sealed class GitComparisonPreparer(
         if (!HasBoundedValidText(output.StandardOutput) ||
             !HasBoundedValidDiagnostics(output.StandardError))
         {
-            return InspectionFailed<RepositoryHead>();
+            return InspectionFailedError;
         }
 
         if (output.ExitCode == 1 &&
@@ -684,7 +684,7 @@ public sealed class GitComparisonPreparer(
 
         if (output.ExitCode != 0 || output.StandardError.Length != 0)
         {
-            return InspectionFailed<RepositoryHead>();
+            return InspectionFailedError;
         }
 
         var branchName = RemoveOneTerminalLineEnding(output.StandardOutput);
@@ -694,7 +694,7 @@ public sealed class GitComparisonPreparer(
                !branchName.Contains('\n')
             ? Result.Success<RepositoryHead>(
                 new BranchRepositoryHead(branchName, revision))
-            : InspectionFailed<RepositoryHead>();
+            : InspectionFailedError;
     }
 
     /// <summary>
@@ -903,12 +903,4 @@ public sealed class GitComparisonPreparer(
     /// <returns>The comparison timeout, output-limit, and inspection errors.</returns>
     private static GitCommandErrorPolicy ComparisonErrors() =>
         new(TimedOutError, TooLargeError, InspectionFailedError);
-
-    /// <summary>
-    ///     Creates a typed result containing the stable comparison inspection failure.
-    /// </summary>
-    /// <typeparam name="T">The result payload type.</typeparam>
-    /// <returns>The failed typed result.</returns>
-    private static Result<T> InspectionFailed<T>() =>
-        Result.Fail<T>(InspectionFailedError);
 }

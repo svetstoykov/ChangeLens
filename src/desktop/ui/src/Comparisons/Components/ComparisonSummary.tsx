@@ -1,17 +1,26 @@
 import type { IconName } from "../../Visuals/Components/Icon";
 import { Icon } from "../../Visuals/Components/Icon";
 import type { ComparisonReadiness } from "../Models/ComparisonReadiness";
-import type { ComparisonFreshnessState } from "../Models/ComparisonWorkspaceState";
+import type {
+  ComparisonFreshnessState,
+  RemoteBaselineStatus,
+} from "../Models/ComparisonWorkspaceState";
 import type { PreparedComparison } from "../Models/PreparedComparison";
 
 interface ComparisonSummaryProps {
   readonly preparedComparison: PreparedComparison | null;
   readonly freshness: ComparisonFreshnessState;
+  readonly remoteBaseline: RemoteBaselineStatus;
+  readonly onRefreshRemoteBaseline: () => void;
+  readonly onCancelRemoteBaselineRefresh: () => void;
 }
 
 export function ComparisonSummary({
   preparedComparison,
   freshness,
+  remoteBaseline,
+  onRefreshRemoteBaseline,
+  onCancelRemoteBaselineRefresh,
 }: ComparisonSummaryProps) {
   if (preparedComparison === null) {
     return (
@@ -40,6 +49,14 @@ export function ComparisonSummary({
       aria-labelledby="comparison-summary-heading"
     >
       <SummaryHeading />
+      {preparedComparison.target.kind === "remoteTracking" ? (
+        <RemoteBaselineIndicator
+          name={preparedComparison.target.name}
+          status={remoteBaseline}
+          onRefresh={onRefreshRemoteBaseline}
+          onCancel={onCancelRemoteBaselineRefresh}
+        />
+      ) : null}
       <Readiness
         readiness={preparedComparison.readiness}
         freshness={freshness}
@@ -151,6 +168,72 @@ function Fact({
       </dt>
       <dd>{value}</dd>
     </div>
+  );
+}
+
+function RemoteBaselineIndicator({
+  name,
+  status,
+  onRefresh,
+  onCancel,
+}: {
+  readonly name: string;
+  readonly status: RemoteBaselineStatus;
+  readonly onRefresh: () => void;
+  readonly onCancel: () => void;
+}) {
+  if (status === "idle" || status === "current") return null;
+
+  if (status === "checking") {
+    return (
+      <p
+        className="remote-baseline-indicator"
+        data-status={status}
+        role="status"
+      >
+        <Icon name="refresh" />
+        <code>{name}</code> · checking…
+      </p>
+    );
+  }
+
+  if (status === "moved") {
+    return (
+      <p
+        className="remote-baseline-indicator"
+        data-status={status}
+        role="status"
+      >
+        <Icon name="warning" />
+        <code>{name}</code> ⚠ moved since last fetch
+        <button type="button" onClick={onRefresh}>
+          Refresh
+        </button>
+      </p>
+    );
+  }
+
+  if (status === "refreshing") {
+    return (
+      <p
+        className="remote-baseline-indicator"
+        data-status={status}
+        role="status"
+      >
+        <Icon name="refresh" />
+        <code>{name}</code> · fetching…
+        <button type="button" onClick={onCancel}>
+          Cancel
+        </button>
+      </p>
+    );
+  }
+
+  return (
+    <p className="remote-baseline-indicator" data-status={status} role="status">
+      <Icon name="warning" />
+      <code>{name}</code> · couldn&apos;t check
+    </p>
   );
 }
 

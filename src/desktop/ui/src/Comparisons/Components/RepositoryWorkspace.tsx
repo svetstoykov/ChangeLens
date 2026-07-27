@@ -116,6 +116,14 @@ export function RepositoryWorkspace({
                       Retry refresh
                     </button>
                   ) : null}
+                  {canRetryError && state.errorSource === "remoteBaseline" ? (
+                    <button
+                      type="button"
+                      onClick={controller.refreshRemoteBaseline}
+                    >
+                      Retry refresh
+                    </button>
+                  ) : null}
                 </div>
               </div>
             </section>
@@ -177,6 +185,11 @@ export function RepositoryWorkspace({
           <ComparisonSummary
             preparedComparison={state.preparedComparison}
             freshness={state.freshness}
+            remoteBaseline={state.remoteBaseline}
+            onRefreshRemoteBaseline={controller.refreshRemoteBaseline}
+            onCancelRemoteBaselineRefresh={
+              controller.cancelRemoteBaselineRefresh
+            }
           />
           <FreshnessControl
             freshness={state.freshness}

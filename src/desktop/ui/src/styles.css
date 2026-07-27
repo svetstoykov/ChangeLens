@@ -1326,6 +1326,45 @@ button.current-navigation-item:not([aria-current="page"]) {
   color: var(--danger);
 }
 
+.remote-baseline-indicator {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+.remote-baseline-indicator > .icon {
+  width: 14px;
+  height: 14px;
+  color: var(--text-tertiary);
+}
+
+.remote-baseline-indicator code {
+  font-size: 11px;
+}
+
+.remote-baseline-indicator button {
+  margin-left: auto;
+  font-size: 11px;
+}
+
+.remote-baseline-indicator[data-status="checking"] > .icon,
+.remote-baseline-indicator[data-status="refreshing"] > .icon {
+  animation: icon-spin 1s linear infinite;
+}
+
+.remote-baseline-indicator[data-status="moved"],
+.remote-baseline-indicator[data-status="unreachable"] {
+  color: var(--warning);
+}
+
+.remote-baseline-indicator[data-status="moved"] > .icon,
+.remote-baseline-indicator[data-status="unreachable"] > .icon {
+  color: var(--warning);
+}
+
 .comparison-facts {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));

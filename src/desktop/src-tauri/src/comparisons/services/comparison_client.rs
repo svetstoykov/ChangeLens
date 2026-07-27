@@ -1,13 +1,18 @@
 use crate::comparisons::constants::{
-    COMPARISON_CHECK_FRESHNESS_ACTION, COMPARISON_LIST_TARGETS_ACTION, COMPARISON_PREPARE_ACTION,
-    FRESHNESS_RESPONSE_TIMEOUT, PREPARATION_RESPONSE_TIMEOUT, TARGET_DISCOVERY_RESPONSE_TIMEOUT,
+    COMPARISON_CHECK_FRESHNESS_ACTION, COMPARISON_CHECK_REMOTE_BASELINE_ACTION,
+    COMPARISON_LIST_TARGETS_ACTION, COMPARISON_PREPARE_ACTION,
+    COMPARISON_REFRESH_REMOTE_BASELINE_ACTION, FRESHNESS_RESPONSE_TIMEOUT,
+    PREPARATION_RESPONSE_TIMEOUT, REMOTE_BASELINE_CHECK_RESPONSE_TIMEOUT,
+    REMOTE_BASELINE_REFRESH_RESPONSE_TIMEOUT, TARGET_DISCOVERY_RESPONSE_TIMEOUT,
 };
 use crate::comparisons::models::{
-    ComparisonCheckFreshnessParameters, ComparisonListTargetsParameters,
-    ComparisonPrepareParameters,
+    ComparisonCheckFreshnessParameters, ComparisonCheckRemoteBaselineParameters,
+    ComparisonListTargetsParameters, ComparisonPrepareParameters,
+    ComparisonRefreshRemoteBaselineParameters,
 };
 use crate::comparisons::{
-    ComparisonFreshness, ComparisonService, ComparisonTargetPage, PreparedComparison,
+    ComparisonFreshness, ComparisonRefreshRemoteBaselineResult, ComparisonRemoteBaseline,
+    ComparisonService, ComparisonTargetPage, PreparedComparison,
 };
 use crate::engine_protocol::{EngineActionError, EngineClient};
 use std::time::Duration;
@@ -40,6 +45,26 @@ impl ComparisonService for EngineClient {
         freshness_token: &str,
     ) -> Result<ComparisonFreshness, EngineActionError> {
         self.check_freshness_with_timeout(path, target, freshness_token, FRESHNESS_RESPONSE_TIMEOUT)
+    }
+
+    fn check_remote_baseline(
+        &self,
+        path: &str,
+        target: &str,
+    ) -> Result<ComparisonRemoteBaseline, EngineActionError> {
+        self.check_remote_baseline_with_timeout(path, target, REMOTE_BASELINE_CHECK_RESPONSE_TIMEOUT)
+    }
+
+    fn refresh_remote_baseline(
+        &self,
+        path: &str,
+        target: &str,
+    ) -> Result<ComparisonRefreshRemoteBaselineResult, EngineActionError> {
+        self.refresh_remote_baseline_with_timeout(
+            path,
+            target,
+            REMOTE_BASELINE_REFRESH_RESPONSE_TIMEOUT,
+        )
     }
 }
 
@@ -75,6 +100,26 @@ impl EngineClient {
         timeout: Duration,
     ) -> Result<ComparisonFreshness, EngineActionError> {
         self.check_freshness_with_timeout(path, target, freshness_token, timeout)
+    }
+
+    #[doc(hidden)]
+    pub fn check_remote_baseline_with_timeout_for_testing(
+        &self,
+        path: &str,
+        target: &str,
+        timeout: Duration,
+    ) -> Result<ComparisonRemoteBaseline, EngineActionError> {
+        self.check_remote_baseline_with_timeout(path, target, timeout)
+    }
+
+    #[doc(hidden)]
+    pub fn refresh_remote_baseline_with_timeout_for_testing(
+        &self,
+        path: &str,
+        target: &str,
+        timeout: Duration,
+    ) -> Result<ComparisonRefreshRemoteBaselineResult, EngineActionError> {
+        self.refresh_remote_baseline_with_timeout(path, target, timeout)
     }
 
     fn list_targets_with_timeout(
@@ -127,6 +172,32 @@ impl EngineClient {
             timeout,
         )
     }
+
+    fn check_remote_baseline_with_timeout(
+        &self,
+        path: &str,
+        target: &str,
+        timeout: Duration,
+    ) -> Result<ComparisonRemoteBaseline, EngineActionError> {
+        self.execute_action(
+            COMPARISON_CHECK_REMOTE_BASELINE_ACTION,
+            Some(ComparisonCheckRemoteBaselineParameters { path, target }),
+            timeout,
+        )
+    }
+
+    fn refresh_remote_baseline_with_timeout(
+        &self,
+        path: &str,
+        target: &str,
+        timeout: Duration,
+    ) -> Result<ComparisonRefreshRemoteBaselineResult, EngineActionError> {
+        self.execute_action(
+            COMPARISON_REFRESH_REMOTE_BASELINE_ACTION,
+            Some(ComparisonRefreshRemoteBaselineParameters { path, target }),
+            timeout,
+        )
+    }
 }
 
 #[cfg(test)]
@@ -166,6 +237,16 @@ mod tests {
             target: "refs/remotes/origin/main",
             freshness_token: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
         };
+        let check_remote_baseline =
+            crate::comparisons::models::ComparisonCheckRemoteBaselineParameters {
+                path: "/projects/change_lens",
+                target: "refs/remotes/origin/main",
+            };
+        let refresh_remote_baseline =
+            crate::comparisons::models::ComparisonRefreshRemoteBaselineParameters {
+                path: "/projects/change_lens",
+                target: "refs/remotes/origin/main",
+            };
 
         assert_eq!(
             serde_json::to_string(&list).unwrap(),
@@ -182,6 +263,14 @@ mod tests {
         assert_eq!(
             serde_json::to_string(&freshness).unwrap(),
             r#"{"path":"/projects/change_lens","target":"refs/remotes/origin/main","freshnessToken":"0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"}"#
+        );
+        assert_eq!(
+            serde_json::to_string(&check_remote_baseline).unwrap(),
+            r#"{"path":"/projects/change_lens","target":"refs/remotes/origin/main"}"#
+        );
+        assert_eq!(
+            serde_json::to_string(&refresh_remote_baseline).unwrap(),
+            r#"{"path":"/projects/change_lens","target":"refs/remotes/origin/main"}"#
         );
     }
 }

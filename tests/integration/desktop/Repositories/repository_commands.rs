@@ -1,6 +1,6 @@
 use changelens_desktop_lib::comparisons::{
-    ComparisonFreshness, ComparisonService, ComparisonState, ComparisonTargetPage,
-    PreparedComparison,
+    ComparisonFreshness, ComparisonRefreshRemoteBaselineResult, ComparisonRemoteBaseline,
+    ComparisonService, ComparisonState, ComparisonTargetPage, PreparedComparison,
 };
 use changelens_desktop_lib::engine_protocol::{
     ActionErrorDetail, ActionErrorKind, EngineActionError, EngineClient, OperationErrorType,
@@ -156,6 +156,22 @@ impl ComparisonService for UnusedComparisonService {
         _freshness_token: &str,
     ) -> Result<ComparisonFreshness, EngineActionError> {
         unreachable!("the repository command test does not check comparison freshness")
+    }
+
+    fn check_remote_baseline(
+        &self,
+        _path: &str,
+        _target: &str,
+    ) -> Result<ComparisonRemoteBaseline, EngineActionError> {
+        unreachable!("the repository command test does not check the remote baseline")
+    }
+
+    fn refresh_remote_baseline(
+        &self,
+        _path: &str,
+        _target: &str,
+    ) -> Result<ComparisonRefreshRemoteBaselineResult, EngineActionError> {
+        unreachable!("the repository command test does not refresh the remote baseline")
     }
 }
 

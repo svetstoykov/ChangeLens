@@ -176,7 +176,9 @@ export function RepositoryWorkspace({
               Preparing comparison…
             </p>
           ) : null}
-          {state.isRefreshing && !state.isPreparing ? (
+          {state.isRefreshing &&
+          !state.isPreparing &&
+          state.remoteBaseline !== "refreshing" ? (
             <p className="workspace-progress" role="status">
               <Icon name="refresh" />
               Refreshing comparison…

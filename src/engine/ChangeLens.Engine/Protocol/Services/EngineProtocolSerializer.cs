@@ -18,6 +18,14 @@ internal sealed class EngineProtocolSerializer : IEngineProtocolSerializer
 {
     private static readonly JsonSerializerOptions SerializerOptions = CreateSerializerOptions();
 
+    private static readonly OperationError InvalidRequestError = OperationError.Validation(
+        "The request does not match the engine protocol schema.",
+        EngineErrorCode.InvalidRequest);
+
+    private static readonly OperationError SerializationFailedError = OperationError.InternalError(
+        "The engine could not serialize the protocol response.",
+        EngineErrorCode.SerializationFailed);
+
     /// <inheritdoc />
     public Result<EngineProtocolRequest> DeserializeRequest(string requestLine)
     {
@@ -31,10 +39,9 @@ internal sealed class EngineProtocolSerializer : IEngineProtocolSerializer
         }
         catch (JsonException)
         {
-            return Result.Fail<EngineProtocolRequest>(
-                OperationError.MalformedInput(
-                    "The request is not valid JSON.",
-                    EngineErrorCode.InvalidJson));
+            return OperationError.MalformedInput(
+                "The request is not valid JSON.",
+                EngineErrorCode.InvalidJson);
         }
 
         using (document)
@@ -47,7 +54,7 @@ internal sealed class EngineProtocolSerializer : IEngineProtocolSerializer
                     string.IsNullOrWhiteSpace(request.RequestId) ||
                     string.IsNullOrWhiteSpace(request.Action))
                 {
-                    return InvalidRequest<EngineProtocolRequest>();
+                    return InvalidRequestError;
                 }
 
                 return Result.Success(
@@ -63,7 +70,7 @@ internal sealed class EngineProtocolSerializer : IEngineProtocolSerializer
             }
             catch (JsonException)
             {
-                return InvalidRequest<EngineProtocolRequest>();
+                return InvalidRequestError;
             }
         }
     }
@@ -78,12 +85,12 @@ internal sealed class EngineProtocolSerializer : IEngineProtocolSerializer
             var value = parameters.Deserialize<TParameters>(SerializerOptions);
 
             return value is null
-                ? InvalidParameters<TParameters>(action)
+                ? InvalidParametersError(action)
                 : Result.Success(value);
         }
         catch (JsonException)
         {
-            return InvalidParameters<TParameters>(action);
+            return InvalidParametersError(action);
         }
     }
 
@@ -99,10 +106,7 @@ internal sealed class EngineProtocolSerializer : IEngineProtocolSerializer
         }
         catch (Exception exception) when (exception is JsonException or NotSupportedException)
         {
-            return Result.Fail<string>(
-                OperationError.InternalError(
-                    "The engine could not serialize the protocol response.",
-                    EngineErrorCode.SerializationFailed));
+            return SerializationFailedError;
         }
     }
 
@@ -121,10 +125,7 @@ internal sealed class EngineProtocolSerializer : IEngineProtocolSerializer
         }
         catch (Exception exception) when (exception is JsonException or NotSupportedException)
         {
-            return Result.Fail<int>(
-                OperationError.InternalError(
-                    "The engine could not serialize the protocol response.",
-                    EngineErrorCode.SerializationFailed));
+            return SerializationFailedError;
         }
     }
 
@@ -148,25 +149,12 @@ internal sealed class EngineProtocolSerializer : IEngineProtocolSerializer
     }
 
     /// <summary>
-    ///     Creates the standard failure for a request that does not match the protocol schema.
-    /// </summary>
-    /// <typeparam name="T">The expected deserialized value type.</typeparam>
-    /// <returns>A validation failure with the stable invalid-request code.</returns>
-    private static Result<T> InvalidRequest<T>() =>
-        Result.Fail<T>(
-            OperationError.Validation(
-                "The request does not match the engine protocol schema.",
-                EngineErrorCode.InvalidRequest));
-
-    /// <summary>
     ///     Creates the standard failure for parameters that do not match an action schema.
     /// </summary>
-    /// <typeparam name="T">The expected parameter type.</typeparam>
     /// <param name="action">The fixed protocol action.</param>
     /// <returns>A validation failure with the stable invalid-request code.</returns>
-    private static Result<T> InvalidParameters<T>(string action) =>
-        Result.Fail<T>(
-            OperationError.Validation(
-                $"The parameters do not match the {action} schema.",
-                EngineErrorCode.InvalidRequest));
+    private static OperationError InvalidParametersError(string action) =>
+        OperationError.Validation(
+            $"The parameters do not match the {action} schema.",
+            EngineErrorCode.InvalidRequest);
 }

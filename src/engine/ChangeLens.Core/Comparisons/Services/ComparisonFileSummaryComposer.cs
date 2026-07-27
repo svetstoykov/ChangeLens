@@ -45,10 +45,9 @@ public sealed class ComparisonFileSummaryComposer : IComparisonFileSummaryCompos
         }
         catch (OverflowException)
         {
-            return Result.Fail<ComparisonFileSummary>(
-                OperationError.UnprocessableInput(
-                    "The comparison exceeds the supported local inspection limit.",
-                    ComparisonErrorCode.TooLarge));
+            return OperationError.UnprocessableInput(
+                "The comparison exceeds the supported local inspection limit.",
+                ComparisonErrorCode.TooLarge);
         }
     }
 

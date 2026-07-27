@@ -40,6 +40,11 @@ public sealed class GitRemoteBaselineTracker(
         "The repository has no configured remote for the selected target.",
         ComparisonErrorCode.NoRemoteConfigured);
 
+    private static readonly OperationError InspectionFailedError =
+        OperationError.ExternalDependencyFailure(
+            "Git comparison inspection failed.",
+            ComparisonErrorCode.InspectionFailed);
+
     private readonly IGitRepositoryInspector _repositoryInspector =
         repositoryInspector ?? throw new ArgumentNullException(nameof(repositoryInspector));
 
@@ -60,7 +65,7 @@ public sealed class GitRemoteBaselineTracker(
             this._logger.LogDebug(
                 "Rejected remote baseline check for target {Target}: target shape is not approved.",
                 target);
-            return Result.Fail<RemoteBaselineCheckResult>(TargetInvalidError);
+            return TargetInvalidError;
         }
 
         cancellationToken.ThrowIfCancellationRequested();
@@ -105,7 +110,7 @@ public sealed class GitRemoteBaselineTracker(
                 this._logger.LogDebug(
                     "Rejected remote baseline check for target {Target}: target does not match a known remote.",
                     target);
-                return Result.Fail<RemoteBaselineCheckResult>(TargetInvalidError);
+                return TargetInvalidError;
             }
 
             var (remote, branch) = resolution.Value;
@@ -126,12 +131,12 @@ public sealed class GitRemoteBaselineTracker(
                     "Remote baseline check for target {Target} found no local commit; the target may have been " +
                     "removed since it was last discovered.",
                     target);
-                return Result.Fail<RemoteBaselineCheckResult>(TargetInvalidError);
+                return TargetInvalidError;
             }
 
             if (localRevisionResult.Data!.ExitCode != 0)
             {
-                return InspectionFailed<RemoteBaselineCheckResult>();
+                return InspectionFailedError;
             }
 
             var localRevision = GitOutputParser.ParseRevision(localRevisionResult.Data!);
@@ -162,7 +167,7 @@ public sealed class GitRemoteBaselineTracker(
                     "remote branch.",
                     target,
                     remote);
-                return Result.Fail<RemoteBaselineCheckResult>(TargetInvalidError);
+                return TargetInvalidError;
             }
 
             if (lsRemoteOutput.ExitCode != 0)
@@ -174,8 +179,8 @@ public sealed class GitRemoteBaselineTracker(
                     remote,
                     lsRemoteOutput.ExitCode,
                     Stopwatch.GetElapsedTime(startedAt).TotalMilliseconds);
-                return Result.Fail<RemoteBaselineCheckResult>(
-                    GitDiagnosticClassifier.ClassifyRemoteFailure(lsRemoteOutput));
+                return 
+                    GitDiagnosticClassifier.ClassifyRemoteFailure(lsRemoteOutput);
             }
 
             var remoteRevisionResult = GitOutputParser.ParseLsRemoteRevision(lsRemoteOutput, expectedRef);
@@ -204,7 +209,7 @@ public sealed class GitRemoteBaselineTracker(
                 "Remote baseline check for target {Target} timed out after {ElapsedMilliseconds:0.000} ms.",
                 target,
                 Stopwatch.GetElapsedTime(startedAt).TotalMilliseconds);
-            return Result.Fail<RemoteBaselineCheckResult>(TimedOutError());
+            return TimedOutError();
         }
     }
 
@@ -219,7 +224,7 @@ public sealed class GitRemoteBaselineTracker(
             this._logger.LogDebug(
                 "Rejected remote baseline refresh for target {Target}: target shape is not approved.",
                 target);
-            return Result.Fail<string>(TargetInvalidError);
+            return TargetInvalidError;
         }
 
         cancellationToken.ThrowIfCancellationRequested();
@@ -258,7 +263,7 @@ public sealed class GitRemoteBaselineTracker(
                 this._logger.LogWarning(
                     "Remote baseline refresh for target {Target} found no configured remotes.",
                     target);
-                return Result.Fail<string>(NoRemoteConfiguredError);
+                return NoRemoteConfiguredError;
             }
 
             var resolution = GitOutputParser.ResolveRemoteBranch(target!, remoteNames);
@@ -267,7 +272,7 @@ public sealed class GitRemoteBaselineTracker(
                 this._logger.LogDebug(
                     "Rejected remote baseline refresh for target {Target}: target does not match a known remote.",
                     target);
-                return Result.Fail<string>(TargetInvalidError);
+                return TargetInvalidError;
             }
 
             var (remote, branch) = resolution.Value;
@@ -293,7 +298,7 @@ public sealed class GitRemoteBaselineTracker(
                     remote,
                     fetchOutput.ExitCode,
                     Stopwatch.GetElapsedTime(startedAt).TotalMilliseconds);
-                return Result.Fail<string>(GitDiagnosticClassifier.ClassifyRemoteFailure(fetchOutput));
+                return GitDiagnosticClassifier.ClassifyRemoteFailure(fetchOutput);
             }
 
             var revisionResult = await this.RunAsync(
@@ -310,7 +315,7 @@ public sealed class GitRemoteBaselineTracker(
             var revisionOutput = revisionResult.Data!;
             if (revisionOutput.ExitCode != 0)
             {
-                return InspectionFailed<string>();
+                return InspectionFailedError;
             }
 
             var parsedRevision = GitOutputParser.ParseRevision(revisionOutput);
@@ -334,7 +339,7 @@ public sealed class GitRemoteBaselineTracker(
                 "Remote baseline refresh for target {Target} timed out after {ElapsedMilliseconds:0.000} ms.",
                 target,
                 Stopwatch.GetElapsedTime(startedAt).TotalMilliseconds);
-            return Result.Fail<string>(TimedOutError());
+            return TimedOutError();
         }
     }
 
@@ -358,7 +363,7 @@ public sealed class GitRemoteBaselineTracker(
     {
         var remaining = Remaining(startedAt, totalBudget);
         return remaining <= TimeSpan.Zero
-            ? Result.Fail<RepositoryDescriptor>(TimedOutError())
+            ? TimedOutError()
             : await this._repositoryInspector.InspectAsync(
                 path,
                 remaining,
@@ -421,7 +426,7 @@ public sealed class GitRemoteBaselineTracker(
         var remaining = Remaining(startedAt, totalBudget);
         if (remaining <= TimeSpan.Zero)
         {
-            return Task.FromResult(Result.Fail<GitCommandOutput>(TimedOutError()));
+            return Task.FromResult<Result<GitCommandOutput>>(TimedOutError());
         }
 
         IReadOnlyList<string> arguments = ["-C", canonicalPath, .. subcommandArguments];
@@ -525,14 +530,4 @@ public sealed class GitRemoteBaselineTracker(
             "Checking the remote branch exceeded its allowed time.",
             ComparisonErrorCode.RemoteTimedOut);
 
-    /// <summary>
-    ///     Creates a typed result containing the stable comparison inspection failure.
-    /// </summary>
-    /// <typeparam name="T">The result payload type.</typeparam>
-    /// <returns>The failed typed result.</returns>
-    private static Result<T> InspectionFailed<T>() =>
-        Result.Fail<T>(
-            OperationError.ExternalDependencyFailure(
-                "Git comparison inspection failed.",
-                ComparisonErrorCode.InspectionFailed));
 }

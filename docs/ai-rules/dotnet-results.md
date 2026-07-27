@@ -25,7 +25,7 @@ Follow these consistency rules when the Result types are implemented:
 - Keep callers independent from lower-layer error codes. Only the operation that detects a specific condition assigns a code; intermediate layers propagate it unchanged unless they deliberately translate to a different abstraction.
 - Keep forwarding transport-independent and free of logging or other side effects.
 - Let the outer application boundary translate error categories into its protocol-specific representation and add correlation information.
-- Keep the implementation deliberately small. Do not add `Bind`, `Map`, result builders, implicit failure conversion, or a result-specific extension-method framework.
+- Keep the implementation deliberately small. Do not add `Bind`, `Map`, result builders, or a result-specific extension-method framework. `Result<T>` may define an implicit conversion from `OperationError` (mirroring its existing implicit conversion from `T`) so failure call sites do not have to restate the payload type; `Result` stays without one, since its non-generic `Fail` call sites carry no such repetition.
 - Treat expected failures as Result data. Treat unexpected exceptions through the separate exception boundary.
 - Keep cancellation exception-based and distinct from timeout or other Result failures.
 - Put Result types, operation errors, error categories, and stable codes in Core.

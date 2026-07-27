@@ -94,7 +94,7 @@ public sealed class GitRepositoryInspector(
             this._logger.LogWarning(
                 "Repository inspection timed out after {ElapsedMilliseconds:0.000} ms.",
                 Stopwatch.GetElapsedTime(startedAt).TotalMilliseconds);
-            return Result.Fail<RepositoryDescriptor>(errorPolicy.TimedOut);
+            return errorPolicy.TimedOut;
         }
     }
 
@@ -146,8 +146,7 @@ public sealed class GitRepositoryInspector(
                 "Repository inspection fact {GitFact} failed with exit code {ExitCode}.",
                 "rev-parse --is-inside-work-tree",
                 insideResult.Data.ExitCode);
-            return Result.Fail<RepositoryDescriptor>(
-                GitDiagnosticClassifier.ClassifyWorkTreeFailure(insideResult.Data));
+            return GitDiagnosticClassifier.ClassifyWorkTreeFailure(insideResult.Data);
         }
 
         var insideParseResult = GitOutputParser.ParseBoolean(insideResult.Data);
@@ -171,8 +170,7 @@ public sealed class GitRepositoryInspector(
                 "Repository inspection fact {GitFact} failed with exit code {ExitCode}.",
                 "rev-parse --is-bare-repository",
                 bareResult.Data.ExitCode);
-            return Result.Fail<RepositoryDescriptor>(
-                GitDiagnosticClassifier.ClassifyInspectionFailure(bareResult.Data));
+            return GitDiagnosticClassifier.ClassifyInspectionFailure(bareResult.Data);
         }
 
         var bareParseResult = GitOutputParser.ParseBoolean(bareResult.Data);
@@ -187,20 +185,18 @@ public sealed class GitRepositoryInspector(
         {
             this._logger.LogWarning(
                 "Repository inspection rejected the selected directory because it is a bare repository.");
-            return Result.Fail<RepositoryDescriptor>(
-                OperationError.UnprocessableInput(
-                    "The selected repository does not have a working tree.",
-                    RepositoryErrorCode.WorkTreeUnavailable));
+            return OperationError.UnprocessableInput(
+                "The selected repository does not have a working tree.",
+                RepositoryErrorCode.WorkTreeUnavailable);
         }
 
         if (!isInsideWorkTree)
         {
             this._logger.LogWarning(
                 "Repository inspection rejected the selected directory because it is not inside a Git working tree.");
-            return Result.Fail<RepositoryDescriptor>(
-                OperationError.UnprocessableInput(
-                    "The selected folder is not inside a Git working tree.",
-                    RepositoryErrorCode.NotGitRepository));
+            return OperationError.UnprocessableInput(
+                "The selected folder is not inside a Git working tree.",
+                RepositoryErrorCode.NotGitRepository);
         }
 
         var rootResult = await this.RunAsync(
@@ -218,8 +214,7 @@ public sealed class GitRepositoryInspector(
                 "Repository inspection fact {GitFact} failed with exit code {ExitCode}.",
                 "rev-parse --show-toplevel",
                 rootResult.Data.ExitCode);
-            return Result.Fail<RepositoryDescriptor>(
-                GitDiagnosticClassifier.ClassifyInspectionFailure(rootResult.Data));
+            return GitDiagnosticClassifier.ClassifyInspectionFailure(rootResult.Data);
         }
 
         var rootParseResult = GitOutputParser.ParsePath(rootResult.Data);
@@ -252,8 +247,7 @@ public sealed class GitRepositoryInspector(
                 "Repository inspection fact {GitFact} failed with exit code {ExitCode}.",
                 "rev-parse --verify HEAD^{commit}",
                 revisionResult.Data.ExitCode);
-            return Result.Fail<RepositoryDescriptor>(
-                GitDiagnosticClassifier.ClassifyInspectionFailure(revisionResult.Data));
+            return GitDiagnosticClassifier.ClassifyInspectionFailure(revisionResult.Data);
         }
 
         var revisionParseResult = GitOutputParser.ParseRevision(revisionResult.Data);
@@ -321,7 +315,7 @@ public sealed class GitRepositoryInspector(
         var remaining = totalBudget - Stopwatch.GetElapsedTime(startedAt);
         if (remaining <= TimeSpan.Zero)
         {
-            return Task.FromResult(Result.Fail<GitCommandOutput>(errorPolicy.TimedOut));
+            return Task.FromResult<Result<GitCommandOutput>>(errorPolicy.TimedOut);
         }
 
         return commandRunner.RunAsync(

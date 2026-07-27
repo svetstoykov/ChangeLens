@@ -20,6 +20,18 @@ namespace ChangeLens.Infrastructure.FileSystem.Services;
 /// </remarks>
 public sealed class PhysicalRepositoryPathResolver : IRepositoryPathResolver
 {
+    private static readonly OperationError AccessDeniedError = OperationError.Unauthorized(
+        "The selected directory cannot be accessed.",
+        RepositoryErrorCode.AccessDenied);
+
+    private static readonly OperationError PathNotFoundError = OperationError.NotFound(
+        "The selected directory does not exist.",
+        RepositoryErrorCode.PathNotFound);
+
+    private static readonly OperationError ResolutionFailedError = OperationError.ExternalDependencyFailure(
+        "The selected directory could not be resolved.",
+        RepositoryErrorCode.InspectionFailed);
+
     private readonly ILogger<PhysicalRepositoryPathResolver> _logger;
 
     /// <summary>
@@ -62,28 +74,19 @@ public sealed class PhysicalRepositoryPathResolver : IRepositoryPathResolver
         catch (UnauthorizedAccessException exception)
         {
             this._logger.LogDebug(exception, "Path resolution for {Path} failed: access denied.", path);
-            return Result.Fail<string>(
-                OperationError.Unauthorized(
-                    "The selected directory cannot be accessed.",
-                    RepositoryErrorCode.AccessDenied));
+            return AccessDeniedError;
         }
         catch (Exception exception) when (
             exception is DirectoryNotFoundException or FileNotFoundException)
         {
             this._logger.LogDebug(exception, "Path resolution for {Path} failed: the directory does not exist.", path);
-            return Result.Fail<string>(
-                OperationError.NotFound(
-                    "The selected directory does not exist.",
-                    RepositoryErrorCode.PathNotFound));
+            return PathNotFoundError;
         }
         catch (Exception exception) when (
             exception is IOException or NotSupportedException or ArgumentException)
         {
             this._logger.LogWarning(exception, "Path resolution failed unexpectedly.");
-            return Result.Fail<string>(
-                OperationError.ExternalDependencyFailure(
-                    "The selected directory could not be resolved.",
-                    RepositoryErrorCode.InspectionFailed));
+            return ResolutionFailedError;
         }
     }
 

@@ -18,6 +18,14 @@ internal static class GitOutputParser
     private static readonly UTF8Encoding StrictUtf8 = new(false, true);
 
     /// <summary>
+    ///     The stable generic repository inspection failure.
+    /// </summary>
+    private static readonly OperationError InspectionFailedError =
+        OperationError.ExternalDependencyFailure(
+            "Git repository inspection failed.",
+            RepositoryErrorCode.InspectionFailed);
+
+    /// <summary>
     ///     Validates output from the Git availability command.
     /// </summary>
     /// <param name="output">The captured Git output. Cannot be <see langword="null" />.</param>
@@ -74,7 +82,7 @@ internal static class GitOutputParser
         {
             "true" => Result.Success(true),
             "false" => Result.Success(false),
-            _ => InspectionFailure<bool>(),
+            _ => InspectionFailedError,
         };
     }
 
@@ -98,7 +106,7 @@ internal static class GitOutputParser
 
         return Path.IsPathFullyQualified(lineResult.Data!)
             ? lineResult
-            : InspectionFailure<string>();
+            : InspectionFailedError;
     }
 
     /// <summary>
@@ -121,7 +129,7 @@ internal static class GitOutputParser
 
         return IsSupportedObjectId(lineResult.Data!)
             ? lineResult
-            : InspectionFailure<string>();
+            : InspectionFailedError;
     }
 
     /// <summary>
@@ -149,7 +157,7 @@ internal static class GitOutputParser
 
         if (!IsSupportedObjectId(revision))
         {
-            return InspectionFailure<RepositoryHead>();
+            return InspectionFailedError;
         }
 
         if (output.ExitCode == 0 &&
@@ -167,7 +175,7 @@ internal static class GitOutputParser
             return Result.Success<RepositoryHead>(new DetachedRepositoryHead(revision));
         }
 
-        return InspectionFailure<RepositoryHead>();
+        return InspectionFailedError;
     }
 
     /// <summary>
@@ -184,7 +192,7 @@ internal static class GitOutputParser
 
         if (output.ExitCode != 0 || output.StandardError.Length != 0)
         {
-            return InspectionFailure<IReadOnlyList<string>>();
+            return InspectionFailedError;
         }
 
         if (output.StandardOutput.Length == 0)
@@ -194,7 +202,7 @@ internal static class GitOutputParser
 
         if (!output.StandardOutput.EndsWith('\n') || output.StandardOutput.Contains('\r'))
         {
-            return InspectionFailure<IReadOnlyList<string>>();
+            return InspectionFailedError;
         }
 
         var lines = output.StandardOutput.Split('\n');
@@ -203,7 +211,7 @@ internal static class GitOutputParser
         {
             if (lines[index].Length == 0)
             {
-                return InspectionFailure<IReadOnlyList<string>>();
+                return InspectionFailedError;
             }
 
             names.Add(lines[index]);
@@ -211,7 +219,7 @@ internal static class GitOutputParser
 
         return lines[^1].Length == 0
             ? Result.Success<IReadOnlyList<string>>(names)
-            : InspectionFailure<IReadOnlyList<string>>();
+            : InspectionFailedError;
     }
 
     /// <summary>
@@ -235,13 +243,13 @@ internal static class GitOutputParser
             !output.StandardOutput.EndsWith('\n') ||
             output.StandardOutput.Contains('\r'))
         {
-            return InspectionFailure<string>();
+            return InspectionFailedError;
         }
 
         var lines = output.StandardOutput.Split('\n');
         if (lines.Length != 2 || lines[1].Length != 0)
         {
-            return InspectionFailure<string>();
+            return InspectionFailedError;
         }
 
         var fields = lines[0].Split('\t');
@@ -249,7 +257,7 @@ internal static class GitOutputParser
                IsSupportedObjectId(fields[0]) &&
                string.Equals(fields[1], expectedRef, StringComparison.Ordinal)
             ? Result.Success<string>(fields[0])
-            : InspectionFailure<string>();
+            : InspectionFailedError;
     }
 
     /// <summary>
@@ -322,7 +330,7 @@ internal static class GitOutputParser
 
         return output.ExitCode == 0 && output.StandardError.Length == 0
             ? lineResult
-            : InspectionFailure<string>();
+            : InspectionFailedError;
     }
 
     /// <summary>
@@ -334,7 +342,7 @@ internal static class GitOutputParser
     {
         if (IsOversized(output.StandardOutput) || IsOversized(output.StandardError))
         {
-            return InspectionFailure<string>();
+            return InspectionFailedError;
         }
 
         var value = output.StandardOutput.EndsWith("\r\n", StringComparison.Ordinal)
@@ -344,7 +352,7 @@ internal static class GitOutputParser
                 : output.StandardOutput;
 
         return value.Contains('\r') || value.Contains('\n')
-            ? InspectionFailure<string>()
+            ? InspectionFailedError
             : Result.Success<string>(value);
     }
 
@@ -383,20 +391,5 @@ internal static class GitOutputParser
     ///     Creates a safe generic repository inspection failure.
     /// </summary>
     /// <returns>A failed result with the stable repository inspection error.</returns>
-    private static Result InspectionFailure() =>
-        Result.Fail(
-            OperationError.ExternalDependencyFailure(
-                "Git repository inspection failed.",
-                RepositoryErrorCode.InspectionFailed));
-
-    /// <summary>
-    ///     Creates a typed safe generic repository inspection failure.
-    /// </summary>
-    /// <typeparam name="T">The success payload type.</typeparam>
-    /// <returns>A failed result with the stable repository inspection error.</returns>
-    private static Result<T> InspectionFailure<T>() =>
-        Result.Fail<T>(
-            OperationError.ExternalDependencyFailure(
-                "Git repository inspection failed.",
-                RepositoryErrorCode.InspectionFailed));
+    private static Result InspectionFailure() => Result.Fail(InspectionFailedError);
 }

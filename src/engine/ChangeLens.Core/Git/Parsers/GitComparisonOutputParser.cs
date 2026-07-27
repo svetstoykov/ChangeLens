@@ -18,6 +18,14 @@ internal static class GitComparisonOutputParser
     private static readonly UTF8Encoding StrictUtf8 = new(false, true);
 
     /// <summary>
+    ///     The single error returned whenever reviewed Git comparison output fails strict inspection.
+    /// </summary>
+    private static readonly OperationError InspectionFailedError =
+        OperationError.ExternalDependencyFailure(
+            "Git comparison inspection failed.",
+            ComparisonErrorCode.InspectionFailed);
+
+    /// <summary>
     ///     Parses reference facts emitted by the approved comparison-target discovery format.
     /// </summary>
     /// <param name="output">The captured Git output. Cannot be <see langword="null" />.</param>
@@ -32,7 +40,7 @@ internal static class GitComparisonOutputParser
 
         if (!IsSuccessfulQuietOutput(output))
         {
-            return InspectionFailure<IReadOnlyList<GitComparisonTargetRecord>>();
+            return InspectionFailedError;
         }
 
         if (output.StandardOutput.Length == 0)
@@ -44,7 +52,7 @@ internal static class GitComparisonOutputParser
         if (!output.StandardOutput.EndsWith('\n') ||
             output.StandardOutput.Contains('\r'))
         {
-            return InspectionFailure<IReadOnlyList<GitComparisonTargetRecord>>();
+            return InspectionFailedError;
         }
 
         var lines = output.StandardOutput.Split('\n');
@@ -57,7 +65,7 @@ internal static class GitComparisonOutputParser
 
             if (line.Length == 0 || !line.EndsWith('\0'))
             {
-                return InspectionFailure<IReadOnlyList<GitComparisonTargetRecord>>();
+                return InspectionFailedError;
             }
 
             var fields = line[..^1].Split('\0');
@@ -69,7 +77,7 @@ internal static class GitComparisonOutputParser
                 !IsValidOptionalText(fields[4]) ||
                 !seenFullNames.Add(fields[0]))
             {
-                return InspectionFailure<IReadOnlyList<GitComparisonTargetRecord>>();
+                return InspectionFailedError;
             }
 
             records.Add(
@@ -83,7 +91,7 @@ internal static class GitComparisonOutputParser
 
         return lines[^1].Length == 0
             ? Result.Success<IReadOnlyList<GitComparisonTargetRecord>>(records)
-            : InspectionFailure<IReadOnlyList<GitComparisonTargetRecord>>();
+            : InspectionFailedError;
     }
 
     /// <summary>
@@ -101,7 +109,7 @@ internal static class GitComparisonOutputParser
 
         if (!IsSuccessfulQuietOutput(output))
         {
-            return InspectionFailure<IReadOnlyList<string>>();
+            return InspectionFailedError;
         }
 
         if (output.StandardOutput.Length == 0)
@@ -111,7 +119,7 @@ internal static class GitComparisonOutputParser
 
         if (output.StandardOutput.Contains('\r'))
         {
-            return InspectionFailure<IReadOnlyList<string>>();
+            return InspectionFailedError;
         }
 
         var text = RemoveOneTerminalLineFeed(output.StandardOutput);
@@ -119,7 +127,7 @@ internal static class GitComparisonOutputParser
 
         return revisions.Length > 0 && revisions.All(IsSupportedObjectId)
             ? Result.Success<IReadOnlyList<string>>(revisions)
-            : InspectionFailure<IReadOnlyList<string>>();
+            : InspectionFailedError;
     }
 
     /// <summary>
@@ -139,13 +147,13 @@ internal static class GitComparisonOutputParser
             output.StandardOutput.Length == 0 ||
             output.StandardOutput.Contains('\r'))
         {
-            return InspectionFailure<(int TargetOnly, int CurrentWork)>();
+            return InspectionFailedError;
         }
 
         var text = RemoveOneTerminalLineFeed(output.StandardOutput);
         if (text.Contains('\n'))
         {
-            return InspectionFailure<(int TargetOnly, int CurrentWork)>();
+            return InspectionFailedError;
         }
 
         var fields = text.Split('\t');
@@ -153,7 +161,7 @@ internal static class GitComparisonOutputParser
                TryParseCanonicalCount(fields[0], out var targetOnly) &&
                TryParseCanonicalCount(fields[1], out var currentWork)
             ? Result.Success((TargetOnly: targetOnly, CurrentWork: currentWork))
-            : InspectionFailure<(int TargetOnly, int CurrentWork)>();
+            : InspectionFailedError;
     }
 
     /// <summary>
@@ -171,7 +179,7 @@ internal static class GitComparisonOutputParser
 
         if (!IsSuccessfulQuietOutput(output))
         {
-            return InspectionFailure<IReadOnlyList<GitComparisonFileRecord>>();
+            return InspectionFailedError;
         }
 
         var records = new List<GitComparisonFileRecord>();
@@ -185,13 +193,13 @@ internal static class GitComparisonOutputParser
                     out var status,
                     out var isRename))
             {
-                return InspectionFailure<IReadOnlyList<GitComparisonFileRecord>>();
+                return InspectionFailedError;
             }
 
             if (!TryReadNulField(output.StandardOutput, ref position, out var firstPath) ||
                 firstPath.Length == 0)
             {
-                return InspectionFailure<IReadOnlyList<GitComparisonFileRecord>>();
+                return InspectionFailedError;
             }
 
             if (!isRename)
@@ -204,7 +212,7 @@ internal static class GitComparisonOutputParser
                 currentPath.Length == 0 ||
                 status[0] != 'R')
             {
-                return InspectionFailure<IReadOnlyList<GitComparisonFileRecord>>();
+                return InspectionFailedError;
             }
 
             records.Add(new GitComparisonFileRecord(currentPath, firstPath));
@@ -228,7 +236,7 @@ internal static class GitComparisonOutputParser
 
         if (!IsSuccessfulQuietOutput(output))
         {
-            return InspectionFailure<IReadOnlyList<GitWorkingTreeRecord>>();
+            return InspectionFailedError;
         }
 
         var records = new List<GitWorkingTreeRecord>();
@@ -239,7 +247,7 @@ internal static class GitComparisonOutputParser
             if (!TryReadNulField(output.StandardOutput, ref position, out var record) ||
                 record.Length < 3)
             {
-                return InspectionFailure<IReadOnlyList<GitWorkingTreeRecord>>();
+                return InspectionFailedError;
             }
 
             switch (record[0])
@@ -247,7 +255,7 @@ internal static class GitComparisonOutputParser
                 case '1':
                     if (!TryParseOrdinaryRecord(record, out var ordinary))
                     {
-                        return InspectionFailure<IReadOnlyList<GitWorkingTreeRecord>>();
+                        return InspectionFailedError;
                     }
 
                     records.Add(ordinary);
@@ -259,7 +267,7 @@ internal static class GitComparisonOutputParser
                             record,
                             out var renamed))
                     {
-                        return InspectionFailure<IReadOnlyList<GitWorkingTreeRecord>>();
+                        return InspectionFailedError;
                     }
 
                     records.Add(renamed);
@@ -267,7 +275,7 @@ internal static class GitComparisonOutputParser
                 case 'u':
                     if (!TryParseUnmergedRecord(record, out var unmerged))
                     {
-                        return InspectionFailure<IReadOnlyList<GitWorkingTreeRecord>>();
+                        return InspectionFailedError;
                     }
 
                     records.Add(unmerged);
@@ -276,7 +284,7 @@ internal static class GitComparisonOutputParser
                     if (!record.StartsWith("? ", StringComparison.Ordinal) ||
                         record.Length == 2)
                     {
-                        return InspectionFailure<IReadOnlyList<GitWorkingTreeRecord>>();
+                        return InspectionFailedError;
                     }
 
                     records.Add(
@@ -293,7 +301,7 @@ internal static class GitComparisonOutputParser
                     if (!record.StartsWith("! ", StringComparison.Ordinal) ||
                         record.Length == 2)
                     {
-                        return InspectionFailure<IReadOnlyList<GitWorkingTreeRecord>>();
+                        return InspectionFailedError;
                     }
 
                     records.Add(
@@ -307,7 +315,7 @@ internal static class GitComparisonOutputParser
                             true));
                     break;
                 default:
-                    return InspectionFailure<IReadOnlyList<GitWorkingTreeRecord>>();
+                    return InspectionFailedError;
             }
         }
 
@@ -906,10 +914,4 @@ internal static class GitComparisonOutputParser
 
     private static string? NullWhenEmpty(string value) =>
         value.Length == 0 ? null : value;
-
-    private static Result<T> InspectionFailure<T>() =>
-        Result.Fail<T>(
-            OperationError.ExternalDependencyFailure(
-                "Git comparison inspection failed.",
-                ComparisonErrorCode.InspectionFailed));
 }

@@ -64,4 +64,24 @@ internal static class ComparisonErrorCode
     ///     Identifies an invalid comparison freshness token.
     /// </summary>
     internal const string InvalidFreshnessToken = "comparison.invalidFreshnessToken";
+
+    /// <summary>
+    ///     Identifies a remote that could not be reached.
+    /// </summary>
+    internal const string RemoteUnreachable = "comparison.remoteUnreachable";
+
+    /// <summary>
+    ///     Identifies a remote that requires interactive authentication ChangeLens does not perform.
+    /// </summary>
+    internal const string RemoteAuthenticationRequired = "comparison.remoteAuthenticationRequired";
+
+    /// <summary>
+    ///     Identifies a remote operation that exceeded its allowed time.
+    /// </summary>
+    internal const string RemoteTimedOut = "comparison.remoteTimedOut";
+
+    /// <summary>
+    ///     Identifies a repository with no configured remote for the selected target.
+    /// </summary>
+    internal const string NoRemoteConfigured = "comparison.noRemoteConfigured";
 }

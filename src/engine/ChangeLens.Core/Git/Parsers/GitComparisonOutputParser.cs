@@ -372,7 +372,7 @@ internal static class GitComparisonOutputParser
             !AreCompatibleObjectIds(fields[6], fields[7]) ||
             IsZeroObjectId(fields[6]) ||
             IsZeroObjectId(fields[7]) ||
-            !IsRenameScore(fields[8]) ||
+            !IsCompactRenameScore(fields[8]) ||
             path.Length == 0 ||
             !TryReadNulField(output, ref position, out var originalPath) ||
             originalPath.Length == 0)
@@ -484,7 +484,7 @@ internal static class GitComparisonOutputParser
                        !IsZeroObjectId(oldRevision) &&
                        !IsZeroObjectId(newRevision);
             default:
-                isRename = IsRenameScore(status);
+                isRename = IsPaddedRenameScore(status);
                 return isRename &&
                        IsNonzeroSupportedMode(oldMode) &&
                        IsNonzeroSupportedMode(newMode) &&
@@ -784,11 +784,33 @@ internal static class GitComparisonOutputParser
     private static bool IsKnownObjectType(string value) =>
         value is "blob" or "tree" or "commit" or "tag";
 
-    private static bool IsRenameScore(string value)
+    /// <summary>
+    ///     Determines whether a porcelain-v2 rename field carries Git's unpadded similarity score.
+    /// </summary>
+    /// <param name="value">The rename field, such as <c>R73</c> or <c>R100</c>.</param>
+    /// <returns><see langword="true" /> when the field is a supported unpadded rename score.</returns>
+    private static bool IsCompactRenameScore(string value) =>
+        value.Length is 3 or 4 &&
+        value[1] != '0' &&
+        IsSupportedRenameScore(value);
+
+    /// <summary>
+    ///     Determines whether a raw-diff status carries Git's three-digit similarity score.
+    /// </summary>
+    /// <param name="value">The raw status, such as <c>R073</c> or <c>R100</c>.</param>
+    /// <returns><see langword="true" /> when the status is a supported padded rename score.</returns>
+    private static bool IsPaddedRenameScore(string value) =>
+        value.Length == 4 &&
+        IsSupportedRenameScore(value);
+
+    /// <summary>
+    ///     Determines whether a rename field names a similarity percentage within the requested bound.
+    /// </summary>
+    /// <param name="value">The rename field. Cannot be empty.</param>
+    /// <returns><see langword="true" /> when the field is <c>R</c> followed by a supported percentage.</returns>
+    private static bool IsSupportedRenameScore(string value)
     {
-        if (value.Length is < 2 or > 4 ||
-            value[0] != 'R' ||
-            value.Length > 2 && value[1] == '0' ||
+        if (value[0] != 'R' ||
             !value.AsSpan(1).ToString().All(char.IsAsciiDigit))
         {
             return false;

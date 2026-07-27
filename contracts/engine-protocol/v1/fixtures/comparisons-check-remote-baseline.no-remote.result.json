@@ -1,0 +1,8 @@
+{
+  "protocolVersion": 1,
+  "type": "result",
+  "requestId": "remote-baseline-check-1",
+  "result": {
+    "state": "noRemote"
+  }
+}

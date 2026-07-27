@@ -1326,6 +1326,77 @@ button.current-navigation-item:not([aria-current="page"]) {
   color: var(--danger);
 }
 
+.remote-baseline-notice {
+  display: flex;
+  min-width: 0;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-panel);
+  background: var(--surface-subtle);
+}
+
+.remote-baseline-notice > .icon {
+  width: 19px;
+  height: 19px;
+  flex: none;
+  margin-top: 1px;
+  color: var(--text-tertiary);
+}
+
+.remote-baseline-notice-body {
+  display: grid;
+  min-width: 0;
+  flex: 1 1 auto;
+  gap: 2px;
+}
+
+.remote-baseline-notice strong {
+  font-size: 12px;
+}
+
+.remote-baseline-notice small {
+  color: var(--text-secondary);
+  font-size: 10px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.remote-baseline-notice code {
+  font-size: 10px;
+  color: var(--text);
+}
+
+.remote-baseline-notice-action {
+  min-height: 28px;
+  flex: none;
+  gap: 6px;
+  padding: 4px 10px;
+  font-size: 11px;
+}
+
+.remote-baseline-notice-action .icon {
+  width: 13px;
+  height: 13px;
+}
+
+.remote-baseline-notice[data-status="checking"] > .icon,
+.remote-baseline-notice[data-status="refreshing"] > .icon {
+  animation: icon-spin 1s linear infinite;
+}
+
+.remote-baseline-notice[data-status="moved"],
+.remote-baseline-notice[data-status="unreachable"] {
+  border-color: var(--warning-border);
+  background: var(--warning-soft);
+}
+
+.remote-baseline-notice[data-status="moved"] > .icon,
+.remote-baseline-notice[data-status="unreachable"] > .icon {
+  color: var(--warning);
+}
+
 .comparison-facts {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));

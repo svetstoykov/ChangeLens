@@ -1,0 +1,9 @@
+{
+  "protocolVersion": 1,
+  "type": "result",
+  "requestId": "remote-baseline-check-1",
+  "result": {
+    "state": "current",
+    "remoteRevision": "0123456789abcdef0123456789abcdef01234567"
+  }
+}

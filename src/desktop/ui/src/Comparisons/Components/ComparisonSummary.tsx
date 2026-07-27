@@ -1,17 +1,26 @@
 import type { IconName } from "../../Visuals/Components/Icon";
 import { Icon } from "../../Visuals/Components/Icon";
 import type { ComparisonReadiness } from "../Models/ComparisonReadiness";
-import type { ComparisonFreshnessState } from "../Models/ComparisonWorkspaceState";
+import type {
+  ComparisonFreshnessState,
+  RemoteBaselineStatus,
+} from "../Models/ComparisonWorkspaceState";
 import type { PreparedComparison } from "../Models/PreparedComparison";
 
 interface ComparisonSummaryProps {
   readonly preparedComparison: PreparedComparison | null;
   readonly freshness: ComparisonFreshnessState;
+  readonly remoteBaseline: RemoteBaselineStatus;
+  readonly onRefreshRemoteBaseline: () => void;
+  readonly onCancelRemoteBaselineRefresh: () => void;
 }
 
 export function ComparisonSummary({
   preparedComparison,
   freshness,
+  remoteBaseline,
+  onRefreshRemoteBaseline,
+  onCancelRemoteBaselineRefresh,
 }: ComparisonSummaryProps) {
   if (preparedComparison === null) {
     return (
@@ -40,6 +49,14 @@ export function ComparisonSummary({
       aria-labelledby="comparison-summary-heading"
     >
       <SummaryHeading />
+      {preparedComparison.target.kind === "remoteTracking" ? (
+        <RemoteBaselineIndicator
+          name={preparedComparison.target.name}
+          status={remoteBaseline}
+          onRefresh={onRefreshRemoteBaseline}
+          onCancel={onCancelRemoteBaselineRefresh}
+        />
+      ) : null}
       <Readiness
         readiness={preparedComparison.readiness}
         freshness={freshness}
@@ -152,6 +169,88 @@ function Fact({
       <dd>{value}</dd>
     </div>
   );
+}
+
+function RemoteBaselineIndicator({
+  name,
+  status,
+  onRefresh,
+  onCancel,
+}: {
+  readonly name: string;
+  readonly status: RemoteBaselineStatus;
+  readonly onRefresh: () => void;
+  readonly onCancel: () => void;
+}) {
+  if (status === "idle" || status === "current") return null;
+
+  const presentation = describeRemoteBaselineStatus(status);
+
+  return (
+    <div className="remote-baseline-notice" data-status={status} role="status">
+      <Icon name={presentation.icon} />
+      <div className="remote-baseline-notice-body">
+        <strong>{presentation.title}</strong>
+        <small>
+          <code>{name}</code> {presentation.detail}
+        </small>
+      </div>
+      {status === "moved" ? (
+        <button
+          type="button"
+          className="remote-baseline-notice-action"
+          onClick={onRefresh}
+        >
+          <Icon name="refresh" />
+          Fetch
+        </button>
+      ) : null}
+      {status === "refreshing" ? (
+        <button
+          type="button"
+          className="remote-baseline-notice-action"
+          onClick={onCancel}
+        >
+          Cancel
+        </button>
+      ) : null}
+    </div>
+  );
+}
+
+function describeRemoteBaselineStatus(
+  status: Exclude<RemoteBaselineStatus, "idle" | "current">,
+): {
+  readonly icon: IconName;
+  readonly title: string;
+  readonly detail: string;
+} {
+  switch (status) {
+    case "checking":
+      return {
+        icon: "refresh",
+        title: "Checking the remote baseline",
+        detail: "is being compared with its remote.",
+      };
+    case "moved":
+      return {
+        icon: "warning",
+        title: "Remote baseline moved",
+        detail: "has new commits that are not fetched yet.",
+      };
+    case "refreshing":
+      return {
+        icon: "refresh",
+        title: "Fetching the remote baseline",
+        detail: "is being updated from its remote.",
+      };
+    default:
+      return {
+        icon: "warning",
+        title: "Remote baseline check failed",
+        detail: "could not be checked, so it may be out of date.",
+      };
+  }
 }
 
 function Readiness({

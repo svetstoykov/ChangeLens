@@ -20,7 +20,8 @@ impl ComparisonState {
 mod tests {
     use super::ComparisonState;
     use crate::comparisons::{
-        ComparisonFreshness, ComparisonService, ComparisonTargetPage, PreparedComparison,
+        ComparisonFreshness, ComparisonRefreshRemoteBaselineResult, ComparisonRemoteBaseline,
+        ComparisonService, ComparisonTargetPage, PreparedComparison,
     };
     use crate::engine_protocol::{EngineActionError, EngineClient};
     use std::sync::Arc;
@@ -52,6 +53,22 @@ mod tests {
             _target: &str,
             _freshness_token: &str,
         ) -> Result<ComparisonFreshness, EngineActionError> {
+            unreachable!("the state test does not execute comparison actions")
+        }
+
+        fn check_remote_baseline(
+            &self,
+            _path: &str,
+            _target: &str,
+        ) -> Result<ComparisonRemoteBaseline, EngineActionError> {
+            unreachable!("the state test does not execute comparison actions")
+        }
+
+        fn refresh_remote_baseline(
+            &self,
+            _path: &str,
+            _target: &str,
+        ) -> Result<ComparisonRefreshRemoteBaselineResult, EngineActionError> {
             unreachable!("the state test does not execute comparison actions")
         }
     }

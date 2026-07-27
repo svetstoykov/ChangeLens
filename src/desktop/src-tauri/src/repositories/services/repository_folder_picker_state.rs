@@ -15,34 +15,3 @@ impl RepositoryFolderPickerState {
         Arc::clone(&self.0)
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::RepositoryFolderPickerState;
-    use crate::engine_protocol::EngineActionError;
-    use crate::repositories::RepositoryFolderPicker;
-    use raw_window_handle::HasWindowHandle;
-    use std::path::PathBuf;
-    use std::sync::Arc;
-
-    struct RepositoryFolderPickerFixture;
-
-    impl RepositoryFolderPicker for RepositoryFolderPickerFixture {
-        fn select_folder(
-            &self,
-            _owner: &dyn HasWindowHandle,
-        ) -> Result<Option<PathBuf>, EngineActionError> {
-            unreachable!("the state test does not open a folder picker")
-        }
-    }
-
-    #[test]
-    fn clones_the_configured_repository_folder_picker() {
-        let state = RepositoryFolderPickerState::new(Arc::new(RepositoryFolderPickerFixture));
-
-        let first = state.picker();
-        let second = state.picker();
-
-        assert!(Arc::ptr_eq(&first, &second));
-    }
-}

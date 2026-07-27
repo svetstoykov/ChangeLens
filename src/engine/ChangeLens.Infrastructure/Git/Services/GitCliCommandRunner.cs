@@ -8,6 +8,8 @@ using ChangeLens.Core.Git.Models;
 using ChangeLens.Core.Repositories.Constants;
 using ChangeLens.Core.Results.Models;
 using ChangeLens.Infrastructure.Git.Constants;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace ChangeLens.Infrastructure.Git.Services;
 
@@ -45,12 +47,16 @@ public sealed class GitCliCommandRunner : IGitCommandRunner
     private readonly string _executablePath;
     private readonly ReadOnlyCollection<string> _executableArguments;
     private readonly Func<Stream, int, CancellationToken, Task<byte[]>> _readBoundedAsync;
+    private readonly ILogger<GitCliCommandRunner> _logger;
 
     /// <summary>
     ///     Initializes a new instance of the <see cref="GitCliCommandRunner" /> class using the installed Git executable.
     /// </summary>
-    public GitCliCommandRunner()
-        : this(GitProcessConstants.DefaultExecutable, [])
+    /// <param name="logger">
+    ///     The logger for command execution outcomes, or <see langword="null" /> to log nowhere.
+    /// </param>
+    public GitCliCommandRunner(ILogger<GitCliCommandRunner>? logger = null)
+        : this(GitProcessConstants.DefaultExecutable, [], logger)
     {
     }
 
@@ -64,6 +70,9 @@ public sealed class GitCliCommandRunner : IGitCommandRunner
     ///     The immutable prefix arguments placed before every Git argument. Cannot be <see langword="null" /> or contain
     ///     <see langword="null" /> values.
     /// </param>
+    /// <param name="logger">
+    ///     The logger for command execution outcomes, or <see langword="null" /> to log nowhere.
+    /// </param>
     /// <exception cref="ArgumentException">
     ///     <paramref name="executablePath" /> is empty or contains only white-space characters.
     ///     -or-
@@ -76,8 +85,9 @@ public sealed class GitCliCommandRunner : IGitCommandRunner
     /// </exception>
     public GitCliCommandRunner(
         string executablePath,
-        IEnumerable<string> executableArguments)
-        : this(executablePath, executableArguments, ReadBoundedAsync)
+        IEnumerable<string> executableArguments,
+        ILogger<GitCliCommandRunner>? logger = null)
+        : this(executablePath, executableArguments, ReadBoundedAsync, logger)
     {
     }
 
@@ -96,6 +106,9 @@ public sealed class GitCliCommandRunner : IGitCommandRunner
     /// <param name="readBoundedAsync">
     ///     The redirected-stream reader. Cannot be <see langword="null" />.
     /// </param>
+    /// <param name="logger">
+    ///     The logger for command execution outcomes, or <see langword="null" /> to log nowhere.
+    /// </param>
     /// <exception cref="ArgumentException">
     ///     <paramref name="executablePath" /> is empty or contains only white-space characters.
     ///     -or-
@@ -108,7 +121,8 @@ public sealed class GitCliCommandRunner : IGitCommandRunner
     internal GitCliCommandRunner(
         string executablePath,
         IEnumerable<string> executableArguments,
-        Func<Stream, int, CancellationToken, Task<byte[]>> readBoundedAsync)
+        Func<Stream, int, CancellationToken, Task<byte[]>> readBoundedAsync,
+        ILogger<GitCliCommandRunner>? logger = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(executablePath);
         ArgumentNullException.ThrowIfNull(executableArguments);
@@ -125,6 +139,7 @@ public sealed class GitCliCommandRunner : IGitCommandRunner
         this._executablePath = executablePath;
         this._executableArguments = Array.AsReadOnly(copiedArguments);
         this._readBoundedAsync = readBoundedAsync;
+        this._logger = logger ?? NullLogger<GitCliCommandRunner>.Instance;
     }
 
     /// <inheritdoc />
@@ -135,6 +150,8 @@ public sealed class GitCliCommandRunner : IGitCommandRunner
         ArgumentNullException.ThrowIfNull(command);
         cancellationToken.ThrowIfCancellationRequested();
 
+        var startedAt = Stopwatch.GetTimestamp();
+
         using var process = new Process
         {
             StartInfo = this.CreateStartInfo(command),
@@ -144,6 +161,9 @@ public sealed class GitCliCommandRunner : IGitCommandRunner
         {
             if (!process.Start())
             {
+                this._logger.LogWarning(
+                    "Git executable {ExecutablePath} did not start.",
+                    this._executablePath);
                 return Unavailable();
             }
         }
@@ -154,6 +174,10 @@ public sealed class GitCliCommandRunner : IGitCommandRunner
                 or UnauthorizedAccessException
                 or InvalidOperationException)
         {
+            this._logger.LogWarning(
+                exception,
+                "Git executable {ExecutablePath} is unavailable.",
+                this._executablePath);
             return Unavailable();
         }
 
@@ -190,6 +214,11 @@ public sealed class GitCliCommandRunner : IGitCommandRunner
             if (exceededLimit)
             {
                 await TerminateAndCleanUpAsync(process, executionCancellation, cleanupTasks);
+                this._logger.LogWarning(
+                    "Git command with {ArgumentCount} arguments exceeded its output bound after " +
+                    "{ElapsedMilliseconds:0.000} ms.",
+                    command.Arguments.Count,
+                    Stopwatch.GetElapsedTime(startedAt).TotalMilliseconds);
                 return Result.Fail<GitCommandOutput>(command.ErrorPolicy.OutputLimitExceeded);
             }
 
@@ -198,19 +227,35 @@ public sealed class GitCliCommandRunner : IGitCommandRunner
             if (standardOutputBytes.Length > command.MaximumStandardOutputBytes
                 || standardErrorBytes.Length > command.MaximumStandardErrorBytes)
             {
+                this._logger.LogWarning(
+                    "Git command with {ArgumentCount} arguments exceeded its output bound after " +
+                    "{ElapsedMilliseconds:0.000} ms.",
+                    command.Arguments.Count,
+                    Stopwatch.GetElapsedTime(startedAt).TotalMilliseconds);
                 return Result.Fail<GitCommandOutput>(command.ErrorPolicy.OutputLimitExceeded);
             }
 
             try
             {
+                this._logger.LogDebug(
+                    "Ran Git command with {ArgumentCount} arguments, exit code {ExitCode}, in " +
+                    "{ElapsedMilliseconds:0.000} ms.",
+                    command.Arguments.Count,
+                    process.ExitCode,
+                    Stopwatch.GetElapsedTime(startedAt).TotalMilliseconds);
                 return Result.Success(
                     new GitCommandOutput(
                         process.ExitCode,
                         StrictUtf8.GetString(standardOutputBytes),
                         StrictUtf8.GetString(standardErrorBytes)));
             }
-            catch (DecoderFallbackException)
+            catch (DecoderFallbackException exception)
             {
+                this._logger.LogWarning(
+                    exception,
+                    "Git command with {ArgumentCount} arguments produced output that could not be decoded as " +
+                    "UTF-8.",
+                    command.Arguments.Count);
                 return Result.Fail<GitCommandOutput>(command.ErrorPolicy.InspectionFailed);
             }
         }
@@ -223,11 +268,20 @@ public sealed class GitCliCommandRunner : IGitCommandRunner
         catch (OperationCanceledException) when (timeout.IsCancellationRequested)
         {
             await TerminateAndCleanUpAsync(process, executionCancellation, cleanupTasks);
+            this._logger.LogWarning(
+                "Git command with {ArgumentCount} arguments timed out after {ElapsedMilliseconds:0.000} ms.",
+                command.Arguments.Count,
+                Stopwatch.GetElapsedTime(startedAt).TotalMilliseconds);
             return Result.Fail<GitCommandOutput>(command.ErrorPolicy.TimedOut);
         }
         catch (Exception exception) when (exception is IOException or InvalidOperationException)
         {
             await TerminateAndCleanUpAsync(process, executionCancellation, cleanupTasks);
+            this._logger.LogWarning(
+                exception,
+                "Git command with {ArgumentCount} arguments failed after {ElapsedMilliseconds:0.000} ms.",
+                command.Arguments.Count,
+                Stopwatch.GetElapsedTime(startedAt).TotalMilliseconds);
             return Result.Fail<GitCommandOutput>(command.ErrorPolicy.InspectionFailed);
         }
     }

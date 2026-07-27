@@ -4,6 +4,7 @@ using ChangeLens.Core.LocalState.Interfaces;
 using ChangeLens.Core.LocalState.Models;
 using ChangeLens.Core.Results.Models;
 using ChangeLens.Engine.Repositories.Interfaces;
+using Microsoft.Extensions.Logging;
 
 namespace ChangeLens.Engine.Repositories.Services;
 
@@ -17,11 +18,13 @@ namespace ChangeLens.Engine.Repositories.Services;
 /// <param name="historyStore">The durable repository-history store.</param>
 /// <param name="pathKeyProvider">The platform-specific canonical-path key provider.</param>
 /// <param name="timeProvider">The time source used for explicit-open timestamps.</param>
+/// <param name="logger">The logger for repository history outcomes.</param>
 internal sealed class RepositoryHistoryService(
     IGitRepositoryInspector repositoryInspector,
     IRepositoryHistoryStore historyStore,
     ICanonicalRepositoryPathKeyProvider pathKeyProvider,
-    TimeProvider timeProvider) : IRepositoryHistoryService
+    TimeProvider timeProvider,
+    ILogger<RepositoryHistoryService> logger) : IRepositoryHistoryService
 {
     /// <inheritdoc />
     public async Task<Result<OpenedRepository>> OpenAsync(
@@ -31,6 +34,7 @@ internal sealed class RepositoryHistoryService(
         var inspectionResult = await repositoryInspector.InspectAsync(path, cancellationToken);
         if (inspectionResult.IsFailure)
         {
+            logger.LogWarning("Failed to open the selected repository: inspection did not produce a repository.");
             return Result.ErrorFromResult<OpenedRepository>(inspectionResult);
         }
 
@@ -46,6 +50,7 @@ internal sealed class RepositoryHistoryService(
             return Result.ErrorFromResult<OpenedRepository>(recordResult);
         }
 
+        logger.LogInformation("Opened repository {RepositoryName}.", repository.Name);
         return Result.Success(new OpenedRepository(recordResult.Data!, repository));
     }
 
@@ -62,6 +67,7 @@ internal sealed class RepositoryHistoryService(
         var entry = lastResult.Data;
         if (entry is null)
         {
+            logger.LogDebug("No repository history entry available to restore.");
             return Result.Success(new RepositoryRestoration(null, null));
         }
 
@@ -70,9 +76,11 @@ internal sealed class RepositoryHistoryService(
             cancellationToken);
         if (inspectionResult.IsFailure)
         {
+            logger.LogWarning("Failed to restore the last repository: it is no longer inspectable.");
             return Result.ErrorFromResult<RepositoryRestoration>(inspectionResult);
         }
 
+        logger.LogInformation("Restored last repository {RepositoryName}.", entry.DisplayName);
         return Result.Success(new RepositoryRestoration(entry, inspectionResult.Data!));
     }
 

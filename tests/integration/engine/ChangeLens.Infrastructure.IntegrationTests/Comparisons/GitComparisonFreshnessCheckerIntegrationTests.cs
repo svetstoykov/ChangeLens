@@ -3,6 +3,7 @@ using ChangeLens.Core.Comparisons.Services;
 using ChangeLens.Infrastructure.FileSystem.Services;
 using ChangeLens.Infrastructure.Git.Services;
 using ChangeLens.Infrastructure.IntegrationTests.Git.Support;
+using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 
 namespace ChangeLens.Infrastructure.IntegrationTests.Comparisons;
@@ -185,12 +186,14 @@ public sealed class GitComparisonFreshnessCheckerIntegrationTests
     {
         var inspector = new ChangeLens.Core.Git.Services.GitRepositoryInspector(
             runner,
-            new PhysicalRepositoryPathResolver());
+            new PhysicalRepositoryPathResolver(),
+            NullLogger<ChangeLens.Core.Git.Services.GitRepositoryInspector>.Instance);
         return new GitComparisonPreparer(
             inspector,
-            new GitComparisonTargetDiscovery(inspector, runner),
+            new GitComparisonTargetDiscovery(inspector, runner, NullLogger<GitComparisonTargetDiscovery>.Instance),
             runner,
-            new ComparisonFileSummaryComposer());
+            new ComparisonFileSummaryComposer(),
+            NullLogger<GitComparisonPreparer>.Instance);
     }
 
     private static GitComparisonFreshnessChecker CreateChecker(
@@ -198,10 +201,12 @@ public sealed class GitComparisonFreshnessCheckerIntegrationTests
     {
         var inspector = new ChangeLens.Core.Git.Services.GitRepositoryInspector(
             runner,
-            new PhysicalRepositoryPathResolver());
+            new PhysicalRepositoryPathResolver(),
+            NullLogger<ChangeLens.Core.Git.Services.GitRepositoryInspector>.Instance);
         return new GitComparisonFreshnessChecker(
             inspector,
-            new GitComparisonTargetDiscovery(inspector, runner),
-            runner);
+            new GitComparisonTargetDiscovery(inspector, runner, NullLogger<GitComparisonTargetDiscovery>.Instance),
+            runner,
+            NullLogger<GitComparisonFreshnessChecker>.Instance);
     }
 }

@@ -42,8 +42,8 @@ public sealed class SqliteLocalStateTests
     {
         using var temporaryDirectory = new TemporaryDirectory();
         var database = CreateDatabase(temporaryDirectory.DirectoryPath);
-        var historyStore = new SqliteRepositoryHistoryStore(database);
-        var themeStore = new SqliteColorThemePreferenceStore(database);
+        var historyStore = new SqliteRepositoryHistoryStore(database, NullLogger<SqliteRepositoryHistoryStore>.Instance);
+        var themeStore = new SqliteColorThemePreferenceStore(database, NullLogger<SqliteColorThemePreferenceStore>.Instance);
         var cancellationToken = TestContext.Current.CancellationToken;
 
         Assert.True((await database.InitializeAsync(cancellationToken)).IsSuccess);
@@ -97,7 +97,7 @@ public sealed class SqliteLocalStateTests
     {
         using var temporaryDirectory = new TemporaryDirectory();
         var database = CreateDatabase(temporaryDirectory.DirectoryPath);
-        var historyStore = new SqliteRepositoryHistoryStore(database);
+        var historyStore = new SqliteRepositoryHistoryStore(database, NullLogger<SqliteRepositoryHistoryStore>.Instance);
         var cancellationToken = TestContext.Current.CancellationToken;
         Assert.True((await database.InitializeAsync(cancellationToken)).IsSuccess);
 
@@ -178,7 +178,7 @@ public sealed class SqliteLocalStateTests
         var result = await database.InitializeAsync(cancellationToken);
 
         Assert.True(result.IsSuccess);
-        var theme = await new SqliteColorThemePreferenceStore(database).GetAsync(cancellationToken);
+        var theme = await new SqliteColorThemePreferenceStore(database, NullLogger<SqliteColorThemePreferenceStore>.Instance).GetAsync(cancellationToken);
         Assert.Equal(ColorTheme.Dark, theme.Data);
         await using var verificationConnection =
             new SqliteConnection($"Data Source={databasePath};Mode=ReadOnly");
@@ -253,7 +253,7 @@ public sealed class SqliteLocalStateTests
                 cancellationToken);
         }
 
-        var result = await new SqliteRepositoryHistoryStore(database)
+        var result = await new SqliteRepositoryHistoryStore(database, NullLogger<SqliteRepositoryHistoryStore>.Instance)
             .ListRecentAsync(cancellationToken);
 
         Assert.True(result.IsFailure);

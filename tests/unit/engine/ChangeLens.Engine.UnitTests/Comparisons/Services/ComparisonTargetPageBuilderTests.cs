@@ -4,6 +4,7 @@ using ChangeLens.Engine.Comparisons.Constants;
 using ChangeLens.Engine.Comparisons.Models;
 using ChangeLens.Engine.Comparisons.Services;
 using ChangeLens.Engine.Protocol.Services;
+using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 
 namespace ChangeLens.Engine.UnitTests.Comparisons.Services;
@@ -362,7 +363,8 @@ public sealed class ComparisonTargetPageBuilderTests
         Assert.True(System.Text.Encoding.UTF8.GetByteCount(json) <= TargetPageBudgetBytes);
     }
 
-    private ComparisonTargetPageBuilder CreateBuilder() => new(this._serializer);
+    private ComparisonTargetPageBuilder CreateBuilder() =>
+        new(this._serializer, NullLogger<ComparisonTargetPageBuilder>.Instance);
 
     private string Serialize(string requestId, ComparisonTargetPageResult result)
     {

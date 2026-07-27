@@ -5,6 +5,7 @@ using ChangeLens.Infrastructure.LocalState.Constants;
 using ChangeLens.Infrastructure.LocalState.Interfaces;
 using ChangeLens.Infrastructure.LocalState.Persistence.Entities;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 
 namespace ChangeLens.Infrastructure.LocalState.Services;
 
@@ -15,7 +16,10 @@ namespace ChangeLens.Infrastructure.LocalState.Services;
 ///     The Engine registers this stateless implementation as a singleton. Each operation uses its own Entity Framework context.
 /// </remarks>
 /// <param name="database">The required SQLite local-state database.</param>
-public sealed class SqliteRepositoryHistoryStore(ILocalStateDatabase database) : IRepositoryHistoryStore
+/// <param name="logger">The logger for repository-history persistence failures.</param>
+public sealed class SqliteRepositoryHistoryStore(
+    ILocalStateDatabase database,
+    ILogger<SqliteRepositoryHistoryStore> logger) : IRepositoryHistoryStore
 {
     /// <inheritdoc />
     public async Task<Result<RepositoryHistoryEntry>> RecordOpenAsync(
@@ -69,10 +73,14 @@ public sealed class SqliteRepositoryHistoryStore(ILocalStateDatabase database) :
         }
         catch (Exception exception) when (SqliteLocalStateDatabase.IsExpectedAccessFailure(exception))
         {
+            logger.LogWarning(exception, "Failed to record a repository history open.");
             return SqliteLocalStateDatabase.Unavailable<RepositoryHistoryEntry>(exception);
         }
         catch (Exception exception) when (SqliteLocalStateDatabase.IsMalformedDataFailure(exception))
         {
+            logger.LogWarning(
+                exception,
+                "Failed to record a repository history open: stored metadata is malformed.");
             return SqliteLocalStateDatabase.Invalid<RepositoryHistoryEntry>();
         }
     }
@@ -91,10 +99,14 @@ public sealed class SqliteRepositoryHistoryStore(ILocalStateDatabase database) :
         }
         catch (Exception exception) when (SqliteLocalStateDatabase.IsExpectedAccessFailure(exception))
         {
+            logger.LogWarning(exception, "Failed to read the last-opened repository from history.");
             return SqliteLocalStateDatabase.Unavailable<RepositoryHistoryEntry?>(exception);
         }
         catch (Exception exception) when (SqliteLocalStateDatabase.IsMalformedDataFailure(exception))
         {
+            logger.LogWarning(
+                exception,
+                "Failed to read the last-opened repository from history: stored metadata is malformed.");
             return SqliteLocalStateDatabase.Invalid<RepositoryHistoryEntry?>();
         }
     }
@@ -121,10 +133,12 @@ public sealed class SqliteRepositoryHistoryStore(ILocalStateDatabase database) :
         }
         catch (Exception exception) when (SqliteLocalStateDatabase.IsExpectedAccessFailure(exception))
         {
+            logger.LogWarning(exception, "Failed to list recent repository history.");
             return SqliteLocalStateDatabase.Unavailable<RepositoryHistorySnapshot>(exception);
         }
         catch (Exception exception) when (SqliteLocalStateDatabase.IsMalformedDataFailure(exception))
         {
+            logger.LogWarning(exception, "Failed to list recent repository history: stored metadata is malformed.");
             return SqliteLocalStateDatabase.Invalid<RepositoryHistorySnapshot>();
         }
     }
@@ -148,6 +162,7 @@ public sealed class SqliteRepositoryHistoryStore(ILocalStateDatabase database) :
         }
         catch (Exception exception) when (SqliteLocalStateDatabase.IsExpectedAccessFailure(exception))
         {
+            logger.LogWarning(exception, "Failed to remove repository {RepositoryId} from history.", repositoryId);
             return SqliteLocalStateDatabase.Unavailable(exception);
         }
     }
@@ -174,6 +189,7 @@ public sealed class SqliteRepositoryHistoryStore(ILocalStateDatabase database) :
         }
         catch (Exception exception) when (SqliteLocalStateDatabase.IsExpectedAccessFailure(exception))
         {
+            logger.LogWarning(exception, "Failed to save a preferred comparison target.");
             return SqliteLocalStateDatabase.Unavailable(exception);
         }
     }

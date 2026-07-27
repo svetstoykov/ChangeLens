@@ -2,6 +2,7 @@ using ChangeLens.Core.Git.Interfaces;
 using ChangeLens.Core.Git.Models;
 using ChangeLens.Core.Git.Services;
 using ChangeLens.Core.Results.Models;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace ChangeLens.Engine.UnitTests.Repositories.Support;
 
@@ -19,7 +20,7 @@ internal sealed class RepositoryInspectorFixture : IGitCommandRunner, IRepositor
     /// </summary>
     internal RepositoryInspectorFixture()
     {
-        this.Inspector = new GitRepositoryInspector(this, this);
+        this.Inspector = new GitRepositoryInspector(this, this, NullLogger<GitRepositoryInspector>.Instance);
     }
 
     /// <summary>

@@ -4,6 +4,7 @@ using ChangeLens.Core.Git.Services;
 using ChangeLens.Infrastructure.FileSystem.Services;
 using ChangeLens.Infrastructure.Git.Services;
 using ChangeLens.Infrastructure.IntegrationTests.Git.Support;
+using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 using Xunit.Sdk;
 
@@ -132,8 +133,10 @@ public sealed class GitComparisonTargetDiscoveryIntegrationTests
         var discovery = new GitComparisonTargetDiscovery(
             new GitRepositoryInspector(
                 runner,
-                new PhysicalRepositoryPathResolver()),
-            runner);
+                new PhysicalRepositoryPathResolver(),
+                NullLogger<GitRepositoryInspector>.Instance),
+            runner,
+            NullLogger<GitComparisonTargetDiscovery>.Instance);
 
         var result = await discovery.ListAsync(
             repository.RootPath,

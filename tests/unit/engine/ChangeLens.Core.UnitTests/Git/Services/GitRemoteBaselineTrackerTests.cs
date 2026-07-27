@@ -3,6 +3,7 @@ using ChangeLens.Core.Git.Models;
 using ChangeLens.Core.Git.Services;
 using ChangeLens.Core.Results.Models;
 using ChangeLens.Core.UnitTests.Git.Support;
+using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 
 namespace ChangeLens.Core.UnitTests.Git.Services;
@@ -214,7 +215,9 @@ public sealed class GitRemoteBaselineTrackerTests
     private static GitRemoteBaselineTracker CreateTracker(
         StubGitCommandRunner runner,
         StubRepositoryPathResolver resolver) =>
-        new(new GitRepositoryInspector(runner, resolver), runner);
+        new(new GitRepositoryInspector(runner, resolver, NullLogger<GitRepositoryInspector>.Instance),
+            runner,
+            NullLogger<GitRemoteBaselineTracker>.Instance);
 
     private static void EnqueueInspection(
         StubGitCommandRunner runner,

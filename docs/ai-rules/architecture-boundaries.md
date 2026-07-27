@@ -4,7 +4,7 @@ Read before adding or moving a project, changing project references, touching th
 
 ## Engine projects
 
-- `ChangeLens.Core` contains domain concepts, invariants, transport-independent Results, and interfaces required from external capabilities. It has no references to other ChangeLens projects. External NuGet packages are permitted when they preserve this ownership boundary.
+- `ChangeLens.Core` contains domain concepts, invariants, transport-independent Results, and interfaces required from external capabilities. It has no references to other ChangeLens projects. External NuGet packages are permitted when they preserve this ownership boundary; Core should generally stay minimal, but does not have to be strictly dependency-free where a lightweight, provider-neutral abstraction earns its place — `Microsoft.Extensions.Logging.Abstractions` is one such accepted case (see `dotnet-logging.md`).
 - `ChangeLens.Infrastructure` implements Core interfaces for Git, SQLite, local artifacts, filesystem access, subprocess execution, Roslyn/MSBuild analysis, and configured AI providers. It references Core.
 - `ChangeLens.Engine` is the executable application boundary. It owns use-case orchestration, dependency-injection composition, lifecycle, and versioned standard-input/output protocol handling. It references Core and Infrastructure.
 

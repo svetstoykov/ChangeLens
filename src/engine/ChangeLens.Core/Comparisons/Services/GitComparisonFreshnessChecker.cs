@@ -87,16 +87,14 @@ public sealed class GitComparisonFreshnessChecker(
         if (!IsValidToken(freshnessToken))
         {
             this._logger.LogDebug(
-                "Rejected comparison freshness check for target {Target}: freshness token shape is not approved.",
-                target);
+                "Rejected comparison freshness check: freshness token shape is not approved.");
             return InvalidFreshnessTokenError;
         }
 
         if (!IsApprovedTargetShape(target))
         {
             this._logger.LogDebug(
-                "Rejected comparison freshness check for target {Target}: target shape is not approved.",
-                target);
+                "Rejected comparison freshness check: target shape is not approved.");
             return TargetInvalidError;
         }
 

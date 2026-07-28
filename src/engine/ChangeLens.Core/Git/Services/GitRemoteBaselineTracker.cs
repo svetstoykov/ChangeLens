@@ -529,5 +529,4 @@ public sealed class GitRemoteBaselineTracker(
         OperationError.Timeout(
             "Checking the remote branch exceeded its allowed time.",
             ComparisonErrorCode.RemoteTimedOut);
-
 }

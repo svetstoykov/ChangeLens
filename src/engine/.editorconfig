@@ -1,0 +1,36 @@
+root = true
+
+[*.cs]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+indent_style = space
+indent_size = 4
+tab_width = 4
+max_line_length = 150
+
+dotnet_sort_system_directives_first = true
+dotnet_separate_import_directive_groups = false
+dotnet_style_qualification_for_field = true:error
+dotnet_style_qualification_for_property = true:error
+dotnet_style_qualification_for_method = true:error
+dotnet_style_qualification_for_event = true:error
+
+resharper_csharp_keep_user_linebreaks = false
+resharper_csharp_keep_existing_declaration_parens_arrangement = false
+resharper_csharp_keep_existing_primary_constructor_declaration_parens_arrangement = false
+resharper_csharp_keep_existing_invocation_parens_arrangement = false
+resharper_csharp_wrap_parameters_style = chop_if_long
+resharper_csharp_wrap_primary_constructor_parameters_style = chop_if_long
+resharper_csharp_wrap_arguments_style = chop_if_long
+resharper_csharp_wrap_before_declaration_rpar = false
+resharper_csharp_wrap_before_invocation_rpar = false
+resharper_csharp_wrap_chained_method_calls = chop_if_long
+resharper_csharp_wrap_after_dot_in_method_calls = false
+
+[**/Migrations/**/*.cs]
+generated_code = true
+
+[*.Designer.cs]
+generated_code = true

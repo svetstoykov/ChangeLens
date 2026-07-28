@@ -41,9 +41,25 @@ internal static class EngineHostApplicationBuilderExtensions
         ArgumentNullException.ThrowIfNull(builder);
 
         builder.AddEngineLogging();
+
+        AddRuntimeServices(builder);
+        AddLocalStateServices(builder);
+        AddPreferenceServices(builder);
+        AddEngineStatusServices(builder);
+        AddRepositoryServices(builder);
+        AddComparisonServices(builder);
+        AddProtocolServices(builder);
+    }
+
+    private static void AddRuntimeServices(HostApplicationBuilder builder)
+    {
         builder.Services.AddSingleton<TextReader>(_ => Console.In);
         builder.Services.AddSingleton<TextWriter>(_ => Console.Out);
         builder.Services.AddSingleton<TimeProvider>(TimeProvider.System);
+    }
+
+    private static void AddLocalStateServices(HostApplicationBuilder builder)
+    {
         builder.Services.AddSingleton<ILocalStateDatabase>(
             serviceProvider =>
                 new SqliteLocalStateDatabase(
@@ -55,13 +71,23 @@ internal static class EngineHostApplicationBuilderExtensions
             serviceProvider => serviceProvider.GetRequiredService<ILocalStateDatabase>() as ILocalStateInitializer
                 ?? throw new InvalidOperationException("The local-state database must provide lifecycle initialization."));
         builder.Services.AddSingleton<IRepositoryHistoryStore, SqliteRepositoryHistoryStore>();
-        builder.Services.AddSingleton<
-            IColorThemePreferenceStore,
-            SqliteColorThemePreferenceStore>();
-        builder.Services.AddSingleton<
-            ICanonicalRepositoryPathKeyProvider,
-            CanonicalRepositoryPathKeyProvider>();
+        builder.Services.AddSingleton<IRepositoryHistoryService, RepositoryHistoryService>();
+    }
+
+    private static void AddPreferenceServices(HostApplicationBuilder builder)
+    {
+        builder.Services.AddSingleton<IColorThemePreferenceStore, SqliteColorThemePreferenceStore>();
+        builder.Services.AddSingleton<IColorThemePreferenceService, ColorThemePreferenceService>();
+    }
+
+    private static void AddEngineStatusServices(HostApplicationBuilder builder)
+    {
         builder.Services.AddSingleton<IEngineStatusService, EngineStatusService>();
+    }
+
+    private static void AddRepositoryServices(HostApplicationBuilder builder)
+    {
+        builder.Services.AddSingleton<ICanonicalRepositoryPathKeyProvider, CanonicalRepositoryPathKeyProvider>();
         builder.Services.AddSingleton<IRepositoryPathResolver, PhysicalRepositoryPathResolver>();
         builder.Services.AddSingleton<IGitCommandRunner>(
             serviceProvider =>
@@ -79,15 +105,21 @@ internal static class EngineHostApplicationBuilderExtensions
                         Microsoft.Extensions.Logging.ILogger<GitCliCommandRunner>>());
             });
         builder.Services.AddSingleton<IGitRepositoryInspector, GitRepositoryInspector>();
+    }
+
+    private static void AddComparisonServices(HostApplicationBuilder builder)
+    {
         builder.Services.AddSingleton<IComparisonFileSummaryComposer, ComparisonFileSummaryComposer>();
         builder.Services.AddSingleton<IGitComparisonTargetDiscovery, GitComparisonTargetDiscovery>();
         builder.Services.AddSingleton<IGitComparisonPreparer, GitComparisonPreparer>();
         builder.Services.AddSingleton<IGitComparisonFreshnessChecker, GitComparisonFreshnessChecker>();
         builder.Services.AddSingleton<IGitRemoteBaselineTracker, GitRemoteBaselineTracker>();
-        builder.Services.AddSingleton<IEngineProtocolSerializer, EngineProtocolSerializer>();
         builder.Services.AddSingleton<IComparisonTargetPageBuilder, ComparisonTargetPageBuilder>();
-        builder.Services.AddSingleton<IRepositoryHistoryService, RepositoryHistoryService>();
-        builder.Services.AddSingleton<IColorThemePreferenceService, ColorThemePreferenceService>();
+    }
+
+    private static void AddProtocolServices(HostApplicationBuilder builder)
+    {
+        builder.Services.AddSingleton<IEngineProtocolSerializer, EngineProtocolSerializer>();
         builder.Services.AddSingleton<IEngineProtocolTransport, EngineProtocolTransport>();
         builder.Services.AddSingleton<IEngineActionProcessor, EngineActionProcessor>();
         builder.Services.AddHostedService<EngineProtocolHost>();

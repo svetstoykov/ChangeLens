@@ -1,0 +1,19 @@
+{
+  "protocolVersion": 1,
+  "type": "result",
+  "requestId": "desktop-5",
+  "result": {
+    "state": "restored",
+    "repositoryId": "01234567-89ab-cdef-0123-456789abcdef",
+    "repository": {
+      "name": "change_lens",
+      "canonicalPath": "/projects/change_lens",
+      "head": {
+        "kind": "branch",
+        "name": "main",
+        "revision": "0123456789abcdef0123456789abcdef01234567"
+      }
+    },
+    "preferredTarget": null
+  }
+}

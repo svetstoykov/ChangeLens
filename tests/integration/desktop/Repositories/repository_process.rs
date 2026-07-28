@@ -80,6 +80,29 @@ fn local_state_actions_use_exact_shapes_and_share_one_process() {
 }
 
 #[test]
+fn parses_a_restored_startup_repository() {
+    let client = client_for_mode("local-state-restored");
+
+    let restoration = client
+        .restore_last_repository()
+        .expect("the restored result must parse");
+
+    let RepositoryRestoreResult::Restored {
+        repository_id,
+        repository,
+        preferred_target,
+    } = restoration
+    else {
+        panic!("the fixture must return a restored result");
+    };
+
+    assert_eq!(repository_id, "01234567-89ab-cdef-0123-456789abcdef");
+    assert_eq!(repository.name, "change_lens");
+    assert_eq!(repository.canonical_path, REPOSITORY_PATH);
+    assert_eq!(preferred_target, None);
+}
+
+#[test]
 fn preserves_ordered_engine_errors_and_reuses_the_process() {
     let client = client_for_mode("repository-ordered-error-once");
 

@@ -104,7 +104,7 @@ impl EngineClient {
         let exchange_result = process_guard
             .as_mut()
             .expect("the engine process was initialized")
-            .exchange::<_, TResult>(&request, &request_id, response_timeout);
+            .exchange::<_, TResult>(&request, action, &request_id, response_timeout);
 
         match exchange_result {
             Ok(result) => Ok(result),

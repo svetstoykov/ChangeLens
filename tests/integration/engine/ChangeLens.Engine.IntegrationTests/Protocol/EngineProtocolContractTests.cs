@@ -30,6 +30,9 @@ public sealed class EngineProtocolContractTests
     [InlineData("repository-open.schema.json", "repositories-open.detached.result.json")]
     [InlineData("repository-restore-last.schema.json", "repositories-restore-last.request.json")]
     [InlineData("repository-restore-last.schema.json", "repositories-restore-last.none.result.json")]
+    [InlineData(
+        "repository-restore-last.schema.json",
+        "repositories-restore-last.restored.result.json")]
     [InlineData("repository-list-recent.schema.json", "repositories-list-recent.request.json")]
     [InlineData("repository-list-recent.schema.json", "repositories-list-recent.result.json")]
     [InlineData("repository-remove-recent.schema.json", "repositories-remove-recent.request.json")]

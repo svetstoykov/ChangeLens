@@ -3,7 +3,12 @@ use serde::{Deserialize, Serialize};
 
 /// Defines whether a repository HEAD is attached to a branch or detached at a revision.
 #[derive(Clone, Debug, Deserialize, PartialEq, Eq, Serialize)]
-#[serde(tag = "kind", rename_all = "camelCase", deny_unknown_fields)]
+#[serde(
+    tag = "kind",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase",
+    deny_unknown_fields
+)]
 pub enum RepositoryHead {
     /// A HEAD attached to a named branch.
     #[serde(rename = "branch")]

@@ -1,7 +1,7 @@
 using ChangeLens.Core.LocalState.Models;
+using ChangeLens.Core.LocalState.Interfaces;
 using ChangeLens.Core.Results.Models;
 using ChangeLens.Engine.Preferences.Constants;
-using ChangeLens.Engine.Preferences.Interfaces;
 using ChangeLens.Engine.Preferences.Models;
 using ChangeLens.Engine.Protocol.Interfaces;
 using ChangeLens.Engine.Protocol.Models;

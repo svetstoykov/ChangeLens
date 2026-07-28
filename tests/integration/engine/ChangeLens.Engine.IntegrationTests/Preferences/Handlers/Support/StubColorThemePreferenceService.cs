@@ -1,6 +1,6 @@
+using ChangeLens.Core.LocalState.Interfaces;
 using ChangeLens.Core.LocalState.Models;
 using ChangeLens.Core.Results.Models;
-using ChangeLens.Engine.Preferences.Interfaces;
 
 namespace ChangeLens.Engine.IntegrationTests.Preferences.Handlers.Support;
 

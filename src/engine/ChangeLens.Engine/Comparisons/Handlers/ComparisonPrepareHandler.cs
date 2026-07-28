@@ -1,12 +1,12 @@
 using System.Text.Json;
 using ChangeLens.Core.Comparisons.Interfaces;
+using ChangeLens.Core.LocalState.Interfaces;
 using ChangeLens.Core.Results.Models;
 using ChangeLens.Engine.Comparisons.Constants;
 using ChangeLens.Engine.Comparisons.Models;
 using ChangeLens.Engine.Protocol.Interfaces;
 using ChangeLens.Engine.Protocol.Models;
 using ChangeLens.Engine.Protocol.Services;
-using ChangeLens.Engine.Repositories.Interfaces;
 
 namespace ChangeLens.Engine.Comparisons.Handlers;
 

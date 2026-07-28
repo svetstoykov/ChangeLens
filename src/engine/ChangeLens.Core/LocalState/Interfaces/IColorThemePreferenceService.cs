@@ -1,12 +1,12 @@
 using ChangeLens.Core.LocalState.Models;
 using ChangeLens.Core.Results.Models;
 
-namespace ChangeLens.Engine.Preferences.Interfaces;
+namespace ChangeLens.Core.LocalState.Interfaces;
 
 /// <summary>
-///     Defines color-theme preference use cases for engine actions.
+///     Defines color-theme preference use cases.
 /// </summary>
-internal interface IColorThemePreferenceService
+public interface IColorThemePreferenceService
 {
     /// <summary>
     ///     Asynchronously gets the explicit color-theme preference.

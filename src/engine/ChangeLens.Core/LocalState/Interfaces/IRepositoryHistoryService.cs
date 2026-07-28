@@ -1,12 +1,12 @@
 using ChangeLens.Core.LocalState.Models;
 using ChangeLens.Core.Results.Models;
 
-namespace ChangeLens.Engine.Repositories.Interfaces;
+namespace ChangeLens.Core.LocalState.Interfaces;
 
 /// <summary>
-///     Defines repository-history use cases for engine actions.
+///     Defines repository-history use cases.
 /// </summary>
-internal interface IRepositoryHistoryService
+public interface IRepositoryHistoryService
 {
     /// <summary>
     ///     Asynchronously inspects and records an explicitly opened repository.

@@ -3,7 +3,7 @@ using ChangeLens.Engine.Protocol.Interfaces;
 using ChangeLens.Engine.Protocol.Models;
 using ChangeLens.Engine.Protocol.Services;
 using ChangeLens.Engine.Repositories.Constants;
-using ChangeLens.Engine.Repositories.Interfaces;
+using ChangeLens.Core.LocalState.Interfaces;
 using ChangeLens.Engine.Repositories.Models;
 
 namespace ChangeLens.Engine.Repositories.Handlers;

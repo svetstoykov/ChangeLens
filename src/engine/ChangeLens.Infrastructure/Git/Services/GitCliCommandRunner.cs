@@ -219,9 +219,9 @@ public sealed class GitCliCommandRunner : IGitCommandRunner
             {
                 await TerminateAndCleanUpAsync(process, executionCancellation, cleanupTasks);
                 this._logger.LogWarning(
-                    "Git command with {ArgumentCount} arguments exceeded its output bound after " +
+                    "Git {Subcommand} command exceeded its output bound after " +
                     "{ElapsedMilliseconds:0.000} ms.",
-                    command.Arguments.Count,
+                    Subcommand(command),
                     Stopwatch.GetElapsedTime(startedAt).TotalMilliseconds);
                 return command.ErrorPolicy.OutputLimitExceeded;
             }
@@ -232,9 +232,9 @@ public sealed class GitCliCommandRunner : IGitCommandRunner
                 || standardErrorBytes.Length > command.MaximumStandardErrorBytes)
             {
                 this._logger.LogWarning(
-                    "Git command with {ArgumentCount} arguments exceeded its output bound after " +
+                    "Git {Subcommand} command exceeded its output bound after " +
                     "{ElapsedMilliseconds:0.000} ms.",
-                    command.Arguments.Count,
+                    Subcommand(command),
                     Stopwatch.GetElapsedTime(startedAt).TotalMilliseconds);
                 return command.ErrorPolicy.OutputLimitExceeded;
             }
@@ -242,9 +242,9 @@ public sealed class GitCliCommandRunner : IGitCommandRunner
             try
             {
                 this._logger.LogDebug(
-                    "Ran Git command with {ArgumentCount} arguments, exit code {ExitCode}, in " +
+                    "Ran Git command 'git {Arguments}', exit code {ExitCode}, in " +
                     "{ElapsedMilliseconds:0.000} ms.",
-                    command.Arguments.Count,
+                    string.Join(' ', command.Arguments),
                     process.ExitCode,
                     Stopwatch.GetElapsedTime(startedAt).TotalMilliseconds);
                 return Result.Success(
@@ -257,9 +257,8 @@ public sealed class GitCliCommandRunner : IGitCommandRunner
             {
                 this._logger.LogWarning(
                     exception,
-                    "Git command with {ArgumentCount} arguments produced output that could not be decoded as " +
-                    "UTF-8.",
-                    command.Arguments.Count);
+                    "Git {Subcommand} command produced output that could not be decoded as UTF-8.",
+                    Subcommand(command));
                 return command.ErrorPolicy.InspectionFailed;
             }
         }
@@ -273,8 +272,8 @@ public sealed class GitCliCommandRunner : IGitCommandRunner
         {
             await TerminateAndCleanUpAsync(process, executionCancellation, cleanupTasks);
             this._logger.LogWarning(
-                "Git command with {ArgumentCount} arguments timed out after {ElapsedMilliseconds:0.000} ms.",
-                command.Arguments.Count,
+                "Git {Subcommand} command timed out after {ElapsedMilliseconds:0.000} ms.",
+                Subcommand(command),
                 Stopwatch.GetElapsedTime(startedAt).TotalMilliseconds);
             return command.ErrorPolicy.TimedOut;
         }
@@ -283,8 +282,8 @@ public sealed class GitCliCommandRunner : IGitCommandRunner
             await TerminateAndCleanUpAsync(process, executionCancellation, cleanupTasks);
             this._logger.LogWarning(
                 exception,
-                "Git command with {ArgumentCount} arguments failed after {ElapsedMilliseconds:0.000} ms.",
-                command.Arguments.Count,
+                "Git {Subcommand} command failed after {ElapsedMilliseconds:0.000} ms.",
+                Subcommand(command),
                 Stopwatch.GetElapsedTime(startedAt).TotalMilliseconds);
             return command.ErrorPolicy.InspectionFailed;
         }
@@ -527,6 +526,38 @@ public sealed class GitCliCommandRunner : IGitCommandRunner
                 or Win32Exception)
         {
         }
+    }
+
+    /// <summary>
+    ///     Selects the Git subcommand so a failure names the operation that failed.
+    /// </summary>
+    /// <remarks>
+    ///     Only the subcommand verb is returned. Repository paths are sensitive and must not reach
+    ///     <c>Information</c> or above, so the surrounding options and their values are excluded.
+    /// </remarks>
+    /// <param name="command">The command being run. Cannot be <see langword="null" />.</param>
+    /// <returns>The subcommand verb, or <c>unknown</c> when the arguments carry none.</returns>
+    private static string Subcommand(GitCommand command)
+    {
+        var skipNext = false;
+        foreach (var argument in command.Arguments)
+        {
+            if (skipNext)
+            {
+                skipNext = false;
+                continue;
+            }
+
+            if (argument.StartsWith('-'))
+            {
+                skipNext = argument is "-C" or "-c";
+                continue;
+            }
+
+            return argument;
+        }
+
+        return "unknown";
     }
 
     private static Result<GitCommandOutput> Unavailable() => UnavailableError;

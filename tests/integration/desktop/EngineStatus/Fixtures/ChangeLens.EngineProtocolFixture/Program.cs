@@ -166,7 +166,7 @@ while (await Console.In.ReadLineAsync() is { } requestLine)
         "repositories.removeRecent" or "preferences.getColorTheme" or
         "preferences.setColorTheme")
     {
-        await WriteLocalStateResultAsync(requestId, action);
+        await WriteLocalStateResultAsync(requestId, action, mode);
         continue;
     }
 
@@ -357,10 +357,27 @@ static void ValidateLocalStateRequest(string requestLine, string requestId, stri
     }
 }
 
-async Task WriteLocalStateResultAsync(string requestId, string action)
+async Task WriteLocalStateResultAsync(string requestId, string action, string mode)
 {
     object? result = action switch
     {
+        "repositories.restoreLast" when mode == "local-state-restored" => new
+        {
+            state = "restored",
+            repositoryId = "01234567-89ab-cdef-0123-456789abcdef",
+            repository = new
+            {
+                name = "change_lens",
+                canonicalPath = "/projects/change_lens",
+                head = new
+                {
+                    kind = "branch",
+                    name = "main",
+                    revision = "0123456789abcdef0123456789abcdef01234567",
+                },
+            },
+            preferredTarget = (string?)null,
+        },
         "repositories.restoreLast" => new
         {
             state = "none",

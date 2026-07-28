@@ -6,7 +6,10 @@ mod protocol_response_parser;
 
 pub use engine_client::EngineClient;
 
-pub(crate) use engine_diagnostics::{report_engine_action_failure, report_engine_shutdown_forced};
+pub(crate) use engine_diagnostics::{
+    report_engine_action_failure, report_engine_response_schema_mismatch,
+    report_engine_shutdown_forced,
+};
 pub(crate) use engine_path::resolve_engine_path;
 pub(crate) use engine_process::EngineProcess;
 pub(crate) use protocol_response_parser::parse_response;

@@ -1,3 +1,4 @@
+use crate::engine_protocol::services::report_engine_response_schema_mismatch;
 use crate::engine_protocol::{EngineActionError, EngineExchangeError, EngineResponse};
 use serde::de::DeserializeOwned;
 
@@ -5,14 +6,22 @@ const CURRENT_PROTOCOL_VERSION: u32 = 1;
 
 pub(crate) fn parse_response<T: DeserializeOwned>(
     response_line: &str,
+    action: &str,
     expected_request_id: &str,
 ) -> Result<T, EngineExchangeError> {
-    let response: EngineResponse<T> = serde_json::from_str(response_line).map_err(|_| {
-        invalid_response(
-            Some(expected_request_id),
-            "The engine returned a response that does not match the protocol schema.",
-        )
-    })?;
+    let response: EngineResponse<T> =
+        serde_json::from_str(response_line).map_err(|deserialization_error| {
+            report_engine_response_schema_mismatch(
+                action,
+                expected_request_id,
+                &deserialization_error.to_string(),
+            );
+
+            invalid_response(
+                Some(expected_request_id),
+                "The engine returned a response that does not match the protocol schema.",
+            )
+        })?;
 
     match response {
         EngineResponse::Result {
@@ -120,7 +129,7 @@ mod tests {
 
     #[test]
     fn preserves_shared_ordered_error_fixture() {
-        let error = parse_response::<()>(ERROR_FIXTURE, "desktop-43")
+        let error = parse_response::<()>(ERROR_FIXTURE, "engine.checkStatus", "desktop-43")
             .expect_err("the canonical error fixture must reject the action")
             .into_action_error();
 
@@ -135,8 +144,12 @@ mod tests {
 
     #[test]
     fn preserves_uncorrelated_engine_error_without_invalidating_process() {
-        let exchange_error = parse_response::<()>(UNCORRELATED_ERROR_FIXTURE, "desktop-1")
-            .expect_err("the shared uncorrelated fixture must reject the action");
+        let exchange_error = parse_response::<()>(
+            UNCORRELATED_ERROR_FIXTURE,
+            "engine.checkStatus",
+            "desktop-1",
+        )
+        .expect_err("the shared uncorrelated fixture must reject the action");
 
         assert!(!exchange_error.invalidates_process());
 
@@ -154,24 +167,33 @@ mod tests {
 
     #[test]
     fn parses_shared_payload_free_result_fixture() {
-        parse_response::<()>(STATUS_RESULT_FIXTURE, "desktop-42")
+        parse_response::<()>(STATUS_RESULT_FIXTURE, "engine.checkStatus", "desktop-42")
             .expect("the canonical payload-free result must parse");
     }
 
     #[test]
     fn parses_shared_typed_repository_result_fixtures() {
-        parse_response::<RepositoryOpenResult>(REPOSITORY_BRANCH_RESULT_FIXTURE, "desktop-42")
-            .expect("the canonical branch result must parse");
-        parse_response::<RepositoryOpenResult>(REPOSITORY_DETACHED_RESULT_FIXTURE, "desktop-43")
-            .expect("the canonical detached result must parse");
+        parse_response::<RepositoryOpenResult>(
+            REPOSITORY_BRANCH_RESULT_FIXTURE,
+            "repositories.open",
+            "desktop-42",
+        )
+        .expect("the canonical branch result must parse");
+        parse_response::<RepositoryOpenResult>(
+            REPOSITORY_DETACHED_RESULT_FIXTURE,
+            "repositories.open",
+            "desktop-43",
+        )
+        .expect("the canonical detached result must parse");
     }
 
     #[test]
     fn invalid_typed_result_invalidates_the_process() {
         let response = r#"{"protocolVersion":1,"type":"result","requestId":"desktop-1","result":{"repository":{"name":"change_lens","canonicalPath":"/projects/change_lens","head":{"kind":"detached","name":"main","revision":"0123456789abcdef0123456789abcdef01234567"}}}}"#;
 
-        let error = parse_response::<RepositoryOpenResult>(response, "desktop-1")
-            .expect_err("the malformed typed result must fail");
+        let error =
+            parse_response::<RepositoryOpenResult>(response, "repositories.open", "desktop-1")
+                .expect_err("the malformed typed result must fail");
 
         assert!(error.invalidates_process());
         assert_eq!(
@@ -191,7 +213,7 @@ mod tests {
             r#"{"protocolVersion":1,"type":"result","requestId":"desktop-1","result":null,"extra":true}"#,
             r#"{"protocolVersion":"1","type":"result","requestId":"desktop-1","result":null}"#,
         ] {
-            let error = parse_response::<()>(response, "desktop-1")
+            let error = parse_response::<()>(response, "engine.checkStatus", "desktop-1")
                 .expect_err("the invalid response must be rejected")
                 .into_action_error();
 

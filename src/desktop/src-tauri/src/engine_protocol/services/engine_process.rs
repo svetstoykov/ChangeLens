@@ -57,6 +57,7 @@ impl EngineProcess {
     pub(crate) fn exchange<TRequest, TResult>(
         &mut self,
         request: &TRequest,
+        action: &str,
         request_id: &str,
         response_timeout: Duration,
     ) -> Result<TResult, EngineExchangeError>
@@ -76,7 +77,7 @@ impl EngineProcess {
         write_request(stdin, &request_line, request_id)?;
 
         let response_line = self.receive_response(request_id, response_timeout)?;
-        parse_response(&response_line, request_id)
+        parse_response(&response_line, action, request_id)
     }
 
     pub(crate) fn id(&self) -> u32 {

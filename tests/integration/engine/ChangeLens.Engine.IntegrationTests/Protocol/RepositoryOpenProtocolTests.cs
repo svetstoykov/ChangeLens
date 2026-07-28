@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Globalization;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using ChangeLens.Core.Results.Models;
 using ChangeLens.Engine.IntegrationTests.Support;
 using ChangeLens.Infrastructure.FileSystem.Services;
@@ -11,7 +12,7 @@ namespace ChangeLens.Engine.IntegrationTests.Protocol;
 /// <summary>
 ///     Verifies repository-open behavior through the real Engine process protocol.
 /// </summary>
-public sealed class RepositoryOpenProtocolTests
+public sealed partial class RepositoryOpenProtocolTests
 {
     /// <summary>
     ///     Verifies repository history, preferred target, theme, restoration, and removal in one real Engine process.
@@ -511,11 +512,49 @@ public sealed class RepositoryOpenProtocolTests
         Assert.Contains("repository.notGitRepository", log, StringComparison.Ordinal);
         Assert.Contains(" in ", log, StringComparison.Ordinal);
         Assert.Contains(" ms.", log, StringComparison.Ordinal);
-        Assert.DoesNotContain(selectedPath, log, StringComparison.Ordinal);
+        Assert.DoesNotContain(selectedPath, InformationAndAbove(log), StringComparison.Ordinal);
         Assert.DoesNotContain("fatal: not a git repository", log, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain(request, log, StringComparison.Ordinal);
         Assert.DoesNotContain(response, log, StringComparison.Ordinal);
     }
+
+    /// <summary>
+    ///     Selects the log entries written at <c>Information</c> or above.
+    /// </summary>
+    /// <remarks>
+    ///     Local filesystem paths are sensitive and must never reach an operator-facing level, but the
+    ///     Git runner deliberately records full command arguments at <c>Debug</c> so a failing invocation
+    ///     can be reproduced.
+    /// </remarks>
+    /// <param name="log">The captured log text.</param>
+    /// <returns>The log text with every <c>Debug</c> and <c>Verbose</c> entry removed.</returns>
+    private static string InformationAndAbove(string log)
+    {
+        var retained = new List<string>();
+        var inSuppressedEntry = false;
+
+        foreach (var line in log.Split('\n'))
+        {
+            if (EntryLevel().Match(AnsiEscapes().Replace(line, string.Empty)) is
+                { Success: true } entryStart)
+            {
+                inSuppressedEntry = entryStart.Groups["level"].Value is "DBG" or "VRB";
+            }
+
+            if (!inSuppressedEntry)
+            {
+                retained.Add(line);
+            }
+        }
+
+        return string.Join('\n', retained);
+    }
+
+    [GeneratedRegex(@"^\[[^\]]* (?<level>[A-Z]{3})\] \[")]
+    private static partial Regex EntryLevel();
+
+    [GeneratedRegex(@"\x1B\[[0-9;]*m")]
+    private static partial Regex AnsiEscapes();
 
     private static string FirstErrorCode(JsonDocument response) =>
         response.RootElement.GetProperty("errors")[0].GetProperty("code").GetString()!;

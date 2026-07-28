@@ -4,7 +4,12 @@ use serde::{Deserialize, Serialize};
 
 /// Represents startup repository restoration.
 #[derive(Clone, Debug, Deserialize, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase", tag = "state", deny_unknown_fields)]
+#[serde(
+    tag = "state",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase",
+    deny_unknown_fields
+)]
 pub enum RepositoryRestoreResult {
     /// No repository is selected for automatic restoration.
     #[serde(rename = "none")]
@@ -111,6 +116,10 @@ mod tests {
         env!("CARGO_MANIFEST_DIR"),
         "/../../../contracts/engine-protocol/v1/fixtures/repositories-restore-last.none.result.json"
     ));
+    const RESTORED_FIXTURE: &str = include_str!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../../contracts/engine-protocol/v1/fixtures/repositories-restore-last.restored.result.json"
+    ));
 
     #[test]
     fn parses_shared_repository_history_fixtures() {
@@ -126,6 +135,27 @@ mod tests {
         let restoration: RepositoryRestoreResult =
             serde_json::from_value(none["result"].clone()).unwrap();
         assert_eq!(restoration, RepositoryRestoreResult::None);
+    }
+
+    #[test]
+    fn parses_the_restored_repository_fixture() {
+        let restored: serde_json::Value = serde_json::from_str(RESTORED_FIXTURE).unwrap();
+        let restoration: RepositoryRestoreResult =
+            serde_json::from_value(restored["result"].clone())
+                .expect("the shared restored fixture must deserialize");
+
+        let RepositoryRestoreResult::Restored {
+            repository_id,
+            repository,
+            preferred_target,
+        } = restoration
+        else {
+            panic!("the restored fixture must produce a restored result");
+        };
+
+        assert_eq!(repository_id, "01234567-89ab-cdef-0123-456789abcdef");
+        assert_eq!(repository.name, "change_lens");
+        assert_eq!(preferred_target, None);
     }
 
     #[test]

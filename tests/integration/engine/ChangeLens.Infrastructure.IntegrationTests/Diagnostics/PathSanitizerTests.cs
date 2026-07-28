@@ -20,9 +20,7 @@ public sealed class PathSanitizerTests
     [Fact]
     public void ToRepositoryRelativePathRootReturnsDisplayName()
     {
-        var sanitizer = new PathSanitizer();
-
-        var result = sanitizer.ToRepositoryRelativePath(Repository.CanonicalPath, Repository);
+        var result = PathSanitizer.ToRepositoryRelativePath(Repository.CanonicalPath, Repository);
 
         Assert.Equal(Repository.Name, result);
     }
@@ -33,10 +31,9 @@ public sealed class PathSanitizerTests
     [Fact]
     public void ToRepositoryRelativePathNestedFileReturnsDisplayNameAndRelativePath()
     {
-        var sanitizer = new PathSanitizer();
         var absolutePath = Path.Combine(Repository.CanonicalPath, "src", "Payroll.cs");
 
-        var result = sanitizer.ToRepositoryRelativePath(absolutePath, Repository);
+        var result = PathSanitizer.ToRepositoryRelativePath(absolutePath, Repository);
 
         Assert.Equal("acme-corp-payroll/src/Payroll.cs", result);
     }
@@ -47,10 +44,9 @@ public sealed class PathSanitizerTests
     [Fact]
     public void ToRepositoryRelativePathOutsideRepositoryReturnsPlaceholder()
     {
-        var sanitizer = new PathSanitizer();
         var absolutePath = Path.Combine(Path.GetTempPath(), "repositories", "other-repo", "file.txt");
 
-        var result = sanitizer.ToRepositoryRelativePath(absolutePath, Repository);
+        var result = PathSanitizer.ToRepositoryRelativePath(absolutePath, Repository);
 
         Assert.DoesNotContain(Repository.CanonicalPath, result, StringComparison.Ordinal);
         Assert.DoesNotContain("other-repo", result, StringComparison.Ordinal);
@@ -62,10 +58,9 @@ public sealed class PathSanitizerTests
     [Fact]
     public void ToRepositoryRelativePathSiblingSharingPathPrefixReturnsPlaceholder()
     {
-        var sanitizer = new PathSanitizer();
         var absolutePath = Path.Combine($"{Repository.CanonicalPath}-archive", "file.txt");
 
-        var result = sanitizer.ToRepositoryRelativePath(absolutePath, Repository);
+        var result = PathSanitizer.ToRepositoryRelativePath(absolutePath, Repository);
 
         Assert.Equal("<path outside repository>", result);
     }
@@ -76,10 +71,9 @@ public sealed class PathSanitizerTests
     [Fact]
     public void ToRepositoryRelativePathDotPrefixedFileNameStaysInsideRepository()
     {
-        var sanitizer = new PathSanitizer();
         var absolutePath = Path.Combine(Repository.CanonicalPath, "..config");
 
-        var result = sanitizer.ToRepositoryRelativePath(absolutePath, Repository);
+        var result = PathSanitizer.ToRepositoryRelativePath(absolutePath, Repository);
 
         Assert.Equal("acme-corp-payroll/..config", result);
     }
@@ -90,11 +84,10 @@ public sealed class PathSanitizerTests
     [Fact]
     public void RedactHomeDirectoryNestedPathReplacesHomePrefix()
     {
-        var sanitizer = new PathSanitizer();
         var homeDirectory = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
         var absolutePath = Path.Combine(homeDirectory, "Projects", "acme-corp-payroll");
 
-        var result = sanitizer.RedactHomeDirectory(absolutePath);
+        var result = PathSanitizer.RedactHomeDirectory(absolutePath);
 
         Assert.Equal("~/Projects/acme-corp-payroll", result);
     }
@@ -105,10 +98,9 @@ public sealed class PathSanitizerTests
     [Fact]
     public void RedactHomeDirectoryHomeDirectoryItselfReturnsMarker()
     {
-        var sanitizer = new PathSanitizer();
         var homeDirectory = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
 
-        var result = sanitizer.RedactHomeDirectory(homeDirectory);
+        var result = PathSanitizer.RedactHomeDirectory(homeDirectory);
 
         Assert.Equal("~", result);
     }
@@ -119,10 +111,9 @@ public sealed class PathSanitizerTests
     [Fact]
     public void RedactHomeDirectoryOutsideHomeDirectoryReturnsUnchanged()
     {
-        var sanitizer = new PathSanitizer();
         var absolutePath = Path.Combine(Path.GetTempPath(), "repositories", "acme-corp-payroll");
 
-        var result = sanitizer.RedactHomeDirectory(absolutePath);
+        var result = PathSanitizer.RedactHomeDirectory(absolutePath);
 
         Assert.Equal(absolutePath, result);
     }
@@ -133,11 +124,10 @@ public sealed class PathSanitizerTests
     [Fact]
     public void RedactHomeDirectorySiblingSharingPathPrefixReturnsUnchanged()
     {
-        var sanitizer = new PathSanitizer();
         var homeDirectory = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
         var absolutePath = Path.Combine($"{homeDirectory}-shared", "Projects", "acme-corp-payroll");
 
-        var result = sanitizer.RedactHomeDirectory(absolutePath);
+        var result = PathSanitizer.RedactHomeDirectory(absolutePath);
 
         Assert.Equal(absolutePath, result);
     }
@@ -148,9 +138,7 @@ public sealed class PathSanitizerTests
     [Fact]
     public void EmptyAbsolutePathThrowsArgumentException()
     {
-        var sanitizer = new PathSanitizer();
-
-        Assert.Throws<ArgumentException>(() => sanitizer.ToRepositoryRelativePath(string.Empty, Repository));
-        Assert.Throws<ArgumentException>(() => sanitizer.RedactHomeDirectory(string.Empty));
+        Assert.Throws<ArgumentException>(() => PathSanitizer.ToRepositoryRelativePath(string.Empty, Repository));
+        Assert.Throws<ArgumentException>(() => PathSanitizer.RedactHomeDirectory(string.Empty));
     }
 }

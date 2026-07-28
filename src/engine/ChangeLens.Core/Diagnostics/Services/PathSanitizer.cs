@@ -1,4 +1,3 @@
-using ChangeLens.Core.Diagnostics.Interfaces;
 using ChangeLens.Core.Repositories.Models;
 
 namespace ChangeLens.Core.Diagnostics.Services;
@@ -8,14 +7,14 @@ namespace ChangeLens.Core.Diagnostics.Services;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         The Engine host registers this stateless service as a singleton. It is safe to call concurrently.
+///         Stateless and safe to call concurrently.
 ///     </para>
 ///     <para>
 ///         The current user's home directory is resolved once per process. A change to the <c>HOME</c> or
 ///         <c>USERPROFILE</c> environment variable after startup is not observed.
 ///     </para>
 /// </remarks>
-public sealed class PathSanitizer : IPathSanitizer
+public static class PathSanitizer
 {
     private const string OutsideRepositoryPlaceholder = "<path outside repository>";
     private const string HomeDirectoryPlaceholder = "~";
@@ -25,12 +24,24 @@ public sealed class PathSanitizer : IPathSanitizer
     private static readonly string HomeDirectory =
         Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
 
-    /// <inheritdoc />
+    /// <summary>
+    ///     Converts an absolute path known to live under a repository into that repository's display name
+    ///     plus the path relative to its canonical root.
+    /// </summary>
+    /// <param name="absolutePath">
+    ///     The absolute path to convert. Cannot be <see langword="null" /> or empty.
+    /// </param>
+    /// <param name="repository">The repository the path is expected to live under. Cannot be <see langword="null" />.</param>
+    /// <returns>
+    ///     The repository display name, or the display name followed by the relative path when
+    ///     <paramref name="absolutePath" /> is not the repository root itself. A fixed placeholder when
+    ///     <paramref name="absolutePath" /> does not fall under <paramref name="repository" />'s canonical root.
+    /// </returns>
     /// <exception cref="ArgumentNullException">
     ///     <paramref name="absolutePath" /> or <paramref name="repository" /> is <see langword="null" />.
     /// </exception>
     /// <exception cref="ArgumentException"><paramref name="absolutePath" /> is empty.</exception>
-    public string ToRepositoryRelativePath(string absolutePath, RepositoryDescriptor repository)
+    public static string ToRepositoryRelativePath(string absolutePath, RepositoryDescriptor repository)
     {
         ArgumentException.ThrowIfNullOrEmpty(absolutePath);
         ArgumentNullException.ThrowIfNull(repository);
@@ -45,10 +56,23 @@ public sealed class PathSanitizer : IPathSanitizer
             : $"{repository.Name}/{relativePath}";
     }
 
-    /// <inheritdoc />
+    /// <summary>
+    ///     Redacts the current user's home-directory segment from an absolute path.
+    /// </summary>
+    /// <param name="absolutePath">The absolute path to redact. Cannot be <see langword="null" /> or empty.</param>
+    /// <returns>
+    ///     The path with its home-directory prefix replaced by <c>~</c>, or <paramref name="absolutePath" />
+    ///     unchanged when it does not fall under the current user's home directory.
+    /// </returns>
+    /// <remarks>
+    ///     <para>
+    ///         A path outside the home directory is returned in full. Callers that must never emit a raw local
+    ///         path cannot rely on this method alone.
+    ///     </para>
+    /// </remarks>
     /// <exception cref="ArgumentNullException"><paramref name="absolutePath" /> is <see langword="null" />.</exception>
     /// <exception cref="ArgumentException"><paramref name="absolutePath" /> is empty.</exception>
-    public string RedactHomeDirectory(string absolutePath)
+    public static string RedactHomeDirectory(string absolutePath)
     {
         ArgumentException.ThrowIfNullOrEmpty(absolutePath);
 

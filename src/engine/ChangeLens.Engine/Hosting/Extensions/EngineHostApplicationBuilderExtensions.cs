@@ -1,7 +1,5 @@
 using ChangeLens.Core.Comparisons.Interfaces;
 using ChangeLens.Core.Comparisons.Services;
-using ChangeLens.Core.Diagnostics.Interfaces;
-using ChangeLens.Core.Diagnostics.Services;
 using ChangeLens.Core.EngineStatus.Interfaces;
 using ChangeLens.Core.EngineStatus.Services;
 using ChangeLens.Core.Git.Interfaces;
@@ -64,7 +62,6 @@ internal static class EngineHostApplicationBuilderExtensions
             ICanonicalRepositoryPathKeyProvider,
             CanonicalRepositoryPathKeyProvider>();
         builder.Services.AddSingleton<IEngineStatusService, EngineStatusService>();
-        builder.Services.AddSingleton<IPathSanitizer, PathSanitizer>();
         builder.Services.AddSingleton<IRepositoryPathResolver, PhysicalRepositoryPathResolver>();
         builder.Services.AddSingleton<IGitCommandRunner>(
             serviceProvider =>
@@ -79,8 +76,7 @@ internal static class EngineHostApplicationBuilderExtensions
                     executable,
                     [],
                     serviceProvider.GetRequiredService<
-                        Microsoft.Extensions.Logging.ILogger<GitCliCommandRunner>>(),
-                    serviceProvider.GetRequiredService<IPathSanitizer>());
+                        Microsoft.Extensions.Logging.ILogger<GitCliCommandRunner>>());
             });
         builder.Services.AddSingleton<IGitRepositoryInspector, GitRepositoryInspector>();
         builder.Services.AddSingleton<IComparisonFileSummaryComposer, ComparisonFileSummaryComposer>();

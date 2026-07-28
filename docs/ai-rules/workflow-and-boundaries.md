@@ -24,8 +24,9 @@ Store every artifact created by a `superpowers:*` skill in `docs/superpowers/`. 
 
 ## Git Workflow
 
-- Work and commit directly on `main` until the user explicitly gives further notice.
-- Do not create or switch to a purpose-specific branch unless the user explicitly requests one.
+- Before starting new work while on `main`, ask the user whether to stay on `main` and commit directly, or create a branch. Propose a branch prefix inferred from the nature of the work and ask the user to confirm it before creating the branch.
+- Choose the branch prefix from: `feat/` or `feature/` (new functionality), `fix/` or `bugfix/` (normal bug fix), `hotfix/` (urgent production fix), `refactor/` (restructure without changing behaviour), `chore/` (maintenance and cleanup), `docs/` (documentation only), `test/` (tests only), `perf/` (performance improvements), `build/` (build system or dependencies), `ci/` (CI/CD pipelines), `style/` (formatting or UI styling), `release/` (release preparation), `revert/` (reverting an earlier change), `spike/` or `experiment/` (exploratory work).
+- Once already working on a purpose-specific branch, keep committing there without asking again until the work is finished or the user redirects.
 - Use Conventional Commit subjects, selecting the accurate type and optional scope.
 - Write each commit message as one concise subject sentence followed by two or three explanatory bullet points.
 - Never add `Co-authored-by` or other co-author attribution.

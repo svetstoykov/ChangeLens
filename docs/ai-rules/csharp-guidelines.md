@@ -52,12 +52,17 @@ their first use; do not collect unrelated locals at the start of a method.
 ### Engine composition
 
 `EngineHostApplicationBuilderExtensions.AddEngine` remains the single public composition entry point. It performs the
-null guard, adds logging, and invokes private helpers in capability order:
+null guard, configures service-provider build and scope validation, adds logging, and invokes private helpers in
+capability order:
 
 ```csharp
 ArgumentNullException.ThrowIfNull(builder);
 
+builder.ConfigureContainer(
+    new DefaultServiceProviderFactory(new ServiceProviderOptions { ValidateOnBuild = true, ValidateScopes = true }),
+    static _ => { });
 builder.AddEngineLogging();
+
 AddRuntimeServices(builder);
 AddLocalStateServices(builder);
 AddPreferenceServices(builder);
@@ -65,6 +70,7 @@ AddEngineStatusServices(builder);
 AddRepositoryServices(builder);
 AddComparisonServices(builder);
 AddProtocolServices(builder);
+AddActionHandlers(builder);
 ```
 
 Keep the private helpers in the same file. Do not introduce new extension classes, interfaces, nested types, or
@@ -81,6 +87,9 @@ decorative region/comment separators. The helpers register:
   `IGitComparisonFreshnessChecker`, `IGitRemoteBaselineTracker`, and `IComparisonTargetPageBuilder`.
 - `AddProtocolServices`: `IEngineProtocolSerializer`, `IEngineProtocolTransport`, `IEngineActionProcessor`, and
   `EngineProtocolHost` as the hosted service.
+- `AddActionHandlers`: every `IActionHandler` implementation, one `AddSingleton<IActionHandler, THandler>` line per
+  approved protocol action. Keep the twelve registrations contiguous in this helper rather than distributing them
+  across the capability helpers, so a missing action is visible in one place.
 
 Preserve every existing descriptor, lifetime, factory body, configuration key, and hosted-service ordering, with logging
 initialized before services that log and the protocol hosted service registered last.

@@ -5,14 +5,18 @@ using ChangeLens.Core.EngineStatus.Services;
 using ChangeLens.Core.Git.Interfaces;
 using ChangeLens.Core.Git.Services;
 using ChangeLens.Core.LocalState.Interfaces;
+using ChangeLens.Engine.Comparisons.Handlers;
 using ChangeLens.Engine.Comparisons.Interfaces;
 using ChangeLens.Engine.Comparisons.Services;
+using ChangeLens.Engine.EngineStatus.Handlers;
 using ChangeLens.Engine.Logging.Extensions;
 using ChangeLens.Engine.Protocol.Interfaces;
 using ChangeLens.Engine.Protocol.Services;
+using ChangeLens.Engine.Preferences.Handlers;
 using ChangeLens.Engine.Preferences.Interfaces;
 using ChangeLens.Engine.Preferences.Services;
 using ChangeLens.Engine.Repositories.Constants;
+using ChangeLens.Engine.Repositories.Handlers;
 using ChangeLens.Engine.Repositories.Interfaces;
 using ChangeLens.Engine.Repositories.Services;
 using ChangeLens.Infrastructure.FileSystem.Services;
@@ -40,6 +44,9 @@ internal static class EngineHostApplicationBuilderExtensions
     {
         ArgumentNullException.ThrowIfNull(builder);
 
+        builder.ConfigureContainer(
+            new DefaultServiceProviderFactory(new ServiceProviderOptions { ValidateOnBuild = true, ValidateScopes = true }),
+            static _ => { });
         builder.AddEngineLogging();
 
         AddRuntimeServices(builder);
@@ -49,6 +56,7 @@ internal static class EngineHostApplicationBuilderExtensions
         AddRepositoryServices(builder);
         AddComparisonServices(builder);
         AddProtocolServices(builder);
+        AddActionHandlers(builder);
     }
 
     private static void AddRuntimeServices(HostApplicationBuilder builder)
@@ -123,5 +131,21 @@ internal static class EngineHostApplicationBuilderExtensions
         builder.Services.AddSingleton<IEngineProtocolTransport, EngineProtocolTransport>();
         builder.Services.AddSingleton<IEngineActionProcessor, EngineActionProcessor>();
         builder.Services.AddHostedService<EngineProtocolHost>();
+    }
+
+    private static void AddActionHandlers(HostApplicationBuilder builder)
+    {
+        builder.Services.AddSingleton<IActionHandler, RepositoryOpenHandler>();
+        builder.Services.AddSingleton<IActionHandler, RepositoryRestoreLastHandler>();
+        builder.Services.AddSingleton<IActionHandler, RepositoryListRecentHandler>();
+        builder.Services.AddSingleton<IActionHandler, RepositoryRemoveRecentHandler>();
+        builder.Services.AddSingleton<IActionHandler, ComparisonListTargetsHandler>();
+        builder.Services.AddSingleton<IActionHandler, ComparisonPrepareHandler>();
+        builder.Services.AddSingleton<IActionHandler, ComparisonCheckFreshnessHandler>();
+        builder.Services.AddSingleton<IActionHandler, ComparisonCheckRemoteBaselineHandler>();
+        builder.Services.AddSingleton<IActionHandler, ComparisonRefreshRemoteBaselineHandler>();
+        builder.Services.AddSingleton<IActionHandler, PreferenceGetColorThemeHandler>();
+        builder.Services.AddSingleton<IActionHandler, PreferenceSetColorThemeHandler>();
+        builder.Services.AddSingleton<IActionHandler, EngineCheckStatusHandler>();
     }
 }

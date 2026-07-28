@@ -66,9 +66,7 @@ public sealed class GitRepositoryInspector(
         }
 
         using var deadline = new CancellationTokenSource(totalBudget);
-        using var inspectionCancellation = CancellationTokenSource.CreateLinkedTokenSource(
-            cancellationToken,
-            deadline.Token);
+        using var inspectionCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, deadline.Token);
         var startedAt = Stopwatch.GetTimestamp();
 
         try
@@ -192,8 +190,7 @@ public sealed class GitRepositoryInspector(
 
         if (!isInsideWorkTree)
         {
-            this._logger.LogWarning(
-                "Repository inspection rejected the selected directory because it is not inside a Git working tree.");
+            this._logger.LogWarning("Repository inspection rejected the selected directory because it is not inside a Git working tree.");
             return OperationError.UnprocessableInput(
                 "The selected folder is not inside a Git working tree.",
                 RepositoryErrorCode.NotGitRepository);
@@ -367,10 +364,9 @@ public sealed class GitRepositoryInspector(
     /// </summary>
     /// <returns>A failed result with the repository invalid-path error.</returns>
     private static Result InvalidPath() =>
-        Result.Fail(
-            OperationError.Validation(
-                "The selected repository path is invalid.",
-                RepositoryErrorCode.InvalidPath));
+        Result.Fail(OperationError.Validation(
+            "The selected repository path is invalid.",
+            RepositoryErrorCode.InvalidPath));
 
     /// <summary>
     ///     Creates the Phase 1A terminal errors for repository inspection.

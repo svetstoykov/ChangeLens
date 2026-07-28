@@ -1005,20 +1005,20 @@ internal static class GitComparisonOutputParser
 
         internal GitFieldReader(ReadOnlySpan<char> text)
         {
-            _text = text;
-            _position = 0;
+            this._text = text;
+            this._position = 0;
         }
 
         /// <summary>
         ///     Gets a value indicating whether every character has been consumed.
         /// </summary>
-        internal readonly bool IsAtEnd => _position >= _text.Length;
+        internal readonly bool IsAtEnd => this._position >= this._text.Length;
 
         /// <summary>
         ///     Gets the unconsumed remainder, which is how trailing fields that may contain the
         ///     delimiter are read.
         /// </summary>
-        internal readonly ReadOnlySpan<char> Remainder => _text[_position..];
+        internal readonly ReadOnlySpan<char> Remainder => this._text[this._position..];
 
         /// <summary>
         ///     Reads the text up to the next delimiter and consumes the delimiter.
@@ -1028,15 +1028,15 @@ internal static class GitComparisonOutputParser
         /// <returns><see langword="false" /> when no delimiter remains.</returns>
         internal bool TryRead(char delimiter, out ReadOnlySpan<char> field)
         {
-            var offset = Remainder.IndexOf(delimiter);
+            var offset = this.Remainder.IndexOf(delimiter);
             if (offset < 0)
             {
                 field = default;
                 return false;
             }
 
-            field = _text.Slice(_position, offset);
-            _position += offset + 1;
+            field = this._text.Slice(this._position, offset);
+            this._position += offset + 1;
             return true;
         }
 
@@ -1045,7 +1045,7 @@ internal static class GitComparisonOutputParser
         /// </summary>
         /// <param name="field">The field text, excluding the terminator.</param>
         /// <returns><see langword="false" /> when no terminator remains.</returns>
-        internal bool TryReadNulField(out ReadOnlySpan<char> field) => TryRead('\0', out field);
+        internal bool TryReadNulField(out ReadOnlySpan<char> field) => this.TryRead('\0', out field);
 
         /// <summary>
         ///     Reads a nonempty space-terminated field.
@@ -1053,6 +1053,6 @@ internal static class GitComparisonOutputParser
         /// <param name="field">The field text, excluding the separating space.</param>
         /// <returns><see langword="false" /> when the field is missing or empty.</returns>
         internal bool TryReadWord(out ReadOnlySpan<char> field) =>
-            TryRead(' ', out field) && !field.IsEmpty;
+            this.TryRead(' ', out field) && !field.IsEmpty;
     }
 }

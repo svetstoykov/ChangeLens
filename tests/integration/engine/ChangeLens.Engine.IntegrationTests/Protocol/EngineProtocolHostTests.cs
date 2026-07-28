@@ -7,9 +7,9 @@ using Xunit;
 namespace ChangeLens.Engine.IntegrationTests.Protocol;
 
 /// <summary>
-///     Verifies that the action processor rejects an invalid handler registration when it is constructed.
+///     Verifies that the protocol host rejects an invalid handler registration when it is constructed.
 /// </summary>
-public sealed class EngineActionProcessorTests
+public sealed class EngineProtocolHostTests
 {
     /// <summary>
     ///     Verifies that a handler without an action name is rejected and named in the failure.
@@ -17,7 +17,7 @@ public sealed class EngineActionProcessorTests
     [Fact]
     public void ConstructionRejectsBlankHandlerAction()
     {
-        var exception = Assert.Throws<InvalidOperationException>(() => CreateProcessor(new StubActionHandler(" ")));
+        var exception = Assert.Throws<InvalidOperationException>(() => CreateHost(new StubActionHandler(" ")));
 
         Assert.Contains(typeof(StubActionHandler).FullName!, exception.Message, StringComparison.Ordinal);
     }
@@ -29,11 +29,16 @@ public sealed class EngineActionProcessorTests
     public void ConstructionRejectsDuplicateHandlerAction()
     {
         var exception = Assert.Throws<InvalidOperationException>(
-            () => CreateProcessor(new StubActionHandler("repositories.open"), new StubActionHandler("repositories.open")));
+            () => CreateHost(new StubActionHandler("repositories.open"), new StubActionHandler("repositories.open")));
 
         Assert.Contains("repositories.open", exception.Message, StringComparison.Ordinal);
     }
 
-    private static EngineActionProcessor CreateProcessor(params IActionHandler[] actionHandlers) =>
-        new(actionHandlers, new StubEngineStatusService(), NullLogger<EngineActionProcessor>.Instance);
+    private static EngineProtocolHost CreateHost(params IActionHandler[] actionHandlers) =>
+        new(
+            null!,
+            actionHandlers,
+            new StubEngineStatusService(),
+            NullLogger<EngineProtocolHost>.Instance,
+            null!);
 }

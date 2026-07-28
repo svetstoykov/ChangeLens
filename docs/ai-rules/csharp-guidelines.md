@@ -85,8 +85,8 @@ decorative region/comment separators. The helpers register:
   `IGitRepositoryInspector`.
 - `AddComparisonServices`: `IComparisonFileSummaryComposer`, `IGitComparisonTargetDiscovery`, `IGitComparisonPreparer`,
   `IGitComparisonFreshnessChecker`, `IGitRemoteBaselineTracker`, and `IComparisonTargetPageBuilder`.
-- `AddProtocolServices`: `IEngineProtocolSerializer`, `IEngineProtocolTransport`, `IEngineActionProcessor`, and
-  `EngineProtocolHost` as the hosted service.
+- `AddProtocolServices`: `IEngineProtocolSerializer`, `IEngineProtocolTransport`, and `EngineProtocolHost` as the hosted
+  service.
 - `AddActionHandlers`: every `IActionHandler` implementation, one `AddSingleton<IActionHandler, THandler>` line per
   approved protocol action. Keep the twelve registrations contiguous in this helper rather than distributing them
   across the capability helpers, so a missing action is visible in one place.

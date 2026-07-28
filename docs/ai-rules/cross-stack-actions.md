@@ -9,7 +9,7 @@ Classify the action before adding transport code:
 - UI-only actions remain in React.
 - Native-only actions use one explicit typed Tauri command and do not enter the Engine protocol.
 - Engine-backed actions use React → an explicit Tauri command → the shared Rust engine client/process →
-  `EngineActionProcessor` → the action's `IActionHandler` → an already approved capability entry point.
+  `EngineProtocolHost` → the action's `IActionHandler` → an already approved capability entry point.
 
 For every engine-backed action:
 
@@ -23,9 +23,9 @@ For every engine-backed action:
 5. Add one `IActionHandler` implementation for the action in its capability slice, and register it with
    `AddSingleton<IActionHandler, THandler>`. The handler's `Action` property returns its capability-owned
    action constant; the handler deserializes its own parameters and returns one correlated
-   `ProtocolResponse`. `EngineActionProcessor` enumerates the registered handlers once into an ordinal,
-   immutable-after-construction map and rejects blank or duplicate action names. Keep the processor free
-   of action constants. Do not add a mediator library, reflection-based handler discovery, keyed DI, a
+   `ProtocolResponse`. `EngineProtocolHost` enumerates the registered handlers once into an ordinal,
+   immutable-after-construction map and rejects blank or duplicate action names. Keep routing free of
+   action-specific registration logic. Do not add a mediator library, reflection-based handler discovery, keyed DI, a
    service locator, a runtime-mutable registry, or generated protocol types.
 6. Return exactly one correlated result or error. A typed action returns its typed payload; a payload-free action returns `result: null`. Fire-and-forget engine actions are not supported.
 7. Preserve every expected error's `ErrorType`, stable code, safe message, order, and request identifier. An uncoded or unsafe error becomes a sanitized `InternalError` at the Engine boundary. Rust-originated failures use the approved `transport` or `protocol` kind; TypeScript normalizes all rejections to `ActionError`.

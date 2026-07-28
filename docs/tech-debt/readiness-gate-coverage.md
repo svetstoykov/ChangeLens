@@ -2,8 +2,8 @@
 
 Recorded 2026-07-28 as part of the Engine action-handler refactor.
 
-`EngineActionProcessor` runs `IEngineStatusService.CheckStatusAsync` as an unconditional gate after it resolves a
-handler and before it invokes that handler. The gate's ordering and its failure short-circuit are untested.
+`EngineProtocolHost` runs `IEngineStatusService.CheckStatusAsync` as an unconditional gate after it resolves a handler
+and before it invokes that handler. The gate's ordering and its failure short-circuit are untested.
 
 ## Why it is untested
 

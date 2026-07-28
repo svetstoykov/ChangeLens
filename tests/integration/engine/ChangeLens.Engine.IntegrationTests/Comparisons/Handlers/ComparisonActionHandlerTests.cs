@@ -31,13 +31,13 @@ public sealed class ComparisonActionHandlerTests
         var handler = new ComparisonCheckFreshnessHandler(
             new StubGitComparisonFreshnessChecker((ComparisonFreshnessState)int.MaxValue),
             new EngineProtocolSerializer());
-        var logger = new RecordingLogger<EngineActionProcessor>();
-        var processor = new EngineActionProcessor([handler], new StubEngineStatusService(), logger);
+        var logger = new RecordingLogger<EngineProtocolHost>();
+        var host = new EngineProtocolHost(null!, [handler], new StubEngineStatusService(), logger, null!);
         var request = CreateRequest(
             ComparisonActionConstants.CheckFreshnessAction,
             """{"path":"/repository","target":"refs/heads/main","freshnessToken":"token"}""");
 
-        var response = await processor.ProcessAsync(request, TestContext.Current.CancellationToken);
+        var response = await host.ProcessAsync(request, TestContext.Current.CancellationToken);
 
         AssertInternalError(
             response,

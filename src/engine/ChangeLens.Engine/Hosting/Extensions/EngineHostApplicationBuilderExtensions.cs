@@ -10,11 +10,11 @@ using ChangeLens.Engine.Comparisons.Interfaces;
 using ChangeLens.Engine.Comparisons.Services;
 using ChangeLens.Engine.EngineStatus.Handlers;
 using ChangeLens.Engine.Logging.Extensions;
-using ChangeLens.Engine.Protocol.Interfaces;
-using ChangeLens.Engine.Protocol.Services;
 using ChangeLens.Engine.Preferences.Handlers;
 using ChangeLens.Engine.Preferences.Interfaces;
 using ChangeLens.Engine.Preferences.Services;
+using ChangeLens.Engine.Protocol.Interfaces;
+using ChangeLens.Engine.Protocol.Services;
 using ChangeLens.Engine.Repositories.Constants;
 using ChangeLens.Engine.Repositories.Handlers;
 using ChangeLens.Engine.Repositories.Interfaces;
@@ -117,7 +117,6 @@ internal static class EngineHostApplicationBuilderExtensions
     {
         builder.Services.AddSingleton<IEngineProtocolSerializer, EngineProtocolSerializer>();
         builder.Services.AddSingleton<IEngineProtocolTransport, EngineProtocolTransport>();
-        builder.Services.AddSingleton<IEngineActionProcessor, EngineActionProcessor>();
         builder.Services.AddHostedService<EngineProtocolHost>();
     }
 

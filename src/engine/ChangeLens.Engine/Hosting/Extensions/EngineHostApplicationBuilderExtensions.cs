@@ -79,7 +79,8 @@ internal static class EngineHostApplicationBuilderExtensions
                     executable,
                     [],
                     serviceProvider.GetRequiredService<
-                        Microsoft.Extensions.Logging.ILogger<GitCliCommandRunner>>());
+                        Microsoft.Extensions.Logging.ILogger<GitCliCommandRunner>>(),
+                    serviceProvider.GetRequiredService<IPathSanitizer>());
             });
         builder.Services.AddSingleton<IGitRepositoryInspector, GitRepositoryInspector>();
         builder.Services.AddSingleton<IComparisonFileSummaryComposer, ComparisonFileSummaryComposer>();

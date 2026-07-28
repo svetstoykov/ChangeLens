@@ -2,6 +2,8 @@ using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Diagnostics;
 using System.Text;
+using ChangeLens.Core.Diagnostics.Interfaces;
+using ChangeLens.Core.Diagnostics.Services;
 using ChangeLens.Core.Git.Constants;
 using ChangeLens.Core.Git.Interfaces;
 using ChangeLens.Core.Git.Models;
@@ -52,6 +54,7 @@ public sealed class GitCliCommandRunner : IGitCommandRunner
     private readonly ReadOnlyCollection<string> _executableArguments;
     private readonly Func<Stream, int, CancellationToken, Task<byte[]>> _readBoundedAsync;
     private readonly ILogger<GitCliCommandRunner> _logger;
+    private readonly IPathSanitizer _pathSanitizer;
 
     /// <summary>
     ///     Initializes a new instance of the <see cref="GitCliCommandRunner" /> class using the installed Git executable.
@@ -59,8 +62,11 @@ public sealed class GitCliCommandRunner : IGitCommandRunner
     /// <param name="logger">
     ///     The logger for command execution outcomes, or <see langword="null" /> to log nowhere.
     /// </param>
-    public GitCliCommandRunner(ILogger<GitCliCommandRunner>? logger = null)
-        : this(GitProcessConstants.DefaultExecutable, [], logger)
+    /// <param name="pathSanitizer">
+    ///     The sanitizer for logged paths, or <see langword="null" /> to use a default instance.
+    /// </param>
+    public GitCliCommandRunner(ILogger<GitCliCommandRunner>? logger = null, IPathSanitizer? pathSanitizer = null)
+        : this(GitProcessConstants.DefaultExecutable, [], logger, pathSanitizer)
     {
     }
 
@@ -77,6 +83,9 @@ public sealed class GitCliCommandRunner : IGitCommandRunner
     /// <param name="logger">
     ///     The logger for command execution outcomes, or <see langword="null" /> to log nowhere.
     /// </param>
+    /// <param name="pathSanitizer">
+    ///     The sanitizer for logged paths, or <see langword="null" /> to use a default instance.
+    /// </param>
     /// <exception cref="ArgumentException">
     ///     <paramref name="executablePath" /> is empty or contains only white-space characters.
     ///     -or-
@@ -90,8 +99,9 @@ public sealed class GitCliCommandRunner : IGitCommandRunner
     public GitCliCommandRunner(
         string executablePath,
         IEnumerable<string> executableArguments,
-        ILogger<GitCliCommandRunner>? logger = null)
-        : this(executablePath, executableArguments, ReadBoundedAsync, logger)
+        ILogger<GitCliCommandRunner>? logger = null,
+        IPathSanitizer? pathSanitizer = null)
+        : this(executablePath, executableArguments, ReadBoundedAsync, logger, pathSanitizer)
     {
     }
 
@@ -113,6 +123,9 @@ public sealed class GitCliCommandRunner : IGitCommandRunner
     /// <param name="logger">
     ///     The logger for command execution outcomes, or <see langword="null" /> to log nowhere.
     /// </param>
+    /// <param name="pathSanitizer">
+    ///     The sanitizer for logged paths, or <see langword="null" /> to use a default instance.
+    /// </param>
     /// <exception cref="ArgumentException">
     ///     <paramref name="executablePath" /> is empty or contains only white-space characters.
     ///     -or-
@@ -126,7 +139,8 @@ public sealed class GitCliCommandRunner : IGitCommandRunner
         string executablePath,
         IEnumerable<string> executableArguments,
         Func<Stream, int, CancellationToken, Task<byte[]>> readBoundedAsync,
-        ILogger<GitCliCommandRunner>? logger = null)
+        ILogger<GitCliCommandRunner>? logger = null,
+        IPathSanitizer? pathSanitizer = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(executablePath);
         ArgumentNullException.ThrowIfNull(executableArguments);
@@ -144,6 +158,7 @@ public sealed class GitCliCommandRunner : IGitCommandRunner
         this._executableArguments = Array.AsReadOnly(copiedArguments);
         this._readBoundedAsync = readBoundedAsync;
         this._logger = logger ?? NullLogger<GitCliCommandRunner>.Instance;
+        this._pathSanitizer = pathSanitizer ?? new PathSanitizer();
     }
 
     /// <inheritdoc />
@@ -167,7 +182,7 @@ public sealed class GitCliCommandRunner : IGitCommandRunner
             {
                 this._logger.LogWarning(
                     "Git executable {ExecutablePath} did not start.",
-                    this._executablePath);
+                    this._pathSanitizer.RedactHomeDirectory(this._executablePath));
                 return Unavailable();
             }
         }
@@ -181,7 +196,7 @@ public sealed class GitCliCommandRunner : IGitCommandRunner
             this._logger.LogWarning(
                 exception,
                 "Git executable {ExecutablePath} is unavailable.",
-                this._executablePath);
+                this._pathSanitizer.RedactHomeDirectory(this._executablePath));
             return Unavailable();
         }
 

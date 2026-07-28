@@ -9,8 +9,10 @@ using ChangeLens.Core.Git.Models;
 using ChangeLens.Core.Repositories.Constants;
 using ChangeLens.Core.Results.Models;
 using ChangeLens.Infrastructure.Git.Constants;
+using ChangeLens.Infrastructure.Git.Models;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
 
 namespace ChangeLens.Infrastructure.Git.Services;
 
@@ -62,6 +64,17 @@ public sealed class GitCliCommandRunner : IGitCommandRunner
     /// </param>
     public GitCliCommandRunner(ILogger<GitCliCommandRunner>? logger = null)
         : this(GitProcessConstants.DefaultExecutable, [], logger)
+    {
+    }
+
+    /// <summary>
+    ///     Initializes a new instance of the <see cref="GitCliCommandRunner" /> class using the configured executable.
+    /// </summary>
+    /// <param name="options">The Git command execution settings. Cannot be <see langword="null" />.</param>
+    /// <param name="logger">The logger for command execution outcomes.</param>
+    /// <exception cref="ArgumentNullException"><paramref name="options" /> is <see langword="null" />.</exception>
+    public GitCliCommandRunner(IOptions<GitCommandRunnerOptions> options, ILogger<GitCliCommandRunner> logger)
+        : this(ResolveExecutablePath(options), [], logger)
     {
     }
 
@@ -145,6 +158,16 @@ public sealed class GitCliCommandRunner : IGitCommandRunner
         this._executableArguments = Array.AsReadOnly(copiedArguments);
         this._readBoundedAsync = readBoundedAsync;
         this._logger = logger ?? NullLogger<GitCliCommandRunner>.Instance;
+    }
+
+    private static string ResolveExecutablePath(IOptions<GitCommandRunnerOptions> options)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+
+        var configuredExecutablePath = options.Value.ExecutablePath;
+        return string.IsNullOrWhiteSpace(configuredExecutablePath)
+            ? GitProcessConstants.DefaultExecutable
+            : configuredExecutablePath;
     }
 
     /// <inheritdoc />

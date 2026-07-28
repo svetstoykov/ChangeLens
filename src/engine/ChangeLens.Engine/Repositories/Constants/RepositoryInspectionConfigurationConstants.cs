@@ -9,9 +9,4 @@ internal static class RepositoryInspectionConfigurationConstants
     ///     The configuration key for the Git executable path or name.
     /// </summary>
     internal const string GitExecutableConfigurationKey = "ChangeLens:Repositories:GitExecutable";
-
-    /// <summary>
-    ///     The default Git executable resolved from the process search path.
-    /// </summary>
-    internal const string DefaultGitExecutable = "git";
 }

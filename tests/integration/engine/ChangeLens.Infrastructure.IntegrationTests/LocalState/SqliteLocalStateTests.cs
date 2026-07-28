@@ -1,9 +1,11 @@
 using ChangeLens.Core.LocalState.Models;
 using ChangeLens.Infrastructure.IntegrationTests.Support;
+using ChangeLens.Infrastructure.LocalState.Models;
 using ChangeLens.Infrastructure.LocalState.Services;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
 using Xunit;
 
 namespace ChangeLens.Infrastructure.IntegrationTests.LocalState;
@@ -13,27 +15,6 @@ namespace ChangeLens.Infrastructure.IntegrationTests.LocalState;
 /// </summary>
 public sealed class SqliteLocalStateTests
 {
-    /// <summary>
-    ///     Verifies that an existing empty database is rejected without destructive replacement.
-    /// </summary>
-    [Fact]
-    public async Task ExistingEmptyDatabaseRemainsUntouchedAndInvalid()
-    {
-        using var temporaryDirectory = new TemporaryDirectory();
-        var databasePath = Path.Combine(temporaryDirectory.DirectoryPath, "changelens.db");
-        await File.WriteAllBytesAsync(
-            databasePath,
-            [],
-            TestContext.Current.CancellationToken);
-        var database = CreateDatabase(temporaryDirectory.DirectoryPath);
-
-        var result = await database.InitializeAsync(TestContext.Current.CancellationToken);
-
-        Assert.True(result.IsFailure);
-        Assert.Equal("localState.invalid", Assert.Single(result.Errors).Code);
-        Assert.Equal(0, new FileInfo(databasePath).Length);
-    }
-
     /// <summary>
     ///     Verifies initial schema creation, idempotent readiness, history identity, removal, and theme round trips.
     /// </summary>
@@ -132,10 +113,10 @@ public sealed class SqliteLocalStateTests
     }
 
     /// <summary>
-    ///     Verifies that an existing version-one local-state database is adopted by the EF migration history.
+    ///     Verifies that an existing schema without EF migration history is reported unavailable rather than adopted.
     /// </summary>
     [Fact]
-    public async Task ExistingVersionOneDatabaseIsAdoptedByEntityFrameworkMigrations()
+    public async Task ExistingPreMigrationDatabaseReturnsUnavailable()
     {
         using var temporaryDirectory = new TemporaryDirectory();
         var databasePath = Path.Combine(temporaryDirectory.DirectoryPath, "changelens.db");
@@ -174,56 +155,10 @@ public sealed class SqliteLocalStateTests
             await command.ExecuteNonQueryAsync(cancellationToken);
         }
 
-        var database = CreateDatabase(temporaryDirectory.DirectoryPath);
-        var result = await database.InitializeAsync(cancellationToken);
-
-        Assert.True(result.IsSuccess);
-        var theme = await new SqliteColorThemePreferenceStore(database, NullLogger<SqliteColorThemePreferenceStore>.Instance).GetAsync(cancellationToken);
-        Assert.Equal(ColorTheme.Dark, theme.Data);
-        await using var verificationConnection =
-            new SqliteConnection($"Data Source={databasePath};Mode=ReadOnly");
-        await verificationConnection.OpenAsync(cancellationToken);
-        await using var verificationCommand = verificationConnection.CreateCommand();
-        verificationCommand.CommandText =
-            "SELECT MigrationId FROM __EFMigrationsHistory;";
-        Assert.Equal(
-            "20260726150843_InitialLocalState",
-            await verificationCommand.ExecuteScalarAsync(cancellationToken));
-    }
-
-    /// <summary>
-    ///     Verifies that a newer schema version is rejected and remains unchanged.
-    /// </summary>
-    [Fact]
-    public async Task NewerDatabaseVersionRemainsUntouchedAndUnsupported()
-    {
-        using var temporaryDirectory = new TemporaryDirectory();
-        var database = CreateDatabase(temporaryDirectory.DirectoryPath);
-        var cancellationToken = TestContext.Current.CancellationToken;
-        Assert.True((await database.InitializeAsync(cancellationToken)).IsSuccess);
-        var databasePath = Path.Combine(temporaryDirectory.DirectoryPath, "changelens.db");
-
-        await using (var connection = new SqliteConnection($"Data Source={databasePath}"))
-        {
-            await connection.OpenAsync(cancellationToken);
-            await using var command = connection.CreateCommand();
-            command.CommandText =
-                "UPDATE local_state_metadata SET schema_version = 2 WHERE singleton_id = 1;";
-            await command.ExecuteNonQueryAsync(cancellationToken);
-        }
-
-        var result = await CreateDatabase(temporaryDirectory.DirectoryPath)
-            .InitializeAsync(cancellationToken);
+        var result = await CreateDatabase(temporaryDirectory.DirectoryPath).InitializeAsync(cancellationToken);
 
         Assert.True(result.IsFailure);
-        Assert.Equal("localState.versionUnsupported", Assert.Single(result.Errors).Code);
-        await using var verificationConnection =
-            new SqliteConnection($"Data Source={databasePath};Mode=ReadOnly");
-        await verificationConnection.OpenAsync(cancellationToken);
-        await using var verificationCommand = verificationConnection.CreateCommand();
-        verificationCommand.CommandText =
-            "SELECT schema_version FROM local_state_metadata WHERE singleton_id = 1;";
-        Assert.Equal(2L, await verificationCommand.ExecuteScalarAsync(cancellationToken));
+        Assert.Equal("localState.unavailable", Assert.Single(result.Errors).Code);
     }
 
     /// <summary>
@@ -261,5 +196,7 @@ public sealed class SqliteLocalStateTests
     }
 
     private static SqliteLocalStateDatabase CreateDatabase(string directoryPath) =>
-        new(directoryPath, NullLogger<SqliteLocalStateDatabase>.Instance);
+        new(
+            Options.Create(new LocalStateOptions { Directory = directoryPath }),
+            NullLogger<SqliteLocalStateDatabase>.Instance);
 }

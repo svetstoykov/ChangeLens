@@ -3,10 +3,12 @@ using ChangeLens.Core.LocalState.Interfaces;
 using ChangeLens.Core.Results.Models;
 using ChangeLens.Infrastructure.LocalState.Constants;
 using ChangeLens.Infrastructure.LocalState.Interfaces;
+using ChangeLens.Infrastructure.LocalState.Models;
 using ChangeLens.Infrastructure.LocalState.Persistence;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace ChangeLens.Infrastructure.LocalState.Services;
 
@@ -27,10 +29,6 @@ public sealed class SqliteLocalStateDatabase : ILocalStateInitializer, ILocalSta
         "The existing local-state database contains invalid metadata.",
         LocalStateErrorCode.Invalid);
 
-    private static readonly OperationError InvalidSchemaError = OperationError.UnprocessableInput(
-        "The existing local-state database schema is invalid.",
-        LocalStateErrorCode.Invalid);
-
     private readonly string _directoryPath;
     private readonly string _databasePath;
     private readonly DbContextOptions<ChangeLensLocalStateDbContext> _contextOptions;
@@ -41,28 +39,32 @@ public sealed class SqliteLocalStateDatabase : ILocalStateInitializer, ILocalSta
     /// <summary>
     ///     Initializes a new instance of the <see cref="SqliteLocalStateDatabase" /> class.
     /// </summary>
-    /// <param name="configuredDirectory">
-    ///     The configured database directory, or <see langword="null" /> to use local application data.
-    /// </param>
+    /// <param name="options">The local-state settings. Cannot be <see langword="null" />.</param>
     /// <param name="logger">The local-state lifecycle logger.</param>
-    public SqliteLocalStateDatabase(string? configuredDirectory, ILogger<SqliteLocalStateDatabase> logger)
+    public SqliteLocalStateDatabase(IOptions<LocalStateOptions> options, ILogger<SqliteLocalStateDatabase> logger)
     {
         this._logger = logger;
-        this._directoryPath = string.IsNullOrWhiteSpace(configuredDirectory)
-            ? Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                LocalStateConstants.ProductName)
-            : Path.GetFullPath(configuredDirectory);
+        var configuredDirectory = options.Value.Directory;
+        if (string.IsNullOrWhiteSpace(configuredDirectory))
+        {
+            var localApplicationDataPath = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+            this._directoryPath = Path.Combine(localApplicationDataPath, LocalStateConstants.ProductName);
+        }
+        else
+        {
+            this._directoryPath = Path.GetFullPath(configuredDirectory);
+        }
+
         this._databasePath = Path.Combine(this._directoryPath, LocalStateConstants.DatabaseFileName);
+        var connectionStringBuilder = new SqliteConnectionStringBuilder
+        {
+            DataSource = this._databasePath,
+            Mode = SqliteOpenMode.ReadWriteCreate,
+            Cache = SqliteCacheMode.Private,
+            DefaultTimeout = LocalStateConstants.CommandTimeoutSeconds,
+        };
         this._contextOptions = new DbContextOptionsBuilder<ChangeLensLocalStateDbContext>()
-            .UseSqlite(
-                new SqliteConnectionStringBuilder
-                {
-                    DataSource = this._databasePath,
-                    Mode = SqliteOpenMode.ReadWriteCreate,
-                    Cache = SqliteCacheMode.Private,
-                    DefaultTimeout = LocalStateConstants.CommandTimeoutSeconds,
-                }.ToString())
+            .UseSqlite(connectionStringBuilder.ToString())
             .Options;
     }
 
@@ -85,20 +87,8 @@ public sealed class SqliteLocalStateDatabase : ILocalStateInitializer, ILocalSta
             try
             {
                 Directory.CreateDirectory(this._directoryPath);
-                var databaseExisted = File.Exists(this._databasePath);
                 await using var context = await this.CreateContextAsync(cancellationToken);
-                var preparation = await PrepareExistingDatabaseAsync(context, databaseExisted, cancellationToken);
-                if (preparation.IsFailure)
-                {
-                    return preparation;
-                }
-
                 await context.Database.MigrateAsync(cancellationToken);
-                var verification = await VerifySchemaAsync(context, cancellationToken);
-                if (verification.IsFailure)
-                {
-                    return verification;
-                }
 
                 this._isReady = true;
                 this._logger.LogInformation(
@@ -174,107 +164,11 @@ public sealed class SqliteLocalStateDatabase : ILocalStateInitializer, ILocalSta
         try
         {
             await using var context = await this.CreateContextAsync(cancellationToken);
-            return await VerifySchemaAsync(context, cancellationToken);
+            return Result.Success();
         }
         catch (Exception exception) when (IsExpectedAccessFailure(exception))
         {
             return Unavailable(exception);
         }
     }
-
-    private static async Task<Result> PrepareExistingDatabaseAsync(
-        ChangeLensLocalStateDbContext context,
-        bool databaseExisted,
-        CancellationToken cancellationToken)
-    {
-        if (!databaseExisted)
-        {
-            return Result.Success();
-        }
-
-        var tableNames = await GetTableNamesAsync(context, cancellationToken);
-        if (tableNames.Count == 0)
-        {
-            return InvalidSchema();
-        }
-
-        var requiredTables = new[] { "local_state_metadata", "repositories", "application_state" };
-        if (!requiredTables.All(tableNames.Contains))
-        {
-            return InvalidSchema();
-        }
-
-        var metadata = await context.Metadata.AsNoTracking().SingleOrDefaultAsync(
-            entry => entry.SingletonId == 1,
-            cancellationToken);
-        if (metadata is null || metadata.ProductName != LocalStateConstants.ProductName || metadata.SchemaVersion < 1)
-        {
-            return InvalidSchema();
-        }
-
-        if (metadata.SchemaVersion > LocalStateConstants.CurrentSchemaVersion)
-        {
-            return Result.Fail(OperationError.InvalidOperation(
-                "The local-state database was created by a newer ChangeLens version.",
-                LocalStateErrorCode.VersionUnsupported));
-        }
-
-        if (!tableNames.Contains("__EFMigrationsHistory"))
-        {
-            await context.Database.ExecuteSqlRawAsync(
-                "CREATE TABLE __EFMigrationsHistory (MigrationId TEXT NOT NULL CONSTRAINT PK___EFMigrationsHistory PRIMARY KEY, ProductVersion TEXT NOT NULL);",
-                cancellationToken);
-            await context.Database.ExecuteSqlRawAsync(
-                "INSERT INTO __EFMigrationsHistory (MigrationId, ProductVersion) VALUES ({0}, {1});",
-                [LocalStateConstants.InitialMigrationId, "10.0.10"],
-                cancellationToken);
-        }
-
-        return Result.Success();
-    }
-
-    private static async Task<HashSet<string>> GetTableNamesAsync(
-        ChangeLensLocalStateDbContext context,
-        CancellationToken cancellationToken)
-    {
-        var tableNames = new HashSet<string>(StringComparer.Ordinal);
-        await using var command = context.Database.GetDbConnection().CreateCommand();
-        command.CommandText = "SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%';";
-        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
-        while (await reader.ReadAsync(cancellationToken))
-        {
-            tableNames.Add(reader.GetString(0));
-        }
-
-        return tableNames;
-    }
-
-    private static async Task<Result> VerifySchemaAsync(
-        ChangeLensLocalStateDbContext context,
-        CancellationToken cancellationToken)
-    {
-        try
-        {
-            var metadata = await context.Metadata.AsNoTracking().SingleOrDefaultAsync(
-                entry => entry.SingletonId == 1,
-                cancellationToken);
-            var applicationStateCount = await context.ApplicationState.CountAsync(
-                entry => entry.SingletonId == 1,
-                cancellationToken);
-            return metadata is null ||
-                   metadata.ProductName != LocalStateConstants.ProductName ||
-                   metadata.SchemaVersion != LocalStateConstants.CurrentSchemaVersion ||
-                   applicationStateCount != 1
-                ? InvalidSchema()
-                : Result.Success();
-        }
-        catch (SqliteException exception) when (!IsBusy(exception))
-        {
-            return InvalidSchema();
-        }
-    }
-
-    private static Result InvalidSchema() => Result.Fail(InvalidSchemaError);
-
-    private static bool IsBusy(SqliteException exception) => exception.SqliteErrorCode is 5 or 6;
 }

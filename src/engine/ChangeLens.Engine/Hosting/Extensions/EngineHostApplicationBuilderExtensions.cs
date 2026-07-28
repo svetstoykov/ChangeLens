@@ -20,8 +20,11 @@ using ChangeLens.Engine.Repositories.Handlers;
 using ChangeLens.Engine.Repositories.Interfaces;
 using ChangeLens.Engine.Repositories.Services;
 using ChangeLens.Infrastructure.FileSystem.Services;
+using ChangeLens.Infrastructure.Git.Models;
 using ChangeLens.Infrastructure.Git.Services;
+using ChangeLens.Infrastructure.LocalState.Constants;
 using ChangeLens.Infrastructure.LocalState.Interfaces;
+using ChangeLens.Infrastructure.LocalState.Models;
 using ChangeLens.Infrastructure.LocalState.Services;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -63,18 +66,14 @@ internal static class EngineHostApplicationBuilderExtensions
     {
         builder.Services.AddSingleton<TextReader>(_ => Console.In);
         builder.Services.AddSingleton<TextWriter>(_ => Console.Out);
-        builder.Services.AddSingleton<TimeProvider>(TimeProvider.System);
+        builder.Services.AddSingleton(TimeProvider.System);
     }
 
     private static void AddLocalStateServices(HostApplicationBuilder builder)
     {
-        builder.Services.AddSingleton<ILocalStateDatabase>(
-            serviceProvider =>
-                new SqliteLocalStateDatabase(
-                    builder.Configuration[
-                        "ChangeLens:LocalState:Directory"],
-                    serviceProvider.GetRequiredService<
-                        Microsoft.Extensions.Logging.ILogger<SqliteLocalStateDatabase>>()));
+        builder.Services.Configure<LocalStateOptions>(
+            options => options.Directory = builder.Configuration[LocalStateConstants.DirectoryConfigurationKey]);
+        builder.Services.AddSingleton<ILocalStateDatabase, SqliteLocalStateDatabase>();
         builder.Services.AddSingleton<ILocalStateInitializer>(
             serviceProvider => serviceProvider.GetRequiredService<ILocalStateDatabase>() as ILocalStateInitializer
                 ?? throw new InvalidOperationException("The local-state database must provide lifecycle initialization."));
@@ -97,21 +96,10 @@ internal static class EngineHostApplicationBuilderExtensions
     {
         builder.Services.AddSingleton<ICanonicalRepositoryPathKeyProvider, CanonicalRepositoryPathKeyProvider>();
         builder.Services.AddSingleton<IRepositoryPathResolver, PhysicalRepositoryPathResolver>();
-        builder.Services.AddSingleton<IGitCommandRunner>(
-            serviceProvider =>
-            {
-                var configuredExecutable =
-                    builder.Configuration[
-                        RepositoryInspectionConfigurationConstants.GitExecutableConfigurationKey];
-                var executable = string.IsNullOrWhiteSpace(configuredExecutable)
-                    ? RepositoryInspectionConfigurationConstants.DefaultGitExecutable
-                    : configuredExecutable;
-                return new GitCliCommandRunner(
-                    executable,
-                    [],
-                    serviceProvider.GetRequiredService<
-                        Microsoft.Extensions.Logging.ILogger<GitCliCommandRunner>>());
-            });
+        builder.Services.Configure<GitCommandRunnerOptions>(
+            options => options.ExecutablePath =
+                builder.Configuration[RepositoryInspectionConfigurationConstants.GitExecutableConfigurationKey]);
+        builder.Services.AddSingleton<IGitCommandRunner, GitCliCommandRunner>();
         builder.Services.AddSingleton<IGitRepositoryInspector, GitRepositoryInspector>();
     }
 

@@ -1,7 +1,5 @@
 using System.Diagnostics;
-using ChangeLens.Core.EngineStatus.Interfaces;
 using ChangeLens.Core.Results.Models;
-using ChangeLens.Engine.Comparisons.Constants;
 using ChangeLens.Engine.Hosting.Constants;
 using ChangeLens.Engine.Protocol.Constants;
 using ChangeLens.Engine.Protocol.Interfaces;
@@ -20,13 +18,12 @@ namespace ChangeLens.Engine.Protocol.Services;
 ///     </para>
 ///     <para>
 ///         The routing map is built once from the registered handlers and is never mutated afterwards. The host owns
-///         the protocol version check, handler lookup, readiness gate, exception boundary, and outcome logging; each
+///         the protocol version check, handler lookup, exception boundary, and outcome logging; each
 ///         handler owns its own parameter binding and capability calls.
 ///     </para>
 /// </remarks>
 /// <param name="protocolTransport">The bounded protocol transport. Cannot be <see langword="null" />.</param>
 /// <param name="actionHandlers">The registered protocol action handlers. Cannot be <see langword="null" />.</param>
-/// <param name="engineStatusService">The engine-status capability. Cannot be <see langword="null" />.</param>
 /// <param name="logger">The logger for protocol lifecycle and action outcomes. Cannot be <see langword="null" />.</param>
 /// <param name="applicationLifetime">
 ///     The application lifetime used to stop the process. Cannot be <see langword="null" />.
@@ -42,10 +39,15 @@ namespace ChangeLens.Engine.Protocol.Services;
 internal sealed class EngineProtocolHost(
     IEngineProtocolTransport protocolTransport,
     IEnumerable<IActionHandler> actionHandlers,
-    IEngineStatusService engineStatusService,
     ILogger<EngineProtocolHost> logger,
     IHostApplicationLifetime applicationLifetime) : BackgroundService
 {
+    private static OperationError UnsupportedProtocolVersionError(int protocolVersion) =>
+        OperationError.UnprocessableInput($"Protocol version {protocolVersion} is not supported.", EngineErrorCode.UnsupportedVersion);
+
+    private static OperationError UnknownActionError(string action) =>
+        OperationError.NotFound($"The action '{action}' is not recognized.", EngineErrorCode.UnknownAction);
+
     private readonly IReadOnlyDictionary<string, IActionHandler> _actionHandlersByAction = CreateActionHandlerMap(actionHandlers);
 
     /// <summary>
@@ -79,9 +81,7 @@ internal sealed class EngineProtocolHost(
             {
                 response = ProtocolResponseFactory.FromError(
                     request.RequestId,
-                    OperationError.UnprocessableInput(
-                        $"Protocol version {request.ProtocolVersion} is not supported.",
-                        EngineErrorCode.UnsupportedVersion));
+                    UnsupportedProtocolVersionError(request.ProtocolVersion));
             }
             else
             {
@@ -94,11 +94,8 @@ internal sealed class EngineProtocolHost(
         }
         catch (Exception exception)
         {
-            var loggedException = IsComparisonAction(request.Action)
-                ? new InvalidOperationException("Unexpected comparison action failure.")
-                : exception;
             logger.LogError(
-                loggedException,
+                exception,
                 "Unexpected failure processing engine action {RequestId} for {Action} with error {ErrorCode} in " +
                 "{ElapsedMilliseconds:0.000} ms.",
                 request.RequestId,
@@ -175,8 +172,8 @@ internal sealed class EngineProtocolHost(
     ///     A <see cref="CancellationToken" /> to observe while waiting for the action.
     /// </param>
     /// <returns>
-    ///     A task that represents the asynchronous operation. The task result contains the handler's response, the
-    ///     readiness failure that prevented it, or the unknown-action error.
+    ///     A task that represents the asynchronous operation. The task result contains the handler's response or the
+    ///     unknown-action error.
     /// </returns>
     private async Task<ProtocolResponse> ProcessKnownVersionAsync(
         EngineProtocolRequest request,
@@ -184,15 +181,10 @@ internal sealed class EngineProtocolHost(
     {
         if (!this._actionHandlersByAction.TryGetValue(request.Action, out var actionHandler))
         {
-            return ProtocolResponseFactory.FromError(
-                request.RequestId,
-                OperationError.NotFound($"The action '{request.Action}' is not recognized.", EngineErrorCode.UnknownAction));
+            return ProtocolResponseFactory.FromError(request.RequestId, UnknownActionError(request.Action));
         }
 
-        var readinessResult = await engineStatusService.CheckStatusAsync(cancellationToken);
-        return readinessResult.IsFailure
-            ? ProtocolResponseFactory.FromResult(request.RequestId, readinessResult)
-            : await actionHandler.HandleAsync(request, cancellationToken);
+        return await actionHandler.HandleAsync(request, cancellationToken);
     }
 
     /// <summary>
@@ -230,18 +222,6 @@ internal sealed class EngineProtocolHost(
 
         return handlersByAction;
     }
-
-    /// <summary>
-    ///     Determines whether an action belongs to the comparison boundary with restricted diagnostic context.
-    /// </summary>
-    /// <param name="action">The action name.</param>
-    /// <returns><see langword="true" /> for an approved comparison action; otherwise, <see langword="false" />.</returns>
-    private static bool IsComparisonAction(string action) =>
-        action is ComparisonActionConstants.ListTargetsAction or
-            ComparisonActionConstants.PrepareAction or
-            ComparisonActionConstants.CheckFreshnessAction or
-            ComparisonActionConstants.CheckRemoteBaselineAction or
-            ComparisonActionConstants.RefreshRemoteBaselineAction;
 
     /// <summary>
     ///     Determines whether a rejected request leaves the transport safe for another read.

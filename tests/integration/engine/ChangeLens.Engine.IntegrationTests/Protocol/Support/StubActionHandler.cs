@@ -11,12 +11,15 @@ namespace ChangeLens.Engine.IntegrationTests.Protocol.Support;
 ///     exercise the routing map's construction-time guards.
 /// </remarks>
 /// <param name="action">The action name this handler reports.</param>
-internal sealed class StubActionHandler(string action) : IActionHandler
+internal sealed class StubActionHandler(
+    string action,
+    Func<EngineProtocolRequest, CancellationToken, Task<ProtocolResponse>>? handleAsync = null) : IActionHandler
 {
     /// <inheritdoc />
     public string Action => action;
 
     /// <inheritdoc />
     public Task<ProtocolResponse> HandleAsync(EngineProtocolRequest request, CancellationToken cancellationToken) =>
-        throw new NotSupportedException("The stub action handler is only used to build the routing map.");
+        handleAsync?.Invoke(request, cancellationToken)
+        ?? throw new NotSupportedException("The stub action handler is only used to build the routing map.");
 }

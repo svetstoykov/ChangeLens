@@ -32,7 +32,7 @@ public sealed class ComparisonActionHandlerTests
             new StubGitComparisonFreshnessChecker((ComparisonFreshnessState)int.MaxValue),
             new EngineProtocolSerializer());
         var logger = new RecordingLogger<EngineProtocolHost>();
-        var host = new EngineProtocolHost(null!, [handler], new StubEngineStatusService(), logger, null!);
+        var host = new EngineProtocolHost(null!, [handler], logger, null!);
         var request = CreateRequest(
             ComparisonActionConstants.CheckFreshnessAction,
             """{"path":"/repository","target":"refs/heads/main","freshnessToken":"token"}""");

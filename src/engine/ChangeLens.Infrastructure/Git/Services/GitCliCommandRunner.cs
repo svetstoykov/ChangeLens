@@ -48,8 +48,7 @@ public sealed class GitCliCommandRunner : IGitCommandRunner
         throwOnInvalidBytes: true);
 
     private static readonly OperationError UnavailableError = OperationError.ExternalDependencyFailure(
-        "Git is unavailable.",
-        GitErrorCode.Unavailable);
+        "Git is unavailable.", GitErrorCode.Unavailable);
 
     private readonly string _executablePath;
     private readonly ReadOnlyCollection<string> _executableArguments;

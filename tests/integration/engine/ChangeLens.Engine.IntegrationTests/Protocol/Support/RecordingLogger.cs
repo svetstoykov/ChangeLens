@@ -9,11 +9,17 @@ namespace ChangeLens.Engine.IntegrationTests.Protocol.Support;
 internal sealed class RecordingLogger<T> : ILogger<T>
 {
     private readonly List<LogLevel> _levels = [];
+    private readonly List<Exception?> _exceptions = [];
 
     /// <summary>
     ///     Gets the emitted log levels in call order.
     /// </summary>
     internal IReadOnlyList<LogLevel> Levels => this._levels;
+
+    /// <summary>
+    ///     Gets the exceptions emitted in call order.
+    /// </summary>
+    internal IReadOnlyList<Exception?> Exceptions => this._exceptions;
 
     /// <inheritdoc />
     public IDisposable? BeginScope<TState>(TState state)
@@ -29,6 +35,9 @@ internal sealed class RecordingLogger<T> : ILogger<T>
         EventId eventId,
         TState state,
         Exception? exception,
-        Func<TState, Exception?, string> formatter) =>
+        Func<TState, Exception?, string> formatter)
+    {
         this._levels.Add(logLevel);
+        this._exceptions.Add(exception);
+    }
 }

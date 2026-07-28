@@ -14,8 +14,8 @@ namespace ChangeLens.Engine.Comparisons.Handlers;
 ///     Handles the action that checks whether a prepared comparison is still current.
 /// </summary>
 /// <remarks>
-///     The host registers this handler as a singleton. A freshness state the protocol has not approved is an internal
-///     defect and reaches the processor's exception boundary.
+///     The host registers this handler as a singleton. A freshness state the protocol has not approved is returned as
+///     a domain-coded internal error.
 /// </remarks>
 /// <param name="comparisonFreshnessChecker">The comparison freshness capability. Cannot be <see langword="null" />.</param>
 /// <param name="protocolSerializer">The strict engine protocol serializer. Cannot be <see langword="null" />.</param>
@@ -53,12 +53,16 @@ internal sealed class ComparisonCheckFreshnessHandler(
                 Result.ErrorFromResult<ComparisonFreshnessResult>(freshnessResult));
         }
 
-        ComparisonFreshnessResult result = freshnessResult.Data switch
+        var result = freshnessResult.Data switch
         {
-            ComparisonFreshnessState.Current => new CurrentComparisonFreshnessResult(),
-            ComparisonFreshnessState.Stale => new StaleComparisonFreshnessResult(),
-            _ => throw new InvalidOperationException("The comparison freshness state is not approved for the engine protocol."),
+            ComparisonFreshnessState.Current =>
+                Result.Success<ComparisonFreshnessResult>(new CurrentComparisonFreshnessResult()),
+            ComparisonFreshnessState.Stale =>
+                Result.Success<ComparisonFreshnessResult>(new StaleComparisonFreshnessResult()),
+            _ => OperationError.InternalError(
+                "The comparison freshness state is not approved for the engine protocol.",
+                ComparisonErrorCode.UnmappedFreshnessState),
         };
-        return ProtocolResponseFactory.FromResult(request.RequestId, Result.Success(result));
+        return ProtocolResponseFactory.FromResult(request.RequestId, result);
     }
 }

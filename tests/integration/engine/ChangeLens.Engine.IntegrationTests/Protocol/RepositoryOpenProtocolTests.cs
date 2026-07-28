@@ -10,7 +10,7 @@ using Xunit;
 namespace ChangeLens.Engine.IntegrationTests.Protocol;
 
 /// <summary>
-///     Verifies repository-open behavior through the real Engine process protocol.
+///     Verifies repository and local-state behavior through the real Engine process protocol.
 /// </summary>
 public sealed partial class RepositoryOpenProtocolTests
 {
@@ -432,6 +432,82 @@ public sealed partial class RepositoryOpenProtocolTests
     }
 
     /// <summary>
+    ///     Asynchronously verifies removal preserves schema detail and distinguishes a noncanonical repository identifier.
+    /// </summary>
+    /// <param name="request">The complete removal request.</param>
+    /// <param name="requestId">The expected correlated request identifier.</param>
+    /// <param name="expectedMessage">The expected validation detail.</param>
+    /// <returns>A task that represents the asynchronous operation.</returns>
+    [Theory]
+    [InlineData(
+        """{"protocolVersion":1,"requestId":"remove-malformed","action":"repositories.removeRecent","parameters":{"repositoryId":1}}""",
+        "remove-malformed",
+        "The parameters do not match the repositories.removeRecent schema.")]
+    [InlineData(
+        """
+        {
+          "protocolVersion": 1,
+          "requestId": "remove-noncanonical",
+          "action": "repositories.removeRecent",
+          "parameters": {
+            "repositoryId": "00000000-0000-0000-0000-00000000000A"
+          }
+        }
+        """,
+        "remove-noncanonical",
+        "The repositories.removeRecent repositoryId must be a canonical GUID in 'D' format.")]
+    public async Task EnginePreservesRemoveRecentValidationDetail(
+        string request,
+        string requestId,
+        string expectedMessage)
+    {
+        using var engine = StartEngine();
+
+        await engine.StandardInput.WriteLineAsync(request.ReplaceLineEndings(string.Empty));
+        engine.StandardInput.Close();
+        using var response = await ReadResponseAsync(engine);
+        await WaitForExitAsync(engine);
+
+        AssertProtocolError(response, requestId, "Validation", "protocol.invalidRequest", expectedMessage);
+        Assert.Equal(0, engine.ExitCode);
+    }
+
+    /// <summary>
+    ///     Asynchronously verifies string-valued protocol enums reject both defined and unnamed numeric values.
+    /// </summary>
+    /// <param name="colorTheme">The numeric color-theme value to send.</param>
+    /// <returns>A task that represents the asynchronous operation.</returns>
+    [Theory]
+    [InlineData(1)]
+    [InlineData(123)]
+    public async Task EngineRejectsNumericColorThemeValues(int colorTheme)
+    {
+        var requestId = $"numeric-theme-{colorTheme}";
+        var request = JsonSerializer.Serialize(
+            new
+            {
+                protocolVersion = 1,
+                requestId,
+                action = "preferences.setColorTheme",
+                parameters = new { colorTheme },
+            });
+        using var engine = StartEngine();
+
+        await engine.StandardInput.WriteLineAsync(request);
+        engine.StandardInput.Close();
+        using var response = await ReadResponseAsync(engine);
+        await WaitForExitAsync(engine);
+
+        AssertProtocolError(
+            response,
+            requestId,
+            "Validation",
+            "protocol.invalidRequest",
+            "The parameters do not match the preferences.setColorTheme schema.");
+        Assert.Equal(0, engine.ExitCode);
+    }
+
+    /// <summary>
     ///     Verifies repository logs contain safe metadata while standard output contains only the response.
     /// </summary>
     [Fact]
@@ -555,6 +631,22 @@ public sealed partial class RepositoryOpenProtocolTests
 
     [GeneratedRegex(@"\x1B\[[0-9;]*m")]
     private static partial Regex AnsiEscapes();
+
+    private static void AssertProtocolError(
+        JsonDocument response,
+        string requestId,
+        string expectedType,
+        string expectedCode,
+        string expectedMessage)
+    {
+        var root = response.RootElement;
+        Assert.Equal("error", root.GetProperty("type").GetString());
+        Assert.Equal(requestId, root.GetProperty("requestId").GetString());
+        var error = Assert.Single(root.GetProperty("errors").EnumerateArray());
+        Assert.Equal(expectedType, error.GetProperty("type").GetString());
+        Assert.Equal(expectedCode, error.GetProperty("code").GetString());
+        Assert.Equal(expectedMessage, error.GetProperty("message").GetString());
+    }
 
     private static string FirstErrorCode(JsonDocument response) =>
         response.RootElement.GetProperty("errors")[0].GetProperty("code").GetString()!;

@@ -35,13 +35,19 @@ internal sealed class RepositoryRemoveRecentHandler(
         }
 
         var parametersResult = protocolSerializer.DeserializeParameters<RepositoryRemoveRecentParameters>(request.Parameters, this.Action);
-        if (parametersResult.IsFailure ||
-            !Guid.TryParseExact(parametersResult.Data?.RepositoryId, "D", out var repositoryId) ||
+        if (parametersResult.IsFailure)
+        {
+            return ProtocolResponseFactory.CreateError(request.RequestId, parametersResult.Errors);
+        }
+
+        if (!Guid.TryParseExact(parametersResult.Data!.RepositoryId, "D", out var repositoryId) ||
             !string.Equals(parametersResult.Data.RepositoryId, repositoryId.ToString("D"), StringComparison.Ordinal))
         {
             return ProtocolResponseFactory.FromError(
                 request.RequestId,
-                OperationError.Validation("The repositories.removeRecent parameters are invalid.", EngineErrorCode.InvalidRequest));
+                OperationError.Validation(
+                    "The repositories.removeRecent repositoryId must be a canonical GUID in 'D' format.",
+                    EngineErrorCode.InvalidRequest));
         }
 
         var result = await repositoryHistoryService.RemoveRecentAsync(repositoryId, cancellationToken);

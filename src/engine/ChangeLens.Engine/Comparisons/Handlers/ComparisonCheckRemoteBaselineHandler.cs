@@ -14,8 +14,8 @@ namespace ChangeLens.Engine.Comparisons.Handlers;
 ///     Handles the action that checks a cached remote-tracking baseline against the server.
 /// </summary>
 /// <remarks>
-///     The host registers this handler as a singleton. A baseline result the protocol has not approved is an internal
-///     defect and reaches the processor's exception boundary.
+///     The host registers this handler as a singleton. A baseline result the protocol has not approved is returned as
+///     a domain-coded internal error.
 /// </remarks>
 /// <param name="remoteBaselineTracker">
 ///     The remote baseline detection and refresh capability. Cannot be <see langword="null" />.
@@ -49,13 +49,18 @@ internal sealed class ComparisonCheckRemoteBaselineHandler(
             return ProtocolResponseFactory.FromResult(request.RequestId, Result.ErrorFromResult<RemoteBaselineResult>(checkResult));
         }
 
-        RemoteBaselineResult result = checkResult.Data! switch
+        var result = checkResult.Data! switch
         {
-            { State: RemoteBaselineState.Current, RemoteRevision: { } revision } => new CurrentRemoteBaselineResult(revision),
-            { State: RemoteBaselineState.Moved, RemoteRevision: { } revision } => new MovedRemoteBaselineResult(revision),
-            { State: RemoteBaselineState.NoRemote } => new NoRemoteRemoteBaselineResult(),
-            _ => throw new InvalidOperationException("The remote baseline check result is not approved for the engine protocol."),
+            { State: RemoteBaselineState.Current, RemoteRevision: { } revision } =>
+                Result.Success<RemoteBaselineResult>(new CurrentRemoteBaselineResult(revision)),
+            { State: RemoteBaselineState.Moved, RemoteRevision: { } revision } =>
+                Result.Success<RemoteBaselineResult>(new MovedRemoteBaselineResult(revision)),
+            { State: RemoteBaselineState.NoRemote } =>
+                Result.Success<RemoteBaselineResult>(new NoRemoteRemoteBaselineResult()),
+            _ => OperationError.InternalError(
+                "The remote baseline check result is not approved for the engine protocol.",
+                ComparisonErrorCode.UnmappedRemoteBaselineState),
         };
-        return ProtocolResponseFactory.FromResult(request.RequestId, Result.Success(result));
+        return ProtocolResponseFactory.FromResult(request.RequestId, result);
     }
 }

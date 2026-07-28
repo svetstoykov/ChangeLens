@@ -1,5 +1,6 @@
 using System.Text.Json;
 using ChangeLens.Core.LocalState.Models;
+using ChangeLens.Core.Results.Models;
 using ChangeLens.Engine.Preferences.Constants;
 using ChangeLens.Engine.Preferences.Interfaces;
 using ChangeLens.Engine.Preferences.Models;
@@ -13,8 +14,8 @@ namespace ChangeLens.Engine.Preferences.Handlers;
 ///     Handles the action that stores an explicit color-theme preference.
 /// </summary>
 /// <remarks>
-///     The host registers this handler as a singleton. A theme value the protocol has not approved is an internal
-///     defect and reaches the processor's exception boundary.
+///     The host registers this handler as a singleton. A theme value the protocol has not approved is returned as a
+///     domain-coded internal error without changing the stored preference.
 /// </remarks>
 /// <param name="colorThemePreferenceService">The color-theme capability. Cannot be <see langword="null" />.</param>
 /// <param name="protocolSerializer">The strict engine protocol serializer. Cannot be <see langword="null" />.</param>
@@ -39,12 +40,19 @@ internal sealed class PreferenceSetColorThemeHandler(
             return ProtocolResponseFactory.CreateError(request.RequestId, parametersResult.Errors);
         }
 
-        var theme = parametersResult.Data!.ColorTheme switch
+        var colorTheme = parametersResult.Data!.ColorTheme;
+        if (colorTheme is not (ColorThemeResultValue.Light or ColorThemeResultValue.Dark))
         {
-            ColorThemeResultValue.Light => ColorTheme.Light,
-            ColorThemeResultValue.Dark => ColorTheme.Dark,
-            _ => throw new InvalidOperationException("The color-theme preference is not supported."),
-        };
+            return ProtocolResponseFactory.FromError(
+                request.RequestId,
+                OperationError.InternalError(
+                    "The color-theme preference is not approved for the engine protocol.",
+                    PreferenceErrorCode.UnmappedColorTheme));
+        }
+
+        var theme = colorTheme == ColorThemeResultValue.Light
+            ? ColorTheme.Light
+            : ColorTheme.Dark;
         var result = await colorThemePreferenceService.SetAsync(theme, cancellationToken);
         return ProtocolResponseFactory.FromResult(request.RequestId, result);
     }

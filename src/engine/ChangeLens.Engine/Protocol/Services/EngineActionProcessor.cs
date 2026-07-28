@@ -176,7 +176,8 @@ internal sealed class EngineActionProcessor(
     {
         if (response is ProtocolErrorResponse errorResponse)
         {
-            logger.LogInformation(
+            logger.Log(
+                LogLevel.Warning,
                 "Processed engine action {RequestId} for {Action} with errors {ErrorCodes} in " +
                 "{ElapsedMilliseconds:0.000} ms.",
                 request.RequestId,

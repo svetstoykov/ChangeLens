@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Diagnostics;
 using System.Text;
+using ChangeLens.Core.Diagnostics.Services;
 using ChangeLens.Core.Git.Constants;
 using ChangeLens.Core.Git.Interfaces;
 using ChangeLens.Core.Git.Models;
@@ -167,7 +168,7 @@ public sealed class GitCliCommandRunner : IGitCommandRunner
             {
                 this._logger.LogWarning(
                     "Git executable {ExecutablePath} did not start.",
-                    this._executablePath);
+                    PathSanitizer.RedactHomeDirectory(this._executablePath));
                 return Unavailable();
             }
         }
@@ -181,7 +182,7 @@ public sealed class GitCliCommandRunner : IGitCommandRunner
             this._logger.LogWarning(
                 exception,
                 "Git executable {ExecutablePath} is unavailable.",
-                this._executablePath);
+                PathSanitizer.RedactHomeDirectory(this._executablePath));
             return Unavailable();
         }
 

@@ -62,7 +62,7 @@ internal sealed class EngineProtocolTransport(
             {
                 logger.LogInformation(
                     "Rejected protocol input with errors {ErrorCodes}.",
-                    lineResult.Errors.Select(error => error.Code).ToArray());
+                    lineResult.Errors.Select(error => error.Code));
                 return Result.ErrorFromResult<EngineProtocolRequest?>(lineResult);
             }
 
@@ -76,7 +76,7 @@ internal sealed class EngineProtocolTransport(
             {
                 logger.LogInformation(
                     "Rejected protocol input with errors {ErrorCodes}.",
-                    requestResult.Errors.Select(error => error.Code).ToArray());
+                    requestResult.Errors.Select(error => error.Code));
                 return Result.ErrorFromResult<EngineProtocolRequest?>(requestResult);
             }
 

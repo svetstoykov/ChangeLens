@@ -22,7 +22,7 @@ namespace ChangeLens.Infrastructure.Git.Services;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         This implementation is stateless and safe to register as a singleton.
+///         The Engine registers this implementation as scoped. It serves one request and does not need to be thread-safe.
 ///     </para>
 ///     <para>
 ///         Git arguments are passed as distinct process arguments. Paging, interactive prompts, optional locks, and

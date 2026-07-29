@@ -6,6 +6,9 @@ namespace ChangeLens.Core.Comparisons.Interfaces;
 /// <summary>
 ///     Defines preparation of immutable local Git comparison facts.
 /// </summary>
+/// <remarks>
+///     Implementations are registered as scoped services. They serve one request and do not need to be thread-safe.
+/// </remarks>
 public interface IGitComparisonPreparer
 {
     /// <summary>

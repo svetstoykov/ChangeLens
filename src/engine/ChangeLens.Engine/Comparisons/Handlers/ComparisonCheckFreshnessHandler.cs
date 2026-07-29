@@ -14,8 +14,8 @@ namespace ChangeLens.Engine.Comparisons.Handlers;
 ///     Handles the action that checks whether a prepared comparison is still current.
 /// </summary>
 /// <remarks>
-///     The host registers this handler as a singleton. A freshness state the protocol has not approved is returned as
-///     a domain-coded internal error.
+///     The host registers this handler as scoped. A freshness state the protocol has not approved is returned as a
+///     domain-coded internal error.
 /// </remarks>
 /// <param name="comparisonFreshnessChecker">The comparison freshness capability. Cannot be <see langword="null" />.</param>
 /// <param name="protocolSerializer">The strict engine protocol serializer. Cannot be <see langword="null" />.</param>
@@ -24,17 +24,17 @@ internal sealed class ComparisonCheckFreshnessHandler(
     IEngineProtocolSerializer protocolSerializer) : IActionHandler
 {
     /// <inheritdoc />
-    public string Action => ComparisonActionConstants.CheckFreshnessAction;
+    public static string Action => ComparisonActionConstants.CheckFreshnessAction;
 
     /// <inheritdoc />
     public async Task<ProtocolResponse> HandleAsync(EngineProtocolRequest request, CancellationToken cancellationToken)
     {
         if (request.Parameters.ValueKind == JsonValueKind.Undefined)
         {
-            return ProtocolResponseFactory.MissingParameters(request.RequestId, this.Action);
+            return ProtocolResponseFactory.MissingParameters(request.RequestId, Action);
         }
 
-        var parametersResult = protocolSerializer.DeserializeParameters<ComparisonCheckFreshnessParameters>(request.Parameters, this.Action);
+        var parametersResult = protocolSerializer.DeserializeParameters<ComparisonCheckFreshnessParameters>(request.Parameters, Action);
         if (parametersResult.IsFailure)
         {
             return ProtocolResponseFactory.CreateError(request.RequestId, parametersResult.Errors);

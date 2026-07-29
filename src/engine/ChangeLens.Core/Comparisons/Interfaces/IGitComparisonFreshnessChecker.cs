@@ -6,6 +6,9 @@ namespace ChangeLens.Core.Comparisons.Interfaces;
 /// <summary>
 ///     Defines freshness checks for prepared local Git comparisons.
 /// </summary>
+/// <remarks>
+///     Implementations are registered as scoped services. They serve one request and do not need to be thread-safe.
+/// </remarks>
 public interface IGitComparisonFreshnessChecker
 {
     /// <summary>

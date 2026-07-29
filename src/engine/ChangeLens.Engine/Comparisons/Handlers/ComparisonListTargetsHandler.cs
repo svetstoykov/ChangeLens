@@ -14,8 +14,8 @@ namespace ChangeLens.Engine.Comparisons.Handlers;
 ///     Handles the action that lists comparison targets within the protocol response ceiling.
 /// </summary>
 /// <remarks>
-///     The host registers this handler as a singleton. The page builder measures the complete correlated response, so
-///     the request identifier is passed through to it unchanged.
+///     The host registers this handler as scoped. The page builder measures the complete correlated response, so the
+///     request identifier is passed through to it unchanged.
 /// </remarks>
 /// <param name="comparisonTargetDiscovery">
 ///     The comparison-target discovery capability. Cannot be <see langword="null" />.
@@ -28,17 +28,17 @@ internal sealed class ComparisonListTargetsHandler(
     IEngineProtocolSerializer protocolSerializer) : IActionHandler
 {
     /// <inheritdoc />
-    public string Action => ComparisonActionConstants.ListTargetsAction;
+    public static string Action => ComparisonActionConstants.ListTargetsAction;
 
     /// <inheritdoc />
     public async Task<ProtocolResponse> HandleAsync(EngineProtocolRequest request, CancellationToken cancellationToken)
     {
         if (request.Parameters.ValueKind == JsonValueKind.Undefined)
         {
-            return ProtocolResponseFactory.MissingParameters(request.RequestId, this.Action);
+            return ProtocolResponseFactory.MissingParameters(request.RequestId, Action);
         }
 
-        var parametersResult = protocolSerializer.DeserializeParameters<ComparisonListTargetsParameters>(request.Parameters, this.Action);
+        var parametersResult = protocolSerializer.DeserializeParameters<ComparisonListTargetsParameters>(request.Parameters, Action);
         if (parametersResult.IsFailure)
         {
             return ProtocolResponseFactory.CreateError(request.RequestId, parametersResult.Errors);

@@ -7,6 +7,9 @@ namespace ChangeLens.Engine.Comparisons.Interfaces;
 /// <summary>
 ///     Defines construction of protocol-bounded comparison target pages.
 /// </summary>
+/// <remarks>
+///     Implementations are registered as scoped services. They serve one request and do not need to be thread-safe.
+/// </remarks>
 internal interface IComparisonTargetPageBuilder
 {
     /// <summary>

@@ -12,14 +12,14 @@ namespace ChangeLens.Engine.Repositories.Handlers;
 ///     Handles the payload-free action that lists recent repository metadata.
 /// </summary>
 /// <remarks>
-///     The host registers this handler as a singleton. Recent entries are listed without revalidating them, and
-///     supplied parameters are ignored exactly as before.
+///     The host registers this handler as scoped. Recent entries are listed without revalidating them, and supplied
+///     parameters are ignored.
 /// </remarks>
 /// <param name="repositoryHistoryService">The repository-history capability. Cannot be <see langword="null" />.</param>
 internal sealed class RepositoryListRecentHandler(IRepositoryHistoryService repositoryHistoryService) : IActionHandler
 {
     /// <inheritdoc />
-    public string Action => RepositoryActionConstants.ListRecentAction;
+    public static string Action => RepositoryActionConstants.ListRecentAction;
 
     /// <inheritdoc />
     public async Task<ProtocolResponse> HandleAsync(EngineProtocolRequest request, CancellationToken cancellationToken)

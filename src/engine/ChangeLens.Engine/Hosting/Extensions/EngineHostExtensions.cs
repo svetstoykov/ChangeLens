@@ -1,4 +1,5 @@
 using ChangeLens.Core.LocalState.Interfaces;
+using ChangeLens.Core.Results.Models;
 using ChangeLens.Engine.Hosting.Constants;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -37,8 +38,13 @@ internal static class EngineHostExtensions
 
         try
         {
-            var localStateInitializer = host.Services.GetRequiredService<ILocalStateInitializer>();
-            var initializationResult = await localStateInitializer.InitializeAsync(CancellationToken.None);
+            Result initializationResult;
+            await using (var bootScope = host.Services.CreateAsyncScope())
+            {
+                var localStateInitializer = bootScope.ServiceProvider.GetRequiredService<ILocalStateInitializer>();
+                initializationResult = await localStateInitializer.InitializeAsync(CancellationToken.None);
+            }
+
             if (initializationResult.IsFailure)
             {
                 logger.LogCritical(

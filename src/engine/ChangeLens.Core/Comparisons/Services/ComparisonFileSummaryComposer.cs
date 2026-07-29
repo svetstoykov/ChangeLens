@@ -9,7 +9,7 @@ namespace ChangeLens.Core.Comparisons.Services;
 ///     Composes distinct comparison-file lineages and overlapping working-tree categories.
 /// </summary>
 /// <remarks>
-///     The service is stateless and thread-safe and can be registered with any dependency-injection lifetime.
+///     The Engine registers this service as scoped. It serves one request and does not need to be thread-safe.
 /// </remarks>
 public sealed class ComparisonFileSummaryComposer : IComparisonFileSummaryComposer
 {

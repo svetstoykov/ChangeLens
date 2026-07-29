@@ -6,6 +6,9 @@ namespace ChangeLens.Core.Comparisons.Interfaces;
 /// <summary>
 ///     Defines composition of comparison-file summaries.
 /// </summary>
+/// <remarks>
+///     Implementations are registered as scoped services. They serve one request and do not need to be thread-safe.
+/// </remarks>
 public interface IComparisonFileSummaryComposer
 {
     /// <summary>

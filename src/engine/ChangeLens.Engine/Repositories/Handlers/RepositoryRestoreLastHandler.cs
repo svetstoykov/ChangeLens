@@ -12,14 +12,13 @@ namespace ChangeLens.Engine.Repositories.Handlers;
 ///     Handles the payload-free action that restores the last selected repository.
 /// </summary>
 /// <remarks>
-///     The host registers this handler as a singleton. The action carries no payload, so supplied parameters are
-///     ignored exactly as before.
+///     The host registers this handler as scoped. The action carries no payload, and supplied parameters are ignored.
 /// </remarks>
 /// <param name="repositoryHistoryService">The repository-history capability. Cannot be <see langword="null" />.</param>
 internal sealed class RepositoryRestoreLastHandler(IRepositoryHistoryService repositoryHistoryService) : IActionHandler
 {
     /// <inheritdoc />
-    public string Action => RepositoryActionConstants.RestoreLastAction;
+    public static string Action => RepositoryActionConstants.RestoreLastAction;
 
     /// <inheritdoc />
     public async Task<ProtocolResponse> HandleAsync(EngineProtocolRequest request, CancellationToken cancellationToken)

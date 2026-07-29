@@ -49,6 +49,24 @@ line, and keep consecutive validation guards together. Do not add blank lines af
 brace, never keep multiple consecutive blank lines, and keep one blank line between type members. Declare locals near
 their first use; do not collect unrelated locals at the start of a method.
 
+Order type members by accessibility and then static placement:
+
+```text
+constants
+fields
+constructors
+properties
+--- methods ---
+public
+public static
+protected
+protected static
+internal
+internal static
+private
+private static
+```
+
 ### Engine composition
 
 `EngineHostApplicationBuilderExtensions.AddEngine` remains the single public composition entry point. It performs the
@@ -71,14 +89,18 @@ AddRepositoryServices(builder);
 AddComparisonServices(builder);
 AddProtocolServices(builder);
 AddActionHandlers(builder);
+ValidateActionHandlerRegistrations(builder.Services);
 ```
 
-Keep the private helpers in the same file. Do not introduce new extension classes, interfaces, nested types, or
-decorative region/comment separators. The helpers register:
+Keep the helpers in the same file. Registration helpers remain private;
+`ValidateActionHandlerRegistrations` is internal so the Engine integration suite can exercise the production invariant
+without reflection. Do not introduce new extension classes, interfaces, nested types, or decorative region/comment
+separators. The helpers register:
 
 - `AddRuntimeServices`: `TextReader`, `TextWriter`, and `TimeProvider`.
-- `AddLocalStateServices`: `ILocalStateDatabase`, `ILocalStateInitializer`, `IRepositoryHistoryStore`, and
-  `IRepositoryHistoryService`.
+- `AddLocalStateServices`: singleton `LocalStatePaths`; scoped `DbContextOptions<ChangeLensLocalStateDbContext>`,
+  `ChangeLensLocalStateDbContext`, `ILocalStateInitializer`, `IRepositoryHistoryStore`, and
+  `IRepositoryHistoryService`. Configure SQLite through `AddDbContext` here.
 - `AddPreferenceServices`: `IColorThemePreferenceStore` and `IColorThemePreferenceService`.
 - `AddEngineStatusServices`: `IEngineStatusService`.
 - `AddRepositoryServices`: `ICanonicalRepositoryPathKeyProvider`, `IRepositoryPathResolver`, `IGitCommandRunner`, and
@@ -87,12 +109,15 @@ decorative region/comment separators. The helpers register:
   `IGitComparisonFreshnessChecker`, `IGitRemoteBaselineTracker`, and `IComparisonTargetPageBuilder`.
 - `AddProtocolServices`: `IEngineProtocolSerializer`, `IEngineProtocolTransport`, and `EngineProtocolHost` as the hosted
   service.
-- `AddActionHandlers`: every `IActionHandler` implementation, one `AddSingleton<IActionHandler, THandler>` line per
-  approved protocol action. Keep the twelve registrations contiguous in this helper rather than distributing them
-  across the capability helpers, so a missing action is visible in one place.
+- `AddActionHandlers`: every `IActionHandler` implementation, one `AddActionHandler<THandler>` line per approved
+  protocol action. The helper registers the handler as a keyed scoped service under its static declared action. Keep the
+  twelve registrations contiguous in this helper rather than distributing them across the capability helpers.
 
-Preserve every existing descriptor, lifetime, factory body, configuration key, and hosted-service ordering, with logging
-initialized before services that log and the protocol hosted service registered last.
+`TextReader`, `TextWriter`, `TimeProvider`, `IEngineProtocolSerializer`, `IEngineProtocolTransport`,
+`EngineProtocolHost`, and `LocalStatePaths` are singleton. All services that serve a protocol request are scoped.
+Validate the action descriptors as an exact one-to-one match with `EngineActionConstants.ApprovedActions` after
+registration and before building the provider. Keep logging initialized before services that log and register the
+protocol hosted service before the contiguous action-handler registrations.
 
 ## Related rules
 

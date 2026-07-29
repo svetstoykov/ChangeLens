@@ -14,7 +14,7 @@ namespace ChangeLens.Engine.Comparisons.Services;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         The host registers this stateless service as a singleton. It is safe to use concurrently.
+///         The Engine registers this service as scoped. It serves one request and does not need to be thread-safe.
 ///     </para>
 ///     <para>
 ///         Descriptor support is classified from the complete unpaged set with stable correlation overhead.

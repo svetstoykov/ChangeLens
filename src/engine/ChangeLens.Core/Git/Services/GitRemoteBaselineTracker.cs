@@ -15,7 +15,7 @@ namespace ChangeLens.Core.Git.Services;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         The Engine host registers this stateless service as a singleton. It is safe to call concurrently.
+///         The Engine registers this service as scoped. It serves one request and does not need to be thread-safe.
 ///     </para>
 ///     <para>
 ///         Detection uses <c>git ls-remote --heads</c>, which asks the server for a single ref and transfers no

@@ -7,7 +7,7 @@ namespace ChangeLens.Core.Git.Interfaces;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         Implementations are registered as singletons and must be safe for concurrent calls.
+///         Implementations are registered as scoped services. They serve one request and do not need to be thread-safe.
 ///     </para>
 /// </remarks>
 public interface IRepositoryPathResolver

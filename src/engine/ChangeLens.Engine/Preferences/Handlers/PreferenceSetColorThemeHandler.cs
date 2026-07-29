@@ -14,7 +14,7 @@ namespace ChangeLens.Engine.Preferences.Handlers;
 ///     Handles the action that stores an explicit color-theme preference.
 /// </summary>
 /// <remarks>
-///     The host registers this handler as a singleton. A theme value the protocol has not approved is returned as a
+///     The host registers this handler as scoped. A theme value the protocol has not approved is returned as a
 ///     domain-coded internal error without changing the stored preference.
 /// </remarks>
 /// <param name="colorThemePreferenceService">The color-theme capability. Cannot be <see langword="null" />.</param>
@@ -24,17 +24,17 @@ internal sealed class PreferenceSetColorThemeHandler(
     IEngineProtocolSerializer protocolSerializer) : IActionHandler
 {
     /// <inheritdoc />
-    public string Action => PreferenceActionConstants.SetColorThemeAction;
+    public static string Action => PreferenceActionConstants.SetColorThemeAction;
 
     /// <inheritdoc />
     public async Task<ProtocolResponse> HandleAsync(EngineProtocolRequest request, CancellationToken cancellationToken)
     {
         if (request.Parameters.ValueKind == JsonValueKind.Undefined)
         {
-            return ProtocolResponseFactory.MissingParameters(request.RequestId, this.Action);
+            return ProtocolResponseFactory.MissingParameters(request.RequestId, Action);
         }
 
-        var parametersResult = protocolSerializer.DeserializeParameters<ColorThemeSetParameters>(request.Parameters, this.Action);
+        var parametersResult = protocolSerializer.DeserializeParameters<ColorThemeSetParameters>(request.Parameters, Action);
         if (parametersResult.IsFailure)
         {
             return ProtocolResponseFactory.CreateError(request.RequestId, parametersResult.Errors);

@@ -19,7 +19,7 @@ namespace ChangeLens.Core.Comparisons.Services;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         The Engine host registers this stateless service as a singleton. It is safe to call concurrently.
+///         The Engine registers this service as scoped. It serves one request and does not need to be thread-safe.
 ///     </para>
 ///     <para>
 ///         Preparation reads local Git facts only, applies one action deadline, and rejects facts that change

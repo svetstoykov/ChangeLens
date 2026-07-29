@@ -6,6 +6,9 @@ namespace ChangeLens.Core.LocalState.Interfaces;
 /// <summary>
 ///     Defines durable explicit color-theme preference operations.
 /// </summary>
+/// <remarks>
+///     Implementations are registered as scoped services. They serve one request and do not need to be thread-safe.
+/// </remarks>
 public interface IColorThemePreferenceStore
 {
     /// <summary>

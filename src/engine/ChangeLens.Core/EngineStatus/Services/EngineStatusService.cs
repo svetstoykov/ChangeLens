@@ -14,5 +14,5 @@ public sealed class EngineStatusService(ILocalStateInitializer localStateInitial
 {
     /// <inheritdoc />
     public Task<Result> CheckStatusAsync(CancellationToken cancellationToken) =>
-        localStateInitializer.InitializeAsync(cancellationToken);
+        localStateInitializer.CheckReadinessAsync(cancellationToken);
 }

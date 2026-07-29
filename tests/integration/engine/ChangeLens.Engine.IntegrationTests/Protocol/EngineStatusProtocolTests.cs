@@ -49,6 +49,42 @@ public sealed class EngineStatusProtocolTests
     }
 
     /// <summary>
+    ///     Verifies that the engine fails fast, without serving any protocol request, when local state cannot
+    ///     initialize at startup.
+    /// </summary>
+    /// <returns>A task that represents the asynchronous test.</returns>
+    [Fact]
+    public async Task EngineExitsWithFailureWhenLocalStateCannotInitialize()
+    {
+        var blockingFilePath = Path.Combine(
+            Path.GetTempPath(),
+            "ChangeLens.Engine.IntegrationTests",
+            Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(Path.GetDirectoryName(blockingFilePath)!);
+        await File.WriteAllTextAsync(blockingFilePath, string.Empty, TestContext.Current.CancellationToken);
+
+        try
+        {
+            using var engine = StartEngine(
+                environment: new Dictionary<string, string?>
+                {
+                    ["ChangeLens__LocalState__Directory"] = blockingFilePath,
+                });
+
+            await WaitForExitAsync(engine);
+
+            Assert.Equal(1, engine.ExitCode);
+            Assert.Equal(
+                string.Empty,
+                await engine.StandardOutput.ReadToEndAsync(TestContext.Current.CancellationToken));
+        }
+        finally
+        {
+            File.Delete(blockingFilePath);
+        }
+    }
+
+    /// <summary>
     ///     Verifies that logs contain safe metadata without persisting raw protocol payloads.
     /// </summary>
     /// <returns>A task that represents the asynchronous test.</returns>
@@ -313,7 +349,8 @@ public sealed class EngineStatusProtocolTests
 
     private static Process StartEngine(
         string? logDirectory = null,
-        bool redirectStandardError = false)
+        bool redirectStandardError = false,
+        IReadOnlyDictionary<string, string?>? environment = null)
     {
         var engineProject = Path.Combine(
             RepositoryPaths.Root,
@@ -337,6 +374,14 @@ public sealed class EngineStatusProtocolTests
         {
             startInfo.Environment["ChangeLens__Logging__FileDirectory"] = logDirectory;
             startInfo.Environment["Serilog__MinimumLevel__Default"] = "Debug";
+        }
+
+        if (environment is not null)
+        {
+            foreach (var (name, value) in environment)
+            {
+                startInfo.Environment[name] = value;
+            }
         }
 
         startInfo.ArgumentList.Add("run");

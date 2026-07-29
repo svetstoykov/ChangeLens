@@ -71,44 +71,37 @@ public sealed class SqliteLocalStateDatabase : ILocalStateInitializer, ILocalSta
     /// <inheritdoc />
     public async Task<Result> InitializeAsync(CancellationToken cancellationToken)
     {
-        if (this._isReady)
-        {
-            return await this.VerifyReadAsync(cancellationToken);
-        }
-
         await this._initializationLock.WaitAsync(cancellationToken);
         try
         {
-            if (this._isReady)
-            {
-                return await this.VerifyReadAsync(cancellationToken);
-            }
+            Directory.CreateDirectory(this._directoryPath);
+            await using var context = await this.CreateContextAsync(cancellationToken);
+            await context.Database.MigrateAsync(cancellationToken);
 
-            try
-            {
-                Directory.CreateDirectory(this._directoryPath);
-                await using var context = await this.CreateContextAsync(cancellationToken);
-                await context.Database.MigrateAsync(cancellationToken);
-
-                this._isReady = true;
-                this._logger.LogInformation(
-                    "Local state is ready at schema version {SchemaVersion}.",
-                    LocalStateConstants.CurrentSchemaVersion);
-                return Result.Success();
-            }
-            catch (Exception exception) when (IsExpectedAccessFailure(exception))
-            {
-                this._logger.LogInformation(
-                    "Local-state readiness failed with error {ErrorCode}.",
-                    LocalStateErrorCode.Unavailable);
-                return Unavailable(exception);
-            }
+            this._isReady = true;
+            this._logger.LogInformation(
+                "Local state is ready at schema version {SchemaVersion}.",
+                LocalStateConstants.CurrentSchemaVersion);
+            return Result.Success();
+        }
+        catch (Exception exception) when (IsExpectedAccessFailure(exception))
+        {
+            this._logger.LogInformation(
+                "Local-state readiness failed with error {ErrorCode}.",
+                LocalStateErrorCode.Unavailable);
+            return Unavailable(exception);
         }
         finally
         {
             this._initializationLock.Release();
         }
     }
+
+    /// <inheritdoc />
+    public Task<Result> CheckReadinessAsync(CancellationToken cancellationToken) =>
+        this._isReady
+            ? this.VerifyReadAsync(cancellationToken)
+            : Task.FromResult(Unavailable());
 
     /// <inheritdoc />
     public async Task<ChangeLensLocalStateDbContext> CreateContextAsync(CancellationToken cancellationToken)

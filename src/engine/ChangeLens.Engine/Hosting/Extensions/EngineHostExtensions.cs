@@ -1,3 +1,4 @@
+using ChangeLens.Core.LocalState.Interfaces;
 using ChangeLens.Engine.Hosting.Constants;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -11,7 +12,8 @@ namespace ChangeLens.Engine.Hosting.Extensions;
 internal static class EngineHostExtensions
 {
     /// <summary>
-    ///     Asynchronously runs the engine until protocol input closes or application shutdown is requested.
+    ///     Asynchronously initializes local state once and, when it succeeds, runs the engine until protocol input
+    ///     closes or application shutdown is requested.
     /// </summary>
     /// <param name="host">The configured engine host. Cannot be <see langword="null" />.</param>
     /// <returns>
@@ -20,6 +22,11 @@ internal static class EngineHostExtensions
     /// <exception cref="ArgumentNullException">
     ///     <paramref name="host" /> is <see langword="null" />.
     /// </exception>
+    /// <remarks>
+    ///     Local state must be ready before the protocol host reads its first request, so this initializes it once,
+    ///     up front, instead of gating every action behind a per-request readiness check. A failure here stops the
+    ///     process before it starts serving the protocol; it never leaves the engine running against unusable state.
+    /// </remarks>
     internal static async Task<int> RunEngineAsync(this IHost host)
     {
         ArgumentNullException.ThrowIfNull(host);
@@ -30,6 +37,16 @@ internal static class EngineHostExtensions
 
         try
         {
+            var localStateInitializer = host.Services.GetRequiredService<ILocalStateInitializer>();
+            var initializationResult = await localStateInitializer.InitializeAsync(CancellationToken.None);
+            if (initializationResult.IsFailure)
+            {
+                logger.LogCritical(
+                    "The engine cannot start because local state failed to initialize. Errors: {ErrorCodes}",
+                    initializationResult.Errors.Select(error => error.Code));
+                return EngineProcessConstants.UnexpectedFailureExitCode;
+            }
+
             await host.RunAsync();
             return Environment.ExitCode;
         }

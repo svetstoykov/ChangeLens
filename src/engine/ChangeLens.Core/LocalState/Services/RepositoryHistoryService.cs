@@ -10,7 +10,7 @@ namespace ChangeLens.Core.LocalState.Services;
 ///     Coordinates repository inspection with durable repository history.
 /// </summary>
 /// <remarks>
-///     The Engine registers this stateless service as a singleton. Its collaborators are singleton-safe.
+///     The Engine registers this service as scoped. It serves one request and does not need to be thread-safe.
 /// </remarks>
 /// <param name="repositoryInspector">The read-only repository inspector.</param>
 /// <param name="historyStore">The durable repository-history store.</param>

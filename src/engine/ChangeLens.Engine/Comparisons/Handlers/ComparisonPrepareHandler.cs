@@ -15,7 +15,7 @@ namespace ChangeLens.Engine.Comparisons.Handlers;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         The host registers this handler as a singleton.
+///         The host registers this handler as scoped.
 ///     </para>
 ///     <para>
 ///         The preferred target is saved only after preparation succeeds, and a failed save is returned in place of
@@ -31,17 +31,17 @@ internal sealed class ComparisonPrepareHandler(
     IEngineProtocolSerializer protocolSerializer) : IActionHandler
 {
     /// <inheritdoc />
-    public string Action => ComparisonActionConstants.PrepareAction;
+    public static string Action => ComparisonActionConstants.PrepareAction;
 
     /// <inheritdoc />
     public async Task<ProtocolResponse> HandleAsync(EngineProtocolRequest request, CancellationToken cancellationToken)
     {
         if (request.Parameters.ValueKind == JsonValueKind.Undefined)
         {
-            return ProtocolResponseFactory.MissingParameters(request.RequestId, this.Action);
+            return ProtocolResponseFactory.MissingParameters(request.RequestId, Action);
         }
 
-        var parametersResult = protocolSerializer.DeserializeParameters<ComparisonPrepareParameters>(request.Parameters, this.Action);
+        var parametersResult = protocolSerializer.DeserializeParameters<ComparisonPrepareParameters>(request.Parameters, Action);
         if (parametersResult.IsFailure)
         {
             return ProtocolResponseFactory.CreateError(request.RequestId, parametersResult.Errors);

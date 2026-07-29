@@ -11,8 +11,8 @@ namespace ChangeLens.Engine.Protocol.Interfaces;
 ///         capability entry point, and maps the outcome to one correlated <see cref="ProtocolResponse" />.
 ///     </para>
 ///     <para>
-///         The host registers every implementation as a singleton <see cref="IActionHandler" /> service, so an
-///         implementation must be stateless. Request-specific state belongs in local variables, never on the handler.
+///         The host registers every implementation as a scoped <see cref="IActionHandler" /> service. An implementation
+///         serves one request scope and does not need to be thread-safe.
 ///     </para>
 /// </remarks>
 internal interface IActionHandler
@@ -21,7 +21,7 @@ internal interface IActionHandler
     ///     Gets the protocol action this handler owns.
     /// </summary>
     /// <value>The capability-owned action constant. Never <see langword="null" /> or blank.</value>
-    string Action { get; }
+    static abstract string Action { get; }
 
     /// <summary>
     ///     Asynchronously executes this handler's action for one validated request.

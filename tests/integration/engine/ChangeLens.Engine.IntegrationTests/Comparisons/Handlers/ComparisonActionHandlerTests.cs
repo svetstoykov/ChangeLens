@@ -7,8 +7,10 @@ using ChangeLens.Engine.Comparisons.Handlers;
 using ChangeLens.Engine.IntegrationTests.Comparisons.Handlers.Support;
 using ChangeLens.Engine.IntegrationTests.Protocol.Support;
 using ChangeLens.Engine.Protocol.Constants;
+using ChangeLens.Engine.Protocol.Interfaces;
 using ChangeLens.Engine.Protocol.Models;
 using ChangeLens.Engine.Protocol.Services;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Xunit;
 
@@ -31,13 +33,23 @@ public sealed class ComparisonActionHandlerTests
         var handler = new ComparisonCheckFreshnessHandler(
             new StubGitComparisonFreshnessChecker((ComparisonFreshnessState)int.MaxValue),
             new EngineProtocolSerializer());
+        var services = new ServiceCollection();
+        services.AddKeyedScoped(
+            typeof(IActionHandler),
+            ComparisonCheckFreshnessHandler.Action,
+            (_, _) => handler);
+        using var serviceProvider = services.BuildServiceProvider();
+        using var requestScope = serviceProvider.CreateScope();
         var logger = new RecordingLogger<EngineProtocolHost>();
-        var host = new EngineProtocolHost(null!, [handler], logger, null!);
+        var host = new EngineProtocolHost(null!, null!, logger, null!);
         var request = CreateRequest(
             ComparisonActionConstants.CheckFreshnessAction,
             """{"path":"/repository","target":"refs/heads/main","freshnessToken":"token"}""");
 
-        var response = await host.ProcessAsync(request, TestContext.Current.CancellationToken);
+        var response = await host.ProcessAsync(
+            request,
+            requestScope.ServiceProvider,
+            TestContext.Current.CancellationToken);
 
         AssertInternalError(
             response,

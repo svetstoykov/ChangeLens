@@ -7,6 +7,9 @@ namespace ChangeLens.Core.LocalState.Services;
 /// <summary>
 ///     Provides the approved color-theme preference use cases.
 /// </summary>
+/// <remarks>
+///     The Engine registers this service as scoped. It serves one request and does not need to be thread-safe.
+/// </remarks>
 /// <param name="store">The durable color-theme preference store.</param>
 public sealed class ColorThemePreferenceService(IColorThemePreferenceStore store) : IColorThemePreferenceService
 {

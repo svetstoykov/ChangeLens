@@ -4,6 +4,7 @@ using ChangeLens.Engine.Protocol.Constants;
 using ChangeLens.Engine.Protocol.Interfaces;
 using ChangeLens.Engine.Protocol.Models;
 using ChangeLens.Engine.Protocol.Services;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
@@ -11,33 +12,10 @@ using Xunit;
 namespace ChangeLens.Engine.IntegrationTests.Protocol;
 
 /// <summary>
-///     Verifies that the protocol host rejects an invalid handler registration when it is constructed.
+///     Verifies scoped protocol action dispatch and exception handling.
 /// </summary>
 public sealed class EngineProtocolHostTests
 {
-    /// <summary>
-    ///     Verifies that a handler without an action name is rejected and named in the failure.
-    /// </summary>
-    [Fact]
-    public void ConstructionRejectsBlankHandlerAction()
-    {
-        var exception = Assert.Throws<InvalidOperationException>(() => CreateHost(new StubActionHandler(" ")));
-
-        Assert.Contains(typeof(StubActionHandler).FullName!, exception.Message, StringComparison.Ordinal);
-    }
-
-    /// <summary>
-    ///     Verifies that two handlers claiming the same action are rejected and the action is named in the failure.
-    /// </summary>
-    [Fact]
-    public void ConstructionRejectsDuplicateHandlerAction()
-    {
-        var exception = Assert.Throws<InvalidOperationException>(
-            () => CreateHost(new StubActionHandler("repositories.open"), new StubActionHandler("repositories.open")));
-
-        Assert.Contains("repositories.open", exception.Message, StringComparison.Ordinal);
-    }
-
     /// <summary>
     ///     Asynchronously verifies a known action is dispatched directly to its handler.
     /// </summary>
@@ -46,8 +24,7 @@ public sealed class EngineProtocolHostTests
     public async Task KnownActionDispatchesDirectly()
     {
         var actionHandled = false;
-        var handler = new StubActionHandler(
-            "repositories.open",
+        var handler = new RepositoryOpenStubActionHandler(
             (_, _) =>
             {
                 actionHandled = true;
@@ -58,13 +35,20 @@ public sealed class EngineProtocolHostTests
                         "direct-dispatch",
                         "handled"));
             });
+        var services = new ServiceCollection();
+        services.AddKeyedScoped(typeof(IActionHandler), RepositoryOpenStubActionHandler.Action, (_, _) => handler);
+        using var serviceProvider = services.BuildServiceProvider();
+        using var requestScope = serviceProvider.CreateScope();
         var host = new EngineProtocolHost(
             null!,
-            [handler],
+            null!,
             NullLogger<EngineProtocolHost>.Instance,
             null!);
 
-        var response = await host.ProcessAsync(CreateRequest("repositories.open"), TestContext.Current.CancellationToken);
+        var response = await host.ProcessAsync(
+            CreateRequest(RepositoryOpenStubActionHandler.Action),
+            requestScope.ServiceProvider,
+            TestContext.Current.CancellationToken);
 
         Assert.True(actionHandled);
         Assert.IsType<ProtocolResultResponse<string>>(response);
@@ -78,26 +62,55 @@ public sealed class EngineProtocolHostTests
     public async Task ComparisonActionLogsOriginalException()
     {
         var expectedException = new InvalidOperationException("Comparison handler failed.");
-        var handler = new StubActionHandler(
-            ComparisonActionConstants.CheckFreshnessAction,
+        var handler = new ComparisonCheckFreshnessStubActionHandler(
             (_, _) => Task.FromException<ProtocolResponse>(expectedException));
+        var services = new ServiceCollection();
+        services.AddKeyedScoped(
+            typeof(IActionHandler),
+            ComparisonCheckFreshnessStubActionHandler.Action,
+            (_, _) => handler);
+        using var serviceProvider = services.BuildServiceProvider();
+        using var requestScope = serviceProvider.CreateScope();
         var logger = new RecordingLogger<EngineProtocolHost>();
-        var host = new EngineProtocolHost(null!, [handler], logger, null!);
+        var host = new EngineProtocolHost(null!, null!, logger, null!);
 
         await host.ProcessAsync(
             CreateRequest(ComparisonActionConstants.CheckFreshnessAction),
+            requestScope.ServiceProvider,
             TestContext.Current.CancellationToken);
 
         Assert.Equal(LogLevel.Error, Assert.Single(logger.Levels));
         Assert.Same(expectedException, Assert.Single(logger.Exceptions));
     }
 
-    private static EngineProtocolHost CreateHost(params IActionHandler[] actionHandlers) =>
-        new(
+    /// <summary>
+    ///     Asynchronously verifies an unapproved keyed registration cannot expand the runtime protocol.
+    /// </summary>
+    /// <returns>A task that represents the asynchronous operation.</returns>
+    [Fact]
+    public async Task UnapprovedKeyedHandlerCannotBeDispatched()
+    {
+        var services = new ServiceCollection();
+        services.AddKeyedScoped(
+            typeof(IActionHandler),
+            UnapprovedStubActionHandler.Action,
+            typeof(UnapprovedStubActionHandler));
+        using var serviceProvider = services.BuildServiceProvider();
+        using var requestScope = serviceProvider.CreateScope();
+        var host = new EngineProtocolHost(
             null!,
-            actionHandlers,
+            null!,
             NullLogger<EngineProtocolHost>.Instance,
             null!);
+
+        var response = await host.ProcessAsync(
+            CreateRequest(UnapprovedStubActionHandler.Action),
+            requestScope.ServiceProvider,
+            TestContext.Current.CancellationToken);
+
+        var errorResponse = Assert.IsType<ProtocolErrorResponse>(response);
+        Assert.Equal(EngineErrorCode.UnknownAction, Assert.Single(errorResponse.Errors).Code);
+    }
 
     private static EngineProtocolRequest CreateRequest(string action) =>
         new()

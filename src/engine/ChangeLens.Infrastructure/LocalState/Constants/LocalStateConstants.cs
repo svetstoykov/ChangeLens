@@ -28,7 +28,7 @@ public static class LocalStateConstants
     /// <summary>
     ///     The maximum number of seconds allowed for a local-state database command.
     /// </summary>
-    internal const int CommandTimeoutSeconds = 5;
+    public const int CommandTimeoutSeconds = 5;
 
     /// <summary>
     ///     The maximum number of recent repositories retained in local state.

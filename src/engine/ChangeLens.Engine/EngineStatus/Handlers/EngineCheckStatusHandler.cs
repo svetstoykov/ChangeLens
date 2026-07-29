@@ -10,15 +10,15 @@ namespace ChangeLens.Engine.EngineStatus.Handlers;
 ///     Handles the payload-free action that reports engine readiness.
 /// </summary>
 /// <remarks>
-///     The action carries no payload, so supplied parameters are ignored. Local state is initialized once at host
-///     startup, so this reports the live readiness service's own reachability check rather than repeating
-///     initialization on the request path.
+///     The host registers this handler as scoped. The action carries no payload, so supplied parameters are ignored.
+///     Local state is initialized once at host startup, and this reports the request context's live reachability
+///     check.
 /// </remarks>
 /// <param name="engineStatusService">The engine readiness capability. Cannot be <see langword="null" />.</param>
 internal sealed class EngineCheckStatusHandler(IEngineStatusService engineStatusService) : IActionHandler
 {
     /// <inheritdoc />
-    public string Action => EngineStatusActionConstants.CheckStatusAction;
+    public static string Action => EngineStatusActionConstants.CheckStatusAction;
 
     /// <inheritdoc />
     public async Task<ProtocolResponse> HandleAsync(EngineProtocolRequest request, CancellationToken cancellationToken) =>

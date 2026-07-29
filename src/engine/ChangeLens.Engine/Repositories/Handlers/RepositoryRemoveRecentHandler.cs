@@ -14,8 +14,8 @@ namespace ChangeLens.Engine.Repositories.Handlers;
 ///     Handles the action that removes one recent repository-history entry.
 /// </summary>
 /// <remarks>
-///     The host registers this handler as a singleton. The identifier must be a canonical GUID in <c>D</c> format;
-///     a non-canonical spelling is rejected as an invalid request.
+///     The host registers this handler as scoped. The identifier must be a canonical GUID in <c>D</c> format; a
+///     non-canonical spelling is rejected as an invalid request.
 /// </remarks>
 /// <param name="repositoryHistoryService">The repository-history capability. Cannot be <see langword="null" />.</param>
 /// <param name="protocolSerializer">The strict engine protocol serializer. Cannot be <see langword="null" />.</param>
@@ -24,17 +24,17 @@ internal sealed class RepositoryRemoveRecentHandler(
     IEngineProtocolSerializer protocolSerializer) : IActionHandler
 {
     /// <inheritdoc />
-    public string Action => RepositoryActionConstants.RemoveRecentAction;
+    public static string Action => RepositoryActionConstants.RemoveRecentAction;
 
     /// <inheritdoc />
     public async Task<ProtocolResponse> HandleAsync(EngineProtocolRequest request, CancellationToken cancellationToken)
     {
         if (request.Parameters.ValueKind == JsonValueKind.Undefined)
         {
-            return ProtocolResponseFactory.MissingParameters(request.RequestId, this.Action);
+            return ProtocolResponseFactory.MissingParameters(request.RequestId, Action);
         }
 
-        var parametersResult = protocolSerializer.DeserializeParameters<RepositoryRemoveRecentParameters>(request.Parameters, this.Action);
+        var parametersResult = protocolSerializer.DeserializeParameters<RepositoryRemoveRecentParameters>(request.Parameters, Action);
         if (parametersResult.IsFailure)
         {
             return ProtocolResponseFactory.CreateError(request.RequestId, parametersResult.Errors);

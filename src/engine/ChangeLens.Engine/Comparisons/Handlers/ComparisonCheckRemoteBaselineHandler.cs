@@ -14,8 +14,8 @@ namespace ChangeLens.Engine.Comparisons.Handlers;
 ///     Handles the action that checks a cached remote-tracking baseline against the server.
 /// </summary>
 /// <remarks>
-///     The host registers this handler as a singleton. A baseline result the protocol has not approved is returned as
-///     a domain-coded internal error.
+///     The host registers this handler as scoped. A baseline result the protocol has not approved is returned as a
+///     domain-coded internal error.
 /// </remarks>
 /// <param name="remoteBaselineTracker">
 ///     The remote baseline detection and refresh capability. Cannot be <see langword="null" />.
@@ -26,17 +26,17 @@ internal sealed class ComparisonCheckRemoteBaselineHandler(
     IEngineProtocolSerializer protocolSerializer) : IActionHandler
 {
     /// <inheritdoc />
-    public string Action => ComparisonActionConstants.CheckRemoteBaselineAction;
+    public static string Action => ComparisonActionConstants.CheckRemoteBaselineAction;
 
     /// <inheritdoc />
     public async Task<ProtocolResponse> HandleAsync(EngineProtocolRequest request, CancellationToken cancellationToken)
     {
         if (request.Parameters.ValueKind == JsonValueKind.Undefined)
         {
-            return ProtocolResponseFactory.MissingParameters(request.RequestId, this.Action);
+            return ProtocolResponseFactory.MissingParameters(request.RequestId, Action);
         }
 
-        var parametersResult = protocolSerializer.DeserializeParameters<ComparisonCheckRemoteBaselineParameters>(request.Parameters, this.Action);
+        var parametersResult = protocolSerializer.DeserializeParameters<ComparisonCheckRemoteBaselineParameters>(request.Parameters, Action);
         if (parametersResult.IsFailure)
         {
             return ProtocolResponseFactory.CreateError(request.RequestId, parametersResult.Errors);

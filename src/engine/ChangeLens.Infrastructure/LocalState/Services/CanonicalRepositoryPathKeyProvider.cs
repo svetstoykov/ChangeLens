@@ -5,6 +5,9 @@ namespace ChangeLens.Infrastructure.LocalState.Services;
 /// <summary>
 ///     Provides platform-specific canonical repository path identity.
 /// </summary>
+/// <remarks>
+///     The Engine registers this implementation as scoped. It serves one request and does not need to be thread-safe.
+/// </remarks>
 public sealed class CanonicalRepositoryPathKeyProvider : ICanonicalRepositoryPathKeyProvider
 {
     /// <inheritdoc />

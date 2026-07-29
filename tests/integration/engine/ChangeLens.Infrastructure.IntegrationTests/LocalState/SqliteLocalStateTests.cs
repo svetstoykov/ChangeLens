@@ -1,11 +1,11 @@
 using ChangeLens.Core.LocalState.Models;
 using ChangeLens.Infrastructure.IntegrationTests.Support;
 using ChangeLens.Infrastructure.LocalState.Models;
+using ChangeLens.Infrastructure.LocalState.Persistence;
 using ChangeLens.Infrastructure.LocalState.Services;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
-using Microsoft.Extensions.Options;
 using Xunit;
 
 namespace ChangeLens.Infrastructure.IntegrationTests.LocalState;
@@ -22,13 +22,15 @@ public sealed class SqliteLocalStateTests
     public async Task LocalStateRoundTripsApprovedMetadata()
     {
         using var temporaryDirectory = new TemporaryDirectory();
-        var database = CreateDatabase(temporaryDirectory.DirectoryPath);
-        var historyStore = new SqliteRepositoryHistoryStore(database, NullLogger<SqliteRepositoryHistoryStore>.Instance);
-        var themeStore = new SqliteColorThemePreferenceStore(database, NullLogger<SqliteColorThemePreferenceStore>.Instance);
+        var paths = LocalStatePaths.Resolve(temporaryDirectory.DirectoryPath);
+        await using var context = CreateContext(paths);
+        var initializer = CreateInitializer(context, paths);
+        var historyStore = new SqliteRepositoryHistoryStore(context, NullLogger<SqliteRepositoryHistoryStore>.Instance);
+        var themeStore = new SqliteColorThemePreferenceStore(context, NullLogger<SqliteColorThemePreferenceStore>.Instance);
         var cancellationToken = TestContext.Current.CancellationToken;
 
-        Assert.True((await database.InitializeAsync(cancellationToken)).IsSuccess);
-        Assert.True((await database.InitializeAsync(cancellationToken)).IsSuccess);
+        Assert.True((await initializer.InitializeAsync(cancellationToken)).IsSuccess);
+        Assert.True((await initializer.InitializeAsync(cancellationToken)).IsSuccess);
 
         var first = await historyStore.RecordOpenAsync(
             "/projects/change_lens",
@@ -77,10 +79,12 @@ public sealed class SqliteLocalStateTests
     public async Task LocalStateCreatesVersionOneAndPrunesToTwentyRepositories()
     {
         using var temporaryDirectory = new TemporaryDirectory();
-        var database = CreateDatabase(temporaryDirectory.DirectoryPath);
-        var historyStore = new SqliteRepositoryHistoryStore(database, NullLogger<SqliteRepositoryHistoryStore>.Instance);
+        var paths = LocalStatePaths.Resolve(temporaryDirectory.DirectoryPath);
+        await using var context = CreateContext(paths);
+        var initializer = CreateInitializer(context, paths);
+        var historyStore = new SqliteRepositoryHistoryStore(context, NullLogger<SqliteRepositoryHistoryStore>.Instance);
         var cancellationToken = TestContext.Current.CancellationToken;
-        Assert.True((await database.InitializeAsync(cancellationToken)).IsSuccess);
+        Assert.True((await initializer.InitializeAsync(cancellationToken)).IsSuccess);
 
         for (var index = 0; index < 22; index++)
         {
@@ -100,8 +104,7 @@ public sealed class SqliteLocalStateTests
             snapshot.Data.Repositories,
             entry => entry.DisplayName is "repository-0" or "repository-1");
 
-        var databasePath = Path.Combine(temporaryDirectory.DirectoryPath, "changelens.db");
-        await using var connection = new SqliteConnection($"Data Source={databasePath};Mode=ReadOnly");
+        await using var connection = new SqliteConnection($"Data Source={paths.DatabasePath};Mode=ReadOnly");
         await connection.OpenAsync(cancellationToken);
         await using var command = connection.CreateCommand();
         command.CommandText =
@@ -155,7 +158,9 @@ public sealed class SqliteLocalStateTests
             await command.ExecuteNonQueryAsync(cancellationToken);
         }
 
-        var result = await CreateDatabase(temporaryDirectory.DirectoryPath).InitializeAsync(cancellationToken);
+        var paths = LocalStatePaths.Resolve(temporaryDirectory.DirectoryPath);
+        await using var context = CreateContext(paths);
+        var result = await CreateInitializer(context, paths).InitializeAsync(cancellationToken);
 
         Assert.True(result.IsFailure);
         Assert.Equal("localState.unavailable", Assert.Single(result.Errors).Code);
@@ -168,35 +173,50 @@ public sealed class SqliteLocalStateTests
     public async Task MalformedRepositoryMetadataReturnsInvalidLocalState()
     {
         using var temporaryDirectory = new TemporaryDirectory();
-        var database = CreateDatabase(temporaryDirectory.DirectoryPath);
+        var paths = LocalStatePaths.Resolve(temporaryDirectory.DirectoryPath);
+        await using var context = CreateContext(paths);
+        var initializer = CreateInitializer(context, paths);
         var cancellationToken = TestContext.Current.CancellationToken;
-        Assert.True((await database.InitializeAsync(cancellationToken)).IsSuccess);
+        Assert.True((await initializer.InitializeAsync(cancellationToken)).IsSuccess);
 
-        await using (var context = await database.CreateContextAsync(cancellationToken))
-        {
-            await context.Database.ExecuteSqlRawAsync(
-                """
-                INSERT INTO repositories (
-                    repository_id,
-                    canonical_path,
-                    canonical_path_key,
-                    display_name,
-                    last_opened_at_unix_ms,
-                    preferred_target_full_name)
-                VALUES ('not-a-guid', '/projects/invalid', '/projects/invalid', 'invalid', 1, NULL);
-                """,
-                cancellationToken);
-        }
+        await context.Database.ExecuteSqlRawAsync(
+            """
+            INSERT INTO repositories (
+                repository_id,
+                canonical_path,
+                canonical_path_key,
+                display_name,
+                last_opened_at_unix_ms,
+                preferred_target_full_name)
+            VALUES ('not-a-guid', '/projects/invalid', '/projects/invalid', 'invalid', 1, NULL);
+            """,
+            cancellationToken);
 
-        var result = await new SqliteRepositoryHistoryStore(database, NullLogger<SqliteRepositoryHistoryStore>.Instance)
+        var result = await new SqliteRepositoryHistoryStore(context, NullLogger<SqliteRepositoryHistoryStore>.Instance)
             .ListRecentAsync(cancellationToken);
 
         Assert.True(result.IsFailure);
         Assert.Equal("localState.invalid", Assert.Single(result.Errors).Code);
     }
 
-    private static SqliteLocalStateDatabase CreateDatabase(string directoryPath) =>
-        new(
-            Options.Create(new LocalStateOptions { Directory = directoryPath }),
-            NullLogger<SqliteLocalStateDatabase>.Instance);
+    private static ChangeLensLocalStateDbContext CreateContext(LocalStatePaths paths)
+    {
+        var connectionString = new SqliteConnectionStringBuilder
+        {
+            DataSource = paths.DatabasePath,
+            Mode = SqliteOpenMode.ReadWriteCreate,
+            Cache = SqliteCacheMode.Private,
+            DefaultTimeout = 5,
+            ForeignKeys = true,
+        }.ToString();
+        var options = new DbContextOptionsBuilder<ChangeLensLocalStateDbContext>()
+            .UseSqlite(connectionString)
+            .Options;
+        return new ChangeLensLocalStateDbContext(options);
+    }
+
+    private static SqliteLocalStateInitializer CreateInitializer(
+        ChangeLensLocalStateDbContext context,
+        LocalStatePaths paths) =>
+        new(context, paths, NullLogger<SqliteLocalStateInitializer>.Instance);
 }

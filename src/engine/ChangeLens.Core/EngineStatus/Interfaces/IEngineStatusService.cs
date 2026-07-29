@@ -6,7 +6,7 @@ namespace ChangeLens.Core.EngineStatus.Interfaces;
 ///     Defines the engine readiness capability.
 /// </summary>
 /// <remarks>
-///     Implementations are registered as singleton services and must be safe to call concurrently.
+///     Implementations are registered as scoped services and do not need to be thread-safe.
 /// </remarks>
 public interface IEngineStatusService
 {

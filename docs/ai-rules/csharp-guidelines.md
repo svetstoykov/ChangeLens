@@ -9,9 +9,10 @@ These rules extend the language-neutral organization rules in `core-principles.m
   value models, framework-owned types, or genuine stateless language-level utilities for which an interface would add no
   boundary. Do not inject concrete service implementations merely because there is currently one implementation.
 - Avoid static service classes. Static classes are acceptable only for genuine constants or stateless language-level utilities when an injected service would add ceremony without a substitutable boundary.
-- Keep production executable `Program.cs` files limited to host creation, one named composition extension call,
-  host construction and disposal, and one named run extension call. Put service registration, configuration, and
-  lifecycle or exception orchestration in capability-owned extension methods.
+- Keep the whole startup story of a production executable visible in its `Program.cs`: host creation, container
+  configuration, one call per capability registration extension, startup validation, host construction and
+  disposal, and the boot and run sequence with its exception boundary and exit codes. Keep the registration bodies
+  themselves in capability-owned extension methods rather than inline in `Program.cs`.
 - In C# code, explicitly qualify instance members with `this.`. Apply this to instance fields, properties, methods,
   events, and other member access even when the qualification is not required for disambiguation.
 
@@ -49,36 +50,55 @@ line, and keep consecutive validation guards together. Do not add blank lines af
 brace, never keep multiple consecutive blank lines, and keep one blank line between type members. Declare locals near
 their first use; do not collect unrelated locals at the start of a method.
 
+Order type members by accessibility and then static placement:
+
+```text
+constants
+fields
+constructors
+properties
+--- methods ---
+public
+public static
+protected
+protected static
+internal
+internal static
+private
+private static
+```
+
 ### Engine composition
 
-`EngineHostApplicationBuilderExtensions.AddEngine` remains the single public composition entry point. It performs the
-null guard, configures service-provider build and scope validation, adds logging, and invokes private helpers in
-capability order:
+`ChangeLens.Engine/Program.cs` composes the engine in capability order:
 
 ```csharp
-ArgumentNullException.ThrowIfNull(builder);
-
 builder.ConfigureContainer(
     new DefaultServiceProviderFactory(new ServiceProviderOptions { ValidateOnBuild = true, ValidateScopes = true }),
     static _ => { });
-builder.AddEngineLogging();
 
-AddRuntimeServices(builder);
-AddLocalStateServices(builder);
-AddPreferenceServices(builder);
-AddEngineStatusServices(builder);
-AddRepositoryServices(builder);
-AddComparisonServices(builder);
-AddProtocolServices(builder);
-AddActionHandlers(builder);
+builder.AddEngineLogging();
+builder.AddRuntimeServices();
+builder.AddLocalStateServices();
+builder.AddPreferenceServices();
+builder.AddEngineStatusServices();
+builder.AddRepositoryServices();
+builder.AddComparisonServices();
+builder.AddProtocolServices();
+builder.AddActionHandlers();
+
+EngineStartupValidator.Validate(builder.Services);
 ```
 
-Keep the private helpers in the same file. Do not introduce new extension classes, interfaces, nested types, or
-decorative region/comment separators. The helpers register:
+Keep every capability registration extension in `EngineHostApplicationBuilderExtensions`, each `internal`, each an
+extension on `HostApplicationBuilder`, and each opening with its `builder` null guard. `AddActionHandler<THandler>`
+stays private to that file. Do not introduce new extension classes, interfaces, nested types, or decorative
+region/comment separators. The extensions register:
 
 - `AddRuntimeServices`: `TextReader`, `TextWriter`, and `TimeProvider`.
-- `AddLocalStateServices`: `ILocalStateDatabase`, `ILocalStateInitializer`, `IRepositoryHistoryStore`, and
-  `IRepositoryHistoryService`.
+- `AddLocalStateServices`: singleton `LocalStatePaths`; scoped `DbContextOptions<ChangeLensLocalStateDbContext>`,
+  `ChangeLensLocalStateDbContext`, `ILocalStateInitializer`, `IRepositoryHistoryStore`, and
+  `IRepositoryHistoryService`. Configure SQLite through `AddDbContext` here.
 - `AddPreferenceServices`: `IColorThemePreferenceStore` and `IColorThemePreferenceService`.
 - `AddEngineStatusServices`: `IEngineStatusService`.
 - `AddRepositoryServices`: `ICanonicalRepositoryPathKeyProvider`, `IRepositoryPathResolver`, `IGitCommandRunner`, and
@@ -87,12 +107,26 @@ decorative region/comment separators. The helpers register:
   `IGitComparisonFreshnessChecker`, `IGitRemoteBaselineTracker`, and `IComparisonTargetPageBuilder`.
 - `AddProtocolServices`: `IEngineProtocolSerializer`, `IEngineProtocolTransport`, and `EngineProtocolHost` as the hosted
   service.
-- `AddActionHandlers`: every `IActionHandler` implementation, one `AddSingleton<IActionHandler, THandler>` line per
-  approved protocol action. Keep the twelve registrations contiguous in this helper rather than distributing them
-  across the capability helpers, so a missing action is visible in one place.
+- `AddActionHandlers`: every `IActionHandler` implementation, one `AddActionHandler<THandler>` line per approved
+  protocol action. The helper registers the handler as a keyed scoped service under its static declared action. Keep the
+  twelve registrations contiguous in this helper rather than distributing them across the capability helpers.
 
-Preserve every existing descriptor, lifetime, factory body, configuration key, and hosted-service ordering, with logging
-initialized before services that log and the protocol hosted service registered last.
+`TextReader`, `TextWriter`, `TimeProvider`, `IEngineProtocolSerializer`, `IEngineProtocolTransport`,
+`EngineProtocolHost`, and `LocalStatePaths` are singleton. All services that serve a protocol request are scoped.
+Keep logging initialized before services that log and register the protocol hosted service before the contiguous
+action-handler registrations.
+
+### Engine startup validation
+
+`EngineStartupValidator.Validate` is the one place startup invariants run. `Program.cs` calls it after the last
+registration and before `builder.Build()`, so a violated invariant stops the process before a provider exists.
+Add a further startup invariant as a private method of that validator called from `Validate`, not as a second call
+site in `Program.cs`.
+
+The validator inspects service descriptors and resolves nothing: resolution would construct handler graphs the
+scoped lifetime exists to defer, and a built provider does not expose its registration keys, so unapproved and
+non-string keys could no longer be named. It currently enforces an exact one-to-one match between the
+`IActionHandler` descriptors and `EngineActionConstants.ApprovedActions`.
 
 ## Related rules
 

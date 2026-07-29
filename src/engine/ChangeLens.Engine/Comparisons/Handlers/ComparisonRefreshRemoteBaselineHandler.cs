@@ -13,7 +13,7 @@ namespace ChangeLens.Engine.Comparisons.Handlers;
 ///     Handles the action that fetches a selected branch to refresh its cached remote-tracking baseline.
 /// </summary>
 /// <remarks>
-///     The host registers this handler as a singleton. The refreshed revision is returned exactly as the tracker
+///     The host registers this handler as scoped. The refreshed revision is returned exactly as the tracker
 ///     reports it.
 /// </remarks>
 /// <param name="remoteBaselineTracker">
@@ -25,17 +25,17 @@ internal sealed class ComparisonRefreshRemoteBaselineHandler(
     IEngineProtocolSerializer protocolSerializer) : IActionHandler
 {
     /// <inheritdoc />
-    public string Action => ComparisonActionConstants.RefreshRemoteBaselineAction;
+    public static string Action => ComparisonActionConstants.RefreshRemoteBaselineAction;
 
     /// <inheritdoc />
     public async Task<ProtocolResponse> HandleAsync(EngineProtocolRequest request, CancellationToken cancellationToken)
     {
         if (request.Parameters.ValueKind == JsonValueKind.Undefined)
         {
-            return ProtocolResponseFactory.MissingParameters(request.RequestId, this.Action);
+            return ProtocolResponseFactory.MissingParameters(request.RequestId, Action);
         }
 
-        var parametersResult = protocolSerializer.DeserializeParameters<ComparisonRefreshRemoteBaselineParameters>(request.Parameters, this.Action);
+        var parametersResult = protocolSerializer.DeserializeParameters<ComparisonRefreshRemoteBaselineParameters>(request.Parameters, Action);
         if (parametersResult.IsFailure)
         {
             return ProtocolResponseFactory.CreateError(request.RequestId, parametersResult.Errors);

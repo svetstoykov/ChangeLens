@@ -1,7 +1,6 @@
 using ChangeLens.Core.Comparisons.Interfaces;
 using ChangeLens.Core.Comparisons.Services;
 using ChangeLens.Core.EngineStatus.Interfaces;
-using ChangeLens.Core.EngineStatus.Services;
 using ChangeLens.Core.Git.Interfaces;
 using ChangeLens.Core.Git.Services;
 using ChangeLens.Core.LocalState.Interfaces;
@@ -10,126 +9,160 @@ using ChangeLens.Engine.Comparisons.Handlers;
 using ChangeLens.Engine.Comparisons.Interfaces;
 using ChangeLens.Engine.Comparisons.Services;
 using ChangeLens.Engine.EngineStatus.Handlers;
-using ChangeLens.Engine.Logging.Extensions;
 using ChangeLens.Engine.Preferences.Handlers;
 using ChangeLens.Engine.Protocol.Interfaces;
 using ChangeLens.Engine.Protocol.Services;
 using ChangeLens.Engine.Repositories.Constants;
 using ChangeLens.Engine.Repositories.Handlers;
 using ChangeLens.Infrastructure.FileSystem.Services;
+using ChangeLens.Infrastructure.EngineStatus.Services;
 using ChangeLens.Infrastructure.Git.Models;
 using ChangeLens.Infrastructure.Git.Services;
 using ChangeLens.Infrastructure.LocalState.Constants;
-using ChangeLens.Infrastructure.LocalState.Interfaces;
 using ChangeLens.Infrastructure.LocalState.Models;
+using ChangeLens.Infrastructure.LocalState.Persistence;
 using ChangeLens.Infrastructure.LocalState.Services;
+using Microsoft.Data.Sqlite;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 
 namespace ChangeLens.Engine.Hosting.Extensions;
 
 /// <summary>
-///     Provides engine-specific composition for the Generic Host builder.
+///     Provides one capability registration extension per part of the engine service graph.
 /// </summary>
+/// <remarks>
+///     The engine executable calls these in capability order, so the composed graph stays readable at the process
+///     entry point while each capability owns its own registrations here.
+/// </remarks>
 internal static class EngineHostApplicationBuilderExtensions
 {
-    /// <summary>
-    ///     Adds the engine protocol boundary and its supporting services to the host builder.
-    /// </summary>
+    /// <summary>Registers process-owned runtime services.</summary>
     /// <param name="builder">The host application builder to configure. Cannot be <see langword="null" />.</param>
-    /// <exception cref="ArgumentNullException">
-    ///     <paramref name="builder" /> is <see langword="null" />.
-    /// </exception>
-    internal static void AddEngine(this HostApplicationBuilder builder)
+    /// <exception cref="ArgumentNullException"><paramref name="builder" /> is <see langword="null" />.</exception>
+    internal static void AddRuntimeServices(this HostApplicationBuilder builder)
     {
         ArgumentNullException.ThrowIfNull(builder);
 
-        builder.ConfigureContainer(
-            new DefaultServiceProviderFactory(new ServiceProviderOptions { ValidateOnBuild = true, ValidateScopes = true }),
-            static _ => { });
-        builder.AddEngineLogging();
-
-        AddRuntimeServices(builder);
-        AddLocalStateServices(builder);
-        AddPreferenceServices(builder);
-        AddEngineStatusServices(builder);
-        AddRepositoryServices(builder);
-        AddComparisonServices(builder);
-        AddProtocolServices(builder);
-        AddActionHandlers(builder);
-    }
-
-    private static void AddRuntimeServices(HostApplicationBuilder builder)
-    {
         builder.Services.AddSingleton<TextReader>(_ => Console.In);
         builder.Services.AddSingleton<TextWriter>(_ => Console.Out);
         builder.Services.AddSingleton(TimeProvider.System);
     }
 
-    private static void AddLocalStateServices(HostApplicationBuilder builder)
+    /// <summary>Registers local-state persistence and repository-history services.</summary>
+    /// <param name="builder">The host application builder to configure. Cannot be <see langword="null" />.</param>
+    /// <exception cref="ArgumentNullException"><paramref name="builder" /> is <see langword="null" />.</exception>
+    internal static void AddLocalStateServices(this HostApplicationBuilder builder)
     {
-        builder.Services.Configure<LocalStateOptions>(
-            options => options.Directory = builder.Configuration[LocalStateConstants.DirectoryConfigurationKey]);
-        builder.Services.AddSingleton<ILocalStateDatabase, SqliteLocalStateDatabase>();
-        builder.Services.AddSingleton<ILocalStateInitializer>(
-            serviceProvider => serviceProvider.GetRequiredService<ILocalStateDatabase>() as ILocalStateInitializer
-                ?? throw new InvalidOperationException("The local-state database must provide lifecycle initialization."));
-        builder.Services.AddSingleton<IRepositoryHistoryStore, SqliteRepositoryHistoryStore>();
-        builder.Services.AddSingleton<IRepositoryHistoryService, RepositoryHistoryService>();
+        ArgumentNullException.ThrowIfNull(builder);
+
+        var paths = LocalStatePaths.Resolve(builder.Configuration[LocalStateConstants.DirectoryConfigurationKey]);
+        var connectionString = new SqliteConnectionStringBuilder
+        {
+            DataSource = paths.DatabasePath,
+            Mode = SqliteOpenMode.ReadWriteCreate,
+            Cache = SqliteCacheMode.Private,
+            DefaultTimeout = LocalStateConstants.CommandTimeoutSeconds,
+            ForeignKeys = true,
+        }.ToString();
+
+        builder.Services.AddSingleton(paths);
+        builder.Services.AddDbContext<ChangeLensLocalStateDbContext>(options => options.UseSqlite(connectionString));
+        builder.Services.AddScoped<ILocalStateInitializer, SqliteLocalStateInitializer>();
+        builder.Services.AddScoped<IRepositoryHistoryStore, SqliteRepositoryHistoryStore>();
+        builder.Services.AddScoped<IRepositoryHistoryService, RepositoryHistoryService>();
     }
 
-    private static void AddPreferenceServices(HostApplicationBuilder builder)
+    /// <summary>Registers color-theme preference services.</summary>
+    /// <param name="builder">The host application builder to configure. Cannot be <see langword="null" />.</param>
+    /// <exception cref="ArgumentNullException"><paramref name="builder" /> is <see langword="null" />.</exception>
+    internal static void AddPreferenceServices(this HostApplicationBuilder builder)
     {
-        builder.Services.AddSingleton<IColorThemePreferenceStore, SqliteColorThemePreferenceStore>();
-        builder.Services.AddSingleton<IColorThemePreferenceService, ColorThemePreferenceService>();
+        ArgumentNullException.ThrowIfNull(builder);
+
+        builder.Services.AddScoped<IColorThemePreferenceStore, SqliteColorThemePreferenceStore>();
+        builder.Services.AddScoped<IColorThemePreferenceService, ColorThemePreferenceService>();
     }
 
-    private static void AddEngineStatusServices(HostApplicationBuilder builder)
+    /// <summary>Registers engine readiness services.</summary>
+    /// <param name="builder">The host application builder to configure. Cannot be <see langword="null" />.</param>
+    /// <exception cref="ArgumentNullException"><paramref name="builder" /> is <see langword="null" />.</exception>
+    internal static void AddEngineStatusServices(this HostApplicationBuilder builder)
     {
-        builder.Services.AddSingleton<IEngineStatusService, EngineStatusService>();
+        ArgumentNullException.ThrowIfNull(builder);
+
+        builder.Services.AddScoped<IEngineStatusService, EngineStatusService>();
     }
 
-    private static void AddRepositoryServices(HostApplicationBuilder builder)
+    /// <summary>Registers repository inspection services.</summary>
+    /// <param name="builder">The host application builder to configure. Cannot be <see langword="null" />.</param>
+    /// <exception cref="ArgumentNullException"><paramref name="builder" /> is <see langword="null" />.</exception>
+    internal static void AddRepositoryServices(this HostApplicationBuilder builder)
     {
-        builder.Services.AddSingleton<ICanonicalRepositoryPathKeyProvider, CanonicalRepositoryPathKeyProvider>();
-        builder.Services.AddSingleton<IRepositoryPathResolver, PhysicalRepositoryPathResolver>();
+        ArgumentNullException.ThrowIfNull(builder);
+
+        builder.Services.AddScoped<ICanonicalRepositoryPathKeyProvider, CanonicalRepositoryPathKeyProvider>();
+        builder.Services.AddScoped<IRepositoryPathResolver, PhysicalRepositoryPathResolver>();
         builder.Services.Configure<GitCommandRunnerOptions>(
             options => options.ExecutablePath =
                 builder.Configuration[RepositoryInspectionConfigurationConstants.GitExecutableConfigurationKey]);
-        builder.Services.AddSingleton<IGitCommandRunner, GitCliCommandRunner>();
-        builder.Services.AddSingleton<IGitRepositoryInspector, GitRepositoryInspector>();
+        builder.Services.AddScoped<IGitCommandRunner, GitCliCommandRunner>();
+        builder.Services.AddScoped<IGitRepositoryInspector, GitRepositoryInspector>();
     }
 
-    private static void AddComparisonServices(HostApplicationBuilder builder)
+    /// <summary>Registers comparison services.</summary>
+    /// <param name="builder">The host application builder to configure. Cannot be <see langword="null" />.</param>
+    /// <exception cref="ArgumentNullException"><paramref name="builder" /> is <see langword="null" />.</exception>
+    internal static void AddComparisonServices(this HostApplicationBuilder builder)
     {
-        builder.Services.AddSingleton<IComparisonFileSummaryComposer, ComparisonFileSummaryComposer>();
-        builder.Services.AddSingleton<IGitComparisonTargetDiscovery, GitComparisonTargetDiscovery>();
-        builder.Services.AddSingleton<IGitComparisonPreparer, GitComparisonPreparer>();
-        builder.Services.AddSingleton<IGitComparisonFreshnessChecker, GitComparisonFreshnessChecker>();
-        builder.Services.AddSingleton<IGitRemoteBaselineTracker, GitRemoteBaselineTracker>();
-        builder.Services.AddSingleton<IComparisonTargetPageBuilder, ComparisonTargetPageBuilder>();
+        ArgumentNullException.ThrowIfNull(builder);
+
+        builder.Services.AddScoped<IComparisonFileSummaryComposer, ComparisonFileSummaryComposer>();
+        builder.Services.AddScoped<IGitComparisonTargetDiscovery, GitComparisonTargetDiscovery>();
+        builder.Services.AddScoped<IGitComparisonPreparer, GitComparisonPreparer>();
+        builder.Services.AddScoped<IGitComparisonFreshnessChecker, GitComparisonFreshnessChecker>();
+        builder.Services.AddScoped<IGitRemoteBaselineTracker, GitRemoteBaselineTracker>();
+        builder.Services.AddScoped<IComparisonTargetPageBuilder, ComparisonTargetPageBuilder>();
     }
 
-    private static void AddProtocolServices(HostApplicationBuilder builder)
+    /// <summary>Registers singleton protocol transport services and the protocol host.</summary>
+    /// <param name="builder">The host application builder to configure. Cannot be <see langword="null" />.</param>
+    /// <exception cref="ArgumentNullException"><paramref name="builder" /> is <see langword="null" />.</exception>
+    internal static void AddProtocolServices(this HostApplicationBuilder builder)
     {
+        ArgumentNullException.ThrowIfNull(builder);
+
         builder.Services.AddSingleton<IEngineProtocolSerializer, EngineProtocolSerializer>();
         builder.Services.AddSingleton<IEngineProtocolTransport, EngineProtocolTransport>();
         builder.Services.AddHostedService<EngineProtocolHost>();
     }
 
-    private static void AddActionHandlers(HostApplicationBuilder builder)
+    /// <summary>Registers every approved action handler as a keyed scoped service.</summary>
+    /// <param name="builder">The host application builder to configure. Cannot be <see langword="null" />.</param>
+    /// <exception cref="ArgumentNullException"><paramref name="builder" /> is <see langword="null" />.</exception>
+    internal static void AddActionHandlers(this HostApplicationBuilder builder)
     {
-        builder.Services.AddSingleton<IActionHandler, RepositoryOpenHandler>();
-        builder.Services.AddSingleton<IActionHandler, RepositoryRestoreLastHandler>();
-        builder.Services.AddSingleton<IActionHandler, RepositoryListRecentHandler>();
-        builder.Services.AddSingleton<IActionHandler, RepositoryRemoveRecentHandler>();
-        builder.Services.AddSingleton<IActionHandler, ComparisonListTargetsHandler>();
-        builder.Services.AddSingleton<IActionHandler, ComparisonPrepareHandler>();
-        builder.Services.AddSingleton<IActionHandler, ComparisonCheckFreshnessHandler>();
-        builder.Services.AddSingleton<IActionHandler, ComparisonCheckRemoteBaselineHandler>();
-        builder.Services.AddSingleton<IActionHandler, ComparisonRefreshRemoteBaselineHandler>();
-        builder.Services.AddSingleton<IActionHandler, PreferenceGetColorThemeHandler>();
-        builder.Services.AddSingleton<IActionHandler, PreferenceSetColorThemeHandler>();
-        builder.Services.AddSingleton<IActionHandler, EngineCheckStatusHandler>();
+        ArgumentNullException.ThrowIfNull(builder);
+
+        AddActionHandler<RepositoryOpenHandler>(builder);
+        AddActionHandler<RepositoryRestoreLastHandler>(builder);
+        AddActionHandler<RepositoryListRecentHandler>(builder);
+        AddActionHandler<RepositoryRemoveRecentHandler>(builder);
+        AddActionHandler<ComparisonListTargetsHandler>(builder);
+        AddActionHandler<ComparisonPrepareHandler>(builder);
+        AddActionHandler<ComparisonCheckFreshnessHandler>(builder);
+        AddActionHandler<ComparisonCheckRemoteBaselineHandler>(builder);
+        AddActionHandler<ComparisonRefreshRemoteBaselineHandler>(builder);
+        AddActionHandler<PreferenceGetColorThemeHandler>(builder);
+        AddActionHandler<PreferenceSetColorThemeHandler>(builder);
+        AddActionHandler<EngineCheckStatusHandler>(builder);
     }
+
+    /// <summary>Registers one action handler under its declared action.</summary>
+    /// <typeparam name="THandler">The action-handler implementation to register.</typeparam>
+    /// <param name="builder">The host application builder to configure. Cannot be <see langword="null" />.</param>
+    private static void AddActionHandler<THandler>(HostApplicationBuilder builder)
+        where THandler : class, IActionHandler =>
+        builder.Services.AddKeyedScoped(typeof(IActionHandler), THandler.Action, typeof(THandler));
 }

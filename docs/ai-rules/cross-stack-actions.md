@@ -20,13 +20,15 @@ For every engine-backed action:
 3. Add strict versioned request and result schemas under `contracts/engine-protocol`. Reject missing, unknown, duplicate, and incorrectly typed request properties. Add a `parameters` object only when the action has real input.
 4. Keep protocol versions, request identifiers, and fixed action names out of React. Rust assigns them and exposes
    only the action's explicit typed Tauri command; never expose a generic `engine_action(action, parameters)` command.
-5. Add one `IActionHandler` implementation for the action in its capability slice, and register it with
-   `AddSingleton<IActionHandler, THandler>`. The handler's `Action` property returns its capability-owned
-   action constant; the handler deserializes its own parameters and returns one correlated
-   `ProtocolResponse`. `EngineProtocolHost` enumerates the registered handlers once into an ordinal,
-   immutable-after-construction map and rejects blank or duplicate action names. Keep routing free of
-   action-specific registration logic. Do not add a mediator library, reflection-based handler discovery, keyed DI, a
-   service locator, a runtime-mutable registry, or generated protocol types.
+5. Add one `IActionHandler` implementation for the action in its capability slice. Expose its capability-owned action
+   constant through the static abstract `IActionHandler.Action`, add the action to
+   `EngineActionConstants.ApprovedActions`, and register it through `AddActionHandler<THandler>`.
+   `EngineProtocolHost` creates one request scope and resolves the approved handler through keyed dependency injection.
+   This host-boundary routing is the only approved keyed-DI and service-provider lookup; capability code and handlers
+   continue to use constructor injection. Composition validates an exact one-to-one match between approved actions and
+   keyed handler descriptors, and runtime routing gates lookup through the same approved-action list. Do not add a
+   mediator library, reflection-based handler discovery, service-provider lookup outside `EngineProtocolHost`, a
+   runtime-mutable registry, or generated protocol types.
 6. Return exactly one correlated result or error. A typed action returns its typed payload; a payload-free action returns `result: null`. Fire-and-forget engine actions are not supported.
 7. Preserve every expected error's `ErrorType`, stable code, safe message, order, and request identifier. An uncoded or unsafe error becomes a sanitized `InternalError` at the Engine boundary. Rust-originated failures use the approved `transport` or `protocol` kind; TypeScript normalizes all rejections to `ActionError`.
 8. Never automatically replay a failed action. A later user- or React-initiated action may restart an invalidated engine process. Every future write specification must define a reconciliation action for uncertain transport outcomes.

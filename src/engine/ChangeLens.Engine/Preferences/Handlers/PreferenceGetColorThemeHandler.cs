@@ -14,8 +14,8 @@ namespace ChangeLens.Engine.Preferences.Handlers;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         The host registers this handler as a singleton. An absent preference is reported as
-///         <see langword="null" /> rather than as a failure, and supplied parameters are ignored exactly as before.
+///         The host registers this handler as scoped. An absent preference is reported as <see langword="null" />
+///         rather than as a failure, and supplied parameters are ignored.
 ///     </para>
 ///     <para>
 ///         A stored theme the protocol has not approved is returned as a domain-coded internal error.
@@ -25,7 +25,7 @@ namespace ChangeLens.Engine.Preferences.Handlers;
 internal sealed class PreferenceGetColorThemeHandler(IColorThemePreferenceService colorThemePreferenceService) : IActionHandler
 {
     /// <inheritdoc />
-    public string Action => PreferenceActionConstants.GetColorThemeAction;
+    public static string Action => PreferenceActionConstants.GetColorThemeAction;
 
     /// <inheritdoc />
     public async Task<ProtocolResponse> HandleAsync(EngineProtocolRequest request, CancellationToken cancellationToken)

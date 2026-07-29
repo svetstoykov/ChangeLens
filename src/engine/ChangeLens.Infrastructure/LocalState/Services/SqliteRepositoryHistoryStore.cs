@@ -2,7 +2,7 @@ using ChangeLens.Core.LocalState.Interfaces;
 using ChangeLens.Core.LocalState.Models;
 using ChangeLens.Core.Results.Models;
 using ChangeLens.Infrastructure.LocalState.Constants;
-using ChangeLens.Infrastructure.LocalState.Interfaces;
+using ChangeLens.Infrastructure.LocalState.Persistence;
 using ChangeLens.Infrastructure.LocalState.Persistence.Entities;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
@@ -13,12 +13,12 @@ namespace ChangeLens.Infrastructure.LocalState.Services;
 ///     Stores repository history in the required SQLite local-state database.
 /// </summary>
 /// <remarks>
-///     The Engine registers this stateless implementation as a singleton. Each operation uses its own Entity Framework context.
+///     The Engine registers this implementation as scoped. It uses the request context and does not need to be thread-safe.
 /// </remarks>
-/// <param name="database">The required SQLite local-state database.</param>
+/// <param name="context">The scoped local-state context. Cannot be <see langword="null" />.</param>
 /// <param name="logger">The logger for repository-history persistence failures.</param>
 public sealed class SqliteRepositoryHistoryStore(
-    ILocalStateDatabase database,
+    ChangeLensLocalStateDbContext context,
     ILogger<SqliteRepositoryHistoryStore> logger) : IRepositoryHistoryStore
 {
     /// <inheritdoc />
@@ -31,7 +31,6 @@ public sealed class SqliteRepositoryHistoryStore(
     {
         try
         {
-            await using var context = await database.CreateContextAsync(cancellationToken);
             await using var transaction = await context.Database.BeginTransactionAsync(cancellationToken);
             var repository = await context.Repositories.SingleOrDefaultAsync(
                 entry => entry.CanonicalPathKey == canonicalPathKey,
@@ -71,17 +70,17 @@ public sealed class SqliteRepositoryHistoryStore(
             await transaction.CommitAsync(cancellationToken);
             return Result.Success(ToEntry(repository));
         }
-        catch (Exception exception) when (SqliteLocalStateDatabase.IsExpectedAccessFailure(exception))
+        catch (Exception exception) when (LocalStateFailure.IsExpectedAccessFailure(exception))
         {
             logger.LogWarning(exception, "Failed to record a repository history open.");
-            return SqliteLocalStateDatabase.Unavailable<RepositoryHistoryEntry>(exception);
+            return LocalStateFailure.Unavailable<RepositoryHistoryEntry>(exception);
         }
-        catch (Exception exception) when (SqliteLocalStateDatabase.IsMalformedDataFailure(exception))
+        catch (Exception exception) when (LocalStateFailure.IsMalformedDataFailure(exception))
         {
             logger.LogWarning(
                 exception,
                 "Failed to record a repository history open: stored metadata is malformed.");
-            return SqliteLocalStateDatabase.Invalid<RepositoryHistoryEntry>();
+            return LocalStateFailure.Invalid<RepositoryHistoryEntry>();
         }
     }
 
@@ -90,24 +89,24 @@ public sealed class SqliteRepositoryHistoryStore(
     {
         try
         {
-            await using var context = await database.CreateContextAsync(cancellationToken);
             var applicationState = await context.ApplicationState
+                .AsNoTracking()
                 .Include(entry => entry.LastRepository)
                 .SingleAsync(entry => entry.SingletonId == 1, cancellationToken);
             return Result.Success<RepositoryHistoryEntry?>(
                 applicationState.LastRepository is null ? null : ToEntry(applicationState.LastRepository));
         }
-        catch (Exception exception) when (SqliteLocalStateDatabase.IsExpectedAccessFailure(exception))
+        catch (Exception exception) when (LocalStateFailure.IsExpectedAccessFailure(exception))
         {
             logger.LogWarning(exception, "Failed to read the last-opened repository from history.");
-            return SqliteLocalStateDatabase.Unavailable<RepositoryHistoryEntry?>(exception);
+            return LocalStateFailure.Unavailable<RepositoryHistoryEntry?>(exception);
         }
-        catch (Exception exception) when (SqliteLocalStateDatabase.IsMalformedDataFailure(exception))
+        catch (Exception exception) when (LocalStateFailure.IsMalformedDataFailure(exception))
         {
             logger.LogWarning(
                 exception,
                 "Failed to read the last-opened repository from history: stored metadata is malformed.");
-            return SqliteLocalStateDatabase.Invalid<RepositoryHistoryEntry?>();
+            return LocalStateFailure.Invalid<RepositoryHistoryEntry?>();
         }
     }
 
@@ -116,8 +115,8 @@ public sealed class SqliteRepositoryHistoryStore(
     {
         try
         {
-            await using var context = await database.CreateContextAsync(cancellationToken);
             var lastRepositoryId = await context.ApplicationState
+                .AsNoTracking()
                 .Where(entry => entry.SingletonId == 1)
                 .Select(entry => entry.LastRepositoryId)
                 .SingleAsync(cancellationToken);
@@ -131,15 +130,15 @@ public sealed class SqliteRepositoryHistoryStore(
             return Result.Success(
                 new RepositoryHistorySnapshot(lastRepositoryId, repositories.AsReadOnly()));
         }
-        catch (Exception exception) when (SqliteLocalStateDatabase.IsExpectedAccessFailure(exception))
+        catch (Exception exception) when (LocalStateFailure.IsExpectedAccessFailure(exception))
         {
             logger.LogWarning(exception, "Failed to list recent repository history.");
-            return SqliteLocalStateDatabase.Unavailable<RepositoryHistorySnapshot>(exception);
+            return LocalStateFailure.Unavailable<RepositoryHistorySnapshot>(exception);
         }
-        catch (Exception exception) when (SqliteLocalStateDatabase.IsMalformedDataFailure(exception))
+        catch (Exception exception) when (LocalStateFailure.IsMalformedDataFailure(exception))
         {
             logger.LogWarning(exception, "Failed to list recent repository history: stored metadata is malformed.");
-            return SqliteLocalStateDatabase.Invalid<RepositoryHistorySnapshot>();
+            return LocalStateFailure.Invalid<RepositoryHistorySnapshot>();
         }
     }
 
@@ -148,7 +147,6 @@ public sealed class SqliteRepositoryHistoryStore(
     {
         try
         {
-            await using var context = await database.CreateContextAsync(cancellationToken);
             var repository = await context.Repositories.SingleOrDefaultAsync(
                 entry => entry.RepositoryId == repositoryId,
                 cancellationToken);
@@ -160,10 +158,10 @@ public sealed class SqliteRepositoryHistoryStore(
 
             return Result.Success();
         }
-        catch (Exception exception) when (SqliteLocalStateDatabase.IsExpectedAccessFailure(exception))
+        catch (Exception exception) when (LocalStateFailure.IsExpectedAccessFailure(exception))
         {
             logger.LogWarning(exception, "Failed to remove repository {RepositoryId} from history.", repositoryId);
-            return SqliteLocalStateDatabase.Unavailable(exception);
+            return LocalStateFailure.Unavailable(exception);
         }
     }
 
@@ -175,7 +173,6 @@ public sealed class SqliteRepositoryHistoryStore(
     {
         try
         {
-            await using var context = await database.CreateContextAsync(cancellationToken);
             var repository = await context.Repositories.SingleOrDefaultAsync(
                 entry => entry.CanonicalPathKey == canonicalPathKey,
                 cancellationToken);
@@ -187,10 +184,10 @@ public sealed class SqliteRepositoryHistoryStore(
 
             return Result.Success();
         }
-        catch (Exception exception) when (SqliteLocalStateDatabase.IsExpectedAccessFailure(exception))
+        catch (Exception exception) when (LocalStateFailure.IsExpectedAccessFailure(exception))
         {
             logger.LogWarning(exception, "Failed to save a preferred comparison target.");
-            return SqliteLocalStateDatabase.Unavailable(exception);
+            return LocalStateFailure.Unavailable(exception);
         }
     }
 

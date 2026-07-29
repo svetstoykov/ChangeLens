@@ -3,6 +3,14 @@ using Microsoft.EntityFrameworkCore;
 
 namespace ChangeLens.Infrastructure.LocalState.Persistence;
 
+/// <summary>
+///     Represents one scoped Entity Framework session over ChangeLens local state.
+/// </summary>
+/// <remarks>
+///     The Engine registers this context as scoped. It serves one boot or request scope and does not need to be
+///     thread-safe.
+/// </remarks>
+/// <param name="options">The scoped local-state context options. Cannot be <see langword="null" />.</param>
 public sealed class ChangeLensLocalStateDbContext(
     DbContextOptions<ChangeLensLocalStateDbContext> options) : DbContext(options)
 {

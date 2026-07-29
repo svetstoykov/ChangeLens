@@ -17,7 +17,7 @@ namespace ChangeLens.Core.Git.Services;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         The Engine host registers this stateless service as a singleton. It is safe to call concurrently.
+///         The Engine registers this service as scoped. It serves one request and does not need to be thread-safe.
 ///     </para>
 ///     <para>
 ///         Each inspection uses a single 15-second budget across path resolution and the approved read-only Git facts.

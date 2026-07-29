@@ -18,21 +18,25 @@ public sealed class EngineActionRoutingTests
     ///     Verifies that an approved action is never reported as unknown and never fails unexpectedly.
     /// </summary>
     /// <param name="action">The approved protocol action name.</param>
+    /// <param name="isPayloadFree">
+    ///     <see langword="true" /> when the action carries no payload and therefore reaches its local-state-backed
+    ///     capability even when the request omits parameters, as this test does.
+    /// </param>
     /// <returns>A task that represents the asynchronous test.</returns>
     [Theory]
-    [InlineData("repositories.open")]
-    [InlineData("repositories.restoreLast")]
-    [InlineData("repositories.listRecent")]
-    [InlineData("repositories.removeRecent")]
-    [InlineData("comparisons.listTargets")]
-    [InlineData("comparisons.prepare")]
-    [InlineData("comparisons.checkFreshness")]
-    [InlineData("comparisons.checkRemoteBaseline")]
-    [InlineData("comparisons.refreshRemoteBaseline")]
-    [InlineData("engine.checkStatus")]
-    [InlineData("preferences.getColorTheme")]
-    [InlineData("preferences.setColorTheme")]
-    public async Task EngineRoutesEveryApprovedActionToAnImplementation(string action)
+    [InlineData("repositories.open", false)]
+    [InlineData("repositories.restoreLast", true)]
+    [InlineData("repositories.listRecent", true)]
+    [InlineData("repositories.removeRecent", false)]
+    [InlineData("comparisons.listTargets", false)]
+    [InlineData("comparisons.prepare", false)]
+    [InlineData("comparisons.checkFreshness", false)]
+    [InlineData("comparisons.checkRemoteBaseline", false)]
+    [InlineData("comparisons.refreshRemoteBaseline", false)]
+    [InlineData("engine.checkStatus", true)]
+    [InlineData("preferences.getColorTheme", true)]
+    [InlineData("preferences.setColorTheme", false)]
+    public async Task EngineRoutesEveryApprovedActionToAnImplementation(string action, bool isPayloadFree)
     {
         using var engine = StartEngine();
 
@@ -49,6 +53,11 @@ public sealed class EngineActionRoutingTests
 
         Assert.DoesNotContain("protocol.unknownAction", codes);
         Assert.DoesNotContain("engine.unexpectedFailure", codes);
+
+        if (isPayloadFree)
+        {
+            Assert.DoesNotContain("localState.unavailable", codes);
+        }
     }
 
     private static async Task<JsonDocument> ReadResponseAsync(Process engine)

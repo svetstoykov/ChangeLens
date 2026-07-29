@@ -1,12 +1,10 @@
 using ChangeLens.Core.Git.Interfaces;
-using ChangeLens.Core.Git.Services;
 using ChangeLens.Core.LocalState.Interfaces;
 using ChangeLens.Core.LocalState.Models;
 using ChangeLens.Core.Results.Models;
-using ChangeLens.Engine.Repositories.Interfaces;
 using Microsoft.Extensions.Logging;
 
-namespace ChangeLens.Engine.Repositories.Services;
+namespace ChangeLens.Core.LocalState.Services;
 
 /// <summary>
 ///     Coordinates repository inspection with durable repository history.
@@ -19,7 +17,7 @@ namespace ChangeLens.Engine.Repositories.Services;
 /// <param name="pathKeyProvider">The platform-specific canonical-path key provider.</param>
 /// <param name="timeProvider">The time source used for explicit-open timestamps.</param>
 /// <param name="logger">The logger for repository history outcomes.</param>
-internal sealed class RepositoryHistoryService(
+public sealed class RepositoryHistoryService(
     IGitRepositoryInspector repositoryInspector,
     IRepositoryHistoryStore historyStore,
     ICanonicalRepositoryPathKeyProvider pathKeyProvider,

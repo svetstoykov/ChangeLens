@@ -6,7 +6,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <InternalsVisibleTo Include="ChangeLens.Engine.UnitTests" />
+    <InternalsVisibleTo Include="ChangeLens.Engine.IntegrationTests" />
   </ItemGroup>
 
   <ItemGroup>

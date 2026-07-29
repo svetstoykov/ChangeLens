@@ -172,6 +172,7 @@ Use remarks to answer why a member exists and how it behaves. Keep the explanati
 - For dependency-injection services, state the lifetime and thread-safety contract explicitly.
 - Link conceptual documentation with `<see href="...">` when relevant.
 - Omit remarks on simple, self-evident members.
+- Do not narrate history: no "no longer", "used to", or "does not do X" where X was never part of the contract. Describe only what the member does now (see `core-principles.md`).
 
 For example, adjust this lifetime contract to match the service:
 

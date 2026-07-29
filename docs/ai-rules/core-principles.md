@@ -85,3 +85,4 @@ ChangeLens.Core/
 - Put stable non-prose literals such as protocol identifiers, property names, error codes, configuration keys, file-name patterns, and process exit codes in a capability-specific `Constants` folder. Use a static class named for its scope, such as `EngineProtocolConstants`; do not create a project-wide constants dumping ground.
 - Name error-code classes `{Domain}ErrorCode` and keep reason names short, such as `EngineErrorCode.UnknownAction`.
 - Keep one-off human-readable messages and structured logging message templates at their call sites unless they are reused or form part of a stable external contract.
+- Write comments and documentation to describe current behavior only. Never note that a member no longer does something, used to do something, or does not do something it never claimed to do — that documents the diff, not the code. State current behavior positively and let git history carry what changed.

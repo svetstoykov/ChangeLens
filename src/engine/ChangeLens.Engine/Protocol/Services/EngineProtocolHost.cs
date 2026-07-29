@@ -1,30 +1,115 @@
+using System.Diagnostics;
 using ChangeLens.Core.Results.Models;
 using ChangeLens.Engine.Hosting.Constants;
+using ChangeLens.Engine.Protocol.Constants;
 using ChangeLens.Engine.Protocol.Interfaces;
+using ChangeLens.Engine.Protocol.Models;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
 namespace ChangeLens.Engine.Protocol.Services;
 
 /// <summary>
-///     Orchestrates the engine protocol transport and typed action processor for the host lifetime.
+///     Orchestrates the engine protocol transport and routes approved actions for the host lifetime.
 /// </summary>
 /// <remarks>
-///     The Generic Host owns this singleton service. It processes requests sequentially and contains no action
-///     selection, JSON, or text input/output behavior.
+///     <para>
+///         The Generic Host owns this singleton service and processes requests sequentially.
+///     </para>
+///     <para>
+///         The routing map is built once from the registered handlers and is never mutated afterwards. The host owns
+///         the protocol version check, handler lookup, exception boundary, and outcome logging; each
+///         handler owns its own parameter binding and capability calls.
+///     </para>
 /// </remarks>
 /// <param name="protocolTransport">The bounded protocol transport. Cannot be <see langword="null" />.</param>
-/// <param name="actionProcessor">The typed action processor. Cannot be <see langword="null" />.</param>
-/// <param name="logger">The logger for protocol lifecycle events. Cannot be <see langword="null" />.</param>
+/// <param name="actionHandlers">The registered protocol action handlers. Cannot be <see langword="null" />.</param>
+/// <param name="logger">The logger for protocol lifecycle and action outcomes. Cannot be <see langword="null" />.</param>
 /// <param name="applicationLifetime">
 ///     The application lifetime used to stop the process. Cannot be <see langword="null" />.
 /// </param>
+/// <exception cref="ArgumentNullException">
+///     <paramref name="actionHandlers" /> is <see langword="null" />, or it yields a <see langword="null" /> handler.
+/// </exception>
+/// <exception cref="InvalidOperationException">
+///     A registered handler has a blank action name.
+///     -or-
+///     More than one handler is registered for the same action.
+/// </exception>
 internal sealed class EngineProtocolHost(
     IEngineProtocolTransport protocolTransport,
-    IEngineActionProcessor actionProcessor,
+    IEnumerable<IActionHandler> actionHandlers,
     ILogger<EngineProtocolHost> logger,
     IHostApplicationLifetime applicationLifetime) : BackgroundService
 {
+    private static OperationError UnsupportedProtocolVersionError(int protocolVersion) =>
+        OperationError.UnprocessableInput($"Protocol version {protocolVersion} is not supported.", EngineErrorCode.UnsupportedVersion);
+
+    private static OperationError UnknownActionError(string action) =>
+        OperationError.NotFound($"The action '{action}' is not recognized.", EngineErrorCode.UnknownAction);
+
+    private readonly IReadOnlyDictionary<string, IActionHandler> _actionHandlersByAction = CreateActionHandlerMap(actionHandlers);
+
+    /// <summary>
+    ///     Asynchronously processes one validated common request envelope.
+    /// </summary>
+    /// <param name="request">The request to process. Cannot be <see langword="null" />.</param>
+    /// <param name="cancellationToken">
+    ///     A <see cref="CancellationToken" /> to observe while waiting for the action.
+    /// </param>
+    /// <returns>
+    ///     A task that represents the asynchronous operation. The task result contains one correlated protocol
+    ///     response.
+    /// </returns>
+    /// <exception cref="ArgumentNullException">
+    ///     <paramref name="request" /> is <see langword="null" />.
+    /// </exception>
+    /// <exception cref="OperationCanceledException">
+    ///     The <paramref name="cancellationToken" /> is canceled.
+    /// </exception>
+    internal async Task<ProtocolResponse> ProcessAsync(
+        EngineProtocolRequest request,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        var startedAt = Stopwatch.GetTimestamp();
+
+        ProtocolResponse response;
+        try
+        {
+            if (request.ProtocolVersion != EngineProtocolConstants.CurrentVersion)
+            {
+                response = ProtocolResponseFactory.FromError(
+                    request.RequestId,
+                    UnsupportedProtocolVersionError(request.ProtocolVersion));
+            }
+            else
+            {
+                response = await this.ProcessKnownVersionAsync(request, cancellationToken);
+            }
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception exception)
+        {
+            logger.LogError(
+                exception,
+                "Unexpected failure processing engine action {RequestId} for {Action} with error {ErrorCode} in " +
+                "{ElapsedMilliseconds:0.000} ms.",
+                request.RequestId,
+                request.Action,
+                EngineErrorCode.UnexpectedFailure,
+                Stopwatch.GetElapsedTime(startedAt).TotalMilliseconds);
+
+            return ProtocolResponseFactory.CreateUnexpectedFailure(request.RequestId);
+        }
+
+        this.LogOutcome(response, request, Stopwatch.GetElapsedTime(startedAt));
+        return response;
+    }
+
     /// <inheritdoc />
     /// <remarks>
     ///     Processes one request and writes exactly one response before reading the next request. Normal shutdown
@@ -48,7 +133,7 @@ internal sealed class EngineProtocolHost(
 
                 var response = readResult.IsFailure
                     ? ProtocolResponseFactory.CreateError(null, readResult.Errors)
-                    : await actionProcessor.ProcessAsync(readResult.Data!, stoppingToken);
+                    : await this.ProcessAsync(readResult.Data!, stoppingToken);
                 var writeResult = await protocolTransport.WriteAsync(response, stoppingToken);
 
                 if (writeResult.IsFailure)
@@ -80,6 +165,65 @@ internal sealed class EngineProtocolHost(
     }
 
     /// <summary>
+    ///     Routes one current-version request to the handler that owns its action.
+    /// </summary>
+    /// <param name="request">The current-version request. Cannot be <see langword="null" />.</param>
+    /// <param name="cancellationToken">
+    ///     A <see cref="CancellationToken" /> to observe while waiting for the action.
+    /// </param>
+    /// <returns>
+    ///     A task that represents the asynchronous operation. The task result contains the handler's response or the
+    ///     unknown-action error.
+    /// </returns>
+    private async Task<ProtocolResponse> ProcessKnownVersionAsync(
+        EngineProtocolRequest request,
+        CancellationToken cancellationToken)
+    {
+        if (!this._actionHandlersByAction.TryGetValue(request.Action, out var actionHandler))
+        {
+            return ProtocolResponseFactory.FromError(request.RequestId, UnknownActionError(request.Action));
+        }
+
+        return await actionHandler.HandleAsync(request, cancellationToken);
+    }
+
+    /// <summary>
+    ///     Builds the immutable ordinal routing map from the registered handlers.
+    /// </summary>
+    /// <param name="actionHandlers">The registered action handlers. Cannot be <see langword="null" />.</param>
+    /// <returns>One handler per action, keyed by its ordinal action name.</returns>
+    /// <exception cref="ArgumentNullException">
+    ///     <paramref name="actionHandlers" /> is <see langword="null" />, or it yields a <see langword="null" /> handler.
+    /// </exception>
+    /// <exception cref="InvalidOperationException">
+    ///     A handler has a blank action name.
+    ///     -or-
+    ///     More than one handler is registered for the same action.
+    /// </exception>
+    private static IReadOnlyDictionary<string, IActionHandler> CreateActionHandlerMap(IEnumerable<IActionHandler> actionHandlers)
+    {
+        ArgumentNullException.ThrowIfNull(actionHandlers);
+
+        var handlersByAction = new Dictionary<string, IActionHandler>(StringComparer.Ordinal);
+        foreach (var handler in actionHandlers)
+        {
+            ArgumentNullException.ThrowIfNull(handler);
+
+            if (string.IsNullOrWhiteSpace(handler.Action))
+            {
+                throw new InvalidOperationException($"The {handler.GetType().FullName} action handler has no action name.");
+            }
+
+            if (!handlersByAction.TryAdd(handler.Action, handler))
+            {
+                throw new InvalidOperationException($"More than one action handler is registered for '{handler.Action}'.");
+            }
+        }
+
+        return handlersByAction;
+    }
+
+    /// <summary>
     ///     Determines whether a rejected request leaves the transport safe for another read.
     /// </summary>
     /// <param name="readResult">The failed input result.</param>
@@ -103,5 +247,36 @@ internal sealed class EngineProtocolHost(
             "{FailureMessage} Errors: {ErrorCodes}",
             message,
             result.Errors.Select(error => error.Code).ToArray());
+    }
+
+    /// <summary>
+    ///     Logs one successful or expected failed action outcome.
+    /// </summary>
+    /// <param name="response">The action response.</param>
+    /// <param name="request">The processed request.</param>
+    /// <param name="elapsed">The elapsed action-processing time.</param>
+    private void LogOutcome(
+        ProtocolResponse response,
+        EngineProtocolRequest request,
+        TimeSpan elapsed)
+    {
+        if (response is ProtocolErrorResponse errorResponse)
+        {
+            logger.Log(
+                LogLevel.Warning,
+                "Processed engine action {RequestId} for {Action} with errors {ErrorCodes} in " +
+                "{ElapsedMilliseconds:0.000} ms.",
+                request.RequestId,
+                request.Action,
+                errorResponse.Errors.Select(error => error.Code).ToArray(),
+                elapsed.TotalMilliseconds);
+            return;
+        }
+
+        logger.LogInformation(
+            "Processed engine action {RequestId} for {Action} with a result in {ElapsedMilliseconds:0.000} ms.",
+            request.RequestId,
+            request.Action,
+            elapsed.TotalMilliseconds);
     }
 }

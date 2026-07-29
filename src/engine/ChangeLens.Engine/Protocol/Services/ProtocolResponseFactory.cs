@@ -78,6 +78,15 @@ internal static class ProtocolResponseFactory
     }
 
     /// <summary>
+    ///     Creates the standard validation failure for a parameterized action whose parameters were omitted.
+    /// </summary>
+    /// <param name="requestId">The correlated request identifier. Cannot be <see langword="null" />.</param>
+    /// <param name="action">The fixed parameterized action. Cannot be <see langword="null" />.</param>
+    /// <returns>The correlated invalid-request response.</returns>
+    internal static ProtocolResponse MissingParameters(string requestId, string action) =>
+        FromError(requestId, OperationError.Validation($"The {action} action requires parameters.", EngineErrorCode.InvalidRequest));
+
+    /// <summary>
     ///     Creates an error response while preserving every valid source error in order.
     /// </summary>
     /// <param name="requestId">The request identifier, or <see langword="null" /> when unavailable.</param>

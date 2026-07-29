@@ -16,11 +16,6 @@ public static class LocalStateErrorCode
     public const string MigrationFailed = "localState.migrationFailed";
 
     /// <summary>
-    ///     The database schema is newer than this Engine supports.
-    /// </summary>
-    public const string VersionUnsupported = "localState.versionUnsupported";
-
-    /// <summary>
     ///     The existing database is not valid ChangeLens local state.
     /// </summary>
     public const string Invalid = "localState.invalid";

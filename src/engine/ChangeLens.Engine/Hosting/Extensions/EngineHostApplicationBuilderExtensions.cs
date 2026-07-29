@@ -5,19 +5,23 @@ using ChangeLens.Core.EngineStatus.Services;
 using ChangeLens.Core.Git.Interfaces;
 using ChangeLens.Core.Git.Services;
 using ChangeLens.Core.LocalState.Interfaces;
+using ChangeLens.Core.LocalState.Services;
+using ChangeLens.Engine.Comparisons.Handlers;
 using ChangeLens.Engine.Comparisons.Interfaces;
 using ChangeLens.Engine.Comparisons.Services;
+using ChangeLens.Engine.EngineStatus.Handlers;
 using ChangeLens.Engine.Logging.Extensions;
+using ChangeLens.Engine.Preferences.Handlers;
 using ChangeLens.Engine.Protocol.Interfaces;
 using ChangeLens.Engine.Protocol.Services;
-using ChangeLens.Engine.Preferences.Interfaces;
-using ChangeLens.Engine.Preferences.Services;
 using ChangeLens.Engine.Repositories.Constants;
-using ChangeLens.Engine.Repositories.Interfaces;
-using ChangeLens.Engine.Repositories.Services;
+using ChangeLens.Engine.Repositories.Handlers;
 using ChangeLens.Infrastructure.FileSystem.Services;
+using ChangeLens.Infrastructure.Git.Models;
 using ChangeLens.Infrastructure.Git.Services;
+using ChangeLens.Infrastructure.LocalState.Constants;
 using ChangeLens.Infrastructure.LocalState.Interfaces;
+using ChangeLens.Infrastructure.LocalState.Models;
 using ChangeLens.Infrastructure.LocalState.Services;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -40,6 +44,9 @@ internal static class EngineHostApplicationBuilderExtensions
     {
         ArgumentNullException.ThrowIfNull(builder);
 
+        builder.ConfigureContainer(
+            new DefaultServiceProviderFactory(new ServiceProviderOptions { ValidateOnBuild = true, ValidateScopes = true }),
+            static _ => { });
         builder.AddEngineLogging();
 
         AddRuntimeServices(builder);
@@ -49,24 +56,21 @@ internal static class EngineHostApplicationBuilderExtensions
         AddRepositoryServices(builder);
         AddComparisonServices(builder);
         AddProtocolServices(builder);
+        AddActionHandlers(builder);
     }
 
     private static void AddRuntimeServices(HostApplicationBuilder builder)
     {
         builder.Services.AddSingleton<TextReader>(_ => Console.In);
         builder.Services.AddSingleton<TextWriter>(_ => Console.Out);
-        builder.Services.AddSingleton<TimeProvider>(TimeProvider.System);
+        builder.Services.AddSingleton(TimeProvider.System);
     }
 
     private static void AddLocalStateServices(HostApplicationBuilder builder)
     {
-        builder.Services.AddSingleton<ILocalStateDatabase>(
-            serviceProvider =>
-                new SqliteLocalStateDatabase(
-                    builder.Configuration[
-                        "ChangeLens:LocalState:Directory"],
-                    serviceProvider.GetRequiredService<
-                        Microsoft.Extensions.Logging.ILogger<SqliteLocalStateDatabase>>()));
+        builder.Services.Configure<LocalStateOptions>(
+            options => options.Directory = builder.Configuration[LocalStateConstants.DirectoryConfigurationKey]);
+        builder.Services.AddSingleton<ILocalStateDatabase, SqliteLocalStateDatabase>();
         builder.Services.AddSingleton<ILocalStateInitializer>(
             serviceProvider => serviceProvider.GetRequiredService<ILocalStateDatabase>() as ILocalStateInitializer
                 ?? throw new InvalidOperationException("The local-state database must provide lifecycle initialization."));
@@ -89,21 +93,10 @@ internal static class EngineHostApplicationBuilderExtensions
     {
         builder.Services.AddSingleton<ICanonicalRepositoryPathKeyProvider, CanonicalRepositoryPathKeyProvider>();
         builder.Services.AddSingleton<IRepositoryPathResolver, PhysicalRepositoryPathResolver>();
-        builder.Services.AddSingleton<IGitCommandRunner>(
-            serviceProvider =>
-            {
-                var configuredExecutable =
-                    builder.Configuration[
-                        RepositoryInspectionConfigurationConstants.GitExecutableConfigurationKey];
-                var executable = string.IsNullOrWhiteSpace(configuredExecutable)
-                    ? RepositoryInspectionConfigurationConstants.DefaultGitExecutable
-                    : configuredExecutable;
-                return new GitCliCommandRunner(
-                    executable,
-                    [],
-                    serviceProvider.GetRequiredService<
-                        Microsoft.Extensions.Logging.ILogger<GitCliCommandRunner>>());
-            });
+        builder.Services.Configure<GitCommandRunnerOptions>(
+            options => options.ExecutablePath =
+                builder.Configuration[RepositoryInspectionConfigurationConstants.GitExecutableConfigurationKey]);
+        builder.Services.AddSingleton<IGitCommandRunner, GitCliCommandRunner>();
         builder.Services.AddSingleton<IGitRepositoryInspector, GitRepositoryInspector>();
     }
 
@@ -121,7 +114,22 @@ internal static class EngineHostApplicationBuilderExtensions
     {
         builder.Services.AddSingleton<IEngineProtocolSerializer, EngineProtocolSerializer>();
         builder.Services.AddSingleton<IEngineProtocolTransport, EngineProtocolTransport>();
-        builder.Services.AddSingleton<IEngineActionProcessor, EngineActionProcessor>();
         builder.Services.AddHostedService<EngineProtocolHost>();
+    }
+
+    private static void AddActionHandlers(HostApplicationBuilder builder)
+    {
+        builder.Services.AddSingleton<IActionHandler, RepositoryOpenHandler>();
+        builder.Services.AddSingleton<IActionHandler, RepositoryRestoreLastHandler>();
+        builder.Services.AddSingleton<IActionHandler, RepositoryListRecentHandler>();
+        builder.Services.AddSingleton<IActionHandler, RepositoryRemoveRecentHandler>();
+        builder.Services.AddSingleton<IActionHandler, ComparisonListTargetsHandler>();
+        builder.Services.AddSingleton<IActionHandler, ComparisonPrepareHandler>();
+        builder.Services.AddSingleton<IActionHandler, ComparisonCheckFreshnessHandler>();
+        builder.Services.AddSingleton<IActionHandler, ComparisonCheckRemoteBaselineHandler>();
+        builder.Services.AddSingleton<IActionHandler, ComparisonRefreshRemoteBaselineHandler>();
+        builder.Services.AddSingleton<IActionHandler, PreferenceGetColorThemeHandler>();
+        builder.Services.AddSingleton<IActionHandler, PreferenceSetColorThemeHandler>();
+        builder.Services.AddSingleton<IActionHandler, EngineCheckStatusHandler>();
     }
 }

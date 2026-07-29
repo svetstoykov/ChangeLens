@@ -3,12 +3,12 @@ namespace ChangeLens.Infrastructure.LocalState.Constants;
 /// <summary>
 ///     Provides stable SQLite local-state configuration and schema values.
 /// </summary>
-internal static class LocalStateConstants
+public static class LocalStateConstants
 {
     /// <summary>
     ///     The configuration key that specifies the local-state directory.
     /// </summary>
-    internal const string DirectoryConfigurationKey = "ChangeLens:LocalState:Directory";
+    public const string DirectoryConfigurationKey = "ChangeLens:LocalState:Directory";
 
     /// <summary>
     ///     The file name used for the local-state database.
@@ -34,9 +34,4 @@ internal static class LocalStateConstants
     ///     The maximum number of recent repositories retained in local state.
     /// </summary>
     internal const int MaximumRecentRepositories = 20;
-
-    /// <summary>
-    ///     The identifier of the migration that creates the initial local-state schema.
-    /// </summary>
-    internal const string InitialMigrationId = "20260726150843_InitialLocalState";
 }

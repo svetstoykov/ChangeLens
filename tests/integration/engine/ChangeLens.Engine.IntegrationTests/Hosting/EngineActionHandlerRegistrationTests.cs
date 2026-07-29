@@ -1,4 +1,4 @@
-using ChangeLens.Engine.Hosting.Extensions;
+using ChangeLens.Engine.Hosting.Services;
 using ChangeLens.Engine.IntegrationTests.Protocol.Support;
 using ChangeLens.Engine.Protocol.Constants;
 using ChangeLens.Engine.Protocol.Interfaces;
@@ -20,7 +20,7 @@ public sealed class EngineActionHandlerRegistrationTests
     {
         var services = CreateExactRegistrations();
 
-        EngineHostApplicationBuilderExtensions.ValidateActionHandlerRegistrations(services);
+        EngineStartupValidator.Validate(services);
     }
 
     /// <summary>
@@ -33,7 +33,7 @@ public sealed class EngineActionHandlerRegistrationTests
         services.AddKeyedScoped(typeof(IActionHandler), BlankStubActionHandler.Action, typeof(BlankStubActionHandler));
 
         var exception = Assert.Throws<InvalidOperationException>(
-            () => EngineHostApplicationBuilderExtensions.ValidateActionHandlerRegistrations(services));
+            () => EngineStartupValidator.Validate(services));
 
         Assert.Contains(typeof(BlankStubActionHandler).FullName!, exception.Message, StringComparison.Ordinal);
     }
@@ -52,7 +52,7 @@ public sealed class EngineActionHandlerRegistrationTests
             typeof(RepositoryOpenStubActionHandler));
 
         var exception = Assert.Throws<InvalidOperationException>(
-            () => EngineHostApplicationBuilderExtensions.ValidateActionHandlerRegistrations(services));
+            () => EngineStartupValidator.Validate(services));
 
         Assert.Contains(duplicatedAction, exception.Message, StringComparison.Ordinal);
     }
@@ -68,7 +68,7 @@ public sealed class EngineActionHandlerRegistrationTests
             EngineActionConstants.ApprovedActions.Where(action => action != missingAction));
 
         var exception = Assert.Throws<InvalidOperationException>(
-            () => EngineHostApplicationBuilderExtensions.ValidateActionHandlerRegistrations(services));
+            () => EngineStartupValidator.Validate(services));
 
         Assert.Contains(missingAction, exception.Message, StringComparison.Ordinal);
     }
@@ -86,7 +86,7 @@ public sealed class EngineActionHandlerRegistrationTests
             typeof(UnapprovedStubActionHandler));
 
         var exception = Assert.Throws<InvalidOperationException>(
-            () => EngineHostApplicationBuilderExtensions.ValidateActionHandlerRegistrations(services));
+            () => EngineStartupValidator.Validate(services));
 
         Assert.Contains(UnapprovedStubActionHandler.Action, exception.Message, StringComparison.Ordinal);
     }
@@ -101,7 +101,7 @@ public sealed class EngineActionHandlerRegistrationTests
         services.AddKeyedScoped(typeof(IActionHandler), 42, typeof(RepositoryOpenStubActionHandler));
 
         var exception = Assert.Throws<InvalidOperationException>(
-            () => EngineHostApplicationBuilderExtensions.ValidateActionHandlerRegistrations(services));
+            () => EngineStartupValidator.Validate(services));
 
         Assert.Contains(typeof(int).FullName!, exception.Message, StringComparison.Ordinal);
     }
@@ -116,7 +116,7 @@ public sealed class EngineActionHandlerRegistrationTests
         services.AddScoped(typeof(IActionHandler), typeof(BlankStubActionHandler));
 
         var exception = Assert.Throws<InvalidOperationException>(
-            () => EngineHostApplicationBuilderExtensions.ValidateActionHandlerRegistrations(services));
+            () => EngineStartupValidator.Validate(services));
 
         Assert.Contains(typeof(BlankStubActionHandler).FullName!, exception.Message, StringComparison.Ordinal);
     }

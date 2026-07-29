@@ -3,8 +3,10 @@ using ChangeLens.Core.EngineStatus.Interfaces;
 using ChangeLens.Core.LocalState.Constants;
 using ChangeLens.Core.LocalState.Interfaces;
 using ChangeLens.Engine.Hosting.Extensions;
+using ChangeLens.Engine.Hosting.Services;
 using ChangeLens.Engine.IntegrationTests.Support;
 using ChangeLens.Engine.Logging.Constants;
+using ChangeLens.Engine.Logging.Extensions;
 using ChangeLens.Engine.Protocol.Interfaces;
 using ChangeLens.Engine.Repositories.Handlers;
 using ChangeLens.Infrastructure.LocalState.Constants;
@@ -154,7 +156,22 @@ public sealed class EngineServiceScopeTests
         builder.Configuration[LocalStateConstants.DirectoryConfigurationKey] = localStateDirectory;
         builder.Configuration[EngineLoggingConstants.FileDirectoryConfigurationKey] =
             Path.Combine(localStateDirectory, "logs");
-        builder.AddEngine();
+
+        builder.ConfigureContainer(
+            new DefaultServiceProviderFactory(new ServiceProviderOptions { ValidateOnBuild = true, ValidateScopes = true }),
+            static _ => { });
+
+        builder.AddEngineLogging();
+        builder.AddRuntimeServices();
+        builder.AddLocalStateServices();
+        builder.AddPreferenceServices();
+        builder.AddEngineStatusServices();
+        builder.AddRepositoryServices();
+        builder.AddComparisonServices();
+        builder.AddProtocolServices();
+        builder.AddActionHandlers();
+
+        EngineStartupValidator.Validate(builder.Services);
         return builder.Build();
     }
 

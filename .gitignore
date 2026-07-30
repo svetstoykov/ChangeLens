@@ -113,6 +113,13 @@ _ReSharper*/
 # Local agent workflow material
 docs/superpowers/
 
+# Product and design material stays local. Only docs/ai-rules is versioned.
+docs/architecture/
+docs/decisions/
+docs/evaluation/
+docs/product/
+docs/tech-debt/
+
 # Operating-system metadata
 .DS_Store
 .AppleDouble

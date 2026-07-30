@@ -52,6 +52,8 @@ change_lens/
 
 Do not add speculative capability, adapter, or provider folders. Create a folder when its first real implementation is added.
 
+`docs/ai-rules/` is the only versioned documentation. Architecture, decision, evaluation, product, tech-debt, and superpowers material stays local and untracked, so a published repository never carries product design discussion in its files or its history. Those directories are present but empty in a fresh clone; write to them normally and expect them to stay out of every commit. Group decision records by phase, such as `docs/decisions/phase-02/0001-analysis-run-protocol-and-lifecycle.md`.
+
 ## Design Priorities
 
 Apply these principles in priority order:

@@ -1,0 +1,111 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://changelens.dev/contracts/engine-protocol/v1/analysis-poll-run.schema.json",
+  "title": "ChangeLens analysis-poll-run exchange",
+  "oneOf": [
+    { "$ref": "#/$defs/request" },
+    { "$ref": "#/$defs/pollResult" },
+    { "$ref": "https://changelens.dev/contracts/engine-protocol/v1/error-response.schema.json" }
+  ],
+  "$defs": {
+    "request": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["protocolVersion", "requestId", "action", "parameters"],
+      "properties": {
+        "protocolVersion": { "const": 1 },
+        "requestId": { "type": "string", "minLength": 1, "pattern": "\\S" },
+        "action": { "const": "analysis.pollRun" },
+        "parameters": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["runId"],
+          "properties": { "runId": { "$ref": "#/$defs/runId" } }
+        }
+      }
+    },
+    "pollResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["protocolVersion", "type", "requestId", "result"],
+      "properties": {
+        "protocolVersion": { "const": 1 },
+        "type": { "const": "result" },
+        "requestId": { "type": "string", "minLength": 1, "pattern": "\\S" },
+        "result": { "$ref": "#/$defs/runProjection" }
+      }
+    },
+    "runProjection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["runId", "state", "repository", "comparison", "checks", "requestedAt", "captureStartedAt", "capturedAt", "snapshotId", "cancellationRequested", "facts", "terminal", "interruptedAt", "interruptionReason"],
+      "properties": {
+        "runId": { "$ref": "#/$defs/runId" },
+        "state": { "enum": ["pendingCapture", "capturing", "discovering", "collecting", "checking", "persisting", "completed", "completedWithLimitations", "cancelled", "failed", "interrupted"] },
+        "repository": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["repositoryId", "displayName", "canonicalPath", "head"],
+          "properties": {
+            "repositoryId": { "$ref": "#/$defs/guid" },
+            "displayName": { "type": "string", "minLength": 1, "pattern": "\\S" },
+            "canonicalPath": { "type": "string", "minLength": 1, "pattern": "\\S" },
+            "head": { "$ref": "#/$defs/revision" }
+          }
+        },
+        "comparison": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["target", "targetRevision", "freshnessToken"],
+          "properties": {
+            "target": { "$ref": "#/$defs/refName" },
+            "targetRevision": { "$ref": "#/$defs/revision" },
+            "freshnessToken": { "$ref": "#/$defs/token" }
+          }
+        },
+        "checks": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["build", "tests"],
+          "properties": { "build": { "type": "boolean" }, "tests": { "type": "boolean" } }
+        },
+        "requestedAt": { "$ref": "#/$defs/timestamp" },
+        "captureStartedAt": { "anyOf": [{ "$ref": "#/$defs/timestamp" }, { "type": "null" }] },
+        "capturedAt": { "anyOf": [{ "$ref": "#/$defs/timestamp" }, { "type": "null" }] },
+        "snapshotId": { "type": ["string", "null"], "minLength": 1, "pattern": "\\S" },
+        "cancellationRequested": { "type": "boolean" },
+        "facts": {
+          "type": "array",
+          "maxItems": 32,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["kind", "count", "detail"],
+            "properties": {
+              "kind": { "type": "string", "minLength": 1, "maxLength": 64, "pattern": "\\S" },
+              "count": { "type": "integer", "minimum": 0, "maximum": 2147483647 },
+              "detail": { "type": ["string", "null"], "maxLength": 512 }
+            }
+          }
+        },
+        "terminal": { "anyOf": [{ "$ref": "#/$defs/terminal" }, { "type": "null" }] },
+        "interruptedAt": { "anyOf": [{ "$ref": "#/$defs/timestamp" }, { "type": "null" }] },
+        "interruptionReason": { "enum": ["engineStopped", null] }
+      }
+    },
+    "terminal": {
+      "oneOf": [
+        { "type": "object", "additionalProperties": false, "required": ["kind", "terminalAt"], "properties": { "kind": { "const": "completed" }, "terminalAt": { "$ref": "#/$defs/timestamp" } } },
+        { "type": "object", "additionalProperties": false, "required": ["kind", "terminalAt", "limitationCount"], "properties": { "kind": { "const": "completedWithLimitations" }, "terminalAt": { "$ref": "#/$defs/timestamp" }, "limitationCount": { "type": "integer", "minimum": 0 } } },
+        { "type": "object", "additionalProperties": false, "required": ["kind", "terminalAt"], "properties": { "kind": { "const": "cancelled" }, "terminalAt": { "$ref": "#/$defs/timestamp" } } },
+        { "type": "object", "additionalProperties": false, "required": ["kind", "terminalAt", "failureCode"], "properties": { "kind": { "const": "failed" }, "terminalAt": { "$ref": "#/$defs/timestamp" }, "failureCode": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "\\S" } } }
+      ]
+    },
+    "refName": { "type": "string", "minLength": 1, "maxLength": 4096, "pattern": "^refs/(?:heads|remotes)/[^\\u0000]+$" },
+    "token": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "revision": { "type": "string", "pattern": "^(?:[0-9a-f]{40}|[0-9a-f]{64})$" },
+    "guid": { "type": "string", "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$" },
+    "runId": { "type": "string", "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$" },
+    "timestamp": { "type": "integer", "minimum": 0 }
+  }
+}

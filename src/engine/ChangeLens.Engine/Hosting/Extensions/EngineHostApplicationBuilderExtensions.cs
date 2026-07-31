@@ -1,3 +1,4 @@
+using ChangeLens.Core.AnalysisRuns.Interfaces;
 using ChangeLens.Core.Comparisons.Interfaces;
 using ChangeLens.Core.Comparisons.Services;
 using ChangeLens.Core.EngineStatus.Interfaces;
@@ -5,6 +6,9 @@ using ChangeLens.Core.Git.Interfaces;
 using ChangeLens.Core.Git.Services;
 using ChangeLens.Core.LocalState.Interfaces;
 using ChangeLens.Core.LocalState.Services;
+using ChangeLens.Engine.AnalysisRuns.Handlers;
+using ChangeLens.Engine.AnalysisRuns.Interfaces;
+using ChangeLens.Engine.AnalysisRuns.Services;
 using ChangeLens.Engine.Comparisons.Handlers;
 using ChangeLens.Engine.Comparisons.Interfaces;
 using ChangeLens.Engine.Comparisons.Services;
@@ -22,6 +26,7 @@ using ChangeLens.Infrastructure.LocalState.Constants;
 using ChangeLens.Infrastructure.LocalState.Models;
 using ChangeLens.Infrastructure.LocalState.Persistence;
 using ChangeLens.Infrastructure.LocalState.Services;
+using ChangeLens.Infrastructure.AnalysisRuns.Services;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -126,6 +131,19 @@ internal static class EngineHostApplicationBuilderExtensions
         builder.Services.AddScoped<IComparisonTargetPageBuilder, ComparisonTargetPageBuilder>();
     }
 
+    /// <summary>Registers analysis run services.</summary>
+    /// <param name="builder">The host application builder to configure. Cannot be <see langword="null" />.</param>
+    /// <exception cref="ArgumentNullException"><paramref name="builder" /> is <see langword="null" />.</exception>
+    internal static void AddAnalysisRunServices(this HostApplicationBuilder builder)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+
+        builder.Services.AddSingleton<IAnalysisProcessorControl, AnalysisProcessorControl>();
+        builder.Services.AddScoped<IAnalysisRunStore, SqliteAnalysisRunStore>();
+        builder.Services.AddScoped<IAnalysisPipeline, ShallowAnalysisPipeline>();
+        builder.Services.AddScoped<IAnalysisRunCoordinator, AnalysisRunCoordinator>();
+    }
+
     /// <summary>Registers singleton protocol transport services and the protocol host.</summary>
     /// <param name="builder">The host application builder to configure. Cannot be <see langword="null" />.</param>
     /// <exception cref="ArgumentNullException"><paramref name="builder" /> is <see langword="null" />.</exception>
@@ -157,6 +175,10 @@ internal static class EngineHostApplicationBuilderExtensions
         AddActionHandler<PreferenceGetColorThemeHandler>(builder);
         AddActionHandler<PreferenceSetColorThemeHandler>(builder);
         AddActionHandler<EngineCheckStatusHandler>(builder);
+        AddActionHandler<AnalysisStartHandler>(builder);
+        AddActionHandler<AnalysisGetActiveHandler>(builder);
+        AddActionHandler<AnalysisPollRunHandler>(builder);
+        AddActionHandler<AnalysisCancelHandler>(builder);
     }
 
     /// <summary>Registers one action handler under its declared action.</summary>

@@ -36,6 +36,10 @@ public sealed class EngineActionRoutingTests
     [InlineData("engine.checkStatus", true)]
     [InlineData("preferences.getColorTheme", true)]
     [InlineData("preferences.setColorTheme", false)]
+    [InlineData("analysis.start", false)]
+    [InlineData("analysis.getActive", false)]
+    [InlineData("analysis.pollRun", false)]
+    [InlineData("analysis.cancel", false)]
     public async Task EngineRoutesEveryApprovedActionToAnImplementation(string action, bool isPayloadFree)
     {
         using var engine = StartEngine();

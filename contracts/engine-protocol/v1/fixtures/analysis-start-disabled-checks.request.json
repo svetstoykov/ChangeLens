@@ -1,0 +1,1 @@
+{"protocolVersion":1,"requestId":"analysis-start-2","action":"analysis.start","parameters":{"path":"/projects/change_lens","target":"refs/heads/feature/comparison","freshnessToken":"0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef","checks":{"build":false,"tests":false}}}

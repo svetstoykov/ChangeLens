@@ -168,6 +168,7 @@ public sealed class EngineServiceScopeTests
         builder.AddEngineStatusServices();
         builder.AddRepositoryServices();
         builder.AddComparisonServices();
+        builder.AddAnalysisRunServices();
         builder.AddProtocolServices();
         builder.AddActionHandlers();
 

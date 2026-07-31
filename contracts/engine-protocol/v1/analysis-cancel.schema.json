@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://changelens.dev/contracts/engine-protocol/v1/analysis-cancel.schema.json",
+  "title": "ChangeLens analysis-cancel exchange",
+  "oneOf": [
+    { "$ref": "#/$defs/request" },
+    { "$ref": "https://changelens.dev/contracts/engine-protocol/v1/payload-free-result.schema.json" },
+    { "$ref": "https://changelens.dev/contracts/engine-protocol/v1/error-response.schema.json" }
+  ],
+  "$defs": {
+    "request": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["protocolVersion", "requestId", "action", "parameters"],
+      "properties": {
+        "protocolVersion": { "const": 1 },
+        "requestId": { "type": "string", "minLength": 1, "pattern": "\\S" },
+        "action": { "const": "analysis.cancel" },
+        "parameters": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["runId"],
+          "properties": { "runId": { "$ref": "#/$defs/runId" } }
+        }
+      }
+    },
+    "runId": { "type": "string", "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$" }
+  }
+}

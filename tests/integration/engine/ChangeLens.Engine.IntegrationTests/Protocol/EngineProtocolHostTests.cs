@@ -5,6 +5,7 @@ using ChangeLens.Engine.Protocol.Interfaces;
 using ChangeLens.Engine.Protocol.Models;
 using ChangeLens.Engine.Protocol.Services;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
@@ -16,6 +17,34 @@ namespace ChangeLens.Engine.IntegrationTests.Protocol;
 /// </summary>
 public sealed class EngineProtocolHostTests
 {
+    /// <summary>
+    ///     Asynchronously verifies closed protocol input stops the application after the read loop completes.
+    /// </summary>
+    /// <returns>A task that represents the asynchronous operation.</returns>
+    [Fact]
+    public async Task ClosedStandardInputStopsTheApplication()
+    {
+        using var input = new StringReader(string.Empty);
+        using var output = new StringWriter();
+        using var application = Host.CreateApplicationBuilder().Build();
+        var applicationLifetime = application.Services.GetRequiredService<IHostApplicationLifetime>();
+        using var protocolHost = new EngineProtocolHost(
+            new EngineProtocolTransport(
+                input,
+                output,
+                new EngineProtocolSerializer(),
+                NullLogger<EngineProtocolTransport>.Instance),
+            application.Services.GetRequiredService<IServiceScopeFactory>(),
+            NullLogger<EngineProtocolHost>.Instance,
+            applicationLifetime);
+
+        await protocolHost.StartAsync(TestContext.Current.CancellationToken);
+
+        Assert.NotNull(protocolHost.ExecuteTask);
+        await protocolHost.ExecuteTask.WaitAsync(TestContext.Current.CancellationToken);
+        Assert.True(applicationLifetime.ApplicationStopping.IsCancellationRequested);
+    }
+
     /// <summary>
     ///     Asynchronously verifies a known action is dispatched directly to its handler.
     /// </summary>

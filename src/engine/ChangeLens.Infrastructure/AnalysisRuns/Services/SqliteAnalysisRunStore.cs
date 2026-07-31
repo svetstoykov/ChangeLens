@@ -321,7 +321,7 @@ public sealed class SqliteAnalysisRunStore(
 
         if (affected > 0)
         {
-            logger.LogInformation("Startup recovery interrupted {InterruptedCount} run(s) from earlier processor sessions.", affected);
+            logger.LogInformation("Startup recovery interrupted {InterruptedCount} active run(s).", affected);
         }
 
         return affected;

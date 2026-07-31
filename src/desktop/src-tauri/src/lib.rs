@@ -17,6 +17,9 @@ use repositories::{
     select_repository_folder,
 };
 use std::sync::Arc;
+use tauri::Manager;
+
+const PRIMARY_WINDOW_LABEL: &str = "main";
 
 /// Configures the desktop runtime with its explicit commands and injected services.
 pub fn configure_desktop<R: tauri::Runtime>(
@@ -77,12 +80,25 @@ pub fn handle_desktop_run_event(engine_client: &EngineClient, event: &tauri::Run
     }
 }
 
+fn focus_primary_window<R: tauri::Runtime>(app_handle: &tauri::AppHandle<R>) {
+    let Some(window) = app_handle.get_webview_window(PRIMARY_WINDOW_LABEL) else {
+        return;
+    };
+
+    let _ = window.unminimize();
+    let _ = window.set_focus();
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let engine_client = Arc::new(EngineClient::new());
 
     let app = configure_desktop_with_preferences(
-        tauri::Builder::default(),
+        tauri::Builder::default().plugin(tauri_plugin_single_instance::init(
+            |app_handle, _arguments, _working_directory| {
+                focus_primary_window(app_handle);
+            },
+        )),
         EngineStatusState::new(engine_client.clone()),
         RepositoryState::new(engine_client.clone()),
         RepositoryFolderPickerState::new(Arc::new(NativeRepositoryFolderPicker)),

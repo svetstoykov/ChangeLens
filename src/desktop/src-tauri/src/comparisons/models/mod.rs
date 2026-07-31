@@ -137,7 +137,10 @@ mod tests {
                 remote_revision: "89abcdef0123456789abcdef0123456789abcdef".to_owned()
             }
         );
-        assert_eq!(remote_baseline_no_remote, ComparisonRemoteBaseline::NoRemote);
+        assert_eq!(
+            remote_baseline_no_remote,
+            ComparisonRemoteBaseline::NoRemote
+        );
         assert_eq!(
             remote_baseline_refresh.remote_revision,
             "89abcdef0123456789abcdef0123456789abcdef"

@@ -62,7 +62,8 @@ struct FixedComparisonService {
     prepare_result: Result<PreparedComparison, EngineActionError>,
     freshness_result: Result<ComparisonFreshness, EngineActionError>,
     remote_baseline_result: Result<ComparisonRemoteBaseline, EngineActionError>,
-    refresh_remote_baseline_result: Result<ComparisonRefreshRemoteBaselineResult, EngineActionError>,
+    refresh_remote_baseline_result:
+        Result<ComparisonRefreshRemoteBaselineResult, EngineActionError>,
     panic_on_call: bool,
 }
 
@@ -456,7 +457,10 @@ fn comparison_refresh_remote_baseline_forwards_exact_camel_case_arguments_and_su
     )
     .expect("the refreshed remote-baseline result should be returned");
 
-    assert_eq!(response, serde_json::json!({ "remoteRevision": REMOTE_REVISION }));
+    assert_eq!(
+        response,
+        serde_json::json!({ "remoteRevision": REMOTE_REVISION })
+    );
 
     let calls = calls
         .lock()
@@ -851,7 +855,10 @@ fn fixed_comparison_service(
     prepare_result: Result<PreparedComparison, EngineActionError>,
     freshness_result: Result<ComparisonFreshness, EngineActionError>,
     remote_baseline_result: Result<ComparisonRemoteBaseline, EngineActionError>,
-    refresh_remote_baseline_result: Result<ComparisonRefreshRemoteBaselineResult, EngineActionError>,
+    refresh_remote_baseline_result: Result<
+        ComparisonRefreshRemoteBaselineResult,
+        EngineActionError,
+    >,
     panic_on_call: bool,
 ) -> Arc<dyn ComparisonService> {
     Arc::new(FixedComparisonService {

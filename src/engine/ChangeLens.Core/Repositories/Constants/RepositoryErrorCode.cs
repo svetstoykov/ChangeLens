@@ -39,4 +39,9 @@ public static class RepositoryErrorCode
     ///     Repository inspection failed without a more specific known reason.
     /// </summary>
     public const string InspectionFailed = "repository.inspectionFailed";
+
+    /// <summary>
+    ///     An active analysis run reserves the repository, so the requested action cannot proceed.
+    /// </summary>
+    public const string Busy = "repository.busy";
 }

@@ -21,13 +21,12 @@ public interface IGitComparisonFreshnessChecker
     ///     A <see cref="CancellationToken" /> to observe while waiting for the task to complete.
     /// </param>
     /// <returns>
-    ///     A task that represents the asynchronous operation. The task result contains whether the prepared
-    ///     comparison remains current.
+    ///     A task that represents the asynchronous operation. The task result contains the resolved freshness check.
     /// </returns>
     /// <exception cref="OperationCanceledException">
     ///     The <paramref name="cancellationToken" /> is canceled.
     /// </exception>
-    Task<Result<ComparisonFreshnessState>> CheckAsync(
+    Task<Result<ComparisonFreshnessCheck>> CheckAsync(
         string? path,
         string? target,
         string? freshnessToken,

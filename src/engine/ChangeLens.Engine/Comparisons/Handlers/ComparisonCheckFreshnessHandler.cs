@@ -53,7 +53,7 @@ internal sealed class ComparisonCheckFreshnessHandler(
                 Result.ErrorFromResult<ComparisonFreshnessResult>(freshnessResult));
         }
 
-        var result = freshnessResult.Data switch
+        var result = freshnessResult.Data!.State switch
         {
             ComparisonFreshnessState.Current =>
                 Result.Success<ComparisonFreshnessResult>(new CurrentComparisonFreshnessResult()),

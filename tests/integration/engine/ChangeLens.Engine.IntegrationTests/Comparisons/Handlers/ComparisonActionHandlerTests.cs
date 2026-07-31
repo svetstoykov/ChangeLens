@@ -31,7 +31,8 @@ public sealed class ComparisonActionHandlerTests
     public async Task UnapprovedFreshnessStateReturnsWarningInternalError()
     {
         var handler = new ComparisonCheckFreshnessHandler(
-            new StubGitComparisonFreshnessChecker((ComparisonFreshnessState)int.MaxValue),
+            new StubGitComparisonFreshnessChecker(
+                new ComparisonFreshnessCheck((ComparisonFreshnessState)int.MaxValue, null, null)),
             new EngineProtocolSerializer());
         var services = new ServiceCollection();
         services.AddKeyedScoped(

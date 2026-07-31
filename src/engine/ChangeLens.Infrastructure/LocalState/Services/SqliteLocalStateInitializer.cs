@@ -32,6 +32,18 @@ public sealed class SqliteLocalStateInitializer(
             Directory.CreateDirectory(paths.DirectoryPath);
             await context.Database.MigrateAsync(cancellationToken);
 
+            await context.Database.ExecuteSqlRawAsync("PRAGMA journal_mode=WAL;", cancellationToken);
+            var journalMode = (await context.Database
+                .SqlQueryRaw<string>("PRAGMA journal_mode;")
+                .ToListAsync(cancellationToken))
+                .FirstOrDefault();
+
+            if (!string.Equals(journalMode, "wal", StringComparison.OrdinalIgnoreCase))
+            {
+                logger.LogCritical("Local-state failed to enable write-ahead logging; reported mode was {JournalMode}.", journalMode);
+                return LocalStateFailure.Unavailable();
+            }
+
             logger.LogInformation(
                 "Local state is ready at schema version {SchemaVersion}.",
                 LocalStateConstants.CurrentSchemaVersion);

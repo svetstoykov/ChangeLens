@@ -69,11 +69,6 @@ internal sealed class AnalysisRunEntity
     public bool TestsEnabled { get; set; }
 
     /// <summary>
-    ///     Gets or sets the identifier of the processor session that claimed this run.
-    /// </summary>
-    public Guid ProcessorSessionId { get; set; }
-
-    /// <summary>
     ///     Gets or sets the durable lifecycle state.
     /// </summary>
     public AnalysisRunState State { get; set; }

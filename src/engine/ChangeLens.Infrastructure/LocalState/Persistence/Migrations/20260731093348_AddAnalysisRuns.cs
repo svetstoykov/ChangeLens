@@ -26,7 +26,6 @@ namespace ChangeLens.Infrastructure.LocalState.Persistence.Migrations
                     change_context = table.Column<string>(type: "TEXT", nullable: true),
                     build_enabled = table.Column<bool>(type: "INTEGER", nullable: false),
                     tests_enabled = table.Column<bool>(type: "INTEGER", nullable: false),
-                    processor_session_id = table.Column<string>(type: "TEXT", nullable: false),
                     state = table.Column<string>(type: "TEXT", nullable: false),
                     requested_at_unix_ms = table.Column<long>(type: "INTEGER", nullable: false),
                     capture_started_at_unix_ms = table.Column<long>(type: "INTEGER", nullable: true),

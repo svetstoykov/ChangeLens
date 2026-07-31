@@ -75,11 +75,6 @@ namespace ChangeLens.Infrastructure.LocalState.Persistence.Migrations
                         .HasColumnType("TEXT")
                         .HasColumnName("interruption_reason");
 
-                    b.Property<string>("ProcessorSessionId")
-                        .IsRequired()
-                        .HasColumnType("TEXT")
-                        .HasColumnName("processor_session_id");
-
                     b.Property<string>("RepositoryDisplayName")
                         .IsRequired()
                         .HasColumnType("TEXT")

@@ -12,7 +12,6 @@ namespace ChangeLens.Core.AnalysisRuns.Models;
 /// <param name="FreshnessToken">The accepted freshness token. Cannot be <see langword="null" />.</param>
 /// <param name="Checks">The immutable accepted deterministic check selection. Cannot be <see langword="null" />.</param>
 /// <param name="ChangeContext">The optional developer-supplied change context, or <see langword="null" />.</param>
-/// <param name="ProcessorSessionId">The accepting processor-session identifier.</param>
 /// <param name="RequestedAtUnixMilliseconds">The acceptance timestamp.</param>
 public sealed record AnalysisRunAcceptance(
     string CanonicalRepositoryPathKey,
@@ -24,5 +23,4 @@ public sealed record AnalysisRunAcceptance(
     string FreshnessToken,
     AnalysisCheckSelection Checks,
     string? ChangeContext,
-    Guid ProcessorSessionId,
     long RequestedAtUnixMilliseconds);

@@ -110,7 +110,6 @@ public sealed class AnalysisRunPersistenceTests
             FreshnessToken = "freshness-token",
             BuildEnabled = true,
             TestsEnabled = true,
-            ProcessorSessionId = Guid.NewGuid(),
             State = state,
             RequestedAtUnixMilliseconds = 100,
             TerminalAtUnixMilliseconds = isTerminal ? 200 : null,

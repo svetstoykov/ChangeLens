@@ -65,7 +65,6 @@ public sealed class SqliteAnalysisRunStore(
             ChangeContext = acceptance.ChangeContext,
             BuildEnabled = acceptance.Checks.Build,
             TestsEnabled = acceptance.Checks.Tests,
-            ProcessorSessionId = acceptance.ProcessorSessionId,
             State = AnalysisRunState.PendingCapture,
             RequestedAtUnixMilliseconds = acceptance.RequestedAtUnixMilliseconds,
         };
@@ -128,14 +127,13 @@ public sealed class SqliteAnalysisRunStore(
     }
 
     /// <inheritdoc />
-    public async Task<Result<AnalysisRunClaim?>> ClaimNextPendingAsync(Guid processorSessionId, CancellationToken cancellationToken)
+    public async Task<Result<AnalysisRunClaim?>> ClaimNextPendingAsync(CancellationToken cancellationToken)
     {
         var claimTimestamp = timeProvider.GetUtcNow().ToUnixTimeMilliseconds();
         await using var transaction = await context.Database.BeginTransactionAsync(cancellationToken);
 
         var candidate = await context.AnalysisRuns
             .Where(run => run.State == AnalysisRunState.PendingCapture)
-            .Where(run => run.ProcessorSessionId == processorSessionId)
             .Where(run => run.CancellationRequestedAtUnixMilliseconds == null)
             .OrderBy(run => run.RequestedAtUnixMilliseconds)
             .ThenBy(run => run.RunId)
@@ -160,7 +158,7 @@ public sealed class SqliteAnalysisRunStore(
             return (AnalysisRunClaim?)null;
         }
 
-        logger.LogInformation("Claimed analysis run {RunId} for processor session {ProcessorSessionId}.", candidate.RunId, processorSessionId);
+        logger.LogInformation("Claimed analysis run {RunId}.", candidate.RunId);
         return new AnalysisRunClaim(candidate.RunId, new AnalysisCheckSelection(candidate.BuildEnabled, candidate.TestsEnabled));
     }
 
@@ -292,12 +290,10 @@ public sealed class SqliteAnalysisRunStore(
 
     /// <inheritdoc />
     public async Task<Result<int>> FinalizeCancelledPendingRunsAsync(
-        Guid processorSessionId,
         long atUnixMilliseconds,
         CancellationToken cancellationToken)
     {
         var affected = await context.AnalysisRuns
-            .Where(run => run.ProcessorSessionId == processorSessionId)
             .Where(run => run.State == AnalysisRunState.PendingCapture)
             .Where(run => run.CancellationRequestedAtUnixMilliseconds != null)
             .ExecuteUpdateAsync(
@@ -310,13 +306,11 @@ public sealed class SqliteAnalysisRunStore(
     }
 
     /// <inheritdoc />
-    public async Task<Result<int>> InterruptEarlierSessionRowsAsync(
-        Guid currentProcessorSessionId,
+    public async Task<Result<int>> InterruptActiveRunsAsync(
         long atUnixMilliseconds,
         CancellationToken cancellationToken)
     {
         var affected = await context.AnalysisRuns
-            .Where(run => run.ProcessorSessionId != currentProcessorSessionId)
             .Where(run => ActiveStates.Contains(run.State))
             .ExecuteUpdateAsync(
                 setters => setters

@@ -1,3 +1,4 @@
+using ChangeLens.Core.AnalysisRuns.Constants;
 using ChangeLens.Core.AnalysisRuns.Models;
 using ChangeLens.Infrastructure.IntegrationTests.AnalysisRuns.Support;
 using Xunit;
@@ -55,10 +56,10 @@ public sealed class SqliteAnalysisRunStoreTests
 
     /// <summary>
     ///     Verifies that claiming the next pending run selects deterministically by requested-at timestamp then
-    ///     run identifier, and that the claim is owned by the requesting processor session.
+    ///     run identifier.
     /// </summary>
     [Fact]
-    public async Task ClaimIsDeterministicByRequestedAtThenRunIdAndOwnedByCurrentSession()
+    public async Task ClaimIsDeterministicByRequestedAtThenRunId()
     {
         await using var fixture = await AnalysisRunStoreTestFixture.CreateAsync();
         await fixture.SeedRepositoryAsync("/repository-a");
@@ -68,7 +69,7 @@ public sealed class SqliteAnalysisRunStoreTests
         await fixture.Store.CreateOrReturnActiveAsync(later, TestContext.Current.CancellationToken);
         await fixture.Store.CreateOrReturnActiveAsync(earlier, TestContext.Current.CancellationToken);
 
-        var claim = await fixture.Store.ClaimNextPendingAsync(fixture.ProcessorSessionId, TestContext.Current.CancellationToken);
+        var claim = await fixture.Store.ClaimNextPendingAsync(TestContext.Current.CancellationToken);
 
         Assert.NotNull(claim.Data);
         var claimedRun = await fixture.GetRunAsync(claim.Data!.RunId);
@@ -76,20 +77,22 @@ public sealed class SqliteAnalysisRunStoreTests
     }
 
     /// <summary>
-    ///     Verifies that claiming the next pending run ignores rows accepted under a different processor session.
+    ///     Verifies that claiming the next pending run transitions the selected row to the capturing state.
     /// </summary>
     [Fact]
-    public async Task ClaimIgnoresRowsOwnedByAnotherProcessorSession()
+    public async Task ClaimTransitionsTheRowToCapturing()
     {
         await using var fixture = await AnalysisRunStoreTestFixture.CreateAsync();
-        var otherSessionId = Guid.NewGuid();
         await fixture.Store.CreateOrReturnActiveAsync(
-            fixture.Acceptance(processorSessionId: otherSessionId),
+            fixture.Acceptance(),
             TestContext.Current.CancellationToken);
 
-        var claim = await fixture.Store.ClaimNextPendingAsync(fixture.ProcessorSessionId, TestContext.Current.CancellationToken);
+        var claim = await fixture.Store.ClaimNextPendingAsync(TestContext.Current.CancellationToken);
 
-        Assert.Null(claim.Data);
+        Assert.NotNull(claim.Data);
+        var claimedRun = await fixture.GetRunAsync(claim.Data!.RunId);
+        Assert.Equal(AnalysisRunState.Capturing, claimedRun.State);
+        Assert.NotNull(claimedRun.CaptureStartedAtUnixMilliseconds);
     }
 
     /// <summary>
@@ -101,7 +104,7 @@ public sealed class SqliteAnalysisRunStoreTests
     {
         await using var fixture = await AnalysisRunStoreTestFixture.CreateAsync();
         var runId = await fixture.CreateAcceptedRunAsync();
-        var claim = await fixture.Store.ClaimNextPendingAsync(fixture.ProcessorSessionId, TestContext.Current.CancellationToken);
+        var claim = await fixture.Store.ClaimNextPendingAsync(TestContext.Current.CancellationToken);
         var plan = new[]
         {
             new AnalysisRunStepPlanEntry("analysis.lifecycle.capture", "engine", "lifecycle", 0, AnalysisStage.Capturing),
@@ -217,10 +220,9 @@ public sealed class SqliteAnalysisRunStoreTests
         await fixture.Store.RequestCancellationAsync(runId, 4_000, TestContext.Current.CancellationToken);
 
         var finalizedCount = await fixture.Store.FinalizeCancelledPendingRunsAsync(
-            fixture.ProcessorSessionId,
             6_000,
             TestContext.Current.CancellationToken);
-        var claim = await fixture.Store.ClaimNextPendingAsync(fixture.ProcessorSessionId, TestContext.Current.CancellationToken);
+        var claim = await fixture.Store.ClaimNextPendingAsync(TestContext.Current.CancellationToken);
 
         Assert.Equal(1, finalizedCount.Data);
         Assert.Null(claim.Data);
@@ -230,28 +232,32 @@ public sealed class SqliteAnalysisRunStoreTests
     }
 
     /// <summary>
-    ///     Verifies that startup recovery interrupts every active row owned by an earlier processor session while
-    ///     leaving the current session's own active run untouched.
+    ///     Verifies that startup recovery interrupts every active row and releases each repository reservation.
     /// </summary>
     [Fact]
-    public async Task EarlierSessionInterruptionReleasesReservationAndSkipsCurrentSession()
+    public async Task StartupInterruptionMarksEveryActiveRowAndReleasesItsReservation()
     {
         await using var fixture = await AnalysisRunStoreTestFixture.CreateAsync();
-        var currentSessionRunId = await fixture.CreateAcceptedRunAsync();
-        var earlierSessionId = Guid.NewGuid();
-        await fixture.SeedRepositoryAsync("/repository-earlier");
+        var orphanedRunId = await fixture.CreateAcceptedRunAsync();
+        await fixture.SeedRepositoryAsync("/repository-second");
         await fixture.Store.CreateOrReturnActiveAsync(
-            fixture.Acceptance("/repository-earlier", processorSessionId: earlierSessionId),
+            fixture.Acceptance("/repository-second"),
             TestContext.Current.CancellationToken);
 
-        var interruptedCount = await fixture.Store.InterruptEarlierSessionRowsAsync(
-            fixture.ProcessorSessionId,
+        var interruptedCount = await fixture.Store.InterruptActiveRunsAsync(
             20_000,
             TestContext.Current.CancellationToken);
 
-        Assert.Equal(1, interruptedCount.Data);
-        var currentRun = await fixture.GetRunAsync(currentSessionRunId);
-        Assert.Equal(AnalysisRunState.PendingCapture, currentRun.State);
+        Assert.Equal(2, interruptedCount.Data);
+        var orphanedRun = await fixture.GetRunAsync(orphanedRunId);
+        Assert.Equal(AnalysisRunState.Interrupted, orphanedRun.State);
+        Assert.Equal(20_000, orphanedRun.InterruptedAtUnixMilliseconds);
+        Assert.Equal(AnalysisInterruptionReason.EngineStopped, orphanedRun.InterruptionReason);
+
+        var reaccepted = await fixture.Store.CreateOrReturnActiveAsync(
+            fixture.Acceptance(),
+            TestContext.Current.CancellationToken);
+        Assert.Equal(AnalysisStartOutcomeKind.Accepted, reaccepted.Data!.Kind);
     }
 
     /// <summary>

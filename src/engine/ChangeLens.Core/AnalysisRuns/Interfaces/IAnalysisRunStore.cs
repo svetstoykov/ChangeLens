@@ -39,13 +39,11 @@ public interface IAnalysisRunStore
     Task<Result<AnalysisRunDetail?>> GetActiveByRepositoryAsync(string canonicalRepositoryPathKey, CancellationToken cancellationToken);
 
     /// <summary>
-    ///     Asynchronously and atomically claims the oldest current-session pending run, up to the configured
-    ///     processing bound.
+    ///     Asynchronously and atomically claims the oldest pending run that carries no durable cancellation request.
     /// </summary>
-    /// <param name="processorSessionId">The current processor-session identifier.</param>
     /// <param name="cancellationToken">A <see cref="CancellationToken" /> to observe while waiting for the task.</param>
     /// <returns>A task whose result contains the claimed run, or <see langword="null" /> when none is claimable.</returns>
-    Task<Result<AnalysisRunClaim?>> ClaimNextPendingAsync(Guid processorSessionId, CancellationToken cancellationToken);
+    Task<Result<AnalysisRunClaim?>> ClaimNextPendingAsync(CancellationToken cancellationToken);
 
     /// <summary>
     ///     Asynchronously establishes the deterministic step plan for a claimed run.
@@ -116,22 +114,23 @@ public interface IAnalysisRunStore
 
     /// <summary>
     ///     Asynchronously and conditionally commits <see cref="AnalysisRunState.Cancelled" /> for every pending run
-    ///     owned by the current processor session that already carries a durable cancellation request, without
-    ///     claiming or running them.
+    ///     that already carries a durable cancellation request, without claiming or running them.
     /// </summary>
-    /// <param name="processorSessionId">The current processor-session identifier.</param>
     /// <param name="atUnixMilliseconds">The terminal timestamp.</param>
     /// <param name="cancellationToken">A <see cref="CancellationToken" /> to observe while waiting for the task.</param>
     /// <returns>A task whose result contains the number of rows finalized.</returns>
-    Task<Result<int>> FinalizeCancelledPendingRunsAsync(Guid processorSessionId, long atUnixMilliseconds, CancellationToken cancellationToken);
+    Task<Result<int>> FinalizeCancelledPendingRunsAsync(long atUnixMilliseconds, CancellationToken cancellationToken);
 
     /// <summary>
-    ///     Asynchronously marks every active row owned by a different processor session as
-    ///     <see cref="AnalysisRunState.Interrupted" />.
+    ///     Asynchronously marks every still-active row as <see cref="AnalysisRunState.Interrupted" /> during processor startup.
     /// </summary>
-    /// <param name="currentProcessorSessionId">The starting processor's own session identifier.</param>
+    /// <remarks>
+    ///     Correct only because exactly one engine process owns the local-state database at a time, so every active row
+    ///     observed before this process starts processing is an orphan of an earlier process. Call this once, from
+    ///     <c>AnalysisProcessorHost.StartAsync</c>, before the protocol host begins reading requests.
+    /// </remarks>
     /// <param name="atUnixMilliseconds">The interruption timestamp.</param>
     /// <param name="cancellationToken">A <see cref="CancellationToken" /> to observe while waiting for the task.</param>
     /// <returns>A task whose result contains the number of rows interrupted.</returns>
-    Task<Result<int>> InterruptEarlierSessionRowsAsync(Guid currentProcessorSessionId, long atUnixMilliseconds, CancellationToken cancellationToken);
+    Task<Result<int>> InterruptActiveRunsAsync(long atUnixMilliseconds, CancellationToken cancellationToken);
 }

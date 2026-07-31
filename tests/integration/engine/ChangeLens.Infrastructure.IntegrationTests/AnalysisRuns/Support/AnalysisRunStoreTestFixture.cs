@@ -26,7 +26,6 @@ internal sealed class AnalysisRunStoreTestFixture : IAsyncDisposable
     {
         this._temporaryDirectory = temporaryDirectory;
         this.Context = context;
-        this.ProcessorSessionId = Guid.NewGuid();
         this.Store = new SqliteAnalysisRunStore(context, TimeProvider.System, NullLogger<SqliteAnalysisRunStore>.Instance);
     }
 
@@ -34,11 +33,6 @@ internal sealed class AnalysisRunStoreTestFixture : IAsyncDisposable
     ///     Gets the store under test.
     /// </summary>
     public SqliteAnalysisRunStore Store { get; }
-
-    /// <summary>
-    ///     Gets the processor-session identifier used by <see cref="Acceptance" /> unless overridden.
-    /// </summary>
-    public Guid ProcessorSessionId { get; }
 
     private ChangeLensLocalStateDbContext Context { get; }
 
@@ -90,14 +84,10 @@ internal sealed class AnalysisRunStoreTestFixture : IAsyncDisposable
     /// <param name="canonicalPath">
     ///     The canonical path of the seeded repository, or <see langword="null" /> to use the default repository.
     /// </param>
-    /// <param name="processorSessionId">
-    ///     The accepting processor-session identifier, or <see langword="null" /> to use <see cref="ProcessorSessionId" />.
-    /// </param>
     /// <param name="requestedAtUnixMilliseconds">The acceptance timestamp.</param>
     /// <returns>A valid acceptance request.</returns>
     public AnalysisRunAcceptance Acceptance(
         string? canonicalPath = null,
-        Guid? processorSessionId = null,
         long requestedAtUnixMilliseconds = 1_000) =>
         new(
             canonicalPath ?? DefaultCanonicalPath,
@@ -109,7 +99,6 @@ internal sealed class AnalysisRunStoreTestFixture : IAsyncDisposable
             "freshness-token",
             new AnalysisCheckSelection(true, true),
             null,
-            processorSessionId ?? this.ProcessorSessionId,
             requestedAtUnixMilliseconds);
 
     /// <summary>

@@ -123,7 +123,6 @@ public sealed class ChangeLensLocalStateDbContext(
             entity.Property(run => run.ChangeContext).HasColumnName("change_context");
             entity.Property(run => run.BuildEnabled).HasColumnName("build_enabled");
             entity.Property(run => run.TestsEnabled).HasColumnName("tests_enabled");
-            entity.Property(run => run.ProcessorSessionId).HasColumnName("processor_session_id").HasConversion<string>();
             entity.Property(run => run.State).HasColumnName("state").HasConversion<AnalysisRunStateValueConverter>();
             entity.Property(run => run.RequestedAtUnixMilliseconds).HasColumnName("requested_at_unix_ms");
             entity.Property(run => run.CaptureStartedAtUnixMilliseconds).HasColumnName("capture_started_at_unix_ms");

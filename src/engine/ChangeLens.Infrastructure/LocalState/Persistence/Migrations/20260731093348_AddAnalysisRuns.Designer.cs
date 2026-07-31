@@ -10,7 +10,7 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace ChangeLens.Infrastructure.LocalState.Persistence.Migrations
 {
     [DbContext(typeof(ChangeLensLocalStateDbContext))]
-    [Migration("20260730182924_AddAnalysisRuns")]
+    [Migration("20260731093348_AddAnalysisRuns")]
     partial class AddAnalysisRuns
     {
         /// <inheritdoc />
@@ -77,11 +77,6 @@ namespace ChangeLens.Infrastructure.LocalState.Persistence.Migrations
                     b.Property<string>("InterruptionReason")
                         .HasColumnType("TEXT")
                         .HasColumnName("interruption_reason");
-
-                    b.Property<string>("ProcessorSessionId")
-                        .IsRequired()
-                        .HasColumnType("TEXT")
-                        .HasColumnName("processor_session_id");
 
                     b.Property<string>("RepositoryDisplayName")
                         .IsRequired()

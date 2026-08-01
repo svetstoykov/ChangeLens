@@ -26,7 +26,7 @@ public sealed class GitComparisonFreshnessCheckerIntegrationTests
         var result = await CheckWithoutMutationAsync(repository, prepared);
 
         Assert.True(result.IsSuccess);
-        Assert.Equal(ComparisonFreshnessState.Current, result.Data);
+        Assert.Equal(ComparisonFreshnessState.Current, result.Data!.State);
     }
 
     /// <summary>
@@ -59,7 +59,7 @@ public sealed class GitComparisonFreshnessCheckerIntegrationTests
         var result = await CheckWithoutMutationAsync(repository, prepared);
 
         Assert.True(result.IsSuccess);
-        Assert.Equal(ComparisonFreshnessState.Stale, result.Data);
+        Assert.Equal(ComparisonFreshnessState.Stale, result.Data!.State);
     }
 
     /// <summary>
@@ -76,7 +76,7 @@ public sealed class GitComparisonFreshnessCheckerIntegrationTests
         var result = await CheckWithoutMutationAsync(repository, prepared);
 
         Assert.True(result.IsSuccess);
-        Assert.Equal(ComparisonFreshnessState.Stale, result.Data);
+        Assert.Equal(ComparisonFreshnessState.Stale, result.Data!.State);
     }
 
     /// <summary>
@@ -107,7 +107,7 @@ public sealed class GitComparisonFreshnessCheckerIntegrationTests
         var result = await CheckWithoutMutationAsync(repository, prepared);
 
         Assert.True(result.IsSuccess);
-        Assert.Equal(ComparisonFreshnessState.Stale, result.Data);
+        Assert.Equal(ComparisonFreshnessState.Stale, result.Data!.State);
     }
 
     /// <summary>
@@ -125,7 +125,7 @@ public sealed class GitComparisonFreshnessCheckerIntegrationTests
         var result = await CheckWithoutMutationAsync(repository, prepared);
 
         Assert.True(result.IsSuccess);
-        Assert.Equal(ComparisonFreshnessState.Current, result.Data);
+        Assert.Equal(ComparisonFreshnessState.Current, result.Data!.State);
     }
 
     /// <summary>
@@ -146,7 +146,7 @@ public sealed class GitComparisonFreshnessCheckerIntegrationTests
         var result = await CheckWithoutMutationAsync(repository, prepared);
 
         Assert.True(result.IsSuccess);
-        Assert.Equal(ComparisonFreshnessState.Stale, result.Data);
+        Assert.Equal(ComparisonFreshnessState.Stale, result.Data!.State);
     }
 
     private static async Task<PreparedComparison> PrepareAsync(TemporaryGitRepository repository)
@@ -160,7 +160,7 @@ public sealed class GitComparisonFreshnessCheckerIntegrationTests
         return result.Data!;
     }
 
-    private static async Task<ChangeLens.Core.Results.Models.Result<ComparisonFreshnessState>>
+    private static async Task<ChangeLens.Core.Results.Models.Result<ComparisonFreshnessCheck>>
         CheckWithoutMutationAsync(
             TemporaryGitRepository repository,
             PreparedComparison prepared)

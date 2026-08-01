@@ -6,6 +6,7 @@ import { TauriRepositoryClient } from "./Repositories/Services/TauriRepositoryCl
 import { TauriRepositoryHistoryClient } from "./Repositories/Services/TauriRepositoryHistoryClient";
 import { TauriRepositoryFolderPicker } from "./Repositories/Services/TauriRepositoryFolderPicker";
 import { TauriComparisonClient } from "./Comparisons/Services/TauriComparisonClient";
+import { TauriAnalysisClient } from "./Analysis/Services/TauriAnalysisClient";
 import { initializeColorTheme } from "./Visuals/Services/colorThemePreference";
 import { TauriColorThemePreferenceClient } from "./Visuals/Services/TauriColorThemePreferenceClient";
 import "@fontsource/ibm-plex-sans/400.css";
@@ -27,6 +28,7 @@ const repositoryClient = new TauriRepositoryClient();
 const repositoryHistoryClient = new TauriRepositoryHistoryClient();
 const repositoryFolderPicker = new TauriRepositoryFolderPicker();
 const comparisonClient = new TauriComparisonClient();
+const analysisClient = new TauriAnalysisClient();
 const colorThemePreferenceClient = new TauriColorThemePreferenceClient();
 
 createRoot(rootElement).render(
@@ -37,6 +39,7 @@ createRoot(rootElement).render(
       repositoryHistoryClient={repositoryHistoryClient}
       repositoryFolderPicker={repositoryFolderPicker}
       comparisonClient={comparisonClient}
+      analysisClient={analysisClient}
       colorThemePreferenceClient={colorThemePreferenceClient}
     />
   </StrictMode>,

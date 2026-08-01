@@ -1,3 +1,4 @@
+use changelens_desktop_lib::analysis::AnalysisState;
 use changelens_desktop_lib::comparisons::{
     ComparisonFreshness, ComparisonReadiness, ComparisonRefreshRemoteBaselineResult,
     ComparisonRemoteBaseline, ComparisonService, ComparisonState, ComparisonTarget,
@@ -5,7 +6,7 @@ use changelens_desktop_lib::comparisons::{
 };
 use changelens_desktop_lib::configure_desktop;
 use changelens_desktop_lib::engine_protocol::{
-    ActionErrorDetail, ActionErrorKind, EngineActionError, OperationErrorType,
+    ActionErrorDetail, ActionErrorKind, EngineActionError, EngineClient, OperationErrorType,
 };
 use changelens_desktop_lib::engine_status::{EngineStatusService, EngineStatusState};
 use changelens_desktop_lib::repositories::{
@@ -62,7 +63,8 @@ struct FixedComparisonService {
     prepare_result: Result<PreparedComparison, EngineActionError>,
     freshness_result: Result<ComparisonFreshness, EngineActionError>,
     remote_baseline_result: Result<ComparisonRemoteBaseline, EngineActionError>,
-    refresh_remote_baseline_result: Result<ComparisonRefreshRemoteBaselineResult, EngineActionError>,
+    refresh_remote_baseline_result:
+        Result<ComparisonRefreshRemoteBaselineResult, EngineActionError>,
     panic_on_call: bool,
 }
 
@@ -456,7 +458,10 @@ fn comparison_refresh_remote_baseline_forwards_exact_camel_case_arguments_and_su
     )
     .expect("the refreshed remote-baseline result should be returned");
 
-    assert_eq!(response, serde_json::json!({ "remoteRevision": REMOTE_REVISION }));
+    assert_eq!(
+        response,
+        serde_json::json!({ "remoteRevision": REMOTE_REVISION })
+    );
 
     let calls = calls
         .lock()
@@ -794,6 +799,7 @@ fn invoke_command(
         RepositoryState::new(Arc::new(UnusedRepositoryService)),
         RepositoryFolderPickerState::new(Arc::new(UnusedRepositoryFolderPicker)),
         ComparisonState::new(comparison_service),
+        AnalysisState::new(Arc::new(EngineClient::new())),
     )
     .build(mock_context(noop_assets()))
     .expect("the test desktop application should build");
@@ -851,7 +857,10 @@ fn fixed_comparison_service(
     prepare_result: Result<PreparedComparison, EngineActionError>,
     freshness_result: Result<ComparisonFreshness, EngineActionError>,
     remote_baseline_result: Result<ComparisonRemoteBaseline, EngineActionError>,
-    refresh_remote_baseline_result: Result<ComparisonRefreshRemoteBaselineResult, EngineActionError>,
+    refresh_remote_baseline_result: Result<
+        ComparisonRefreshRemoteBaselineResult,
+        EngineActionError,
+    >,
     panic_on_call: bool,
 ) -> Arc<dyn ComparisonService> {
     Arc::new(FixedComparisonService {

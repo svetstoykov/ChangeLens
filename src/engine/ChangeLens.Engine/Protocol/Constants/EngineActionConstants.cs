@@ -1,5 +1,6 @@
 using ChangeLens.Engine.Comparisons.Constants;
 using ChangeLens.Engine.EngineStatus.Constants;
+using ChangeLens.Engine.AnalysisRuns.Constants;
 using ChangeLens.Engine.Preferences.Constants;
 using ChangeLens.Engine.Repositories.Constants;
 
@@ -27,5 +28,9 @@ internal static class EngineActionConstants
         PreferenceActionConstants.GetColorThemeAction,
         PreferenceActionConstants.SetColorThemeAction,
         EngineStatusActionConstants.CheckStatusAction,
+        AnalysisActionConstants.StartAction,
+        AnalysisActionConstants.GetActiveAction,
+        AnalysisActionConstants.PollRunAction,
+        AnalysisActionConstants.CancelAction,
     ];
 }

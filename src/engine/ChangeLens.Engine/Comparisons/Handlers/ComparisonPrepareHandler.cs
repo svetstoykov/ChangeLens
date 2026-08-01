@@ -2,6 +2,7 @@ using System.Text.Json;
 using ChangeLens.Core.Comparisons.Interfaces;
 using ChangeLens.Core.LocalState.Interfaces;
 using ChangeLens.Core.Results.Models;
+using ChangeLens.Core.AnalysisRuns.Interfaces;
 using ChangeLens.Engine.Comparisons.Constants;
 using ChangeLens.Engine.Comparisons.Models;
 using ChangeLens.Engine.Protocol.Interfaces;
@@ -22,10 +23,12 @@ namespace ChangeLens.Engine.Comparisons.Handlers;
 ///         the prepared result so the client never sees a result the engine did not retain.
 ///     </para>
 /// </remarks>
+/// <param name="busyGuard">The repository-busy guard. Cannot be <see langword="null" />.</param>
 /// <param name="comparisonPreparer">The comparison-preparation capability. Cannot be <see langword="null" />.</param>
 /// <param name="repositoryHistoryService">The repository-history capability. Cannot be <see langword="null" />.</param>
 /// <param name="protocolSerializer">The strict engine protocol serializer. Cannot be <see langword="null" />.</param>
 internal sealed class ComparisonPrepareHandler(
+    IRepositoryBusyGuard busyGuard,
     IGitComparisonPreparer comparisonPreparer,
     IRepositoryHistoryService repositoryHistoryService,
     IEngineProtocolSerializer protocolSerializer) : IActionHandler
@@ -45,6 +48,12 @@ internal sealed class ComparisonPrepareHandler(
         if (parametersResult.IsFailure)
         {
             return ProtocolResponseFactory.CreateError(request.RequestId, parametersResult.Errors);
+        }
+
+        var busyResult = await busyGuard.CheckPathAsync(parametersResult.Data!.Path, cancellationToken);
+        if (busyResult.IsFailure)
+        {
+            return ProtocolResponseFactory.CreateError(request.RequestId, busyResult.Errors);
         }
 
         var parameters = parametersResult.Data!;

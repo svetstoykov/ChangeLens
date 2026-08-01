@@ -1,0 +1,102 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://changelens.dev/contracts/engine-protocol/v1/analysis-start.schema.json",
+  "title": "ChangeLens analysis-start exchange",
+  "oneOf": [
+    { "$ref": "#/$defs/request" },
+    { "$ref": "#/$defs/acceptedResult" },
+    { "$ref": "#/$defs/rejectedStaleResult" },
+    { "$ref": "#/$defs/rejectedActiveResult" },
+    { "$ref": "https://changelens.dev/contracts/engine-protocol/v1/error-response.schema.json" }
+  ],
+  "$defs": {
+    "request": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["protocolVersion", "requestId", "action", "parameters"],
+      "properties": {
+        "protocolVersion": { "const": 1 },
+        "requestId": { "type": "string", "minLength": 1, "pattern": "\\S" },
+        "action": { "const": "analysis.start" },
+        "parameters": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["path", "target", "freshnessToken"],
+          "properties": {
+            "path": { "type": "string", "minLength": 1, "maxLength": 8192, "pattern": "^(?=.*\\S)[^\\u0000]+$" },
+            "target": { "$ref": "#/$defs/refName" },
+            "freshnessToken": { "$ref": "#/$defs/token" },
+            "changeContext": { "type": ["string", "null"], "maxLength": 8192 }
+          }
+        }
+      }
+    },
+    "resultBase": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["protocolVersion", "type", "requestId", "result"],
+      "properties": {
+        "protocolVersion": { "const": 1 },
+        "type": { "const": "result" },
+        "requestId": { "type": "string", "minLength": 1, "pattern": "\\S" },
+        "result": {}
+      }
+    },
+    "acceptedResult": {
+      "allOf": [
+        { "$ref": "#/$defs/resultBase" },
+        {
+          "properties": {
+            "result": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["state", "runId", "requestedAt"],
+              "properties": {
+                "state": { "const": "accepted" },
+                "runId": { "$ref": "#/$defs/runId" },
+                "requestedAt": { "$ref": "#/$defs/timestamp" }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "rejectedStaleResult": {
+      "allOf": [
+        { "$ref": "#/$defs/resultBase" },
+        {
+          "properties": {
+            "result": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["state"],
+              "properties": { "state": { "const": "rejectedStale" } }
+            }
+          }
+        }
+      ]
+    },
+    "rejectedActiveResult": {
+      "allOf": [
+        { "$ref": "#/$defs/resultBase" },
+        {
+          "properties": {
+            "result": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["state", "activeRunId"],
+              "properties": {
+                "state": { "const": "rejectedActive" },
+                "activeRunId": { "$ref": "#/$defs/runId" }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "refName": { "type": "string", "minLength": 1, "maxLength": 4096, "pattern": "^refs/(?:heads|remotes)/[^\\u0000]+$" },
+    "token": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "runId": { "type": "string", "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$" },
+    "timestamp": { "type": "integer", "minimum": 0 }
+  }
+}

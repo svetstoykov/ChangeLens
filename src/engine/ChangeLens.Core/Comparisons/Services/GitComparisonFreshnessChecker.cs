@@ -65,6 +65,8 @@ public sealed class GitComparisonFreshnessChecker(
         "The selected comparison target is not supported.",
         ComparisonErrorCode.TargetInvalid);
 
+    private static readonly ComparisonFreshnessCheck StaleCheck = new(ComparisonFreshnessState.Stale, null, null);
+
     private readonly IGitRepositoryInspector _repositoryInspector =
         repositoryInspector ?? throw new ArgumentNullException(nameof(repositoryInspector));
 
@@ -78,7 +80,7 @@ public sealed class GitComparisonFreshnessChecker(
         logger ?? throw new ArgumentNullException(nameof(logger));
 
     /// <inheritdoc />
-    public async Task<Result<ComparisonFreshnessState>> CheckAsync(
+    public async Task<Result<ComparisonFreshnessCheck>> CheckAsync(
         string? path,
         string? target,
         string? freshnessToken,
@@ -113,7 +115,7 @@ public sealed class GitComparisonFreshnessChecker(
                 actionCancellation.Token);
             if (repositoryResult.IsFailure)
             {
-                return Result.ErrorFromResult<ComparisonFreshnessState>(repositoryResult);
+                return Result.ErrorFromResult<ComparisonFreshnessCheck>(repositoryResult);
             }
 
             var repository = repositoryResult.Data!;
@@ -127,14 +129,14 @@ public sealed class GitComparisonFreshnessChecker(
                 actionCancellation.Token);
             if (targetsResult.IsFailure)
             {
-                return Result.ErrorFromResult<ComparisonFreshnessState>(targetsResult);
+                return Result.ErrorFromResult<ComparisonFreshnessCheck>(targetsResult);
             }
 
             var selectedTarget = targetsResult.Data!.Targets.SingleOrDefault(
                 candidate => StringComparer.Ordinal.Equals(candidate.FullName, target));
             if (selectedTarget is null)
             {
-                return Result.Success(ComparisonFreshnessState.Stale);
+                return Result.Success(StaleCheck);
             }
 
             var checkFormatResult = await this.RunAsync(
@@ -144,13 +146,13 @@ public sealed class GitComparisonFreshnessChecker(
                 actionCancellation.Token);
             if (checkFormatResult.IsFailure)
             {
-                return Result.ErrorFromResult<ComparisonFreshnessState>(checkFormatResult);
+                return Result.ErrorFromResult<ComparisonFreshnessCheck>(checkFormatResult);
             }
 
             var checkFormatOutput = checkFormatResult.Data!;
             if (IsQuietInvalidTarget(checkFormatOutput))
             {
-                return Result.Success(ComparisonFreshnessState.Stale);
+                return Result.Success(StaleCheck);
             }
 
             if (!HasQuietEmptyOutput(checkFormatOutput))
@@ -165,18 +167,18 @@ public sealed class GitComparisonFreshnessChecker(
                 actionCancellation.Token);
             if (targetRevisionResult.IsFailure)
             {
-                return Result.ErrorFromResult<ComparisonFreshnessState>(targetRevisionResult);
+                return Result.ErrorFromResult<ComparisonFreshnessCheck>(targetRevisionResult);
             }
 
             if (IsConfirmedMissingTarget(targetRevisionResult.Data!))
             {
-                return Result.Success(ComparisonFreshnessState.Stale);
+                return Result.Success(StaleCheck);
             }
 
             var parsedTargetRevision = ParseSingleRevision(targetRevisionResult.Data!);
             if (parsedTargetRevision.IsFailure)
             {
-                return Result.ErrorFromResult<ComparisonFreshnessState>(parsedTargetRevision);
+                return Result.ErrorFromResult<ComparisonFreshnessCheck>(parsedTargetRevision);
             }
 
             var statusResult = await this.RunAsync(
@@ -186,13 +188,13 @@ public sealed class GitComparisonFreshnessChecker(
                 actionCancellation.Token);
             if (statusResult.IsFailure)
             {
-                return Result.ErrorFromResult<ComparisonFreshnessState>(statusResult);
+                return Result.ErrorFromResult<ComparisonFreshnessCheck>(statusResult);
             }
 
             var parsedStatus = GitComparisonOutputParser.ParseWorkingTree(statusResult.Data!);
             if (parsedStatus.IsFailure)
             {
-                return Result.ErrorFromResult<ComparisonFreshnessState>(parsedStatus);
+                return Result.ErrorFromResult<ComparisonFreshnessCheck>(parsedStatus);
             }
 
             var resolvedTarget = selectedTarget with { Revision = parsedTargetRevision.Data! };
@@ -210,7 +212,10 @@ public sealed class GitComparisonFreshnessChecker(
                 target,
                 state,
                 Stopwatch.GetElapsedTime(startedAt).TotalMilliseconds);
-            return Result.Success(state);
+            var check = state == ComparisonFreshnessState.Current
+                ? new ComparisonFreshnessCheck(ComparisonFreshnessState.Current, repository, parsedTargetRevision.Data)
+                : StaleCheck;
+            return Result.Success(check);
         }
         catch (OperationCanceledException) when (
             !cancellationToken.IsCancellationRequested && deadline.IsCancellationRequested)

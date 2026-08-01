@@ -31,7 +31,9 @@ public sealed class ComparisonActionHandlerTests
     public async Task UnapprovedFreshnessStateReturnsWarningInternalError()
     {
         var handler = new ComparisonCheckFreshnessHandler(
-            new StubGitComparisonFreshnessChecker((ComparisonFreshnessState)int.MaxValue),
+            new StubRepositoryBusyGuard(),
+            new StubGitComparisonFreshnessChecker(
+                new ComparisonFreshnessCheck((ComparisonFreshnessState)int.MaxValue, null, null)),
             new EngineProtocolSerializer());
         var services = new ServiceCollection();
         services.AddKeyedScoped(
@@ -66,6 +68,7 @@ public sealed class ComparisonActionHandlerTests
     public async Task UnapprovedRemoteBaselineStateReturnsInternalError()
     {
         var handler = new ComparisonCheckRemoteBaselineHandler(
+            new StubRepositoryBusyGuard(),
             new StubGitRemoteBaselineTracker(new RemoteBaselineCheckResult((RemoteBaselineState)int.MaxValue, null)),
             new EngineProtocolSerializer());
         var request = CreateRequest(

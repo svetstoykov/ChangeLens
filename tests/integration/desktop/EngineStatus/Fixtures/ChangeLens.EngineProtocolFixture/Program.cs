@@ -46,6 +46,10 @@ while (await Console.In.ReadLineAsync() is { } requestLine)
     {
         ValidateComparisonRequest(requestLine, request.RootElement, requestId, action);
     }
+    else if (action is "analysis.start" or "analysis.getActive" or "analysis.pollRun" or "analysis.cancel")
+    {
+        ValidateAnalysisRequest(requestLine, request.RootElement, requestId, action);
+    }
     else if (action != "engine.checkStatus")
     {
         throw new InvalidOperationException("The fixture received an unsupported action.");
@@ -66,6 +70,12 @@ while (await Console.In.ReadLineAsync() is { } requestLine)
     }
 
     if (mode == "comparison-delay-first" && requestId == "desktop-1")
+    {
+        await Task.Delay(TimeSpan.FromSeconds(30));
+        continue;
+    }
+
+    if (mode == "analysis-delay-first" && requestId == "desktop-1")
     {
         await Task.Delay(TimeSpan.FromSeconds(30));
         continue;
@@ -179,6 +189,18 @@ while (await Console.In.ReadLineAsync() is { } requestLine)
         }
 
         await WriteComparisonResultAsync(requestId, action, mode);
+        continue;
+    }
+
+    if (action.StartsWith("analysis.", StringComparison.Ordinal))
+    {
+        if (mode == "analysis-ordered-error-once" && requestCount == 1)
+        {
+            await WriteAnalysisUnknownRunErrorAsync(requestId);
+            continue;
+        }
+
+        await WriteAnalysisResultAsync(requestId, action, mode);
         continue;
     }
 
@@ -458,6 +480,155 @@ static void ValidateComparisonRequest(
     }
 }
 
+static void ValidateAnalysisRequest(
+    string requestLine,
+    JsonElement request,
+    string requestId,
+    string action)
+{
+    object? expectedParameters = action switch
+    {
+        "analysis.start" => new
+        {
+            path = "/projects/change_lens",
+            target = "refs/remotes/origin/main",
+            freshnessToken = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+        },
+        "analysis.getActive" => new
+        {
+            path = "/projects/change_lens",
+        },
+        "analysis.pollRun" or "analysis.cancel" => new
+        {
+            runId = "0198a1b2-3c4d-4e5f-8a9b-0123456789ab",
+        },
+        _ => throw new InvalidOperationException("The analysis action is not supported by this fixture."),
+    };
+    var expectedRequest = JsonSerializer.Serialize(new
+    {
+        protocolVersion = 1,
+        requestId,
+        action,
+        parameters = expectedParameters,
+    });
+
+    if (requestLine != expectedRequest)
+    {
+        throw new InvalidOperationException("The analysis request does not match the expected shape.");
+    }
+}
+
+async Task WriteAnalysisUnknownRunErrorAsync(string requestId)
+{
+    await WriteJsonAsync(new
+    {
+        protocolVersion = 1,
+        type = "error",
+        requestId,
+        errors = new[]
+        {
+            new
+            {
+                type = "NotFound",
+                code = "analysis.unknownRun",
+                message = "No analysis run matches the supplied identifier.",
+            },
+        },
+    });
+}
+
+async Task WriteAnalysisResultAsync(string requestId, string action, string fixtureMode)
+{
+    const string runId = "0198a1b2-3c4d-4e5f-8a9b-0123456789ab";
+    const string repositoryId = "5298a1b2-3c4d-4e5f-8a9b-0123456789ab";
+    const string head = "0123456789abcdef0123456789abcdef01234567";
+    const string targetRevision = "89abcdef0123456789abcdef0123456789abcdef";
+    const string token = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+
+    if (action == "analysis.start")
+    {
+        await WriteJsonAsync(new
+        {
+            protocolVersion = 1,
+            type = "result",
+            requestId,
+            result = new
+            {
+                state = "accepted",
+                runId,
+                requestedAt = 1720000000000L,
+            },
+        });
+        return;
+    }
+
+    if (action == "analysis.getActive")
+    {
+        await WriteJsonAsync(new
+        {
+            protocolVersion = 1,
+            type = "result",
+            requestId,
+            result = new
+            {
+                state = "active",
+                run = AnalysisProjection(runId, repositoryId, head, targetRevision, token, "capturing"),
+            },
+        });
+        return;
+    }
+
+    if (action == "analysis.cancel")
+    {
+        await WriteJsonAsync(new
+        {
+            protocolVersion = 1,
+            type = "result",
+            requestId,
+            result = (object?)null,
+        });
+        return;
+    }
+
+    var projection = AnalysisProjection(runId, repositoryId, head, targetRevision, token, "pendingCapture");
+    if (fixtureMode == "analysis-invalid-result-once")
+    {
+        projection = projection with { runId = "not-a-uuid" };
+    }
+
+    await WriteJsonAsync(new
+    {
+        protocolVersion = 1,
+        type = "result",
+        requestId,
+        result = projection,
+    });
+}
+
+static AnalysisProjectionValue AnalysisProjection(
+    string runId,
+    string repositoryId,
+    string head,
+    string targetRevision,
+    string token,
+    string state)
+{
+    return new AnalysisProjectionValue(
+        runId,
+        state,
+        new AnalysisRepositoryValue(repositoryId, "change_lens", "/projects/change_lens", head),
+        new AnalysisComparisonValue("refs/remotes/origin/main", targetRevision, token),
+        1720000000000L,
+        null,
+        null,
+        null,
+        false,
+        Array.Empty<object>(),
+        null,
+        null,
+        null);
+}
+
 async Task WriteComparisonResultAsync(string requestId, string action, string fixtureMode)
 {
     const string revision = "0123456789abcdef0123456789abcdef01234567";
@@ -582,3 +753,22 @@ async Task WriteJsonAsync<T>(T value)
     await Console.Out.WriteLineAsync(JsonSerializer.Serialize(value));
     await Console.Out.FlushAsync();
 }
+
+record AnalysisProjectionValue(
+    string runId,
+    string state,
+    AnalysisRepositoryValue repository,
+    AnalysisComparisonValue comparison,
+    long requestedAt,
+    long? captureStartedAt,
+    long? capturedAt,
+    string? snapshotId,
+    bool cancellationRequested,
+    object[] facts,
+    object? terminal,
+    long? interruptedAt,
+    string? interruptionReason);
+
+record AnalysisRepositoryValue(string repositoryId, string displayName, string canonicalPath, string head);
+
+record AnalysisComparisonValue(string target, string targetRevision, string freshnessToken);

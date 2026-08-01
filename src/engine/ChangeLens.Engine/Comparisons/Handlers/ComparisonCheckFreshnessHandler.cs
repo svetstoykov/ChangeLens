@@ -2,6 +2,7 @@ using System.Text.Json;
 using ChangeLens.Core.Comparisons.Interfaces;
 using ChangeLens.Core.Comparisons.Models;
 using ChangeLens.Core.Results.Models;
+using ChangeLens.Core.AnalysisRuns.Interfaces;
 using ChangeLens.Engine.Comparisons.Constants;
 using ChangeLens.Engine.Comparisons.Models;
 using ChangeLens.Engine.Protocol.Interfaces;
@@ -17,9 +18,11 @@ namespace ChangeLens.Engine.Comparisons.Handlers;
 ///     The host registers this handler as scoped. A freshness state the protocol has not approved is returned as a
 ///     domain-coded internal error.
 /// </remarks>
+/// <param name="busyGuard">The repository-busy guard. Cannot be <see langword="null" />.</param>
 /// <param name="comparisonFreshnessChecker">The comparison freshness capability. Cannot be <see langword="null" />.</param>
 /// <param name="protocolSerializer">The strict engine protocol serializer. Cannot be <see langword="null" />.</param>
 internal sealed class ComparisonCheckFreshnessHandler(
+    IRepositoryBusyGuard busyGuard,
     IGitComparisonFreshnessChecker comparisonFreshnessChecker,
     IEngineProtocolSerializer protocolSerializer) : IActionHandler
 {
@@ -40,6 +43,12 @@ internal sealed class ComparisonCheckFreshnessHandler(
             return ProtocolResponseFactory.CreateError(request.RequestId, parametersResult.Errors);
         }
 
+        var busyResult = await busyGuard.CheckPathAsync(parametersResult.Data!.Path, cancellationToken);
+        if (busyResult.IsFailure)
+        {
+            return ProtocolResponseFactory.CreateError(request.RequestId, busyResult.Errors);
+        }
+
         var parameters = parametersResult.Data!;
         var freshnessResult = await comparisonFreshnessChecker.CheckAsync(
             parameters.Path,
@@ -53,7 +62,7 @@ internal sealed class ComparisonCheckFreshnessHandler(
                 Result.ErrorFromResult<ComparisonFreshnessResult>(freshnessResult));
         }
 
-        var result = freshnessResult.Data switch
+        var result = freshnessResult.Data!.State switch
         {
             ComparisonFreshnessState.Current =>
                 Result.Success<ComparisonFreshnessResult>(new CurrentComparisonFreshnessResult()),

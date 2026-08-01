@@ -5,16 +5,16 @@ using ChangeLens.Core.Results.Models;
 namespace ChangeLens.Engine.IntegrationTests.Comparisons.Handlers.Support;
 
 /// <summary>
-///     Provides one caller-selected comparison freshness state.
+///     Provides one caller-selected comparison freshness check.
 /// </summary>
-/// <param name="state">The freshness state returned by every check.</param>
-internal sealed class StubGitComparisonFreshnessChecker(ComparisonFreshnessState state) : IGitComparisonFreshnessChecker
+/// <param name="check">The freshness check returned by every check.</param>
+internal sealed class StubGitComparisonFreshnessChecker(ComparisonFreshnessCheck check) : IGitComparisonFreshnessChecker
 {
     /// <inheritdoc />
-    public Task<Result<ComparisonFreshnessState>> CheckAsync(
+    public Task<Result<ComparisonFreshnessCheck>> CheckAsync(
         string? path,
         string? target,
         string? freshnessToken,
         CancellationToken cancellationToken) =>
-        Task.FromResult(Result.Success(state));
+        Task.FromResult(Result.Success(check));
 }

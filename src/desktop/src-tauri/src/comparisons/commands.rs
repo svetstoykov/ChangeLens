@@ -91,8 +91,7 @@ pub(crate) async fn comparison_refresh_remote_baseline(
 ) -> Result<ComparisonRefreshRemoteBaselineResult, EngineActionError> {
     let comparison_service = state.service();
     let result =
-        await_action_task(move || comparison_service.refresh_remote_baseline(&path, &target))
-            .await;
+        await_action_task(move || comparison_service.refresh_remote_baseline(&path, &target)).await;
 
     report_rust_originated_failure(&result);
 

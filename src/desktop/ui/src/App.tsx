@@ -1,7 +1,13 @@
 import { useCallback, useEffect, useState } from "react";
-import type { ActionError } from "./Actions/Models/ActionError";
+import { ActionError } from "./Actions/Models/ActionError";
 import { normalizeActionError } from "./Actions/Services/normalizeActionError";
 import { presentActionError } from "./Actions/Services/presentActionError";
+import { AnalysisProgressView } from "./Analysis/Components/AnalysisProgressView";
+import { useAnalysisRun } from "./Analysis/Hooks/useAnalysisRun";
+import type { AnalysisClient } from "./Analysis/Interfaces/AnalysisClient";
+import type { AnalysisRunProjection } from "./Analysis/Models/AnalysisRunProjection";
+import type { AnalysisStartOutcome } from "./Analysis/Models/AnalysisStartOutcome";
+import type { AnalysisStartRequest } from "./Analysis/Models/AnalysisStartRequest";
 import { AppShell } from "./AppShell";
 import { RepositoryWorkspace } from "./Comparisons/Components/RepositoryWorkspace";
 import type { ComparisonClient } from "./Comparisons/Interfaces/ComparisonClient";
@@ -32,10 +38,16 @@ interface AppProps {
   readonly repositoryHistoryClient: RepositoryHistoryClient;
   readonly repositoryFolderPicker: RepositoryFolderPicker;
   readonly colorThemePreferenceClient: ColorThemePreferenceClient;
+  readonly analysisClient: AnalysisClient;
   readonly comparisonClient?: ComparisonClient;
 }
 
 type Workspace = OpenedRepository & { readonly generation: number };
+
+interface RetainedAnalysisRun {
+  readonly runId: string;
+  readonly attached: boolean;
+}
 
 export type ApplicationState =
   | { readonly status: "checkingEngine" }
@@ -52,6 +64,12 @@ export type ApplicationState =
   | {
       readonly status: "repositoryHistory";
       readonly workspace: Workspace | null;
+    }
+  | {
+      readonly status: "analysisRun";
+      readonly workspace: Workspace;
+      readonly runId: string;
+      readonly attached: boolean;
     };
 
 export function App({
@@ -60,6 +78,7 @@ export function App({
   repositoryHistoryClient,
   repositoryFolderPicker,
   colorThemePreferenceClient,
+  analysisClient,
   comparisonClient,
 }: AppProps) {
   const [state, setState] = useState<ApplicationState>({
@@ -74,6 +93,19 @@ export function App({
   const [retryGeneration, setRetryGeneration] = useState(0);
   const [explicitTheme, setExplicitTheme] = useState<ColorTheme | null>(null);
   const [colorTheme, setColorTheme] = useState<ColorTheme>(getSystemColorTheme);
+  const [retainedAnalysisRuns, setRetainedAnalysisRuns] = useState<
+    ReadonlyMap<string, RetainedAnalysisRun>
+  >(new Map());
+  const [analysisError, setAnalysisError] = useState<ActionError | null>(null);
+
+  const currentWorkspace = "workspace" in state ? state.workspace : null;
+  const retainedRun =
+    currentWorkspace === null
+      ? null
+      : (retainedAnalysisRuns.get(currentWorkspace.repositoryId) ?? null);
+  const watchedRunId =
+    state.status === "analysisRun" ? state.runId : (retainedRun?.runId ?? null);
+  const analysisRun = useAnalysisRun(analysisClient, watchedRunId);
 
   useEffect(() => {
     if (explicitTheme !== null) return;
@@ -112,19 +144,39 @@ export function App({
           const restoration =
             await repositoryHistoryClient.restoreLastRepository();
           if (!isCurrent) return;
-          setState(
-            restoration.state === "none"
-              ? { status: "selectingRepository" }
-              : {
-                  status: "repositoryOpen",
-                  workspace: {
-                    repositoryId: restoration.repositoryId,
-                    repository: restoration.repository,
-                    preferredTarget: restoration.preferredTarget,
-                    generation: 1,
-                  },
-                },
+          if (restoration.state === "none") {
+            setState({ status: "selectingRepository" });
+            return;
+          }
+
+          const workspace: Workspace = {
+            repositoryId: restoration.repositoryId,
+            repository: restoration.repository,
+            preferredTarget: restoration.preferredTarget,
+            generation: 1,
+          };
+          const activeRunId = await readActiveRunId(
+            analysisClient,
+            restoration.repository.canonicalPath,
           );
+          if (!isCurrent) return;
+          if (activeRunId === null) {
+            setState({ status: "repositoryOpen", workspace });
+            return;
+          }
+
+          setRetainedAnalysisRuns((current) =>
+            new Map(current).set(restoration.repositoryId, {
+              runId: activeRunId,
+              attached: true,
+            }),
+          );
+          setState({
+            status: "analysisRun",
+            workspace,
+            runId: activeRunId,
+            attached: true,
+          });
         } catch (reason: unknown) {
           if (!isCurrent) return;
           const error = normalizeActionError(reason);
@@ -150,6 +202,7 @@ export function App({
       isCurrent = false;
     };
   }, [
+    analysisClient,
     colorThemePreferenceClient,
     engineStatusClient,
     repositoryHistoryClient,
@@ -172,18 +225,49 @@ export function App({
   }
 
   function commitRepository(opened: OpenedRepository) {
-    setState((current) => {
-      const previousWorkspace =
-        current.status === "replacingRepository" ? current.workspace : null;
-      return {
-        status: "repositoryOpen",
-        workspace: {
-          ...opened,
-          generation: (previousWorkspace?.generation ?? 0) + 1,
-        },
-      };
-    });
+    setState((current) => ({
+      status: "repositoryOpen",
+      workspace: nextWorkspace(current, opened),
+    }));
     void refreshHistory();
+  }
+
+  function attachToAnalysisRun(
+    opened: OpenedRepository,
+    run: RetainedAnalysisRun,
+  ) {
+    setAnalysisError(null);
+    setRetainedAnalysisRuns((current) =>
+      new Map(current).set(opened.repositoryId, run),
+    );
+    setState((current) => ({
+      status: "analysisRun",
+      workspace: attachmentWorkspace(current, opened),
+      runId: run.runId,
+      attached: run.attached,
+    }));
+    void refreshHistory();
+  }
+
+  async function openOrAttachToRepository(
+    opened: OpenedRepository,
+  ): Promise<void> {
+    const retainedForRepository = retainedAnalysisRuns.get(opened.repositoryId);
+    if (retainedForRepository !== undefined) {
+      attachToAnalysisRun(opened, retainedForRepository);
+      return;
+    }
+
+    const activeRunId = await readActiveRunId(
+      analysisClient,
+      opened.repository.canonicalPath,
+    );
+    if (activeRunId !== null) {
+      attachToAnalysisRun(opened, { runId: activeRunId, attached: true });
+      return;
+    }
+
+    commitRepository(opened);
   }
 
   const handleRepositoryRefreshed = useCallback(
@@ -219,7 +303,7 @@ export function App({
     setBusyRepositoryId(repository.repositoryId);
     setHistoryError(null);
     try {
-      commitRepository(
+      await openOrAttachToRepository(
         await repositoryClient.openRepository(repository.canonicalPath),
       );
     } catch (reason: unknown) {
@@ -252,6 +336,114 @@ export function App({
       } else {
         setHistoryError(error);
       }
+    } finally {
+      setBusyRepositoryId(null);
+    }
+  }
+
+  async function startAnalysis(
+    workspace: Workspace,
+    request: AnalysisStartRequest,
+  ): Promise<AnalysisStartOutcome> {
+    if (busyRepositoryId !== null) {
+      setAnalysisError(
+        new ActionError("operation", [
+          {
+            type: "Conflict",
+            code: "analysis.startInProgress",
+            message:
+              "Another action is still running for this repository. Wait for it to finish, then start the analysis again.",
+          },
+        ]),
+      );
+      return "unavailable";
+    }
+
+    setAnalysisError(null);
+    setBusyRepositoryId(workspace.repositoryId);
+    try {
+      const result = await analysisClient.start(
+        workspace.repository.canonicalPath,
+        request.target,
+        request.freshnessToken,
+        request.changeContext,
+      );
+      if (result.state === "rejectedStale") return "stale";
+      if (result.state === "accepted") {
+        attachToAnalysisRun(workspace, {
+          runId: result.runId,
+          attached: false,
+        });
+        return "accepted";
+      }
+
+      const existingRun = await readRunProjection(
+        analysisClient,
+        result.activeRunId,
+      );
+      if (
+        existingRun === null ||
+        existingRun.repository.repositoryId !== workspace.repositoryId
+      ) {
+        setAnalysisError(
+          new ActionError("operation", [
+            {
+              type: "Conflict",
+              code: "analysis.activeRunUnavailable",
+              message:
+                "An analysis run is already active for this repository, but ChangeLens could not read it. Try again in a moment.",
+            },
+          ]),
+        );
+        return "unavailable";
+      }
+
+      attachToAnalysisRun(workspace, {
+        runId: existingRun.runId,
+        attached: true,
+      });
+      return "attached";
+    } catch (reason: unknown) {
+      const error = normalizeActionError(reason);
+      if (isLocalStateError(error)) {
+        setState({ status: "localStateError", error });
+      } else {
+        setAnalysisError(error);
+      }
+      return "unavailable";
+    } finally {
+      setBusyRepositoryId(null);
+    }
+  }
+
+  function cancelAnalysisRun(runId: string): void {
+    setAnalysisError(null);
+    analysisClient.cancel(runId).catch((reason: unknown) => {
+      setAnalysisError(normalizeActionError(reason));
+    });
+  }
+
+  async function returnToSetup(workspace: Workspace): Promise<void> {
+    setAnalysisError(null);
+    setRetainedAnalysisRuns((current) => {
+      const next = new Map(current);
+      next.delete(workspace.repositoryId);
+      return next;
+    });
+    setBusyRepositoryId(workspace.repositoryId);
+    try {
+      commitRepository(
+        await repositoryClient.openRepository(
+          workspace.repository.canonicalPath,
+        ),
+      );
+    } catch (reason: unknown) {
+      const error = normalizeActionError(reason);
+      setState(
+        isLocalStateError(error)
+          ? { status: "localStateError", error }
+          : { status: "selectingRepository", recoveryError: error },
+      );
     } finally {
       setBusyRepositoryId(null);
     }
@@ -350,7 +542,7 @@ export function App({
           onDismiss={() => undefined}
           selectFolder={() => repositoryFolderPicker.selectFolder()}
           onOpenRepository={(path) => repositoryClient.openRepository(path)}
-          onRepositoryOpened={commitRepository}
+          onRepositoryOpened={(opened) => void openOrAttachToRepository(opened)}
         />
       </AppShell>
     );
@@ -359,6 +551,11 @@ export function App({
   const workspace = state.workspace;
   const replacing = state.status === "replacingRepository";
   const showingHistory = state.status === "repositoryHistory";
+  const displayedRunId = watchedRunId;
+  const displayedRunAttached =
+    state.status === "analysisRun"
+      ? state.attached
+      : (retainedRun?.attached ?? false);
   return (
     <AppShell
       {...shellThemeProps}
@@ -370,7 +567,18 @@ export function App({
         void refreshHistory();
       }}
       onShowCurrentChange={() => {
-        if (workspace) setState({ status: "repositoryOpen", workspace });
+        if (!workspace) return;
+        const run = retainedAnalysisRuns.get(workspace.repositoryId);
+        setState(
+          run === undefined
+            ? { status: "repositoryOpen", workspace }
+            : {
+                status: "analysisRun",
+                workspace,
+                runId: run.runId,
+                attached: run.attached,
+              },
+        );
       }}
       onOpenAnotherRepository={() => {
         if (workspace) setState({ status: "replacingRepository", workspace });
@@ -382,7 +590,7 @@ export function App({
           onDismiss={() => setState({ status: "repositoryOpen", workspace })}
           selectFolder={() => repositoryFolderPicker.selectFolder()}
           onOpenRepository={(path) => repositoryClient.openRepository(path)}
-          onRepositoryOpened={commitRepository}
+          onRepositoryOpened={(opened) => void openOrAttachToRepository(opened)}
         />
       ) : null}
       {showingHistory ? (
@@ -400,14 +608,32 @@ export function App({
           }}
         />
       ) : null}
-      {workspace && comparisonClient ? (
+      {workspace && displayedRunId !== null ? (
+        <div hidden={showingHistory}>
+          <AnalysisProgressView
+            projection={analysisRun.projection}
+            error={analysisRun.error}
+            actionError={analysisError}
+            attached={displayedRunAttached}
+            onRetry={analysisRun.retry}
+            onCancel={() => cancelAnalysisRun(displayedRunId)}
+            onDismissActionError={() => setAnalysisError(null)}
+            onReturnToSetup={() => void returnToSetup(workspace)}
+          />
+        </div>
+      ) : null}
+      {workspace && comparisonClient && displayedRunId === null ? (
         <div hidden={showingHistory}>
           <RepositoryWorkspace
             key={workspace.generation}
             repository={workspace.repository}
             preferredTarget={workspace.preferredTarget}
             comparisonClient={comparisonClient}
+            startingAnalysis={busyRepositoryId === workspace.repositoryId}
+            analysisError={analysisError}
             onRepositoryRefreshed={handleRepositoryRefreshed}
+            onStartAnalysis={(request) => startAnalysis(workspace, request)}
+            onDismissAnalysisError={() => setAnalysisError(null)}
           />
         </div>
       ) : null}
@@ -417,4 +643,47 @@ export function App({
 
 function isLocalStateError(error: ActionError): boolean {
   return error.errors.some((detail) => detail.code.startsWith("localState."));
+}
+
+function nextWorkspace(
+  current: ApplicationState,
+  opened: OpenedRepository,
+): Workspace {
+  const previousWorkspace =
+    current.status === "replacingRepository" ? current.workspace : null;
+  return { ...opened, generation: (previousWorkspace?.generation ?? 0) + 1 };
+}
+
+function attachmentWorkspace(
+  current: ApplicationState,
+  opened: OpenedRepository,
+): Workspace {
+  const previousWorkspace = "workspace" in current ? current.workspace : null;
+  return previousWorkspace !== null &&
+    previousWorkspace.repositoryId === opened.repositoryId
+    ? { ...previousWorkspace, ...opened }
+    : nextWorkspace(current, opened);
+}
+
+async function readActiveRunId(
+  analysisClient: AnalysisClient,
+  canonicalPath: string,
+): Promise<string | null> {
+  try {
+    const result = await analysisClient.getActive(canonicalPath);
+    return result.state === "active" ? result.run.runId : null;
+  } catch {
+    return null;
+  }
+}
+
+async function readRunProjection(
+  analysisClient: AnalysisClient,
+  runId: string,
+): Promise<AnalysisRunProjection | null> {
+  try {
+    return await analysisClient.pollRun(runId);
+  } catch {
+    return null;
+  }
 }

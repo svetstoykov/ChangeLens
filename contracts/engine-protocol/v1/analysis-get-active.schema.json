@@ -1,0 +1,56 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://changelens.dev/contracts/engine-protocol/v1/analysis-get-active.schema.json",
+  "title": "ChangeLens analysis-get-active exchange",
+  "oneOf": [
+    { "$ref": "#/$defs/request" },
+    { "$ref": "#/$defs/noneResult" },
+    { "$ref": "#/$defs/activeResult" },
+    { "$ref": "https://changelens.dev/contracts/engine-protocol/v1/error-response.schema.json" }
+  ],
+  "$defs": {
+    "request": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["protocolVersion", "requestId", "action", "parameters"],
+      "properties": {
+        "protocolVersion": { "const": 1 },
+        "requestId": { "type": "string", "minLength": 1, "pattern": "\\S" },
+        "action": { "const": "analysis.getActive" },
+        "parameters": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["path"],
+          "properties": { "path": { "type": "string", "minLength": 1, "maxLength": 8192, "pattern": "^(?=.*\\S)[^\\u0000]+$" } }
+        }
+      }
+    },
+    "noneResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["protocolVersion", "type", "requestId", "result"],
+      "properties": {
+        "protocolVersion": { "const": 1 },
+        "type": { "const": "result" },
+        "requestId": { "type": "string", "minLength": 1, "pattern": "\\S" },
+        "result": { "type": "object", "additionalProperties": false, "required": ["state"], "properties": { "state": { "const": "none" } } }
+      }
+    },
+    "activeResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["protocolVersion", "type", "requestId", "result"],
+      "properties": {
+        "protocolVersion": { "const": 1 },
+        "type": { "const": "result" },
+        "requestId": { "type": "string", "minLength": 1, "pattern": "\\S" },
+        "result": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["state", "run"],
+          "properties": { "state": { "const": "active" }, "run": { "$ref": "https://changelens.dev/contracts/engine-protocol/v1/analysis-poll-run.schema.json#/$defs/runProjection" } }
+        }
+      }
+    }
+  }
+}

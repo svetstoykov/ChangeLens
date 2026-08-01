@@ -26,6 +26,7 @@ builder.AddPreferenceServices();
 builder.AddEngineStatusServices();
 builder.AddRepositoryServices();
 builder.AddComparisonServices();
+builder.AddAnalysisRunServices();
 builder.AddProtocolServices();
 builder.AddActionHandlers();
 

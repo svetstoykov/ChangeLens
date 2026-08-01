@@ -1,3 +1,4 @@
+use changelens_desktop_lib::analysis::AnalysisState;
 use changelens_desktop_lib::comparisons::{
     ComparisonFreshness, ComparisonRefreshRemoteBaselineResult, ComparisonRemoteBaseline,
     ComparisonService, ComparisonState, ComparisonTargetPage, PreparedComparison,
@@ -567,6 +568,7 @@ fn engine_backed_states_share_one_process_and_exit_request_runs_graceful_shutdow
             result: Ok(None),
         })),
         ComparisonState::new(engine_client.clone()),
+        AnalysisState::new(engine_client.clone()),
     )
     .build(mock_context(noop_assets()))
     .expect("the test desktop application should build");
@@ -650,6 +652,7 @@ fn invoke_command(
         RepositoryState::new(repository_service),
         RepositoryFolderPickerState::new(picker),
         ComparisonState::new(Arc::new(UnusedComparisonService)),
+        AnalysisState::new(Arc::new(EngineClient::new())),
     )
     .build(mock_context(noop_assets()))
     .expect("the test desktop application should build");
@@ -687,6 +690,7 @@ fn invoke_preference_command(
         RepositoryState::new(repository_returning(Ok(branch_repository()))),
         RepositoryFolderPickerState::new(picker_returning(Ok(None))),
         ComparisonState::new(Arc::new(UnusedComparisonService)),
+        AnalysisState::new(Arc::new(EngineClient::new())),
         PreferenceState::new(preference_service),
     )
     .build(mock_context(noop_assets()))

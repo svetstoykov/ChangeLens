@@ -14,7 +14,7 @@ The initial technology stack is:
 - .NET 10 for the local analysis engine.
 - SQLite and local artifact files for persistence.
 - The installed Git CLI for source-control facts.
-- Roslyn and MSBuild for the first deep repository adapter.
+- Manifest readers and one grammar per language for repository structure and syntactic evidence. No ecosystem is privileged, and no compiler or project system is hosted.
 - A ChangeLens-owned, provider-neutral AI contract.
 
 Keep detailed and frequently changing product requirements in `docs/product` or feature-specific specifications. Keep the instruction files focused on durable engineering direction.

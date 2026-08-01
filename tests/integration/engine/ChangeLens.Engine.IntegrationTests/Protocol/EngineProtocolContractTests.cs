@@ -204,6 +204,10 @@ public sealed class EngineProtocolContractTests
     [InlineData(
         "error-response.schema.json",
         "comparisons-error-no-remote-configured.response.json")]
+    [InlineData("analysis-start.schema.json", "analysis-start.accepted.result.json")]
+    [InlineData("analysis-poll-run.schema.json", "analysis-poll-run.completed.result.json")]
+    [InlineData("analysis-get-active.schema.json", "analysis-get-active.active.result.json")]
+    [InlineData("analysis-cancel.schema.json", "analysis-cancel.result.json")]
     public void SharedFixtureMatchesSchema(string schemaFileName, string fixtureFileName)
     {
         using var fixture = JsonDocument.Parse(File.ReadAllText(FixturePath(fixtureFileName)));
@@ -510,6 +514,25 @@ public sealed class EngineProtocolContractTests
         Assert.False(IsContractValid("comparison-refresh-remote-baseline.schema.json", json));
     }
 
+    /// <summary>Verifies analysis-start transport structure and identifier bounds.</summary>
+    [Theory]
+    [InlineData("""{"protocolVersion":1,"requestId":"id","action":"analysis.start","parameters":{"path":"/repo","target":"refs/heads/main"}}""")]
+    [InlineData("""{"protocolVersion":1,"requestId":"id","action":"analysis.start","parameters":{"path":"/repo","target":"refs/heads/main","freshnessToken":"0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef","checks":{"build":true,"tests":false}}}""")]
+    [InlineData("""{"protocolVersion":1,"requestId":"id","action":"analysis.start","parameters":{"path":"/repo","path":"/repo","target":"refs/heads/main","freshnessToken":"0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"}}""")]
+    public void AnalysisStartSchemaRejectsMalformedMessages(string json)
+    {
+        Assert.False(IsContractValid("analysis-start.schema.json", json));
+    }
+
+    /// <summary>Verifies analysis-poll-run rejects invalid terminal counts and run identifiers.</summary>
+    [Theory]
+    [InlineData("""{"protocolVersion":1,"requestId":"id","action":"analysis.pollRun","parameters":{"runId":"not-a-guid"}}""")]
+    [InlineData("""{"protocolVersion":1,"type":"result","requestId":"id","result":{"runId":"0198a1b2-3c4d-4e5f-8a9b-0123456789ab","state":"completedWithLimitations","repository":{"repositoryId":"5298a1b2-3c4d-4e5f-8a9b-0123456789ab","displayName":"repo","canonicalPath":"/repo","head":"0123456789abcdef0123456789abcdef01234567"},"comparison":{"target":"refs/heads/main","targetRevision":"89abcdef0123456789abcdef0123456789abcdef","freshnessToken":"0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"},"requestedAt":1,"captureStartedAt":null,"capturedAt":null,"snapshotId":null,"cancellationRequested":false,"facts":[],"terminal":{"kind":"completedWithLimitations","terminalAt":2,"limitationCount":-1},"interruptedAt":null,"interruptionReason":null}}""")]
+    public void AnalysisPollRunSchemaRejectsMalformedMessages(string json)
+    {
+        Assert.False(IsContractValid("analysis-poll-run.schema.json", json));
+    }
+
     private static IReadOnlyDictionary<string, JsonSchema> LoadSchemas()
     {
         var names = new[]
@@ -527,6 +550,10 @@ public sealed class EngineProtocolContractTests
             "comparison-check-freshness.schema.json",
             "comparison-check-remote-baseline.schema.json",
             "comparison-refresh-remote-baseline.schema.json",
+            "analysis-start.schema.json",
+            "analysis-poll-run.schema.json",
+            "analysis-get-active.schema.json",
+            "analysis-cancel.schema.json",
         };
 
         return names.ToDictionary(

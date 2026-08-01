@@ -52,7 +52,11 @@ impl ComparisonService for EngineClient {
         path: &str,
         target: &str,
     ) -> Result<ComparisonRemoteBaseline, EngineActionError> {
-        self.check_remote_baseline_with_timeout(path, target, REMOTE_BASELINE_CHECK_RESPONSE_TIMEOUT)
+        self.check_remote_baseline_with_timeout(
+            path,
+            target,
+            REMOTE_BASELINE_CHECK_RESPONSE_TIMEOUT,
+        )
     }
 
     fn refresh_remote_baseline(

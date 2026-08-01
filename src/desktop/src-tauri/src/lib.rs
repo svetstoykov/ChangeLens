@@ -1,9 +1,13 @@
+pub mod analysis;
 pub mod comparisons;
 pub mod engine_protocol;
 pub mod engine_status;
 pub mod preferences;
 pub mod repositories;
 
+use analysis::{
+    AnalysisState, analysis_cancel, analysis_get_active, analysis_poll_run, analysis_start,
+};
 use comparisons::{
     ComparisonState, comparison_check_freshness, comparison_check_remote_baseline,
     comparison_list_targets, comparison_prepare, comparison_refresh_remote_baseline,
@@ -17,6 +21,9 @@ use repositories::{
     select_repository_folder,
 };
 use std::sync::Arc;
+use tauri::Manager;
+
+const PRIMARY_WINDOW_LABEL: &str = "main";
 
 /// Configures the desktop runtime with its explicit commands and injected services.
 pub fn configure_desktop<R: tauri::Runtime>(
@@ -25,6 +32,7 @@ pub fn configure_desktop<R: tauri::Runtime>(
     repository_state: RepositoryState,
     repository_folder_picker_state: RepositoryFolderPickerState,
     comparison_state: ComparisonState,
+    analysis_state: AnalysisState,
 ) -> tauri::Builder<R> {
     configure_desktop_with_preferences(
         builder,
@@ -32,6 +40,7 @@ pub fn configure_desktop<R: tauri::Runtime>(
         repository_state,
         repository_folder_picker_state,
         comparison_state,
+        analysis_state,
         PreferenceState::unused(),
     )
 }
@@ -44,6 +53,7 @@ pub fn configure_desktop_with_preferences<R: tauri::Runtime>(
     repository_state: RepositoryState,
     repository_folder_picker_state: RepositoryFolderPickerState,
     comparison_state: ComparisonState,
+    analysis_state: AnalysisState,
     preference_state: PreferenceState,
 ) -> tauri::Builder<R> {
     builder
@@ -51,6 +61,7 @@ pub fn configure_desktop_with_preferences<R: tauri::Runtime>(
         .manage(repository_state)
         .manage(repository_folder_picker_state)
         .manage(comparison_state)
+        .manage(analysis_state)
         .manage(preference_state)
         .invoke_handler(tauri::generate_handler![
             engine_check_status,
@@ -66,6 +77,10 @@ pub fn configure_desktop_with_preferences<R: tauri::Runtime>(
             comparison_check_freshness,
             comparison_check_remote_baseline,
             comparison_refresh_remote_baseline,
+            analysis_start,
+            analysis_get_active,
+            analysis_poll_run,
+            analysis_cancel,
         ])
 }
 
@@ -77,16 +92,30 @@ pub fn handle_desktop_run_event(engine_client: &EngineClient, event: &tauri::Run
     }
 }
 
+fn focus_primary_window<R: tauri::Runtime>(app_handle: &tauri::AppHandle<R>) {
+    let Some(window) = app_handle.get_webview_window(PRIMARY_WINDOW_LABEL) else {
+        return;
+    };
+
+    let _ = window.unminimize();
+    let _ = window.set_focus();
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let engine_client = Arc::new(EngineClient::new());
 
     let app = configure_desktop_with_preferences(
-        tauri::Builder::default(),
+        tauri::Builder::default().plugin(tauri_plugin_single_instance::init(
+            |app_handle, _arguments, _working_directory| {
+                focus_primary_window(app_handle);
+            },
+        )),
         EngineStatusState::new(engine_client.clone()),
         RepositoryState::new(engine_client.clone()),
         RepositoryFolderPickerState::new(Arc::new(NativeRepositoryFolderPicker)),
         ComparisonState::new(engine_client.clone()),
+        AnalysisState::new(engine_client.clone()),
         PreferenceState::new(engine_client.clone()),
     )
     .build(tauri::generate_context!())

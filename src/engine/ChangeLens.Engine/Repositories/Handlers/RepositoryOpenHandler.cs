@@ -53,8 +53,6 @@ internal sealed class RepositoryOpenHandler(
             return ProtocolResponseFactory.FromResult(request.RequestId, Result.ErrorFromResult<RepositoryOpenResult>(openResult));
         }
 
-        return ProtocolResponseFactory.FromResult(
-            request.RequestId,
-            Result.Success(RepositoryOpenResult.FromOpenedRepository(openResult.Data!)));
+        return ProtocolResponseFactory.FromResult(request.RequestId, Result.Success(RepositoryOpenResult.FromOpenedRepository(openResult.Data!)));
     }
 }

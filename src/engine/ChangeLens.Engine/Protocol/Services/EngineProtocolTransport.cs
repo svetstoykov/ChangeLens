@@ -45,12 +45,10 @@ internal sealed class EngineProtocolTransport(
     private bool _skipLineFeed;
 
     private static readonly OperationError ReadFailedError = OperationError.ExternalDependencyFailure(
-        "The engine could not read protocol input.",
-        EngineErrorCode.ReadFailed);
+        "The engine could not read protocol input.", EngineErrorCode.ReadFailed);
 
     private static readonly OperationError RequestTooLargeError = OperationError.MalformedInput(
-        "The protocol request exceeds the allowed size.",
-        EngineErrorCode.RequestTooLarge);
+        "The protocol request exceeds the allowed size.", EngineErrorCode.RequestTooLarge);
 
     /// <inheritdoc />
     public async Task<Result<EngineProtocolRequest?>> ReadAsync(CancellationToken cancellationToken)
@@ -60,9 +58,7 @@ internal sealed class EngineProtocolTransport(
             var lineResult = await this.ReadBoundedLineAsync(cancellationToken);
             if (lineResult.IsFailure)
             {
-                logger.LogInformation(
-                    "Rejected protocol input with errors {ErrorCodes}.",
-                    lineResult.Errors.Select(error => error.Code));
+                logger.LogInformation("Rejected protocol input with errors {ErrorCodes}.", lineResult.Errors.Select(error => error.Code));
                 return Result.ErrorFromResult<EngineProtocolRequest?>(lineResult);
             }
 
@@ -74,17 +70,12 @@ internal sealed class EngineProtocolTransport(
             var requestResult = protocolSerializer.DeserializeRequest(lineResult.Data);
             if (requestResult.IsFailure)
             {
-                logger.LogInformation(
-                    "Rejected protocol input with errors {ErrorCodes}.",
-                    requestResult.Errors.Select(error => error.Code));
+                logger.LogInformation("Rejected protocol input with errors {ErrorCodes}.", requestResult.Errors.Select(error => error.Code));
                 return Result.ErrorFromResult<EngineProtocolRequest?>(requestResult);
             }
 
             var request = requestResult.Data!;
-            logger.LogDebug(
-                "Decoded protocol request {RequestId} for {Action}.",
-                request.RequestId,
-                request.Action);
+            logger.LogDebug("Decoded protocol request {RequestId} for {Action}.", request.RequestId, request.Action);
             return Result.Success<EngineProtocolRequest?>(request);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -93,18 +84,13 @@ internal sealed class EngineProtocolTransport(
         }
         catch (Exception exception) when (exception is IOException or ObjectDisposedException)
         {
-            logger.LogError(
-                exception,
-                "Failed to read protocol input with error {ErrorCode}.",
-                EngineErrorCode.ReadFailed);
+            logger.LogError(exception, "Failed to read protocol input with error {ErrorCode}.", EngineErrorCode.ReadFailed);
             return ReadFailedError;
         }
     }
 
     /// <inheritdoc />
-    public async Task<Result> WriteAsync(
-        ProtocolResponse response,
-        CancellationToken cancellationToken)
+    public async Task<Result> WriteAsync(ProtocolResponse response, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(response);
 
@@ -118,10 +104,7 @@ internal sealed class EngineProtocolTransport(
         {
             await output.WriteLineAsync(serializationResult.Data.AsMemory(), cancellationToken);
             await output.FlushAsync(cancellationToken);
-            logger.LogDebug(
-                "Wrote protocol response {RequestId} of type {ResponseType}.",
-                response.RequestId,
-                response.Type);
+            logger.LogDebug("Wrote protocol response {RequestId} of type {ResponseType}.", response.RequestId, response.Type);
             return Result.Success();
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -130,14 +113,8 @@ internal sealed class EngineProtocolTransport(
         }
         catch (Exception exception) when (exception is IOException or ObjectDisposedException)
         {
-            logger.LogError(
-                exception,
-                "Failed to write protocol output with error {ErrorCode}.",
-                EngineErrorCode.WriteFailed);
-            return Result.Fail(
-                OperationError.ExternalDependencyFailure(
-                    "The engine could not write protocol output.",
-                    EngineErrorCode.WriteFailed));
+            logger.LogError(exception, "Failed to write protocol output with error {ErrorCode}.", EngineErrorCode.WriteFailed);
+            return Result.Fail(OperationError.ExternalDependencyFailure("The engine could not write protocol output.", EngineErrorCode.WriteFailed));
         }
     }
 

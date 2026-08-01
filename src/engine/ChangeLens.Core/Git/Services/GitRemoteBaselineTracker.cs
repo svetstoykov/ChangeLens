@@ -33,17 +33,13 @@ public sealed class GitRemoteBaselineTracker(
     ILogger<GitRemoteBaselineTracker> logger) : IGitRemoteBaselineTracker
 {
     private static readonly OperationError TargetInvalidError = OperationError.UnprocessableInput(
-        "The selected comparison target is not supported.",
-        ComparisonErrorCode.TargetInvalid);
+        "The selected comparison target is not supported.", ComparisonErrorCode.TargetInvalid);
 
     private static readonly OperationError NoRemoteConfiguredError = OperationError.UnprocessableInput(
-        "The repository has no configured remote for the selected target.",
-        ComparisonErrorCode.NoRemoteConfigured);
+        "The repository has no configured remote for the selected target.", ComparisonErrorCode.NoRemoteConfigured);
 
-    private static readonly OperationError InspectionFailedError =
-        OperationError.ExternalDependencyFailure(
-            "Git comparison inspection failed.",
-            ComparisonErrorCode.InspectionFailed);
+    private static readonly OperationError InspectionFailedError = OperationError.ExternalDependencyFailure(
+        "Git comparison inspection failed.", ComparisonErrorCode.InspectionFailed);
 
     private readonly IGitRepositoryInspector _repositoryInspector =
         repositoryInspector ?? throw new ArgumentNullException(nameof(repositoryInspector));
@@ -55,25 +51,18 @@ public sealed class GitRemoteBaselineTracker(
         logger ?? throw new ArgumentNullException(nameof(logger));
 
     /// <inheritdoc />
-    public async Task<Result<RemoteBaselineCheckResult>> CheckAsync(
-        string? path,
-        string? target,
-        CancellationToken cancellationToken)
+    public async Task<Result<RemoteBaselineCheckResult>> CheckAsync(string? path, string? target, CancellationToken cancellationToken)
     {
         if (!IsApprovedTarget(target))
         {
-            this._logger.LogDebug(
-                "Rejected remote baseline check for target {Target}: target shape is not approved.",
-                target);
+            this._logger.LogDebug("Rejected remote baseline check for target {Target}: target shape is not approved.", target);
             return TargetInvalidError;
         }
 
         cancellationToken.ThrowIfCancellationRequested();
         var startedAt = Stopwatch.GetTimestamp();
         using var deadline = new CancellationTokenSource(GitRemoteConstants.CheckTimeout);
-        using var actionCancellation = CancellationTokenSource.CreateLinkedTokenSource(
-            cancellationToken,
-            deadline.Token);
+        using var actionCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, deadline.Token);
 
         try
         {
@@ -107,9 +96,7 @@ public sealed class GitRemoteBaselineTracker(
             var resolution = GitOutputParser.ResolveRemoteBranch(target!, remoteNames);
             if (resolution is null)
             {
-                this._logger.LogDebug(
-                    "Rejected remote baseline check for target {Target}: target does not match a known remote.",
-                    target);
+            this._logger.LogDebug("Rejected remote baseline check for target {Target}: target does not match a known remote.", target);
                 return TargetInvalidError;
             }
 
@@ -127,10 +114,8 @@ public sealed class GitRemoteBaselineTracker(
 
             if (IsConfirmedMissingTarget(localRevisionResult.Data!))
             {
-                this._logger.LogWarning(
-                    "Remote baseline check for target {Target} found no local commit; the target may have been " +
-                    "removed since it was last discovered.",
-                    target);
+                this._logger.LogWarning("Remote baseline check for target {Target} found no local commit; the target may have been " +
+                    "removed since it was last discovered.", target);
                 return TargetInvalidError;
             }
 
@@ -162,11 +147,8 @@ public sealed class GitRemoteBaselineTracker(
                 lsRemoteOutput.StandardError.Length == 0 &&
                 lsRemoteOutput.StandardOutput.Length == 0)
             {
-                this._logger.LogWarning(
-                    "Remote baseline check for target {Target} against remote {Remote} found no matching " +
-                    "remote branch.",
-                    target,
-                    remote);
+                this._logger.LogWarning("Remote baseline check for target {Target} against remote {Remote} found no matching " +
+                    "remote branch.", target, remote);
                 return TargetInvalidError;
             }
 
@@ -174,10 +156,7 @@ public sealed class GitRemoteBaselineTracker(
             {
                 this._logger.LogWarning(
                     "Remote baseline check for target {Target} against remote {Remote} failed with exit code " +
-                    "{ExitCode} in {ElapsedMilliseconds:0.000} ms.",
-                    target,
-                    remote,
-                    lsRemoteOutput.ExitCode,
+                    "{ExitCode} in {ElapsedMilliseconds:0.000} ms.", target, remote, lsRemoteOutput.ExitCode,
                     Stopwatch.GetElapsedTime(startedAt).TotalMilliseconds);
                 return 
                     GitDiagnosticClassifier.ClassifyRemoteFailure(lsRemoteOutput);
@@ -195,35 +174,24 @@ public sealed class GitRemoteBaselineTracker(
                 : RemoteBaselineState.Moved;
             this._logger.LogInformation(
                 "Remote baseline check for target {Target} against remote {Remote} resolved to {BaselineState} " +
-                "in {ElapsedMilliseconds:0.000} ms.",
-                target,
-                remote,
-                state,
-                Stopwatch.GetElapsedTime(startedAt).TotalMilliseconds);
+                "in {ElapsedMilliseconds:0.000} ms.", target, remote, state, Stopwatch.GetElapsedTime(startedAt).TotalMilliseconds);
             return Result.Success(new RemoteBaselineCheckResult(state, remoteRevision));
         }
         catch (OperationCanceledException) when (
             !cancellationToken.IsCancellationRequested && deadline.IsCancellationRequested)
         {
-            this._logger.LogWarning(
-                "Remote baseline check for target {Target} timed out after {ElapsedMilliseconds:0.000} ms.",
-                target,
+            this._logger.LogWarning("Remote baseline check for target {Target} timed out after {ElapsedMilliseconds:0.000} ms.", target,
                 Stopwatch.GetElapsedTime(startedAt).TotalMilliseconds);
             return TimedOutError();
         }
     }
 
     /// <inheritdoc />
-    public async Task<Result<string>> RefreshAsync(
-        string? path,
-        string? target,
-        CancellationToken cancellationToken)
+    public async Task<Result<string>> RefreshAsync(string? path, string? target, CancellationToken cancellationToken)
     {
         if (!IsApprovedTarget(target))
         {
-            this._logger.LogDebug(
-                "Rejected remote baseline refresh for target {Target}: target shape is not approved.",
-                target);
+            this._logger.LogDebug("Rejected remote baseline refresh for target {Target}: target shape is not approved.", target);
             return TargetInvalidError;
         }
 
@@ -260,18 +228,14 @@ public sealed class GitRemoteBaselineTracker(
             var remoteNames = remoteNamesResult.Data!;
             if (remoteNames.Count == 0)
             {
-                this._logger.LogWarning(
-                    "Remote baseline refresh for target {Target} found no configured remotes.",
-                    target);
+                this._logger.LogWarning("Remote baseline refresh for target {Target} found no configured remotes.", target);
                 return NoRemoteConfiguredError;
             }
 
             var resolution = GitOutputParser.ResolveRemoteBranch(target!, remoteNames);
             if (resolution is null)
             {
-                this._logger.LogDebug(
-                    "Rejected remote baseline refresh for target {Target}: target does not match a known remote.",
-                    target);
+                this._logger.LogDebug("Rejected remote baseline refresh for target {Target}: target does not match a known remote.", target);
                 return TargetInvalidError;
             }
 
@@ -293,10 +257,7 @@ public sealed class GitRemoteBaselineTracker(
             {
                 this._logger.LogWarning(
                     "Remote baseline refresh for target {Target} against remote {Remote} failed with exit code " +
-                    "{ExitCode} in {ElapsedMilliseconds:0.000} ms.",
-                    target,
-                    remote,
-                    fetchOutput.ExitCode,
+                    "{ExitCode} in {ElapsedMilliseconds:0.000} ms.", target, remote, fetchOutput.ExitCode,
                     Stopwatch.GetElapsedTime(startedAt).TotalMilliseconds);
                 return GitDiagnosticClassifier.ClassifyRemoteFailure(fetchOutput);
             }
@@ -323,10 +284,7 @@ public sealed class GitRemoteBaselineTracker(
             {
                 this._logger.LogInformation(
                     "Refreshed remote baseline for target {Target} against remote {Remote} to revision " +
-                    "{Revision} in {ElapsedMilliseconds:0.000} ms.",
-                    target,
-                    remote,
-                    parsedRevision.Data,
+                    "{Revision} in {ElapsedMilliseconds:0.000} ms.", target, remote, parsedRevision.Data,
                     Stopwatch.GetElapsedTime(startedAt).TotalMilliseconds);
             }
 
@@ -335,9 +293,7 @@ public sealed class GitRemoteBaselineTracker(
         catch (OperationCanceledException) when (
             !cancellationToken.IsCancellationRequested && deadline.IsCancellationRequested)
         {
-            this._logger.LogWarning(
-                "Remote baseline refresh for target {Target} timed out after {ElapsedMilliseconds:0.000} ms.",
-                target,
+            this._logger.LogWarning("Remote baseline refresh for target {Target} timed out after {ElapsedMilliseconds:0.000} ms.", target,
                 Stopwatch.GetElapsedTime(startedAt).TotalMilliseconds);
             return TimedOutError();
         }

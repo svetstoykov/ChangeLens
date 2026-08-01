@@ -52,10 +52,8 @@ internal sealed class RepositoryRemoveRecentHandler(
         if (!Guid.TryParseExact(parametersResult.Data!.RepositoryId, "D", out var repositoryId) ||
             !string.Equals(parametersResult.Data.RepositoryId, repositoryId.ToString("D"), StringComparison.Ordinal))
         {
-            return ProtocolResponseFactory.FromError(
-                request.RequestId,
-                OperationError.Validation(
-                    "The repositories.removeRecent repositoryId must be a canonical GUID in 'D' format.",
+            return ProtocolResponseFactory.FromError(request.RequestId,
+                OperationError.Validation("The repositories.removeRecent repositoryId must be a canonical GUID in 'D' format.",
                     EngineErrorCode.InvalidRequest));
         }
 

@@ -100,25 +100,18 @@ public sealed class GitComparisonPreparer(
         logger ?? throw new ArgumentNullException(nameof(logger));
 
     /// <inheritdoc />
-    public async Task<Result<PreparedComparison>> PrepareAsync(
-        string? path,
-        string? target,
-        CancellationToken cancellationToken)
+    public async Task<Result<PreparedComparison>> PrepareAsync(string? path, string? target, CancellationToken cancellationToken)
     {
         if (!IsApprovedTargetShape(target))
         {
-            this._logger.LogDebug(
-                "Rejected comparison preparation for target {Target}: target shape is not approved.",
-                target);
+            this._logger.LogDebug("Rejected comparison preparation for target {Target}: target shape is not approved.", target);
             return TargetInvalidError;
         }
 
         cancellationToken.ThrowIfCancellationRequested();
         var startedAt = Stopwatch.GetTimestamp();
         using var deadline = new CancellationTokenSource(ComparisonLimits.PreparationTimeout);
-        using var actionCancellation = CancellationTokenSource.CreateLinkedTokenSource(
-            cancellationToken,
-            deadline.Token);
+        using var actionCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, deadline.Token);
 
         try
         {
@@ -149,10 +142,8 @@ public sealed class GitComparisonPreparer(
                 candidate => StringComparer.Ordinal.Equals(candidate.FullName, target));
             if (beginningTarget is null)
             {
-                this._logger.LogDebug(
-                    "Rejected comparison preparation for target {Target}: target is not in the discovered " +
-                    "target set.",
-                    target);
+                this._logger.LogDebug("Rejected comparison preparation for target {Target}: target is not in the discovered " +
+                    "target set.", target);
                 return TargetInvalidError;
             }
 
@@ -168,9 +159,7 @@ public sealed class GitComparisonPreparer(
 
             if (checkResult.Data!.ExitCode != 0)
             {
-                this._logger.LogDebug(
-                    "Rejected comparison preparation for target {Target}: target ref format is invalid.",
-                    target);
+                this._logger.LogDebug("Rejected comparison preparation for target {Target}: target ref format is invalid.", target);
                 return TargetInvalidError;
             }
 
@@ -191,10 +180,8 @@ public sealed class GitComparisonPreparer(
 
             if (targetRevisionResult.Data!.ExitCode != 0)
             {
-                this._logger.LogWarning(
-                    "Comparison preparation for target {Target} could not resolve to a commit; the target may " +
-                    "have been removed or moved during preparation.",
-                    target);
+                this._logger.LogWarning("Comparison preparation for target {Target} could not resolve to a commit; the target may " +
+                    "have been removed or moved during preparation.", target);
                 return TargetUnavailableError;
             }
 
@@ -243,9 +230,7 @@ public sealed class GitComparisonPreparer(
 
             if (IsQuietNoMergeBase(mergeBaseResult.Data!))
             {
-                this._logger.LogWarning(
-                    "Comparison preparation for target {Target} found no shared history with HEAD.",
-                    target);
+                this._logger.LogWarning("Comparison preparation for target {Target} found no shared history with HEAD.", target);
                 return UnrelatedHistoryError;
             }
 
@@ -263,11 +248,8 @@ public sealed class GitComparisonPreparer(
 
             if (parsedMergeBases.Data.Count != 1)
             {
-                this._logger.LogWarning(
-                    "Comparison preparation for target {Target} found {MergeBaseCount} merge bases with HEAD; " +
-                    "exactly one is required.",
-                    target,
-                    parsedMergeBases.Data.Count);
+                this._logger.LogWarning("Comparison preparation for target {Target} found {MergeBaseCount} merge bases with HEAD; " +
+                    "exactly one is required.", target, parsedMergeBases.Data.Count);
                 return AmbiguousBaseError;
             }
 
@@ -445,11 +427,8 @@ public sealed class GitComparisonPreparer(
                     parsedBeginningStatus.Data!,
                     parsedEndingStatus.Data!))
             {
-                this._logger.LogWarning(
-                    "Comparison preparation for target {Target} was aborted because repository facts changed " +
-                    "while preparing in {ElapsedMilliseconds:0.000} ms.",
-                    target,
-                    Stopwatch.GetElapsedTime(startedAt).TotalMilliseconds);
+                this._logger.LogWarning("Comparison preparation for target {Target} was aborted because repository facts changed " +
+                    "while preparing in {ElapsedMilliseconds:0.000} ms.", target, Stopwatch.GetElapsedTime(startedAt).TotalMilliseconds);
                 return ChangedDuringPreparationError;
             }
 
@@ -469,14 +448,9 @@ public sealed class GitComparisonPreparer(
                 endingTargetsResult.Data.TargetSetToken,
                 parsedEndingStatus.Data!);
 
-            this._logger.LogInformation(
-                "Prepared comparison for target {Target} with readiness {Readiness}, {ChangedFileTotal} changed " +
-                "files, and {CurrentWorkCommitCount} commits ahead in {ElapsedMilliseconds:0.000} ms.",
-                target,
-                readiness,
-                files.ChangedFileTotal,
-                parsedCommitCounts.Data.CurrentWork,
-                Stopwatch.GetElapsedTime(startedAt).TotalMilliseconds);
+            this._logger.LogInformation("Prepared comparison for target {Target} with readiness {Readiness}, {ChangedFileTotal} changed " +
+                "files, and {CurrentWorkCommitCount} commits ahead in {ElapsedMilliseconds:0.000} ms.", target, readiness,
+                files.ChangedFileTotal, parsedCommitCounts.Data.CurrentWork, Stopwatch.GetElapsedTime(startedAt).TotalMilliseconds);
 
             return Result.Success(
                 new PreparedComparison(
@@ -492,9 +466,7 @@ public sealed class GitComparisonPreparer(
         catch (OperationCanceledException) when (
             !cancellationToken.IsCancellationRequested && deadline.IsCancellationRequested)
         {
-            this._logger.LogWarning(
-                "Comparison preparation for target {Target} timed out after {ElapsedMilliseconds:0.000} ms.",
-                target,
+            this._logger.LogWarning("Comparison preparation for target {Target} timed out after {ElapsedMilliseconds:0.000} ms.", target,
                 Stopwatch.GetElapsedTime(startedAt).TotalMilliseconds);
             return TimedOutError;
         }

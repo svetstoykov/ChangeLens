@@ -63,8 +63,7 @@ internal static class AnalysisProjectionMapper
         AnalysisRunState.Cancelled => "cancelled",
         AnalysisRunState.Failed => "failed",
         AnalysisRunState.Interrupted => "interrupted",
-        _ => OperationError.InternalError(
-            "The analysis run state is not approved for the engine protocol.",
+        _ => OperationError.InternalError("The analysis run state is not approved for the engine protocol.",
             AnalysisProtocolErrorCode.UnmappedRunState),
     };
 
@@ -76,8 +75,7 @@ internal static class AnalysisProjectionMapper
             terminal.LimitationCount!.Value),
         AnalysisTerminalKind.Cancelled => new Models.CancelledAnalysisTerminalResult(terminal.TerminalAtUnixMilliseconds),
         AnalysisTerminalKind.Failed => new Models.FailedAnalysisTerminalResult(terminal.TerminalAtUnixMilliseconds, terminal.FailureCode!),
-        _ => OperationError.InternalError(
-            "The terminal kind is not approved for the engine protocol.",
+        _ => OperationError.InternalError("The terminal kind is not approved for the engine protocol.",
             AnalysisProtocolErrorCode.UnmappedTerminalKind),
     };
 }

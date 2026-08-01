@@ -44,16 +44,12 @@ public sealed class SqliteLocalStateInitializer(
                 return LocalStateFailure.Unavailable();
             }
 
-            logger.LogInformation(
-                "Local state is ready at schema version {SchemaVersion}.",
-                LocalStateConstants.CurrentSchemaVersion);
+            logger.LogInformation("Local state is ready at schema version {SchemaVersion}.", LocalStateConstants.CurrentSchemaVersion);
             return Result.Success();
         }
         catch (Exception exception) when (LocalStateFailure.IsExpectedAccessFailure(exception))
         {
-            logger.LogInformation(
-                "Local-state readiness failed with error {ErrorCode}.",
-                LocalStateErrorCode.Unavailable);
+            logger.LogInformation("Local-state readiness failed with error {ErrorCode}.", LocalStateErrorCode.Unavailable);
             return LocalStateFailure.Unavailable(exception);
         }
     }

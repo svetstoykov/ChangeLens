@@ -15,18 +15,14 @@ internal sealed class ShallowAnalysisPipeline(
     ILogger<ShallowAnalysisPipeline> logger) : IAnalysisPipeline
 {
     /// <inheritdoc />
-    public async Task RunAsync(
-        Guid runId,
-        CancellationToken userCancellationToken,
-        CancellationToken shutdownToken)
+    public async Task RunAsync(Guid runId, CancellationToken userCancellationToken, CancellationToken shutdownToken)
     {
         var plan = BuildPlan();
         var planResult = await store.EstablishStepPlanAsync(runId, plan, CancellationToken.None);
         if (planResult.IsFailure)
         {
-            logger.LogError(
-                "Analysis run {RunId} could not establish its step plan with errors {ErrorCodes}.",
-                runId, planResult.Errors.Select(error => error.Code));
+            logger.LogError("Analysis run {RunId} could not establish its step plan with errors {ErrorCodes}.", runId,
+                planResult.Errors.Select(error => error.Code));
 
             throw new InvalidOperationException(
                 "The analysis pipeline could not establish the step plan. Errors: " +
@@ -54,8 +50,7 @@ internal sealed class ShallowAnalysisPipeline(
                 var transition = await store.TransitionStageAsync(runId, currentState, nextState, this.Now(), CancellationToken.None);
                 if (transition.IsFailure)
                 {
-                    logger.LogError(
-                        "Analysis run {RunId} could not transition from {CurrentState} to {NextState} with errors {ErrorCodes}.",
+                    logger.LogError("Analysis run {RunId} could not transition from {CurrentState} to {NextState} with errors {ErrorCodes}.",
                         runId, currentState, nextState, transition.Errors.Select(error => error.Code));
 
                     throw new InvalidOperationException(
@@ -65,8 +60,7 @@ internal sealed class ShallowAnalysisPipeline(
 
                 if (transition.Data != nextState)
                 {
-                    logger.LogWarning(
-                        "Analysis run {RunId} drifted to {ObservedState} while transitioning from {CurrentState} to {NextState}.",
+                    logger.LogWarning("Analysis run {RunId} drifted to {ObservedState} while transitioning from {CurrentState} to {NextState}.",
                         runId, transition.Data, currentState, nextState);
                     throw new InvalidOperationException(
                         $"The analysis pipeline observed an unexpected run state drift to {transition.Data}.");
@@ -82,17 +76,11 @@ internal sealed class ShallowAnalysisPipeline(
             }
         }
 
-        var terminalTransition = await store.TransitionStageAsync(
-            runId,
-            AnalysisRunState.Collecting,
-            AnalysisRunState.Persisting,
-            this.Now(),
+        var terminalTransition = await store.TransitionStageAsync(runId, AnalysisRunState.Collecting, AnalysisRunState.Persisting, this.Now(),
             CancellationToken.None);
         if (terminalTransition.IsFailure)
         {
-            logger.LogError(
-                "Analysis run {RunId} could not transition to Persisting with errors {ErrorCodes}.",
-                runId,
+            logger.LogError("Analysis run {RunId} could not transition to Persisting with errors {ErrorCodes}.", runId,
                 terminalTransition.Errors.Select(error => error.Code));
             throw new InvalidOperationException(
                 "The analysis pipeline could not transition the run stage. Errors: " +
@@ -101,9 +89,7 @@ internal sealed class ShallowAnalysisPipeline(
 
         if (terminalTransition.Data != AnalysisRunState.Persisting)
         {
-            logger.LogWarning(
-                "Analysis run {RunId} drifted to {ObservedState} while transitioning from Collecting to Persisting.",
-                runId,
+            logger.LogWarning("Analysis run {RunId} drifted to {ObservedState} while transitioning from Collecting to Persisting.", runId,
                 terminalTransition.Data);
             throw new InvalidOperationException(
                 $"The analysis pipeline observed an unexpected run state drift to {terminalTransition.Data}.");
@@ -123,10 +109,7 @@ internal sealed class ShallowAnalysisPipeline(
         var commitResult = await store.CommitTerminalAsync(runId, terminal, CancellationToken.None);
         if (commitResult.IsFailure)
         {
-            logger.LogError(
-                "Analysis run {RunId} could not commit terminal {TerminalKind} with errors {ErrorCodes}.",
-                runId,
-                terminal.Kind,
+            logger.LogError("Analysis run {RunId} could not commit terminal {TerminalKind} with errors {ErrorCodes}.", runId, terminal.Kind,
                 commitResult.Errors.Select(error => error.Code));
             throw new InvalidOperationException(
                 "The analysis pipeline could not commit the terminal outcome. Errors: " +
@@ -135,17 +118,11 @@ internal sealed class ShallowAnalysisPipeline(
 
         if (!commitResult.Data)
         {
-            logger.LogWarning(
-                "Analysis run {RunId} was already terminal when {TerminalKind} was observed.",
-                runId,
-                terminal.Kind);
+            logger.LogWarning("Analysis run {RunId} was already terminal when {TerminalKind} was observed.", runId, terminal.Kind);
             return;
         }
 
-        logger.LogInformation(
-            "Analysis run {RunId} reached terminal {TerminalKind} with {LimitationCount} limitation(s).",
-            runId,
-            terminal.Kind,
+        logger.LogInformation("Analysis run {RunId} reached terminal {TerminalKind} with {LimitationCount} limitation(s).", runId, terminal.Kind,
             limitationCount);
     }
 

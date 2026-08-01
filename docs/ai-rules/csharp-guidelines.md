@@ -8,7 +8,8 @@ These rules extend the language-neutral organization rules in `core-principles.m
   and be registered through a capability-specific interface. Concrete classes may be injected only when they are immutable
   value models, framework-owned types, or genuine stateless language-level utilities for which an interface would add no
   boundary. Do not inject concrete service implementations merely because there is currently one implementation.
-- Avoid static service classes. Static classes are acceptable only for genuine constants or stateless language-level utilities when an injected service would add ceremony without a substitutable boundary.
+- Avoid static service classes. Static classes are acceptable only for genuine constants or stateless language-level
+  utilities when an injected service would add ceremony without a substitutable boundary.
 - Keep the whole startup story of a production executable visible in its `Program.cs`: host creation, container
   configuration, one call per capability registration extension, startup validation, host construction and
   disposal, and the boot and run sequence with its exception boundary and exit codes. Keep the registration bodies
@@ -29,16 +30,48 @@ expression-bodied members, simple collection expressions and initializer entries
 filters. Existing line breaks do not justify keeping a construct multiline. Never put multiple statements on one line;
 braced blocks retain the normal multiline brace style.
 
-When a declaration or invocation exceeds 150 characters, or contains a block-bodied lambda or control-flow body, keep
-the member name and opening parenthesis on the first line, put one argument or parameter on each continuation line,
-indent continuation lines by four spaces relative to the containing statement, and keep the closing parenthesis beside
-the final item. Do not partially pack arguments or parameters. Wrap at the shallowest useful syntax boundary: do not
-expand nested invocations merely because an inner argument list needs wrapping. Keep a compact nested subexpression on
-one line when it fits.
+### Compact invocation and signature formatting
 
-For other multiline expressions, put ternary arms on separate lines with `?` and `:` leading the continuation lines,
-put one Boolean operand per line with the operator leading the continuation line, break fluent chains before the dot,
-and put one initializer entry or long collection element on each continuation line.
+Apply this procedure to hand-authored method invocations, logging calls, fluent calls, delegates, and method
+signatures/definitions. The 150-character limit always takes precedence over visual symmetry or an existing line break.
+Count every character on the physical line, including indentation, and never exceed 150 characters except for an
+indivisible literal such as SQL, a URI, a hash, a regular expression, or exact protocol/fixture text.
+
+1. First try the complete operation on one physical line. If the assignment, `return`, `await`, call, arguments, and
+   closing punctuation fit within 150 characters, collapse the entire operation to that line. For example:
+
+   ```csharp
+   await capture.WriteAsync(buffer.AsMemory(0, bytesRead), cancellationToken);
+   CryptographicOperations.FixedTimeEquals(Encoding.ASCII.GetBytes(supplied), Encoding.ASCII.GetBytes(current));
+   ```
+
+2. If the complete operation does not fit, keep the member name and opening parenthesis on the first line and put the
+   closing parenthesis beside the final argument. Pack consecutive arguments or parameters onto each continuation
+   line as far as possible without exceeding 150 characters. Do not keep one argument per line merely because the
+   invocation was originally formatted that way. For example:
+
+   ```csharp
+   logger.LogError(
+       "The analysis processor could not record {Reason} for run {RunId} with errors {ErrorCodes}.",
+       reason, runId, terminalResult.Errors.Select(error => error.Code));
+   ```
+
+3. If one packed continuation line would exceed 150 characters, move the next argument or parameter to a new
+   continuation line. Indent continuation lines by four spaces relative to the containing statement. Keep each
+   argument or parameter intact; do not split a nested invocation just because the outer list needs wrapping.
+
+4. If an invocation contains a block-bodied lambda or a control-flow body, keep the invocation multiline and use one
+   argument per continuation line where the body or syntax requires it. Do not expand nested invocations merely because
+   the outer invocation is multiline.
+
+5. Apply the same compact-first procedure to method signatures and definitions when they fit. Do not reformat plain
+   model constructors or service constructors as part of this compact-invocation cleanup. Existing constructor layout
+   may remain unchanged unless a separate constructor-formatting rule explicitly applies.
+
+Use the shallowest useful syntax boundary for every remaining wrap. For ternaries, put `?` and `:` at the start of
+continuation lines. For Boolean expressions, put the operator at the start of the continuation line. Break fluent
+chains before the dot only when the complete fluent expression does not fit on one line. Put one initializer entry or
+long collection element on each continuation line.
 
 For XML documentation, keep a complete tag on one line when it fits and the XML documentation rules permit it. Reflow
 prose at natural phrase boundaries before 150 columns, preserve the established four-space XML content indentation in

@@ -20,10 +20,8 @@ internal static class GitOutputParser
     /// <summary>
     ///     The stable generic repository inspection failure.
     /// </summary>
-    private static readonly OperationError InspectionFailedError =
-        OperationError.ExternalDependencyFailure(
-            "Git repository inspection failed.",
-            RepositoryErrorCode.InspectionFailed);
+    private static readonly OperationError InspectionFailedError = OperationError.ExternalDependencyFailure(
+        "Git repository inspection failed.", RepositoryErrorCode.InspectionFailed);
 
     /// <summary>
     ///     Validates output from the Git availability command.
@@ -39,10 +37,7 @@ internal static class GitOutputParser
 
         if (output.ExitCode != 0)
         {
-            return Result.Fail(
-                OperationError.ExternalDependencyFailure(
-                    "Git is unavailable.",
-                    GitErrorCode.Unavailable));
+            return Result.Fail(OperationError.ExternalDependencyFailure("Git is unavailable.", GitErrorCode.Unavailable));
         }
 
         var lineResult = ParseSingleLine(output);

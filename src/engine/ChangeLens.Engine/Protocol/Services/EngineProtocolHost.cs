@@ -64,10 +64,7 @@ internal sealed class EngineProtocolHost(
                 else
                 {
                     await using var requestScope = serviceScopeFactory.CreateAsyncScope();
-                    response = await this.ProcessAsync(
-                        readResult.Data!,
-                        requestScope.ServiceProvider,
-                        stoppingToken);
+                    response = await this.ProcessAsync(readResult.Data!, requestScope.ServiceProvider, stoppingToken);
                 }
 
                 var writeResult = await protocolTransport.WriteAsync(response, stoppingToken);
@@ -117,9 +114,7 @@ internal sealed class EngineProtocolHost(
     /// <exception cref="OperationCanceledException">
     ///     The <paramref name="cancellationToken" /> is canceled.
     /// </exception>
-    internal async Task<ProtocolResponse> ProcessAsync(
-        EngineProtocolRequest request,
-        IServiceProvider requestServices,
+    internal async Task<ProtocolResponse> ProcessAsync(EngineProtocolRequest request, IServiceProvider requestServices,
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(request);
@@ -132,8 +127,7 @@ internal sealed class EngineProtocolHost(
             if (request.ProtocolVersion != EngineProtocolConstants.CurrentVersion)
             {
                 response = ProtocolResponseFactory.FromError(
-                    request.RequestId,
-                    UnsupportedProtocolVersionError(request.ProtocolVersion));
+                    request.RequestId, UnsupportedProtocolVersionError(request.ProtocolVersion));
             }
             else
             {
@@ -146,13 +140,8 @@ internal sealed class EngineProtocolHost(
         }
         catch (Exception exception)
         {
-            logger.LogError(
-                exception,
-                "Unexpected failure processing engine action {RequestId} for {Action} with error {ErrorCode} in " +
-                "{ElapsedMilliseconds:0.000} ms.",
-                request.RequestId,
-                request.Action,
-                EngineErrorCode.UnexpectedFailure,
+            logger.LogError(exception, "Unexpected failure processing engine action {RequestId} for {Action} with error {ErrorCode} in " +
+                "{ElapsedMilliseconds:0.000} ms.", request.RequestId, request.Action, EngineErrorCode.UnexpectedFailure,
                 Stopwatch.GetElapsedTime(startedAt).TotalMilliseconds);
 
             return ProtocolResponseFactory.CreateUnexpectedFailure(request.RequestId);
@@ -174,9 +163,7 @@ internal sealed class EngineProtocolHost(
     ///     A task that represents the asynchronous operation. The task result contains the handler's response or the
     ///     unknown-action error.
     /// </returns>
-    private async Task<ProtocolResponse> ProcessKnownVersionAsync(
-        EngineProtocolRequest request,
-        IServiceProvider requestServices,
+    private async Task<ProtocolResponse> ProcessKnownVersionAsync(EngineProtocolRequest request, IServiceProvider requestServices,
         CancellationToken cancellationToken)
     {
         if (!EngineActionConstants.ApprovedActions.Contains(request.Action, StringComparer.Ordinal))
@@ -184,9 +171,7 @@ internal sealed class EngineProtocolHost(
             return ProtocolResponseFactory.FromError(request.RequestId, UnknownActionError(request.Action));
         }
 
-        var actionHandler = (IActionHandler)requestServices.GetRequiredKeyedService(
-            typeof(IActionHandler),
-            request.Action);
+        var actionHandler = (IActionHandler)requestServices.GetRequiredKeyedService(typeof(IActionHandler), request.Action);
         return await actionHandler.HandleAsync(request, cancellationToken);
     }
 
@@ -198,10 +183,7 @@ internal sealed class EngineProtocolHost(
     private void FailProcess(Result result, string message)
     {
         Environment.ExitCode = EngineProcessConstants.UnexpectedFailureExitCode;
-        logger.LogCritical(
-            "{FailureMessage} Errors: {ErrorCodes}",
-            message,
-            result.Errors.Select(error => error.Code));
+        logger.LogCritical("{FailureMessage} Errors: {ErrorCodes}", message, result.Errors.Select(error => error.Code));
     }
 
     /// <summary>
@@ -214,22 +196,14 @@ internal sealed class EngineProtocolHost(
     {
         if (response is ProtocolErrorResponse errorResponse)
         {
-            logger.Log(
-                LogLevel.Warning,
-                "Processed engine action {RequestId} for {Action} with errors {ErrorCodes} in " +
-                "{ElapsedMilliseconds:0.000} ms.",
-                request.RequestId,
-                request.Action,
-                errorResponse.Errors.Select(error => error.Code),
+            logger.Log(LogLevel.Warning, "Processed engine action {RequestId} for {Action} with errors {ErrorCodes} in " +
+                "{ElapsedMilliseconds:0.000} ms.", request.RequestId, request.Action, errorResponse.Errors.Select(error => error.Code),
                 elapsed.TotalMilliseconds);
             return;
         }
 
-        logger.LogInformation(
-            "Processed engine action {RequestId} for {Action} with a result in {ElapsedMilliseconds:0.000} ms.",
-            request.RequestId,
-            request.Action,
-            elapsed.TotalMilliseconds);
+        logger.LogInformation("Processed engine action {RequestId} for {Action} with a result in {ElapsedMilliseconds:0.000} ms.", request.RequestId,
+            request.Action, elapsed.TotalMilliseconds);
     }
 
     private static OperationError UnsupportedProtocolVersionError(int protocolVersion) =>

@@ -25,9 +25,7 @@ public sealed class RepositoryHistoryService(
     ILogger<RepositoryHistoryService> logger) : IRepositoryHistoryService
 {
     /// <inheritdoc />
-    public async Task<Result<OpenedRepository>> OpenAsync(
-        string path,
-        CancellationToken cancellationToken)
+    public async Task<Result<OpenedRepository>> OpenAsync(string path, CancellationToken cancellationToken)
     {
         var inspectionResult = await repositoryInspector.InspectAsync(path, cancellationToken);
         if (inspectionResult.IsFailure)
@@ -37,12 +35,8 @@ public sealed class RepositoryHistoryService(
         }
 
         var repository = inspectionResult.Data!;
-        var recordResult = await historyStore.RecordOpenAsync(
-            repository.CanonicalPath,
-            pathKeyProvider.CreateKey(repository.CanonicalPath),
-            repository.Name,
-            timeProvider.GetUtcNow().ToUnixTimeMilliseconds(),
-            cancellationToken);
+        var recordResult = await historyStore.RecordOpenAsync(repository.CanonicalPath, pathKeyProvider.CreateKey(repository.CanonicalPath),
+            repository.Name, timeProvider.GetUtcNow().ToUnixTimeMilliseconds(), cancellationToken);
         if (recordResult.IsFailure)
         {
             return Result.ErrorFromResult<OpenedRepository>(recordResult);
@@ -53,8 +47,7 @@ public sealed class RepositoryHistoryService(
     }
 
     /// <inheritdoc />
-    public async Task<Result<RepositoryRestoration>> RestoreLastAsync(
-        CancellationToken cancellationToken)
+    public async Task<Result<RepositoryRestoration>> RestoreLastAsync(CancellationToken cancellationToken)
     {
         var lastResult = await historyStore.GetLastAsync(cancellationToken);
         if (lastResult.IsFailure)
@@ -69,9 +62,7 @@ public sealed class RepositoryHistoryService(
             return Result.Success(new RepositoryRestoration(null, null));
         }
 
-        var inspectionResult = await repositoryInspector.InspectAsync(
-            entry.CanonicalPath,
-            cancellationToken);
+        var inspectionResult = await repositoryInspector.InspectAsync(entry.CanonicalPath, cancellationToken);
         if (inspectionResult.IsFailure)
         {
             logger.LogWarning("Failed to restore the last repository: it is no longer inspectable.");
@@ -83,23 +74,14 @@ public sealed class RepositoryHistoryService(
     }
 
     /// <inheritdoc />
-    public Task<Result<RepositoryHistorySnapshot>> ListRecentAsync(
-        CancellationToken cancellationToken) =>
+    public Task<Result<RepositoryHistorySnapshot>> ListRecentAsync(CancellationToken cancellationToken) =>
         historyStore.ListRecentAsync(cancellationToken);
 
     /// <inheritdoc />
-    public Task<Result> RemoveRecentAsync(
-        Guid repositoryId,
-        CancellationToken cancellationToken) =>
+    public Task<Result> RemoveRecentAsync(Guid repositoryId, CancellationToken cancellationToken) =>
         historyStore.RemoveAsync(repositoryId, cancellationToken);
 
     /// <inheritdoc />
-    public Task<Result> SavePreferredTargetAsync(
-        string canonicalPath,
-        string preferredTargetFullName,
-        CancellationToken cancellationToken) =>
-        historyStore.SetPreferredTargetAsync(
-            pathKeyProvider.CreateKey(canonicalPath),
-            preferredTargetFullName,
-            cancellationToken);
+    public Task<Result> SavePreferredTargetAsync(string canonicalPath, string preferredTargetFullName, CancellationToken cancellationToken) =>
+        historyStore.SetPreferredTargetAsync(pathKeyProvider.CreateKey(canonicalPath), preferredTargetFullName, cancellationToken);
 }

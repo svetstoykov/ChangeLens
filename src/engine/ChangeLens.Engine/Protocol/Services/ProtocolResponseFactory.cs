@@ -95,9 +95,7 @@ internal static class ProtocolResponseFactory
     /// <exception cref="ArgumentNullException">
     ///     <paramref name="errors" /> is <see langword="null" />.
     /// </exception>
-    internal static ProtocolErrorResponse CreateError(
-        string? requestId,
-        IReadOnlyList<OperationError> errors)
+    internal static ProtocolErrorResponse CreateError(string? requestId, IReadOnlyList<OperationError> errors)
     {
         ArgumentNullException.ThrowIfNull(errors);
 

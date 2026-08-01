@@ -24,7 +24,13 @@ internal sealed class ShallowAnalysisPipeline(
         var planResult = await store.EstablishStepPlanAsync(runId, plan, CancellationToken.None);
         if (planResult.IsFailure)
         {
-            return;
+            logger.LogError(
+                "Analysis run {RunId} could not establish its step plan with errors {ErrorCodes}.",
+                runId, planResult.Errors.Select(error => error.Code));
+
+            throw new InvalidOperationException(
+                "The analysis pipeline could not establish the step plan. Errors: " +
+                string.Join(", ", planResult.Errors.Select(error => error.Code)) + ".");
         }
 
         var limitationCount = 0;
@@ -48,7 +54,22 @@ internal sealed class ShallowAnalysisPipeline(
                 var transition = await store.TransitionStageAsync(runId, currentState, nextState, this.Now(), CancellationToken.None);
                 if (transition.IsFailure)
                 {
-                    return;
+                    logger.LogError(
+                        "Analysis run {RunId} could not transition from {CurrentState} to {NextState} with errors {ErrorCodes}.",
+                        runId, currentState, nextState, transition.Errors.Select(error => error.Code));
+
+                    throw new InvalidOperationException(
+                        "The analysis pipeline could not transition the run stage. Errors: " +
+                        string.Join(", ", transition.Errors.Select(error => error.Code)) + ".");
+                }
+
+                if (transition.Data != nextState)
+                {
+                    logger.LogWarning(
+                        "Analysis run {RunId} drifted to {ObservedState} while transitioning from {CurrentState} to {NextState}.",
+                        runId, transition.Data, currentState, nextState);
+                    throw new InvalidOperationException(
+                        $"The analysis pipeline observed an unexpected run state drift to {transition.Data}.");
                 }
 
                 currentState = nextState;
@@ -69,7 +90,23 @@ internal sealed class ShallowAnalysisPipeline(
             CancellationToken.None);
         if (terminalTransition.IsFailure)
         {
-            return;
+            logger.LogError(
+                "Analysis run {RunId} could not transition to Persisting with errors {ErrorCodes}.",
+                runId,
+                terminalTransition.Errors.Select(error => error.Code));
+            throw new InvalidOperationException(
+                "The analysis pipeline could not transition the run stage. Errors: " +
+                string.Join(", ", terminalTransition.Errors.Select(error => error.Code)) + ".");
+        }
+
+        if (terminalTransition.Data != AnalysisRunState.Persisting)
+        {
+            logger.LogWarning(
+                "Analysis run {RunId} drifted to {ObservedState} while transitioning from Collecting to Persisting.",
+                runId,
+                terminalTransition.Data);
+            throw new InvalidOperationException(
+                $"The analysis pipeline observed an unexpected run state drift to {terminalTransition.Data}.");
         }
 
         if (userCancellationToken.IsCancellationRequested)
@@ -83,7 +120,28 @@ internal sealed class ShallowAnalysisPipeline(
             this.Now(),
             limitationCount > 0 ? limitationCount : null,
             null);
-        await store.CommitTerminalAsync(runId, terminal, CancellationToken.None);
+        var commitResult = await store.CommitTerminalAsync(runId, terminal, CancellationToken.None);
+        if (commitResult.IsFailure)
+        {
+            logger.LogError(
+                "Analysis run {RunId} could not commit terminal {TerminalKind} with errors {ErrorCodes}.",
+                runId,
+                terminal.Kind,
+                commitResult.Errors.Select(error => error.Code));
+            throw new InvalidOperationException(
+                "The analysis pipeline could not commit the terminal outcome. Errors: " +
+                string.Join(", ", commitResult.Errors.Select(error => error.Code)) + ".");
+        }
+
+        if (!commitResult.Data)
+        {
+            logger.LogWarning(
+                "Analysis run {RunId} was already terminal when {TerminalKind} was observed.",
+                runId,
+                terminal.Kind);
+            return;
+        }
+
         logger.LogInformation(
             "Analysis run {RunId} reached terminal {TerminalKind} with {LimitationCount} limitation(s).",
             runId,

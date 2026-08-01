@@ -188,9 +188,7 @@ public sealed class GitCliCommandRunner : IGitCommandRunner
         {
             if (!process.Start())
             {
-                this._logger.LogWarning(
-                    "Git executable {ExecutablePath} did not start.",
-                    PathSanitizer.RedactHomeDirectory(this._executablePath));
+                this._logger.LogWarning("Git executable {ExecutablePath} did not start.", PathSanitizer.RedactHomeDirectory(this._executablePath));
                 return Unavailable();
             }
         }
@@ -209,9 +207,7 @@ public sealed class GitCliCommandRunner : IGitCommandRunner
         }
 
         using var timeout = new CancellationTokenSource(command.Timeout);
-        using var executionCancellation = CancellationTokenSource.CreateLinkedTokenSource(
-            cancellationToken,
-            timeout.Token);
+        using var executionCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeout.Token);
         var standardOutputTask = this._readBoundedAsync(
             process.StandardOutput.BaseStream,
             command.MaximumStandardOutputBytes,
@@ -244,8 +240,7 @@ public sealed class GitCliCommandRunner : IGitCommandRunner
                 this._logger.LogWarning(
                     "Git {Subcommand} command exceeded its output bound after " +
                     "{ElapsedMilliseconds:0.000} ms.",
-                    Subcommand(command),
-                    Stopwatch.GetElapsedTime(startedAt).TotalMilliseconds);
+                    Subcommand(command), Stopwatch.GetElapsedTime(startedAt).TotalMilliseconds);
                 return command.ErrorPolicy.OutputLimitExceeded;
             }
 
@@ -257,8 +252,7 @@ public sealed class GitCliCommandRunner : IGitCommandRunner
                 this._logger.LogWarning(
                     "Git {Subcommand} command exceeded its output bound after " +
                     "{ElapsedMilliseconds:0.000} ms.",
-                    Subcommand(command),
-                    Stopwatch.GetElapsedTime(startedAt).TotalMilliseconds);
+                    Subcommand(command), Stopwatch.GetElapsedTime(startedAt).TotalMilliseconds);
                 return command.ErrorPolicy.OutputLimitExceeded;
             }
 
@@ -296,8 +290,7 @@ public sealed class GitCliCommandRunner : IGitCommandRunner
             await TerminateAndCleanUpAsync(process, executionCancellation, cleanupTasks);
             this._logger.LogWarning(
                 "Git {Subcommand} command timed out after {ElapsedMilliseconds:0.000} ms.",
-                Subcommand(command),
-                Stopwatch.GetElapsedTime(startedAt).TotalMilliseconds);
+                Subcommand(command), Stopwatch.GetElapsedTime(startedAt).TotalMilliseconds);
             return command.ErrorPolicy.TimedOut;
         }
         catch (Exception exception) when (exception is IOException or InvalidOperationException)
@@ -306,8 +299,7 @@ public sealed class GitCliCommandRunner : IGitCommandRunner
             this._logger.LogWarning(
                 exception,
                 "Git {Subcommand} command failed after {ElapsedMilliseconds:0.000} ms.",
-                Subcommand(command),
-                Stopwatch.GetElapsedTime(startedAt).TotalMilliseconds);
+                Subcommand(command), Stopwatch.GetElapsedTime(startedAt).TotalMilliseconds);
             return command.ErrorPolicy.InspectionFailed;
         }
     }
@@ -439,20 +431,14 @@ public sealed class GitCliCommandRunner : IGitCommandRunner
 
         while (capture.Length < captureLimit)
         {
-            var requestedBytes = (int)Math.Min(
-                buffer.Length,
-                captureLimit - capture.Length);
-            var bytesRead = await stream.ReadAsync(
-                buffer.AsMemory(0, requestedBytes),
-                cancellationToken);
+            var requestedBytes = (int)Math.Min(buffer.Length, captureLimit - capture.Length);
+            var bytesRead = await stream.ReadAsync(buffer.AsMemory(0, requestedBytes), cancellationToken);
             if (bytesRead == 0)
             {
                 break;
             }
 
-            await capture.WriteAsync(
-                buffer.AsMemory(0, bytesRead),
-                cancellationToken);
+            await capture.WriteAsync(buffer.AsMemory(0, bytesRead), cancellationToken);
         }
 
         return capture.ToArray();
@@ -523,8 +509,7 @@ public sealed class GitCliCommandRunner : IGitCommandRunner
 
         try
         {
-            await Task.WhenAll(observationTasks)
-                .WaitAsync(GitProcessConstants.CleanupGracePeriod);
+            await Task.WhenAll(observationTasks).WaitAsync(GitProcessConstants.CleanupGracePeriod);
         }
         catch (TimeoutException)
         {

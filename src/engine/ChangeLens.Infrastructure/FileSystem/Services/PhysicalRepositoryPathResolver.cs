@@ -22,16 +22,13 @@ namespace ChangeLens.Infrastructure.FileSystem.Services;
 public sealed class PhysicalRepositoryPathResolver : IRepositoryPathResolver
 {
     private static readonly OperationError AccessDeniedError = OperationError.Unauthorized(
-        "The selected directory cannot be accessed.",
-        RepositoryErrorCode.AccessDenied);
+        "The selected directory cannot be accessed.", RepositoryErrorCode.AccessDenied);
 
     private static readonly OperationError PathNotFoundError = OperationError.NotFound(
-        "The selected directory does not exist.",
-        RepositoryErrorCode.PathNotFound);
+        "The selected directory does not exist.", RepositoryErrorCode.PathNotFound);
 
     private static readonly OperationError ResolutionFailedError = OperationError.ExternalDependencyFailure(
-        "The selected directory could not be resolved.",
-        RepositoryErrorCode.InspectionFailed);
+        "The selected directory could not be resolved.", RepositoryErrorCode.InspectionFailed);
 
     private readonly ILogger<PhysicalRepositoryPathResolver> _logger;
 
@@ -47,9 +44,7 @@ public sealed class PhysicalRepositoryPathResolver : IRepositoryPathResolver
     }
 
     /// <inheritdoc />
-    public async Task<Result<string>> ResolveAsync(
-        string path,
-        CancellationToken cancellationToken)
+    public async Task<Result<string>> ResolveAsync(string path, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
 
@@ -61,8 +56,7 @@ public sealed class PhysicalRepositoryPathResolver : IRepositoryPathResolver
             var physicalPath = ResolveDirectory(root);
             var relativePath = fullPath[root.Length..];
             var segments = relativePath.Split(
-                [Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar],
-                StringSplitOptions.RemoveEmptyEntries);
+                [Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar], StringSplitOptions.RemoveEmptyEntries);
 
             foreach (var segment in segments)
             {
@@ -74,10 +68,7 @@ public sealed class PhysicalRepositoryPathResolver : IRepositoryPathResolver
         }
         catch (UnauthorizedAccessException exception)
         {
-            this._logger.LogDebug(
-                exception,
-                "Path resolution for {Path} failed: access denied.",
-                PathSanitizer.RedactHomeDirectory(path));
+            this._logger.LogDebug(exception, "Path resolution for {Path} failed: access denied.", PathSanitizer.RedactHomeDirectory(path));
             return AccessDeniedError;
         }
         catch (Exception exception) when (

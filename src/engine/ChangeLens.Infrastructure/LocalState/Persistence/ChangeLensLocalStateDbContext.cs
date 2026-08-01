@@ -38,9 +38,7 @@ public sealed class ChangeLensLocalStateDbContext(
                 table.HasCheckConstraint("CK_local_state_metadata_schema", "schema_version > 0");
             });
             entity.HasKey(metadata => metadata.SingletonId);
-            entity.Property(metadata => metadata.SingletonId)
-                .HasColumnName("singleton_id")
-                .ValueGeneratedNever();
+            entity.Property(metadata => metadata.SingletonId).HasColumnName("singleton_id").ValueGeneratedNever();
             entity.Property(metadata => metadata.ProductName).HasColumnName("product_name").IsRequired();
             entity.Property(metadata => metadata.SchemaVersion).HasColumnName("schema_version");
             entity.Property(metadata => metadata.CreatedAtUnixMilliseconds).HasColumnName("created_at_unix_ms");
@@ -50,17 +48,13 @@ public sealed class ChangeLensLocalStateDbContext(
         {
             entity.ToTable("repositories");
             entity.HasKey(repository => repository.RepositoryId);
-            entity.Property(repository => repository.RepositoryId)
-                .HasColumnName("repository_id")
-                .HasConversion<string>();
+            entity.Property(repository => repository.RepositoryId).HasColumnName("repository_id").HasConversion<string>();
             entity.Property(repository => repository.CanonicalPath).HasColumnName("canonical_path").IsRequired();
             entity.Property(repository => repository.CanonicalPathKey).HasColumnName("canonical_path_key").IsRequired();
             entity.HasIndex(repository => repository.CanonicalPathKey).IsUnique();
             entity.Property(repository => repository.DisplayName).HasColumnName("display_name").IsRequired();
-            entity.Property(repository => repository.LastOpenedAtUnixMilliseconds)
-                .HasColumnName("last_opened_at_unix_ms");
-            entity.Property(repository => repository.PreferredTargetFullName)
-                .HasColumnName("preferred_target_full_name");
+            entity.Property(repository => repository.LastOpenedAtUnixMilliseconds).HasColumnName("last_opened_at_unix_ms");
+            entity.Property(repository => repository.PreferredTargetFullName).HasColumnName("preferred_target_full_name");
         });
 
         modelBuilder.Entity<ApplicationLocalState>(entity =>
@@ -68,21 +62,13 @@ public sealed class ChangeLensLocalStateDbContext(
             entity.ToTable("application_state", table =>
             {
                 table.HasCheckConstraint("CK_application_state_singleton", "singleton_id = 1");
-                table.HasCheckConstraint(
-                    "CK_application_state_color_theme",
-                    "color_theme IS NULL OR color_theme IN ('light', 'dark')");
+                table.HasCheckConstraint("CK_application_state_color_theme", "color_theme IS NULL OR color_theme IN ('light', 'dark')");
             });
             entity.HasKey(application => application.SingletonId);
-            entity.Property(application => application.SingletonId)
-                .HasColumnName("singleton_id")
-                .ValueGeneratedNever();
-            entity.Property(application => application.LastRepositoryId)
-                .HasColumnName("last_repository_id")
-                .HasConversion<string>();
+            entity.Property(application => application.SingletonId).HasColumnName("singleton_id").ValueGeneratedNever();
+            entity.Property(application => application.LastRepositoryId).HasColumnName("last_repository_id").HasConversion<string>();
             entity.Property(application => application.ColorTheme).HasColumnName("color_theme");
-            entity.HasOne(application => application.LastRepository)
-                .WithMany()
-                .HasForeignKey(application => application.LastRepositoryId)
+            entity.HasOne(application => application.LastRepository).WithMany().HasForeignKey(application => application.LastRepositoryId)
                 .OnDelete(DeleteBehavior.SetNull);
         });
 
@@ -110,9 +96,7 @@ public sealed class ChangeLensLocalStateDbContext(
             entity.Property(run => run.RepositoryId).HasColumnName("repository_id").HasConversion<string>();
             entity.Property(run => run.RepositoryDisplayName).HasColumnName("repository_display_name").IsRequired();
             entity.Property(run => run.CanonicalRepositoryPath).HasColumnName("canonical_repository_path").IsRequired();
-            entity.Property(run => run.CanonicalRepositoryPathKey)
-                .HasColumnName("canonical_repository_path_key")
-                .IsRequired();
+            entity.Property(run => run.CanonicalRepositoryPathKey).HasColumnName("canonical_repository_path_key").IsRequired();
             entity.Property(run => run.HeadRevision).HasColumnName("head_revision").IsRequired();
             entity.Property(run => run.Target).HasColumnName("target").IsRequired();
             entity.Property(run => run.TargetRevision).HasColumnName("target_revision").IsRequired();
@@ -125,17 +109,13 @@ public sealed class ChangeLensLocalStateDbContext(
             entity.Property(run => run.AnalysisStartedAtUnixMilliseconds).HasColumnName("analysis_started_at_unix_ms");
             entity.Property(run => run.TerminalAtUnixMilliseconds).HasColumnName("terminal_at_unix_ms");
             entity.Property(run => run.InterruptedAtUnixMilliseconds).HasColumnName("interrupted_at_unix_ms");
-            entity.Property(run => run.CancellationRequestedAtUnixMilliseconds)
-                .HasColumnName("cancellation_requested_at_unix_ms");
+            entity.Property(run => run.CancellationRequestedAtUnixMilliseconds).HasColumnName("cancellation_requested_at_unix_ms");
             entity.Property(run => run.SnapshotId).HasColumnName("snapshot_id");
             entity.Property(run => run.TerminalLimitationCount).HasColumnName("terminal_limitation_count");
             entity.Property(run => run.TerminalFailureCode).HasColumnName("terminal_failure_code");
             entity.Property(run => run.InterruptionReason).HasColumnName("interruption_reason");
-            entity.HasIndex(run => run.CanonicalRepositoryPathKey)
-                .HasDatabaseName("IX_analysis_runs_active_repository")
-                .IsUnique()
-                .HasFilter(
-                    "state IN ('pendingCapture','capturing','discovering','collecting','persisting')");
+            entity.HasIndex(run => run.CanonicalRepositoryPathKey).HasDatabaseName("IX_analysis_runs_active_repository").IsUnique()
+                .HasFilter("state IN ('pendingCapture','capturing','discovering','collecting','persisting')");
         });
 
         modelBuilder.Entity<AnalysisRunStepEntity>(entity =>
@@ -159,10 +139,7 @@ public sealed class ChangeLensLocalStateDbContext(
             entity.Property(step => step.FinishedAtUnixMilliseconds).HasColumnName("finished_at_unix_ms");
             entity.Property(step => step.Code).HasColumnName("code");
             entity.HasIndex(step => new { step.RunId, step.Order }).IsUnique();
-            entity.HasOne(step => step.Run)
-                .WithMany(run => run.Steps)
-                .HasForeignKey(step => step.RunId)
-                .OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne(step => step.Run).WithMany(run => run.Steps).HasForeignKey(step => step.RunId).OnDelete(DeleteBehavior.Cascade);
         });
     }
 }

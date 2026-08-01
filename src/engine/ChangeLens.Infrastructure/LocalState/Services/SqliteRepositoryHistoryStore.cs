@@ -32,9 +32,7 @@ public sealed class SqliteRepositoryHistoryStore(
         try
         {
             await using var transaction = await context.Database.BeginTransactionAsync(cancellationToken);
-            var repository = await context.Repositories.SingleOrDefaultAsync(
-                entry => entry.CanonicalPathKey == canonicalPathKey,
-                cancellationToken);
+            var repository = await context.Repositories.SingleOrDefaultAsync(entry => entry.CanonicalPathKey == canonicalPathKey, cancellationToken);
             if (repository is null)
             {
                 repository = new RepositoryLocalState
@@ -54,9 +52,7 @@ public sealed class SqliteRepositoryHistoryStore(
                 repository.LastOpenedAtUnixMilliseconds = openedAtUnixMilliseconds;
             }
 
-            var applicationState = await context.ApplicationState.SingleAsync(
-                entry => entry.SingletonId == 1,
-                cancellationToken);
+            var applicationState = await context.ApplicationState.SingleAsync(entry => entry.SingletonId == 1, cancellationToken);
             applicationState.LastRepositoryId = repository.RepositoryId;
             await context.SaveChangesAsync(cancellationToken);
 
@@ -77,9 +73,7 @@ public sealed class SqliteRepositoryHistoryStore(
         }
         catch (Exception exception) when (LocalStateFailure.IsMalformedDataFailure(exception))
         {
-            logger.LogWarning(
-                exception,
-                "Failed to record a repository history open: stored metadata is malformed.");
+            logger.LogWarning(exception, "Failed to record a repository history open: stored metadata is malformed.");
             return LocalStateFailure.Invalid<RepositoryHistoryEntry>();
         }
     }
@@ -93,8 +87,7 @@ public sealed class SqliteRepositoryHistoryStore(
                 .AsNoTracking()
                 .Include(entry => entry.LastRepository)
                 .SingleAsync(entry => entry.SingletonId == 1, cancellationToken);
-            return Result.Success<RepositoryHistoryEntry?>(
-                applicationState.LastRepository is null ? null : ToEntry(applicationState.LastRepository));
+            return Result.Success<RepositoryHistoryEntry?>(applicationState.LastRepository is null ? null : ToEntry(applicationState.LastRepository));
         }
         catch (Exception exception) when (LocalStateFailure.IsExpectedAccessFailure(exception))
         {
@@ -103,9 +96,7 @@ public sealed class SqliteRepositoryHistoryStore(
         }
         catch (Exception exception) when (LocalStateFailure.IsMalformedDataFailure(exception))
         {
-            logger.LogWarning(
-                exception,
-                "Failed to read the last-opened repository from history: stored metadata is malformed.");
+            logger.LogWarning(exception, "Failed to read the last-opened repository from history: stored metadata is malformed.");
             return LocalStateFailure.Invalid<RepositoryHistoryEntry?>();
         }
     }
@@ -147,9 +138,7 @@ public sealed class SqliteRepositoryHistoryStore(
     {
         try
         {
-            var repository = await context.Repositories.SingleOrDefaultAsync(
-                entry => entry.RepositoryId == repositoryId,
-                cancellationToken);
+            var repository = await context.Repositories.SingleOrDefaultAsync(entry => entry.RepositoryId == repositoryId, cancellationToken);
             if (repository is not null)
             {
                 context.Repositories.Remove(repository);
@@ -166,16 +155,11 @@ public sealed class SqliteRepositoryHistoryStore(
     }
 
     /// <inheritdoc />
-    public async Task<Result> SetPreferredTargetAsync(
-        string canonicalPathKey,
-        string preferredTargetFullName,
-        CancellationToken cancellationToken)
+    public async Task<Result> SetPreferredTargetAsync(string canonicalPathKey, string preferredTargetFullName, CancellationToken cancellationToken)
     {
         try
         {
-            var repository = await context.Repositories.SingleOrDefaultAsync(
-                entry => entry.CanonicalPathKey == canonicalPathKey,
-                cancellationToken);
+            var repository = await context.Repositories.SingleOrDefaultAsync(entry => entry.CanonicalPathKey == canonicalPathKey, cancellationToken);
             if (repository is not null)
             {
                 repository.PreferredTargetFullName = preferredTargetFullName;

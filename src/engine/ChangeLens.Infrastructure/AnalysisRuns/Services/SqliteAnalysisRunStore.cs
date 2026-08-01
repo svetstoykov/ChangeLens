@@ -44,9 +44,7 @@ public sealed class SqliteAnalysisRunStore(
 
         if (repositoryId is null)
         {
-            return OperationError.NotFound(
-                "The repository is not retained in local state.",
-                AnalysisErrorCode.RepositoryUnavailable);
+            return OperationError.NotFound("The repository is not retained in local state.", AnalysisErrorCode.RepositoryUnavailable);
         }
 
         var runId = Guid.NewGuid();
@@ -90,8 +88,7 @@ public sealed class SqliteAnalysisRunStore(
 
             logger.LogInformation(
                 "Rejected analysis run acceptance for repository {RepositoryDisplayName} because run {ActiveRunId} is already active.",
-                acceptance.RepositoryDisplayName,
-                activeRunId);
+                acceptance.RepositoryDisplayName, activeRunId);
             return new AnalysisStartOutcome(AnalysisStartOutcomeKind.RejectedActive, null, null, activeRunId);
         }
 
@@ -112,9 +109,7 @@ public sealed class SqliteAnalysisRunStore(
     }
 
     /// <inheritdoc />
-    public async Task<Result<AnalysisRunDetail?>> GetActiveByRepositoryAsync(
-        string canonicalRepositoryPathKey,
-        CancellationToken cancellationToken)
+    public async Task<Result<AnalysisRunDetail?>> GetActiveByRepositoryAsync(string canonicalRepositoryPathKey, CancellationToken cancellationToken)
     {
         var run = await context.AnalysisRuns
             .AsNoTracking()
@@ -245,10 +240,7 @@ public sealed class SqliteAnalysisRunStore(
     }
 
     /// <inheritdoc />
-    public async Task<Result<AnalysisRunDetail>> RequestCancellationAsync(
-        Guid runId,
-        long atUnixMilliseconds,
-        CancellationToken cancellationToken)
+    public async Task<Result<AnalysisRunDetail>> RequestCancellationAsync(Guid runId, long atUnixMilliseconds, CancellationToken cancellationToken)
     {
         await context.AnalysisRuns
             .Where(run => run.RunId == runId)
@@ -288,9 +280,7 @@ public sealed class SqliteAnalysisRunStore(
     }
 
     /// <inheritdoc />
-    public async Task<Result<int>> FinalizeCancelledPendingRunsAsync(
-        long atUnixMilliseconds,
-        CancellationToken cancellationToken)
+    public async Task<Result<int>> FinalizeCancelledPendingRunsAsync(long atUnixMilliseconds, CancellationToken cancellationToken)
     {
         var affected = await context.AnalysisRuns
             .Where(run => run.State == AnalysisRunState.PendingCapture)
@@ -305,9 +295,7 @@ public sealed class SqliteAnalysisRunStore(
     }
 
     /// <inheritdoc />
-    public async Task<Result<int>> InterruptActiveRunsAsync(
-        long atUnixMilliseconds,
-        CancellationToken cancellationToken)
+    public async Task<Result<int>> InterruptActiveRunsAsync(long atUnixMilliseconds, CancellationToken cancellationToken)
     {
         var affected = await context.AnalysisRuns
             .Where(run => ActiveStates.Contains(run.State))

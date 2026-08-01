@@ -56,9 +56,7 @@ public sealed class SqliteColorThemePreferenceStore(
 
         try
         {
-            var applicationState = await context.ApplicationState.SingleAsync(
-                entry => entry.SingletonId == 1,
-                cancellationToken);
+            var applicationState = await context.ApplicationState.SingleAsync(entry => entry.SingletonId == 1, cancellationToken);
             applicationState.ColorTheme = storedValue;
             await context.SaveChangesAsync(cancellationToken);
             return Result.Success();
@@ -70,13 +68,9 @@ public sealed class SqliteColorThemePreferenceStore(
         }
     }
 
-    private static Result<ColorTheme?> LogInvalidStoredTheme(
-        ILogger<SqliteColorThemePreferenceStore> logger,
-        string? storedValue)
+    private static Result<ColorTheme?> LogInvalidStoredTheme(ILogger<SqliteColorThemePreferenceStore> logger, string? storedValue)
     {
-        logger.LogWarning(
-            "Stored color-theme preference {StoredValue} is not a recognized value.",
-            storedValue);
+        logger.LogWarning("Stored color-theme preference {StoredValue} is not a recognized value.", storedValue);
         return LocalStateFailure.Invalid<ColorTheme?>();
     }
 }

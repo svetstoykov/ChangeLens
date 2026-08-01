@@ -132,8 +132,7 @@ internal sealed class EngineProtocolHost(
             if (request.ProtocolVersion != EngineProtocolConstants.CurrentVersion)
             {
                 response = ProtocolResponseFactory.FromError(
-                    request.RequestId,
-                    UnsupportedProtocolVersionError(request.ProtocolVersion));
+                    request.RequestId, UnsupportedProtocolVersionError(request.ProtocolVersion));
             }
             else
             {

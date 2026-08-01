@@ -1,7 +1,7 @@
 namespace ChangeLens.Core.AnalysisRuns.Models;
 
 /// <summary>
-///     Represents one deterministic planned step established for a claimed run.
+///     Represents one deterministic planned step established for a taken run.
 /// </summary>
 /// <param name="StepId">The stable step identifier. Cannot be <see langword="null" />.</param>
 /// <param name="Producer">The stable producer identifier. Cannot be <see langword="null" />.</param>

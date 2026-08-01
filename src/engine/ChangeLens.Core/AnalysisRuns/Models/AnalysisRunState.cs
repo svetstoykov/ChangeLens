@@ -5,10 +5,10 @@ namespace ChangeLens.Core.AnalysisRuns.Models;
 /// </summary>
 public enum AnalysisRunState
 {
-    /// <summary>The run is durably accepted and awaiting processor claim.</summary>
+    /// <summary>The run is durably accepted and awaiting the processor to take it.</summary>
     PendingCapture,
 
-    /// <summary>The processor has claimed the run and is validating the accepted context.</summary>
+    /// <summary>The processor has taken the run and is validating the accepted context.</summary>
     Capturing,
 
     /// <summary>The run is validating the fixed skeleton plan.</summary>

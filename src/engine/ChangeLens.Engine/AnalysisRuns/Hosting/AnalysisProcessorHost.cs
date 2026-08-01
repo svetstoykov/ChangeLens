@@ -10,7 +10,7 @@ using Microsoft.Extensions.Logging;
 namespace ChangeLens.Engine.AnalysisRuns.Hosting;
 
 /// <summary>
-///     Interrupts orphaned analysis run state at startup, then claims and processes pending runs one at a time.
+///     Interrupts orphaned analysis run state at startup, then takes and processes pending runs one at a time.
 /// </summary>
 /// <remarks>
 ///     <para>
@@ -33,7 +33,7 @@ internal sealed class AnalysisProcessorHost(
     ILogger<AnalysisProcessorHost> logger) : IHostedService
 {
     private readonly CancellationTokenSource _shutdownSource = new();
-    private Task? _claimLoopTask;
+    private Task? _processorLoopTask;
 
     /// <inheritdoc />
     public async Task StartAsync(CancellationToken cancellationToken)
@@ -57,7 +57,7 @@ internal sealed class AnalysisProcessorHost(
         }
 
         logger.LogInformation("The analysis processor completed startup recovery.");
-        this._claimLoopTask = this.RunClaimLoopAsync(this._shutdownSource.Token);
+        this._processorLoopTask = this.RunProcessorLoopAsync(this._shutdownSource.Token);
     }
 
     /// <inheritdoc />
@@ -65,11 +65,11 @@ internal sealed class AnalysisProcessorHost(
     {
         await this._shutdownSource.CancelAsync();
 
-        if (this._claimLoopTask is not null)
+        if (this._processorLoopTask is not null)
         {
             try
             {
-                await this._claimLoopTask.WaitAsync(cancellationToken);
+                await this._processorLoopTask.WaitAsync(cancellationToken);
             }
             catch (OperationCanceledException)
             {
@@ -77,7 +77,7 @@ internal sealed class AnalysisProcessorHost(
         }
     }
 
-    private async Task RunClaimLoopAsync(CancellationToken shutdownToken)
+    private async Task RunProcessorLoopAsync(CancellationToken shutdownToken)
     {
         while (!shutdownToken.IsCancellationRequested)
         {
@@ -85,8 +85,10 @@ internal sealed class AnalysisProcessorHost(
             {
                 await this.FinalizeCancelledPendingRunsAsync();
 
-                while (!shutdownToken.IsCancellationRequested && await this.ClaimAndRunOnceAsync(shutdownToken))
+                Guid? runId;
+                while (!shutdownToken.IsCancellationRequested && (runId = await this.ClaimNextPendingRunAsync()) is not null)
                 {
+                    await this.ExecuteRunAsync(runId.Value, shutdownToken);
                 }
             }
             catch (OperationCanceledException) when (shutdownToken.IsCancellationRequested)
@@ -120,69 +122,63 @@ internal sealed class AnalysisProcessorHost(
     {
         await using var scope = serviceScopeFactory.CreateAsyncScope();
         var store = scope.ServiceProvider.GetRequiredService<IAnalysisRunStore>();
-        var finalizeResult = await store.FinalizeCancelledPendingRunsAsync(
-            timeProvider.GetUtcNow().ToUnixTimeMilliseconds(),
-            CancellationToken.None);
+
+        var finalizeResult = await store.FinalizeCancelledPendingRunsAsync(timeProvider.GetUtcNow().ToUnixTimeMilliseconds(), CancellationToken.None);
         if (finalizeResult.IsFailure)
         {
             logger.LogError(
                 "The analysis processor could not finalize cancelled pending runs with errors {ErrorCodes}.",
                 finalizeResult.Errors.Select(error => error.Code));
-            throw new InvalidOperationException(
-                "The analysis processor could not finalize cancelled pending runs. Errors: " +
-                string.Join(", ", finalizeResult.Errors.Select(error => error.Code)) + ".");
         }
     }
 
-    private async Task<bool> ClaimAndRunOnceAsync(CancellationToken shutdownToken)
+    private async Task<Guid?> ClaimNextPendingRunAsync()
     {
         await using var scope = serviceScopeFactory.CreateAsyncScope();
         var store = scope.ServiceProvider.GetRequiredService<IAnalysisRunStore>();
-        var claimResult = await store.ClaimNextPendingAsync(CancellationToken.None);
+        var takePendingAnalysis = await store.TakeNextPendingAsync(CancellationToken.None);
 
-        if (claimResult.IsFailure)
+        if (takePendingAnalysis.IsFailure)
         {
             logger.LogError(
-                "The analysis processor could not claim pending work with errors {ErrorCodes}.",
-                claimResult.Errors.Select(error => error.Code));
-            throw new InvalidOperationException(
-                "The analysis processor could not claim pending work. Errors: " +
-                string.Join(", ", claimResult.Errors.Select(error => error.Code)) + ".");
+                "The analysis processor could not take pending work with errors {ErrorCodes}.",
+                takePendingAnalysis.Errors.Select(error => error.Code));
+            return null;
         }
 
-        if (claimResult.Data is null)
-        {
-            return false;
-        }
+        return takePendingAnalysis.Data;
+    }
 
-        var claim = claimResult.Data;
-        var runToken = processorControl.BeginRun(claim.RunId);
+    private async Task ExecuteRunAsync(Guid runId, CancellationToken shutdownToken)
+    {
+        await using var scope = serviceScopeFactory.CreateAsyncScope();
+        var store = scope.ServiceProvider.GetRequiredService<IAnalysisRunStore>();
+        var runToken = processorControl.BeginRun(runId);
         try
         {
-            var freshProjection = await store.GetDetailAsync(claim.RunId, CancellationToken.None);
-            if (freshProjection.IsFailure)
+            var getDetails = await store.GetDetailAsync(runId, CancellationToken.None);
+            if (getDetails.IsFailure)
             {
                 logger.LogError(
-                    "The analysis processor could not re-read claimed run {RunId} with errors {ErrorCodes}.",
-                    claim.RunId,
-                    freshProjection.Errors.Select(error => error.Code));
-                throw new InvalidOperationException(
-                    "The analysis processor could not re-read claimed run. Errors: " +
-                    string.Join(", ", freshProjection.Errors.Select(error => error.Code)) + ".");
+                    "The analysis processor could not re-read taken run {RunId} with errors {ErrorCodes}.",
+                    runId, getDetails.Errors.Select(error => error.Code));
+
+                return;
             }
 
-            if (freshProjection.Data!.CancellationRequested)
+            var runDetails = getDetails.Data!;
+            if (runDetails.CancellationRequested)
             {
-                processorControl.RequestRunCancellation(claim.RunId);
+                processorControl.RequestRunCancellation(runId);
             }
 
-            logger.LogInformation("Analysis processor claimed run {RunId}.", claim.RunId);
+            logger.LogInformation("Analysis processor took run {RunId}.", runId);
             var pipeline = scope.ServiceProvider.GetRequiredService<IAnalysisPipeline>();
-            await pipeline.RunAsync(claim.RunId, runToken, shutdownToken);
+            await pipeline.RunAsync(runId, runToken, shutdownToken);
         }
         catch (OperationCanceledException) when (shutdownToken.IsCancellationRequested)
         {
-            logger.LogInformation("Analysis run {RunId} stopped because the engine is shutting down.", claim.RunId);
+            logger.LogInformation("Analysis run {RunId} stopped because the engine is shutting down.", runId);
         }
         catch (OperationCanceledException) when (runToken.IsCancellationRequested)
         {
@@ -191,53 +187,39 @@ internal sealed class AnalysisProcessorHost(
                 timeProvider.GetUtcNow().ToUnixTimeMilliseconds(),
                 null,
                 null);
-            var cancellationResult = await store.CommitTerminalAsync(claim.RunId, terminal, CancellationToken.None);
-            if (cancellationResult.IsFailure)
-            {
-                logger.LogError(
-                    "The analysis processor could not record cancellation for run {RunId} with errors {ErrorCodes}.",
-                    claim.RunId,
-                    cancellationResult.Errors.Select(error => error.Code));
-                throw new InvalidOperationException(
-                    "The analysis processor could not record cancellation. Errors: " +
-                    string.Join(", ", cancellationResult.Errors.Select(error => error.Code)) + ".");
-            }
-
-            if (!cancellationResult.Data!)
-            {
-                logger.LogDebug("Analysis run {RunId} was already terminal when cancellation was observed.", claim.RunId);
-            }
+            await this.RecordTerminalAsync(store, runId, terminal, "cancellation", LogLevel.Debug);
         }
         catch (Exception exception)
         {
-            logger.LogError(exception, "Analysis run {RunId} pipeline failed with an unexpected exception.", claim.RunId);
+            logger.LogError(exception, "Analysis run {RunId} pipeline failed with an unexpected exception.", runId);
             var terminal = new AnalysisTerminalSummary(
                 AnalysisTerminalKind.Failed,
                 timeProvider.GetUtcNow().ToUnixTimeMilliseconds(),
                 null,
                 AnalysisFailureCode.UnexpectedFailure);
-            var terminalResult = await store.CommitTerminalAsync(claim.RunId, terminal, CancellationToken.None);
-            if (terminalResult.IsFailure)
-            {
-                logger.LogError(
-                    "The analysis processor could not record unexpected failure for run {RunId} with errors {ErrorCodes}.",
-                    claim.RunId,
-                    terminalResult.Errors.Select(error => error.Code));
-                throw new InvalidOperationException(
-                    "The analysis processor could not record unexpected failure. Errors: " +
-                    string.Join(", ", terminalResult.Errors.Select(error => error.Code)) + ".");
-            }
-
-            if (!terminalResult.Data!)
-            {
-                logger.LogWarning("Analysis run {RunId} was already terminal when an unexpected failure was observed.", claim.RunId);
-            }
+            await this.RecordTerminalAsync(store, runId, terminal, "unexpected failure", LogLevel.Warning);
         }
         finally
         {
-            processorControl.EndRun(claim.RunId);
+            processorControl.EndRun(runId);
         }
+    }
 
-        return true;
+    private async Task RecordTerminalAsync(
+        IAnalysisRunStore store, Guid runId, AnalysisTerminalSummary terminal, string reason, LogLevel alreadyTerminalLevel)
+    {
+        var terminalResult = await store.CommitTerminalAsync(runId, terminal, CancellationToken.None);
+        if (terminalResult.IsFailure)
+        {
+            logger.LogError(
+                "The analysis processor could not record {Reason} for run {RunId} with errors {ErrorCodes}.",
+                reason,
+                runId,
+                terminalResult.Errors.Select(error => error.Code));
+        }
+        else if (!terminalResult.Data)
+        {
+            logger.Log(alreadyTerminalLevel, "Analysis run {RunId} was already terminal when {Reason} was observed.", runId, reason);
+        }
     }
 }

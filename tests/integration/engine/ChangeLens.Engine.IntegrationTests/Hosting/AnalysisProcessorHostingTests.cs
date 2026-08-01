@@ -24,7 +24,7 @@ public sealed class AnalysisProcessorHostingTests
     }
 
     [Fact]
-    public async Task ClaimedRunReachesCompletedWithoutLimitations()
+    public async Task TakenRunReachesCompletedWithoutLimitations()
     {
         await using var fixture = await EngineHostTestFixture.CreateAsync();
         await fixture.Host.StartAsync(TestContext.Current.CancellationToken);
@@ -90,7 +90,7 @@ public sealed class AnalysisProcessorHostingTests
         await using var fixture = await EngineHostTestFixture.CreateBlockingPipelineAsync();
         await fixture.Host.StartAsync(TestContext.Current.CancellationToken);
         var firstRunId = await fixture.AcceptRunAsync();
-        await fixture.WaitUntilClaimedAsync(firstRunId, TimeSpan.FromSeconds(3));
+        await fixture.WaitUntilTakenAsync(firstRunId, TimeSpan.FromSeconds(3));
         var secondRunId = await fixture.AcceptRunForAnotherRepositoryAsync();
 
         var secondProjection = await fixture.PollOnceAsync(secondRunId);
@@ -121,7 +121,7 @@ public sealed class AnalysisProcessorHostingTests
         await using var fixture = await EngineHostTestFixture.CreateBlockingPipelineAsync();
         await fixture.Host.StartAsync(TestContext.Current.CancellationToken);
         var runId = await fixture.AcceptRunAsync();
-        await fixture.WaitUntilClaimedAsync(runId, TimeSpan.FromSeconds(3));
+        await fixture.WaitUntilTakenAsync(runId, TimeSpan.FromSeconds(3));
 
         await fixture.StopAsync(TestContext.Current.CancellationToken);
         var projection = await fixture.PollOnceAsync(runId);

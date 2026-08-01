@@ -15,7 +15,7 @@ namespace ChangeLens.Core.AnalysisRuns.Models;
 ///     When the pending run and repository lock committed.
 /// </param>
 /// <param name="CaptureStartedAtUnixMilliseconds">
-///     When the processor claimed the run, otherwise <see langword="null" />.
+///     When the processor took the run, otherwise <see langword="null" />.
 /// </param>
 /// <param name="CancellationRequested">Whether cancellation has been durably requested.</param>
 /// <param name="Terminal">

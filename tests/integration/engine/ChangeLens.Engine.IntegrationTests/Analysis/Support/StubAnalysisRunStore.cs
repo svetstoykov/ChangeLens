@@ -21,8 +21,8 @@ internal sealed class StubAnalysisRunStore(
     public Task<Result<AnalysisRunDetail?>> GetActiveByRepositoryAsync(string canonicalRepositoryPathKey, CancellationToken cancellationToken) =>
         throw new NotSupportedException("The active-run operation was not configured.");
 
-    public Task<Result<AnalysisRunClaim?>> ClaimNextPendingAsync(CancellationToken cancellationToken) =>
-        throw new NotSupportedException("The claim operation was not configured.");
+    public Task<Result<Guid?>> TakeNextPendingAsync(CancellationToken cancellationToken) =>
+        throw new NotSupportedException("The take operation was not configured.");
 
     public Task<Result> EstablishStepPlanAsync(Guid runId, IReadOnlyList<AnalysisRunStepPlanEntry> plan, CancellationToken cancellationToken) =>
         throw new NotSupportedException("The plan operation was not configured.");

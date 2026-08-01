@@ -84,6 +84,7 @@ builder.AddPreferenceServices();
 builder.AddEngineStatusServices();
 builder.AddRepositoryServices();
 builder.AddComparisonServices();
+builder.AddAnalysisRunServices();
 builder.AddProtocolServices();
 builder.AddActionHandlers();
 
@@ -105,11 +106,13 @@ region/comment separators. The extensions register:
   `IGitRepositoryInspector`.
 - `AddComparisonServices`: `IComparisonFileSummaryComposer`, `IGitComparisonTargetDiscovery`, `IGitComparisonPreparer`,
   `IGitComparisonFreshnessChecker`, `IGitRemoteBaselineTracker`, and `IComparisonTargetPageBuilder`.
+- `AddAnalysisRunServices`: `IAnalysisProcessorControl`, `IAnalysisRunStore`, `IAnalysisPipeline`,
+  `IAnalysisRunCoordinator`, `IRepositoryBusyGuard`, and `AnalysisProcessorHost` as the hosted service.
 - `AddProtocolServices`: `IEngineProtocolSerializer`, `IEngineProtocolTransport`, and `EngineProtocolHost` as the hosted
   service.
 - `AddActionHandlers`: every `IActionHandler` implementation, one `AddActionHandler<THandler>` line per approved
-  protocol action. The helper registers the handler as a keyed scoped service under its static declared action. Keep the
-  twelve registrations contiguous in this helper rather than distributing them across the capability helpers.
+  protocol action. The helper registers the handler as a keyed scoped service under its static declared action. Keep
+  the registrations contiguous in this helper rather than distributing them across the capability helpers.
 
 `TextReader`, `TextWriter`, `TimeProvider`, `IEngineProtocolSerializer`, `IEngineProtocolTransport`,
 `EngineProtocolHost`, and `LocalStatePaths` are singleton. All services that serve a protocol request are scoped.

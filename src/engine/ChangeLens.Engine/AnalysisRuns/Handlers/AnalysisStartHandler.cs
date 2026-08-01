@@ -33,11 +33,7 @@ internal sealed class AnalysisStartHandler(IAnalysisRunCoordinator coordinator, 
         }
 
         var parameters = parametersResult.Data!;
-        var outcomeResult = await coordinator.StartAsync(
-            parameters.Path,
-            parameters.Target,
-            parameters.FreshnessToken,
-            parameters.ChangeContext,
+        var outcomeResult = await coordinator.StartAsync(parameters.Path, parameters.Target, parameters.FreshnessToken, parameters.ChangeContext,
             cancellationToken);
         if (outcomeResult.IsFailure)
         {

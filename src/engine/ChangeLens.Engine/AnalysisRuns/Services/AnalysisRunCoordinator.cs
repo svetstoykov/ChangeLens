@@ -25,11 +25,7 @@ internal sealed class AnalysisRunCoordinator(
     ILogger<AnalysisRunCoordinator> logger) : IAnalysisRunCoordinator
 {
     /// <inheritdoc />
-    public async Task<Result<AnalysisStartOutcome>> StartAsync(
-        string? path,
-        string? target,
-        string? freshnessToken,
-        string? changeContext,
+    public async Task<Result<AnalysisStartOutcome>> StartAsync(string? path, string? target, string? freshnessToken, string? changeContext,
         CancellationToken cancellationToken)
     {
         var freshnessResult = await freshnessChecker.CheckAsync(path, target, freshnessToken, cancellationToken);
@@ -41,9 +37,7 @@ internal sealed class AnalysisRunCoordinator(
         var freshnessCheck = freshnessResult.Data!;
         if (freshnessCheck.State == ComparisonFreshnessState.Stale)
         {
-            logger.LogInformation(
-                "Rejected analysis run acceptance for target {Target} because the comparison freshness state is stale.",
-                target);
+            logger.LogInformation("Rejected analysis run acceptance for target {Target} because the comparison freshness state is stale.", target);
             return new AnalysisStartOutcome(AnalysisStartOutcomeKind.RejectedStale, null, null, null);
         }
 
@@ -81,16 +75,14 @@ internal sealed class AnalysisRunCoordinator(
     {
         if (string.IsNullOrWhiteSpace(path))
         {
-            return OperationError.NotFound(
-                "The repository path could not be resolved to an available repository.",
+            return OperationError.NotFound("The repository path could not be resolved to an available repository.",
                 AnalysisErrorCode.RepositoryUnavailable);
         }
 
         var resolution = await pathResolver.ResolveAsync(path, cancellationToken);
         if (resolution.IsFailure)
         {
-            return OperationError.NotFound(
-                "The repository path could not be resolved to an available repository.",
+            return OperationError.NotFound("The repository path could not be resolved to an available repository.",
                 AnalysisErrorCode.RepositoryUnavailable);
         }
 

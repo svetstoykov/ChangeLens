@@ -33,9 +33,7 @@ internal sealed class PreferenceGetColorThemeHandler(IColorThemePreferenceServic
         var preferenceResult = await colorThemePreferenceService.GetAsync(cancellationToken);
         if (preferenceResult.IsFailure)
         {
-            return ProtocolResponseFactory.FromResult(
-                request.RequestId,
-                Result.ErrorFromResult<ColorThemePreferenceResult>(preferenceResult));
+            return ProtocolResponseFactory.FromResult(request.RequestId, Result.ErrorFromResult<ColorThemePreferenceResult>(preferenceResult));
         }
 
         var result = preferenceResult.Data switch
@@ -43,8 +41,7 @@ internal sealed class PreferenceGetColorThemeHandler(IColorThemePreferenceServic
             ColorTheme.Light => Result.Success(new ColorThemePreferenceResult(ColorThemeResultValue.Light)),
             ColorTheme.Dark => Result.Success(new ColorThemePreferenceResult(ColorThemeResultValue.Dark)),
             null => Result.Success(new ColorThemePreferenceResult(null)),
-            _ => OperationError.InternalError(
-                "The color-theme preference is not approved for the engine protocol.",
+            _ => OperationError.InternalError("The color-theme preference is not approved for the engine protocol.",
                 PreferenceErrorCode.UnmappedColorTheme),
         };
         return ProtocolResponseFactory.FromResult(request.RequestId, result);

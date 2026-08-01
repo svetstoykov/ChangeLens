@@ -43,10 +43,8 @@ internal sealed class PreferenceSetColorThemeHandler(
         var colorTheme = parametersResult.Data!.ColorTheme;
         if (colorTheme is not (ColorThemeResultValue.Light or ColorThemeResultValue.Dark))
         {
-            return ProtocolResponseFactory.FromError(
-                request.RequestId,
-                OperationError.InternalError(
-                    "The color-theme preference is not approved for the engine protocol.",
+            return ProtocolResponseFactory.FromError(request.RequestId,
+                OperationError.InternalError("The color-theme preference is not approved for the engine protocol.",
                     PreferenceErrorCode.UnmappedColorTheme));
         }
 

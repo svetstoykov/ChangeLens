@@ -54,17 +54,11 @@ internal sealed class ComparisonListTargetsHandler(
         }
 
         var parameters = parametersResult.Data!;
-        var discoveryResult = await comparisonTargetDiscovery.ListAsync(
-            parameters.Path,
-            parameters.Query,
-            parameters.After,
-            parameters.TargetSetToken,
-            cancellationToken);
+        var discoveryResult = await comparisonTargetDiscovery.ListAsync(parameters.Path, parameters.Query, parameters.After,
+            parameters.TargetSetToken, cancellationToken);
         if (discoveryResult.IsFailure)
         {
-            return ProtocolResponseFactory.FromResult(
-                request.RequestId,
-                Result.ErrorFromResult<ComparisonTargetPageResult>(discoveryResult));
+            return ProtocolResponseFactory.FromResult(request.RequestId, Result.ErrorFromResult<ComparisonTargetPageResult>(discoveryResult));
         }
 
         return ProtocolResponseFactory.FromResult(request.RequestId, comparisonTargetPageBuilder.Build(request.RequestId, discoveryResult.Data!));

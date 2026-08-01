@@ -41,15 +41,13 @@ internal sealed class AnalysisProcessorHost(
         await using (var recoveryScope = serviceScopeFactory.CreateAsyncScope())
         {
             var store = recoveryScope.ServiceProvider.GetRequiredService<IAnalysisRunStore>();
-            var interruptedResult = await store.InterruptActiveRunsAsync(
-                timeProvider.GetUtcNow().ToUnixTimeMilliseconds(),
-                cancellationToken);
+            var interruptedResult = await store.InterruptActiveRunsAsync(timeProvider.GetUtcNow().ToUnixTimeMilliseconds(), cancellationToken);
 
             if (interruptedResult.IsFailure)
             {
-                logger.LogCritical(
-                    "Analysis processor startup recovery failed with errors {ErrorCodes}.",
+                logger.LogCritical("Analysis processor startup recovery failed with errors {ErrorCodes}.",
                     interruptedResult.Errors.Select(error => error.Code));
+
                 throw new InvalidOperationException(
                     "Analysis processor recovery failed; the engine cannot start with ambiguous run state. Errors: " +
                     string.Join(", ", interruptedResult.Errors.Select(error => error.Code)) + ".");
@@ -192,11 +190,13 @@ internal sealed class AnalysisProcessorHost(
         catch (Exception exception)
         {
             logger.LogError(exception, "Analysis run {RunId} pipeline failed with an unexpected exception.", runId);
+
             var terminal = new AnalysisTerminalSummary(
                 AnalysisTerminalKind.Failed,
                 timeProvider.GetUtcNow().ToUnixTimeMilliseconds(),
                 null,
                 AnalysisFailureCode.UnexpectedFailure);
+
             await this.RecordTerminalAsync(store, runId, terminal, "unexpected failure", LogLevel.Warning);
         }
         finally
@@ -205,16 +205,13 @@ internal sealed class AnalysisProcessorHost(
         }
     }
 
-    private async Task RecordTerminalAsync(
-        IAnalysisRunStore store, Guid runId, AnalysisTerminalSummary terminal, string reason, LogLevel alreadyTerminalLevel)
+    private async Task RecordTerminalAsync(IAnalysisRunStore store, Guid runId, AnalysisTerminalSummary terminal, string reason,
+        LogLevel alreadyTerminalLevel)
     {
         var terminalResult = await store.CommitTerminalAsync(runId, terminal, CancellationToken.None);
         if (terminalResult.IsFailure)
         {
-            logger.LogError(
-                "The analysis processor could not record {Reason} for run {RunId} with errors {ErrorCodes}.",
-                reason,
-                runId,
+            logger.LogError("The analysis processor could not record {Reason} for run {RunId} with errors {ErrorCodes}.", reason, runId,
                 terminalResult.Errors.Select(error => error.Code));
         }
         else if (!terminalResult.Data)

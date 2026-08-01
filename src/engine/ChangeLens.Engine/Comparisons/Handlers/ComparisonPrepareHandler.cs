@@ -60,24 +60,17 @@ internal sealed class ComparisonPrepareHandler(
         var preparationResult = await comparisonPreparer.PrepareAsync(parameters.Path, parameters.Target, cancellationToken);
         if (preparationResult.IsFailure)
         {
-            return ProtocolResponseFactory.FromResult(
-                request.RequestId,
-                Result.ErrorFromResult<ComparisonPrepareResult>(preparationResult));
+            return ProtocolResponseFactory.FromResult(request.RequestId, Result.ErrorFromResult<ComparisonPrepareResult>(preparationResult));
         }
 
-        var preferenceResult = await repositoryHistoryService.SavePreferredTargetAsync(
-            preparationResult.Data!.Repository.CanonicalPath,
-            preparationResult.Data.Target.FullName,
-            cancellationToken);
+        var preferenceResult = await repositoryHistoryService.SavePreferredTargetAsync(preparationResult.Data!.Repository.CanonicalPath,
+            preparationResult.Data.Target.FullName, cancellationToken);
         if (preferenceResult.IsFailure)
         {
-            return ProtocolResponseFactory.FromResult(
-                request.RequestId,
-                Result.ErrorFromResult<ComparisonPrepareResult>(preferenceResult));
+            return ProtocolResponseFactory.FromResult(request.RequestId, Result.ErrorFromResult<ComparisonPrepareResult>(preferenceResult));
         }
 
-        return ProtocolResponseFactory.FromResult(
-            request.RequestId,
+        return ProtocolResponseFactory.FromResult(request.RequestId,
             Result.Success(ComparisonPrepareResult.FromPreparedComparison(preparationResult.Data!)));
     }
 }

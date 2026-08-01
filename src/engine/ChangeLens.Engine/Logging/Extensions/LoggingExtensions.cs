@@ -36,19 +36,15 @@ internal static class LoggingExtensions
 
         if (string.IsNullOrWhiteSpace(logDirectory))
         {
-            logDirectory = Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                EngineLoggingConstants.DefaultApplicationDirectoryName,
-                EngineLoggingConstants.DefaultLogDirectoryName);
+            logDirectory = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                EngineLoggingConstants.DefaultApplicationDirectoryName, EngineLoggingConstants.DefaultLogDirectoryName);
         }
 
         builder.Services.AddSerilog(
             (_, loggerConfiguration) => loggerConfiguration
                 .ReadFrom.Configuration(builder.Configuration)
                 .Enrich.FromLogContext()
-                .Enrich.WithProperty(
-                    EngineLoggingConstants.ApplicationPropertyName,
-                    EngineProcessConstants.ApplicationName)
+                .Enrich.WithProperty(EngineLoggingConstants.ApplicationPropertyName, EngineProcessConstants.ApplicationName)
                 .WriteTo.Console(
                     standardErrorFromLevel: LogEventLevel.Verbose,
                     theme: AnsiConsoleTheme.Code,

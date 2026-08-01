@@ -26,9 +26,7 @@ internal sealed class RepositoryRestoreLastHandler(IRepositoryHistoryService rep
         var restorationResult = await repositoryHistoryService.RestoreLastAsync(cancellationToken);
         if (restorationResult.IsFailure)
         {
-            return ProtocolResponseFactory.FromResult(
-                request.RequestId,
-                Result.ErrorFromResult<RepositoryRestoreResult>(restorationResult));
+            return ProtocolResponseFactory.FromResult(request.RequestId, Result.ErrorFromResult<RepositoryRestoreResult>(restorationResult));
         }
 
         RepositoryRestoreResult result = restorationResult.Data!.HistoryEntry is null

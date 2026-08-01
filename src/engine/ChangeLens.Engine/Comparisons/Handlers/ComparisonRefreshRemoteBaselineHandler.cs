@@ -54,13 +54,10 @@ internal sealed class ComparisonRefreshRemoteBaselineHandler(
         var refreshResult = await remoteBaselineTracker.RefreshAsync(parameters.Path, parameters.Target, cancellationToken);
         if (refreshResult.IsFailure)
         {
-            return ProtocolResponseFactory.FromResult(
-                request.RequestId,
+            return ProtocolResponseFactory.FromResult(request.RequestId,
                 Result.ErrorFromResult<ComparisonRefreshRemoteBaselineResult>(refreshResult));
         }
 
-        return ProtocolResponseFactory.FromResult(
-            request.RequestId,
-            Result.Success(new ComparisonRefreshRemoteBaselineResult(refreshResult.Data!)));
+        return ProtocolResponseFactory.FromResult(request.RequestId, Result.Success(new ComparisonRefreshRemoteBaselineResult(refreshResult.Data!)));
     }
 }

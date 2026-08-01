@@ -35,8 +35,7 @@ internal sealed class AnalysisPollRunHandler(IAnalysisRunCoordinator coordinator
 
         if (!Guid.TryParse(parametersResult.Data!.RunId, out var runId))
         {
-            return ProtocolResponseFactory.FromError(
-                request.RequestId,
+            return ProtocolResponseFactory.FromError(request.RequestId,
                 OperationError.NotFound("No analysis run matches the supplied identifier.", AnalysisErrorCode.UnknownRun));
         }
 

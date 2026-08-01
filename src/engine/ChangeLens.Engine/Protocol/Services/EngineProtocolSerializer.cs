@@ -19,12 +19,10 @@ internal sealed class EngineProtocolSerializer : IEngineProtocolSerializer
     private static readonly JsonSerializerOptions SerializerOptions = CreateSerializerOptions();
 
     private static readonly OperationError InvalidRequestError = OperationError.Validation(
-        "The request does not match the engine protocol schema.",
-        EngineErrorCode.InvalidRequest);
+        "The request does not match the engine protocol schema.", EngineErrorCode.InvalidRequest);
 
     private static readonly OperationError SerializationFailedError = OperationError.InternalError(
-        "The engine could not serialize the protocol response.",
-        EngineErrorCode.SerializationFailed);
+        "The engine could not serialize the protocol response.", EngineErrorCode.SerializationFailed);
 
     /// <inheritdoc />
     public Result<EngineProtocolRequest> DeserializeRequest(string requestLine)
@@ -39,9 +37,7 @@ internal sealed class EngineProtocolSerializer : IEngineProtocolSerializer
         }
         catch (JsonException)
         {
-            return OperationError.MalformedInput(
-                "The request is not valid JSON.",
-                EngineErrorCode.InvalidJson);
+            return OperationError.MalformedInput("The request is not valid JSON.", EngineErrorCode.InvalidJson);
         }
 
         using (document)
@@ -101,8 +97,7 @@ internal sealed class EngineProtocolSerializer : IEngineProtocolSerializer
 
         try
         {
-            return Result.Success<string>(
-                JsonSerializer.Serialize(response, response.GetType(), SerializerOptions));
+            return Result.Success<string>(JsonSerializer.Serialize(response, response.GetType(), SerializerOptions));
         }
         catch (Exception exception) when (exception is JsonException or NotSupportedException)
         {
@@ -117,11 +112,7 @@ internal sealed class EngineProtocolSerializer : IEngineProtocolSerializer
 
         try
         {
-            return Result.Success(
-                JsonSerializer.SerializeToUtf8Bytes(
-                    response,
-                    response.GetType(),
-                    SerializerOptions).Length);
+            return Result.Success(JsonSerializer.SerializeToUtf8Bytes(response, response.GetType(), SerializerOptions).Length);
         }
         catch (Exception exception) when (exception is JsonException or NotSupportedException)
         {
@@ -154,7 +145,5 @@ internal sealed class EngineProtocolSerializer : IEngineProtocolSerializer
     /// <param name="action">The fixed protocol action.</param>
     /// <returns>A validation failure with the stable invalid-request code.</returns>
     private static OperationError InvalidParametersError(string action) =>
-        OperationError.Validation(
-            $"The parameters do not match the {action} schema.",
-            EngineErrorCode.InvalidRequest);
+        OperationError.Validation($"The parameters do not match the {action} schema.", EngineErrorCode.InvalidRequest);
 }

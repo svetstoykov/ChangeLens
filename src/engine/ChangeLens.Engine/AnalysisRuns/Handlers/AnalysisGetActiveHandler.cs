@@ -40,9 +40,7 @@ internal sealed class AnalysisGetActiveHandler(IAnalysisRunCoordinator coordinat
 
         if (activeResult.Data is null)
         {
-            return ProtocolResponseFactory.FromResult(
-                request.RequestId,
-                Result.Success<AnalysisGetActiveResult>(new NoneAnalysisGetActiveResult()));
+            return ProtocolResponseFactory.FromResult(request.RequestId, Result.Success<AnalysisGetActiveResult>(new NoneAnalysisGetActiveResult()));
         }
 
         var mappedResult = AnalysisProjectionMapper.ToProtocol(activeResult.Data);
@@ -51,8 +49,7 @@ internal sealed class AnalysisGetActiveHandler(IAnalysisRunCoordinator coordinat
             return ProtocolResponseFactory.CreateError(request.RequestId, mappedResult.Errors);
         }
 
-        return ProtocolResponseFactory.FromResult(
-            request.RequestId,
+        return ProtocolResponseFactory.FromResult(request.RequestId,
             Result.Success<AnalysisGetActiveResult>(new ActiveAnalysisGetActiveResult(mappedResult.Data!)));
     }
 }

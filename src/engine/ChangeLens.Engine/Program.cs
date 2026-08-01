@@ -8,12 +8,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
-var builder = Host.CreateApplicationBuilder(
-    new HostApplicationBuilderSettings
-    {
-        Args = args,
-        ContentRootPath = AppContext.BaseDirectory,
-    });
+var builder = Host.CreateApplicationBuilder(new HostApplicationBuilderSettings { Args = args, ContentRootPath = AppContext.BaseDirectory });
 
 builder.ConfigureContainer(
     new DefaultServiceProviderFactory(new ServiceProviderOptions { ValidateOnBuild = true, ValidateScopes = true }),
@@ -48,8 +43,7 @@ try
 
     if (initializationResult.IsFailure)
     {
-        logger.LogCritical(
-            "The engine cannot start because local state failed to initialize. Errors: {ErrorCodes}",
+        logger.LogCritical("The engine cannot start because local state failed to initialize. Errors: {ErrorCodes}",
             initializationResult.Errors.Select(error => error.Code));
         return EngineProcessConstants.UnexpectedFailureExitCode;
     }

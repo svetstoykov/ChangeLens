@@ -36,8 +36,7 @@ internal sealed class ComparisonTargetPageBuilder(
     private const string DescriptorMeasurementRequestId = "comparison-target-page";
 
     private static readonly OperationError TooLargeError = OperationError.UnprocessableInput(
-        "The comparison exceeds the supported local inspection limit.",
-        ComparisonErrorCode.TooLarge);
+        "The comparison exceeds the supported local inspection limit.", ComparisonErrorCode.TooLarge);
 
     private readonly IEngineProtocolSerializer _protocolSerializer =
         protocolSerializer ?? throw new ArgumentNullException(nameof(protocolSerializer));
@@ -46,9 +45,7 @@ internal sealed class ComparisonTargetPageBuilder(
         logger ?? throw new ArgumentNullException(nameof(logger));
 
     /// <inheritdoc />
-    public Result<ComparisonTargetPageResult> Build(
-        string requestId,
-        ComparisonTargetSet targetSet)
+    public Result<ComparisonTargetPageResult> Build(string requestId, ComparisonTargetSet targetSet)
     {
         ArgumentNullException.ThrowIfNull(requestId);
         ArgumentNullException.ThrowIfNull(targetSet);
@@ -73,13 +70,8 @@ internal sealed class ComparisonTargetPageBuilder(
                     continue;
                 }
 
-                var measurement = this.Measure(
-                    DescriptorMeasurementRequestId,
-                    [candidate],
-                    suggestedTarget: null,
-                    hasSupportedCandidateAfter ? candidate.FullName : null,
-                    targetSet.TargetSetToken,
-                    unsupportedTargetCount);
+                var measurement = this.Measure(DescriptorMeasurementRequestId, [candidate], suggestedTarget: null,
+                    hasSupportedCandidateAfter ? candidate.FullName : null, targetSet.TargetSetToken, unsupportedTargetCount);
                 if (measurement.IsFailure)
                 {
                     return Result.ErrorFromResult<ComparisonTargetPageResult>(measurement);
@@ -89,11 +81,8 @@ internal sealed class ComparisonTargetPageBuilder(
                 {
                     serializerUnsupportedFullNames.Add(candidate.FullName);
                     unsupportedTargetCount++;
-                    this._logger.LogDebug(
-                        "Excluded comparison target {FullName} from the page because its serialized size " +
-                        "{SerializedBytes} exceeds the page budget {BudgetBytes}.",
-                        candidate.FullName,
-                        measurement.Data,
+                    this._logger.LogDebug("Excluded comparison target {FullName} from the page because its serialized size " +
+                        "{SerializedBytes} exceeds the page budget {BudgetBytes}.", candidate.FullName, measurement.Data,
                         ComparisonActionConstants.TargetPageBudgetBytes);
                     continue;
                 }
@@ -126,13 +115,7 @@ internal sealed class ComparisonTargetPageBuilder(
                 ? candidate.FullName
                 : null;
             var tentative = emitted.Append(candidate).ToArray();
-            var measurement = this.Measure(
-                requestId,
-                tentative,
-                suggestedTarget,
-                candidateCursor,
-                targetSet.TargetSetToken,
-                unsupportedTargetCount);
+            var measurement = this.Measure(requestId, tentative, suggestedTarget, candidateCursor, targetSet.TargetSetToken, unsupportedTargetCount);
             if (measurement.IsFailure)
             {
                 return Result.ErrorFromResult<ComparisonTargetPageResult>(measurement);
@@ -154,12 +137,7 @@ internal sealed class ComparisonTargetPageBuilder(
             if (suggestedTarget is not null)
             {
                 suggestedTarget = null;
-                measurement = this.Measure(
-                    requestId,
-                    [candidate],
-                    suggestedTarget,
-                    candidateCursor,
-                    targetSet.TargetSetToken,
+                measurement = this.Measure(requestId, [candidate], suggestedTarget, candidateCursor, targetSet.TargetSetToken,
                     unsupportedTargetCount);
                 if (measurement.IsFailure)
                 {
@@ -188,12 +166,7 @@ internal sealed class ComparisonTargetPageBuilder(
             nextCursor,
             targetSet.TargetSetToken,
             unsupportedTargetCount);
-        var finalMeasurement = this.Measure(
-            requestId,
-            page.Targets,
-            page.SuggestedTarget,
-            page.NextCursor,
-            page.TargetSetToken,
+        var finalMeasurement = this.Measure(requestId, page.Targets, page.SuggestedTarget, page.NextCursor, page.TargetSetToken,
             page.UnsupportedTargetCount);
         if (finalMeasurement.IsFailure)
         {
@@ -207,10 +180,8 @@ internal sealed class ComparisonTargetPageBuilder(
 
     private Result<ComparisonTargetPageResult> CreateTooLargeFailure()
     {
-        this._logger.LogWarning(
-            "Comparison target page build failed: even a single target exceeds the page budget " +
-            "{BudgetBytes} bytes.",
-            ComparisonActionConstants.TargetPageBudgetBytes);
+        this._logger.LogWarning("Comparison target page build failed: even a single target exceeds the page budget " +
+            "{BudgetBytes} bytes.", ComparisonActionConstants.TargetPageBudgetBytes);
         return TooLargeError;
     }
 
@@ -238,7 +209,6 @@ internal sealed class ComparisonTargetPageBuilder(
             nextCursor,
             targetSetToken,
             unsupportedTargetCount);
-        return this._protocolSerializer.GetSerializedUtf8ByteCount(
-            ProtocolResponseFactory.CreateWithValue(requestId, page));
+        return this._protocolSerializer.GetSerializedUtf8ByteCount(ProtocolResponseFactory.CreateWithValue(requestId, page));
     }
 }

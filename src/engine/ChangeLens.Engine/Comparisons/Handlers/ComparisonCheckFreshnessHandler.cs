@@ -50,16 +50,11 @@ internal sealed class ComparisonCheckFreshnessHandler(
         }
 
         var parameters = parametersResult.Data!;
-        var freshnessResult = await comparisonFreshnessChecker.CheckAsync(
-            parameters.Path,
-            parameters.Target,
-            parameters.FreshnessToken,
+        var freshnessResult = await comparisonFreshnessChecker.CheckAsync(parameters.Path, parameters.Target, parameters.FreshnessToken,
             cancellationToken);
         if (freshnessResult.IsFailure)
         {
-            return ProtocolResponseFactory.FromResult(
-                request.RequestId,
-                Result.ErrorFromResult<ComparisonFreshnessResult>(freshnessResult));
+            return ProtocolResponseFactory.FromResult(request.RequestId, Result.ErrorFromResult<ComparisonFreshnessResult>(freshnessResult));
         }
 
         var result = freshnessResult.Data!.State switch

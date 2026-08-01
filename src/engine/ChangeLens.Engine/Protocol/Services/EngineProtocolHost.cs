@@ -201,7 +201,7 @@ internal sealed class EngineProtocolHost(
         logger.LogCritical(
             "{FailureMessage} Errors: {ErrorCodes}",
             message,
-            result.Errors.Select(error => error.Code).ToArray());
+            result.Errors.Select(error => error.Code));
     }
 
     /// <summary>
@@ -220,7 +220,7 @@ internal sealed class EngineProtocolHost(
                 "{ElapsedMilliseconds:0.000} ms.",
                 request.RequestId,
                 request.Action,
-                errorResponse.Errors.Select(error => error.Code).ToArray(),
+                errorResponse.Errors.Select(error => error.Code),
                 elapsed.TotalMilliseconds);
             return;
         }

@@ -30,6 +30,7 @@ public sealed class ComparisonCheckFreshnessHandlerTests
             "/repository",
             new DetachedRepositoryHead("0123456789abcdef0123456789abcdef01234567"));
         var handler = new ComparisonCheckFreshnessHandler(
+            new StubRepositoryBusyGuard(),
             new StubGitComparisonFreshnessChecker(
                 new ComparisonFreshnessCheck(
                     ComparisonFreshnessState.Current,

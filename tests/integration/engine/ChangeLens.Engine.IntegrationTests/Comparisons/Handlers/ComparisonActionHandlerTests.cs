@@ -31,6 +31,7 @@ public sealed class ComparisonActionHandlerTests
     public async Task UnapprovedFreshnessStateReturnsWarningInternalError()
     {
         var handler = new ComparisonCheckFreshnessHandler(
+            new StubRepositoryBusyGuard(),
             new StubGitComparisonFreshnessChecker(
                 new ComparisonFreshnessCheck((ComparisonFreshnessState)int.MaxValue, null, null)),
             new EngineProtocolSerializer());
@@ -67,6 +68,7 @@ public sealed class ComparisonActionHandlerTests
     public async Task UnapprovedRemoteBaselineStateReturnsInternalError()
     {
         var handler = new ComparisonCheckRemoteBaselineHandler(
+            new StubRepositoryBusyGuard(),
             new StubGitRemoteBaselineTracker(new RemoteBaselineCheckResult((RemoteBaselineState)int.MaxValue, null)),
             new EngineProtocolSerializer());
         var request = CreateRequest(

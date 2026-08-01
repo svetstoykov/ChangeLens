@@ -6,6 +6,7 @@ using ChangeLens.Engine.Protocol.Models;
 using ChangeLens.Engine.Protocol.Services;
 using ChangeLens.Engine.Repositories.Constants;
 using ChangeLens.Core.LocalState.Interfaces;
+using ChangeLens.Core.AnalysisRuns.Interfaces;
 using ChangeLens.Engine.Repositories.Models;
 
 namespace ChangeLens.Engine.Repositories.Handlers;
@@ -17,9 +18,11 @@ namespace ChangeLens.Engine.Repositories.Handlers;
 ///     The host registers this handler as scoped. The identifier must be a canonical GUID in <c>D</c> format; a
 ///     non-canonical spelling is rejected as an invalid request.
 /// </remarks>
+/// <param name="busyGuard">The repository-busy guard. Cannot be <see langword="null" />.</param>
 /// <param name="repositoryHistoryService">The repository-history capability. Cannot be <see langword="null" />.</param>
 /// <param name="protocolSerializer">The strict engine protocol serializer. Cannot be <see langword="null" />.</param>
 internal sealed class RepositoryRemoveRecentHandler(
+    IRepositoryBusyGuard busyGuard,
     IRepositoryHistoryService repositoryHistoryService,
     IEngineProtocolSerializer protocolSerializer) : IActionHandler
 {
@@ -38,6 +41,12 @@ internal sealed class RepositoryRemoveRecentHandler(
         if (parametersResult.IsFailure)
         {
             return ProtocolResponseFactory.CreateError(request.RequestId, parametersResult.Errors);
+        }
+
+        var busyResult = await busyGuard.CheckRepositoryIdAsync(parametersResult.Data!.RepositoryId, cancellationToken);
+        if (busyResult.IsFailure)
+        {
+            return ProtocolResponseFactory.CreateError(request.RequestId, busyResult.Errors);
         }
 
         if (!Guid.TryParseExact(parametersResult.Data!.RepositoryId, "D", out var repositoryId) ||

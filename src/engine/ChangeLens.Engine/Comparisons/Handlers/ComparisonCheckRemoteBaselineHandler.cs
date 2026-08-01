@@ -2,6 +2,7 @@ using System.Text.Json;
 using ChangeLens.Core.Git.Interfaces;
 using ChangeLens.Core.Git.Models;
 using ChangeLens.Core.Results.Models;
+using ChangeLens.Core.AnalysisRuns.Interfaces;
 using ChangeLens.Engine.Comparisons.Constants;
 using ChangeLens.Engine.Comparisons.Models;
 using ChangeLens.Engine.Protocol.Interfaces;
@@ -17,11 +18,13 @@ namespace ChangeLens.Engine.Comparisons.Handlers;
 ///     The host registers this handler as scoped. A baseline result the protocol has not approved is returned as a
 ///     domain-coded internal error.
 /// </remarks>
+/// <param name="busyGuard">The repository-busy guard. Cannot be <see langword="null" />.</param>
 /// <param name="remoteBaselineTracker">
 ///     The remote baseline detection and refresh capability. Cannot be <see langword="null" />.
 /// </param>
 /// <param name="protocolSerializer">The strict engine protocol serializer. Cannot be <see langword="null" />.</param>
 internal sealed class ComparisonCheckRemoteBaselineHandler(
+    IRepositoryBusyGuard busyGuard,
     IGitRemoteBaselineTracker remoteBaselineTracker,
     IEngineProtocolSerializer protocolSerializer) : IActionHandler
 {
@@ -40,6 +43,12 @@ internal sealed class ComparisonCheckRemoteBaselineHandler(
         if (parametersResult.IsFailure)
         {
             return ProtocolResponseFactory.CreateError(request.RequestId, parametersResult.Errors);
+        }
+
+        var busyResult = await busyGuard.CheckPathAsync(parametersResult.Data!.Path, cancellationToken);
+        if (busyResult.IsFailure)
+        {
+            return ProtocolResponseFactory.CreateError(request.RequestId, busyResult.Errors);
         }
 
         var parameters = parametersResult.Data!;

@@ -39,22 +39,13 @@ public sealed class GitRepositoryInspector(
         logger ?? throw new ArgumentNullException(nameof(logger));
 
     /// <inheritdoc />
-    public async Task<Result<RepositoryDescriptor>> InspectAsync(
-        string? path,
-        CancellationToken cancellationToken)
+    public async Task<Result<RepositoryDescriptor>> InspectAsync(string? path, CancellationToken cancellationToken)
     {
-        return await this.InspectAsync(
-            path,
-            GitInspectionConstants.InspectionTimeout,
-            RepositoryInspectionErrors(),
-            cancellationToken);
+        return await this.InspectAsync(path, GitInspectionConstants.InspectionTimeout, RepositoryInspectionErrors(), cancellationToken);
     }
 
     /// <inheritdoc />
-    public async Task<Result<RepositoryDescriptor>> InspectAsync(
-        string? path,
-        TimeSpan totalBudget,
-        GitCommandErrorPolicy errorPolicy,
+    public async Task<Result<RepositoryDescriptor>> InspectAsync(string? path, TimeSpan totalBudget, GitCommandErrorPolicy errorPolicy,
         CancellationToken cancellationToken)
     {
         ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(totalBudget, TimeSpan.Zero);
@@ -71,27 +62,19 @@ public sealed class GitRepositoryInspector(
 
         try
         {
-            var selectedPathResult = await pathResolver.ResolveAsync(
-                path!,
-                inspectionCancellation.Token);
+            var selectedPathResult = await pathResolver.ResolveAsync(path!, inspectionCancellation.Token);
             if (selectedPathResult.IsFailure)
             {
                 return Result.ErrorFromResult<RepositoryDescriptor>(selectedPathResult);
             }
 
-            return await this.InspectResolvedAsync(
-                selectedPathResult.Data!,
-                startedAt,
-                totalBudget,
-                errorPolicy,
-                inspectionCancellation.Token);
+            return await this.InspectResolvedAsync(selectedPathResult.Data!, startedAt, totalBudget, errorPolicy, inspectionCancellation.Token);
         }
         catch (OperationCanceledException) when (
             !cancellationToken.IsCancellationRequested && deadline.IsCancellationRequested)
         {
             this._logger.LogWarning(
-                "Repository inspection timed out after {ElapsedMilliseconds:0.000} ms.",
-                Stopwatch.GetElapsedTime(startedAt).TotalMilliseconds);
+                "Repository inspection timed out after {ElapsedMilliseconds:0.000} ms.", Stopwatch.GetElapsedTime(startedAt).TotalMilliseconds);
             return errorPolicy.TimedOut;
         }
     }
@@ -130,9 +113,7 @@ public sealed class GitRepositoryInspector(
         }
 
         var insideResult = await this.RunAsync(
-            startedAt, totalBudget, errorPolicy,
-            ["-C", selectedPath, "rev-parse", "--is-inside-work-tree"],
-            cancellationToken);
+            startedAt, totalBudget, errorPolicy, ["-C", selectedPath, "rev-parse", "--is-inside-work-tree"], cancellationToken);
         if (insideResult.IsFailure)
         {
             return Result.ErrorFromResult<RepositoryDescriptor>(insideResult);
@@ -142,8 +123,7 @@ public sealed class GitRepositoryInspector(
         {
             this._logger.LogWarning(
                 "Repository inspection fact {GitFact} failed with exit code {ExitCode}.",
-                "rev-parse --is-inside-work-tree",
-                insideResult.Data.ExitCode);
+                "rev-parse --is-inside-work-tree", insideResult.Data.ExitCode);
             return GitDiagnosticClassifier.ClassifyWorkTreeFailure(insideResult.Data);
         }
 
@@ -154,9 +134,7 @@ public sealed class GitRepositoryInspector(
         }
 
         var bareResult = await this.RunAsync(
-            startedAt, totalBudget, errorPolicy,
-            ["-C", selectedPath, "rev-parse", "--is-bare-repository"],
-            cancellationToken);
+            startedAt, totalBudget, errorPolicy, ["-C", selectedPath, "rev-parse", "--is-bare-repository"], cancellationToken);
         if (bareResult.IsFailure)
         {
             return Result.ErrorFromResult<RepositoryDescriptor>(bareResult);
@@ -165,9 +143,7 @@ public sealed class GitRepositoryInspector(
         if (bareResult.Data!.ExitCode != 0)
         {
             this._logger.LogWarning(
-                "Repository inspection fact {GitFact} failed with exit code {ExitCode}.",
-                "rev-parse --is-bare-repository",
-                bareResult.Data.ExitCode);
+                "Repository inspection fact {GitFact} failed with exit code {ExitCode}.", "rev-parse --is-bare-repository", bareResult.Data.ExitCode);
             return GitDiagnosticClassifier.ClassifyInspectionFailure(bareResult.Data);
         }
 
@@ -181,25 +157,19 @@ public sealed class GitRepositoryInspector(
         var isBare = bareParseResult.Data;
         if (isBare)
         {
-            this._logger.LogWarning(
-                "Repository inspection rejected the selected directory because it is a bare repository.");
+            this._logger.LogWarning("Repository inspection rejected the selected directory because it is a bare repository.");
             return OperationError.UnprocessableInput(
-                "The selected repository does not have a working tree.",
-                RepositoryErrorCode.WorkTreeUnavailable);
+                "The selected repository does not have a working tree.", RepositoryErrorCode.WorkTreeUnavailable);
         }
 
         if (!isInsideWorkTree)
         {
             this._logger.LogWarning("Repository inspection rejected the selected directory because it is not inside a Git working tree.");
-            return OperationError.UnprocessableInput(
-                "The selected folder is not inside a Git working tree.",
-                RepositoryErrorCode.NotGitRepository);
+            return OperationError.UnprocessableInput("The selected folder is not inside a Git working tree.", RepositoryErrorCode.NotGitRepository);
         }
 
         var rootResult = await this.RunAsync(
-            startedAt, totalBudget, errorPolicy,
-            ["-C", selectedPath, "rev-parse", "--show-toplevel"],
-            cancellationToken);
+            startedAt, totalBudget, errorPolicy, ["-C", selectedPath, "rev-parse", "--show-toplevel"], cancellationToken);
         if (rootResult.IsFailure)
         {
             return Result.ErrorFromResult<RepositoryDescriptor>(rootResult);
@@ -208,9 +178,7 @@ public sealed class GitRepositoryInspector(
         if (rootResult.Data!.ExitCode != 0)
         {
             this._logger.LogWarning(
-                "Repository inspection fact {GitFact} failed with exit code {ExitCode}.",
-                "rev-parse --show-toplevel",
-                rootResult.Data.ExitCode);
+                "Repository inspection fact {GitFact} failed with exit code {ExitCode}.", "rev-parse --show-toplevel", rootResult.Data.ExitCode);
             return GitDiagnosticClassifier.ClassifyInspectionFailure(rootResult.Data);
         }
 
@@ -220,19 +188,15 @@ public sealed class GitRepositoryInspector(
             return Result.ErrorFromResult<RepositoryDescriptor>(rootParseResult);
         }
 
-        var canonicalRootResult = await pathResolver.ResolveAsync(
-            rootParseResult.Data!,
-            cancellationToken);
+        var canonicalRootResult = await pathResolver.ResolveAsync(rootParseResult.Data!, cancellationToken);
         if (canonicalRootResult.IsFailure)
         {
             return Result.ErrorFromResult<RepositoryDescriptor>(canonicalRootResult);
         }
 
         var canonicalRoot = canonicalRootResult.Data!;
-        var revisionResult = await this.RunAsync(
-            startedAt, totalBudget, errorPolicy,
-            ["-C", canonicalRoot, "rev-parse", "--verify", "HEAD^{commit}"],
-            cancellationToken);
+        var revisionResult = await this.RunAsync(startedAt, totalBudget, errorPolicy,
+            ["-C", canonicalRoot, "rev-parse", "--verify", "HEAD^{commit}"], cancellationToken);
         if (revisionResult.IsFailure)
         {
             return Result.ErrorFromResult<RepositoryDescriptor>(revisionResult);
@@ -242,8 +206,7 @@ public sealed class GitRepositoryInspector(
         {
             this._logger.LogWarning(
                 "Repository inspection fact {GitFact} failed with exit code {ExitCode}.",
-                "rev-parse --verify HEAD^{commit}",
-                revisionResult.Data.ExitCode);
+                "rev-parse --verify HEAD^{commit}", revisionResult.Data.ExitCode);
             return GitDiagnosticClassifier.ClassifyInspectionFailure(revisionResult.Data);
         }
 
@@ -253,18 +216,14 @@ public sealed class GitRepositoryInspector(
             return Result.ErrorFromResult<RepositoryDescriptor>(revisionParseResult);
         }
 
-        var headResult = await this.RunAsync(
-            startedAt, totalBudget, errorPolicy,
-            ["-C", canonicalRoot, "symbolic-ref", "--quiet", "--short", "HEAD"],
-            cancellationToken);
+        var headResult = await this.RunAsync(startedAt, totalBudget, errorPolicy,
+            ["-C", canonicalRoot, "symbolic-ref", "--quiet", "--short", "HEAD"], cancellationToken);
         if (headResult.IsFailure)
         {
             return Result.ErrorFromResult<RepositoryDescriptor>(headResult);
         }
 
-        var headParseResult = GitOutputParser.ParseHead(
-            headResult.Data!,
-            revisionParseResult.Data!);
+        var headParseResult = GitOutputParser.ParseHead(headResult.Data!, revisionParseResult.Data!);
         if (headParseResult.IsFailure)
         {
             return Result.ErrorFromResult<RepositoryDescriptor>(headParseResult);
@@ -276,11 +235,8 @@ public sealed class GitRepositoryInspector(
             name = canonicalRoot;
         }
 
-        this._logger.LogInformation(
-            "Repository inspection resolved {RepositoryName} at {Head} in {ElapsedMilliseconds:0.000} ms.",
-            name,
-            headParseResult.Data,
-            Stopwatch.GetElapsedTime(startedAt).TotalMilliseconds);
+        this._logger.LogInformation("Repository inspection resolved {RepositoryName} at {Head} in {ElapsedMilliseconds:0.000} ms.", name,
+            headParseResult.Data, Stopwatch.GetElapsedTime(startedAt).TotalMilliseconds);
 
         return Result.Success(
             new RepositoryDescriptor(
@@ -364,9 +320,7 @@ public sealed class GitRepositoryInspector(
     /// </summary>
     /// <returns>A failed result with the repository invalid-path error.</returns>
     private static Result InvalidPath() =>
-        Result.Fail(OperationError.Validation(
-            "The selected repository path is invalid.",
-            RepositoryErrorCode.InvalidPath));
+        Result.Fail(OperationError.Validation("The selected repository path is invalid.", RepositoryErrorCode.InvalidPath));
 
     /// <summary>
     ///     Creates the Phase 1A terminal errors for repository inspection.
@@ -374,13 +328,7 @@ public sealed class GitRepositoryInspector(
     /// <returns>The immutable terminal error policy for repository inspection.</returns>
     private static GitCommandErrorPolicy RepositoryInspectionErrors() =>
         new(
-            OperationError.Timeout(
-                "Git repository inspection exceeded its allowed time.",
-                GitErrorCode.TimedOut),
-            OperationError.ExternalDependencyFailure(
-                "Git repository inspection failed.",
-                RepositoryErrorCode.InspectionFailed),
-            OperationError.ExternalDependencyFailure(
-                "Git repository inspection failed.",
-                RepositoryErrorCode.InspectionFailed));
+            OperationError.Timeout("Git repository inspection exceeded its allowed time.", GitErrorCode.TimedOut),
+            OperationError.ExternalDependencyFailure("Git repository inspection failed.", RepositoryErrorCode.InspectionFailed),
+            OperationError.ExternalDependencyFailure("Git repository inspection failed.", RepositoryErrorCode.InspectionFailed));
 }

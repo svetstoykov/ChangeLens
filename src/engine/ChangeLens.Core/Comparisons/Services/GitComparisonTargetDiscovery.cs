@@ -192,8 +192,7 @@ public sealed class GitComparisonTargetDiscovery(
         if (targetSetToken is not null &&
             !TokensEqual(targetSetToken, token))
         {
-            this._logger.LogWarning(
-                "Comparison target set changed since the caller's cached token was issued.");
+            this._logger.LogWarning("Comparison target set changed since the caller's cached token was issued.");
             return TargetsChangedError;
         }
 
@@ -218,12 +217,8 @@ public sealed class GitComparisonTargetDiscovery(
         var suggestion = query is null && after is null
             ? discovered.SuggestedTarget
             : null;
-        this._logger.LogDebug(
-            "Discovered {TargetCount} comparison targets ({UnsupportedTargetCount} unsupported) for " +
-            "{CanonicalPath}.",
-            discovered.Targets.Count,
-            discovered.UnsupportedTargetCount,
-            repository.CanonicalPath);
+        this._logger.LogDebug("Discovered {TargetCount} comparison targets ({UnsupportedTargetCount} unsupported) for " +
+            "{CanonicalPath}.", discovered.Targets.Count, discovered.UnsupportedTargetCount, repository.CanonicalPath);
         return Result.Success(
             new ComparisonTargetSet(
                 page,

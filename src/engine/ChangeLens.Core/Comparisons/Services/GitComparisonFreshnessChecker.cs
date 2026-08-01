@@ -88,15 +88,13 @@ public sealed class GitComparisonFreshnessChecker(
     {
         if (!IsValidToken(freshnessToken))
         {
-            this._logger.LogDebug(
-                "Rejected comparison freshness check: freshness token shape is not approved.");
+            this._logger.LogDebug("Rejected comparison freshness check: freshness token shape is not approved.");
             return InvalidFreshnessTokenError;
         }
 
         if (!IsApprovedTargetShape(target))
         {
-            this._logger.LogDebug(
-                "Rejected comparison freshness check: target shape is not approved.");
+            this._logger.LogDebug("Rejected comparison freshness check: target shape is not approved.");
             return TargetInvalidError;
         }
 
@@ -206,12 +204,8 @@ public sealed class GitComparisonFreshnessChecker(
             var state = TokensEqual(freshnessToken!, currentToken)
                 ? ComparisonFreshnessState.Current
                 : ComparisonFreshnessState.Stale;
-            this._logger.LogInformation(
-                "Comparison freshness check for target {Target} resolved to {FreshnessState} in " +
-                "{ElapsedMilliseconds:0.000} ms.",
-                target,
-                state,
-                Stopwatch.GetElapsedTime(startedAt).TotalMilliseconds);
+            this._logger.LogInformation("Comparison freshness check for target {Target} resolved to {FreshnessState} in " +
+                "{ElapsedMilliseconds:0.000} ms.", target, state, Stopwatch.GetElapsedTime(startedAt).TotalMilliseconds);
             var check = state == ComparisonFreshnessState.Current
                 ? new ComparisonFreshnessCheck(ComparisonFreshnessState.Current, repository, parsedTargetRevision.Data)
                 : StaleCheck;
@@ -220,9 +214,7 @@ public sealed class GitComparisonFreshnessChecker(
         catch (OperationCanceledException) when (
             !cancellationToken.IsCancellationRequested && deadline.IsCancellationRequested)
         {
-            this._logger.LogWarning(
-                "Comparison freshness check for target {Target} timed out after {ElapsedMilliseconds:0.000} ms.",
-                target,
+            this._logger.LogWarning("Comparison freshness check for target {Target} timed out after {ElapsedMilliseconds:0.000} ms.", target,
                 Stopwatch.GetElapsedTime(startedAt).TotalMilliseconds);
             return TimedOutError;
         }

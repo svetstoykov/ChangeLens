@@ -62,18 +62,14 @@ internal static class GitDiagnosticClassifier
         var diagnostic = output.StandardError;
         if (diagnostic.Contains("not a git repository", StringComparison.OrdinalIgnoreCase))
         {
-            return OperationError.UnprocessableInput(
-                "The selected folder is not inside a Git working tree.",
-                RepositoryErrorCode.NotGitRepository);
+            return OperationError.UnprocessableInput("The selected folder is not inside a Git working tree.", RepositoryErrorCode.NotGitRepository);
         }
 
         if (diagnostic.Contains("detected dubious ownership in repository", StringComparison.OrdinalIgnoreCase) ||
             diagnostic.Contains("unsafe repository", StringComparison.OrdinalIgnoreCase) ||
             diagnostic.Contains("permission denied", StringComparison.OrdinalIgnoreCase))
         {
-            return OperationError.Unauthorized(
-                "Git could not access the selected repository.",
-                RepositoryErrorCode.AccessDenied);
+            return OperationError.Unauthorized("Git could not access the selected repository.", RepositoryErrorCode.AccessDenied);
         }
 
         if (diagnostic.Contains("does not have any commits yet", StringComparison.OrdinalIgnoreCase) ||
@@ -83,8 +79,7 @@ internal static class GitDiagnosticClassifier
             diagnostic.Contains("ambiguous argument 'HEAD^{commit}'", StringComparison.OrdinalIgnoreCase))
         {
             return OperationError.UnprocessableInput(
-                "The selected repository does not have a committed HEAD revision.",
-                RepositoryErrorCode.HeadUnavailable);
+                "The selected repository does not have a committed HEAD revision.", RepositoryErrorCode.HeadUnavailable);
         }
 
         return InspectionFailure();
@@ -117,8 +112,7 @@ internal static class GitDiagnosticClassifier
             diagnostic.Contains("permission denied (publickey", StringComparison.OrdinalIgnoreCase) ||
             diagnostic.Contains("terminal prompts disabled", StringComparison.OrdinalIgnoreCase))
         {
-            return OperationError.Unauthorized(
-                "The remote requires authentication. Run `git fetch <remote> <branch>` in a terminal, then try again.",
+            return OperationError.Unauthorized("The remote requires authentication. Run `git fetch <remote> <branch>` in a terminal, then try again.",
                 ComparisonErrorCode.RemoteAuthenticationRequired);
         }
 
@@ -130,9 +124,7 @@ internal static class GitDiagnosticClassifier
     /// </summary>
     /// <returns>The stable remote-unreachable operation error.</returns>
     private static OperationError RemoteUnreachableFailure() =>
-        OperationError.ExternalDependencyFailure(
-            "The remote could not be reached.",
-            ComparisonErrorCode.RemoteUnreachable);
+        OperationError.ExternalDependencyFailure("The remote could not be reached.", ComparisonErrorCode.RemoteUnreachable);
 
     /// <summary>
     ///     Determines whether a captured stream is valid UTF-8 text within the inspection byte bound.
@@ -158,7 +150,5 @@ internal static class GitDiagnosticClassifier
     /// </summary>
     /// <returns>The stable generic repository inspection error.</returns>
     private static OperationError InspectionFailure() =>
-        OperationError.ExternalDependencyFailure(
-            "Git repository inspection failed.",
-            RepositoryErrorCode.InspectionFailed);
+        OperationError.ExternalDependencyFailure("Git repository inspection failed.", RepositoryErrorCode.InspectionFailed);
 }

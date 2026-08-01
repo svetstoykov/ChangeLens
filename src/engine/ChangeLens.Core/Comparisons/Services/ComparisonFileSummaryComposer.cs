@@ -45,9 +45,7 @@ public sealed class ComparisonFileSummaryComposer : IComparisonFileSummaryCompos
         }
         catch (OverflowException)
         {
-            return OperationError.UnprocessableInput(
-                "The comparison exceeds the supported local inspection limit.",
-                ComparisonErrorCode.TooLarge);
+            return OperationError.UnprocessableInput("The comparison exceeds the supported local inspection limit.", ComparisonErrorCode.TooLarge);
         }
     }
 
@@ -56,9 +54,7 @@ public sealed class ComparisonFileSummaryComposer : IComparisonFileSummaryCompos
     /// </summary>
     /// <param name="parents">The mutable lineage parent map.</param>
     /// <param name="path">The path to add.</param>
-    private static void AddPath(
-        IDictionary<string, string> parents,
-        string path)
+    private static void AddPath(IDictionary<string, string> parents, string path)
     {
         if (!parents.ContainsKey(path))
         {
@@ -72,9 +68,7 @@ public sealed class ComparisonFileSummaryComposer : IComparisonFileSummaryCompos
     /// <param name="parents">The mutable lineage parent map.</param>
     /// <param name="path">The path whose root is resolved.</param>
     /// <returns>The canonical root selected for the path's lineage.</returns>
-    private static string Find(
-        IDictionary<string, string> parents,
-        string path)
+    private static string Find(IDictionary<string, string> parents, string path)
     {
         var root = path;
 
@@ -99,10 +93,7 @@ public sealed class ComparisonFileSummaryComposer : IComparisonFileSummaryCompos
     /// <param name="parents">The mutable lineage parent map.</param>
     /// <param name="left">The original side of the rename edge.</param>
     /// <param name="right">The current side of the rename edge.</param>
-    private static void Union(
-        IDictionary<string, string> parents,
-        string left,
-        string right)
+    private static void Union(IDictionary<string, string> parents, string left, string right)
     {
         var leftRoot = Find(parents, left);
         var rightRoot = Find(parents, right);
@@ -120,9 +111,7 @@ public sealed class ComparisonFileSummaryComposer : IComparisonFileSummaryCompos
     /// <param name="parents">The mutable lineage parent map.</param>
     /// <param name="predicate">The category predicate applied to each record.</param>
     /// <returns>The checked number of unique matching lineage roots.</returns>
-    private static int CountDistinctRoots(
-        IEnumerable<ComparisonFileRecord> records,
-        IDictionary<string, string> parents,
+    private static int CountDistinctRoots(IEnumerable<ComparisonFileRecord> records, IDictionary<string, string> parents,
         Func<ComparisonFileRecord, bool> predicate)
     {
         var roots = new HashSet<string>(StringComparer.Ordinal);

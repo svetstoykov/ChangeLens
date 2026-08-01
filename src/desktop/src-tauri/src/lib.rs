@@ -1,9 +1,13 @@
+pub mod analysis;
 pub mod comparisons;
 pub mod engine_protocol;
 pub mod engine_status;
 pub mod preferences;
 pub mod repositories;
 
+use analysis::{
+    AnalysisState, analysis_cancel, analysis_get_active, analysis_poll_run, analysis_start,
+};
 use comparisons::{
     ComparisonState, comparison_check_freshness, comparison_check_remote_baseline,
     comparison_list_targets, comparison_prepare, comparison_refresh_remote_baseline,
@@ -28,6 +32,7 @@ pub fn configure_desktop<R: tauri::Runtime>(
     repository_state: RepositoryState,
     repository_folder_picker_state: RepositoryFolderPickerState,
     comparison_state: ComparisonState,
+    analysis_state: AnalysisState,
 ) -> tauri::Builder<R> {
     configure_desktop_with_preferences(
         builder,
@@ -35,6 +40,7 @@ pub fn configure_desktop<R: tauri::Runtime>(
         repository_state,
         repository_folder_picker_state,
         comparison_state,
+        analysis_state,
         PreferenceState::unused(),
     )
 }
@@ -47,6 +53,7 @@ pub fn configure_desktop_with_preferences<R: tauri::Runtime>(
     repository_state: RepositoryState,
     repository_folder_picker_state: RepositoryFolderPickerState,
     comparison_state: ComparisonState,
+    analysis_state: AnalysisState,
     preference_state: PreferenceState,
 ) -> tauri::Builder<R> {
     builder
@@ -54,6 +61,7 @@ pub fn configure_desktop_with_preferences<R: tauri::Runtime>(
         .manage(repository_state)
         .manage(repository_folder_picker_state)
         .manage(comparison_state)
+        .manage(analysis_state)
         .manage(preference_state)
         .invoke_handler(tauri::generate_handler![
             engine_check_status,
@@ -69,6 +77,10 @@ pub fn configure_desktop_with_preferences<R: tauri::Runtime>(
             comparison_check_freshness,
             comparison_check_remote_baseline,
             comparison_refresh_remote_baseline,
+            analysis_start,
+            analysis_get_active,
+            analysis_poll_run,
+            analysis_cancel,
         ])
 }
 
@@ -103,6 +115,7 @@ pub fn run() {
         RepositoryState::new(engine_client.clone()),
         RepositoryFolderPickerState::new(Arc::new(NativeRepositoryFolderPicker)),
         ComparisonState::new(engine_client.clone()),
+        AnalysisState::new(engine_client.clone()),
         PreferenceState::new(engine_client.clone()),
     )
     .build(tauri::generate_context!())

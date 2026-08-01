@@ -46,3 +46,11 @@ path = "../../../tests/integration/desktop/Comparisons/comparison_process.rs"
 [[test]]
 name = "comparison_commands"
 path = "../../../tests/integration/desktop/Comparisons/comparison_commands.rs"
+
+[[test]]
+name = "analysis_process"
+path = "../../../tests/integration/desktop/Analysis/analysis_process.rs"
+
+[[test]]
+name = "analysis_commands"
+path = "../../../tests/integration/desktop/Analysis/analysis_commands.rs"

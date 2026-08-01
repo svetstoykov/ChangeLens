@@ -1,3 +1,4 @@
+use changelens_desktop_lib::analysis::AnalysisState;
 use changelens_desktop_lib::comparisons::{
     ComparisonFreshness, ComparisonReadiness, ComparisonRefreshRemoteBaselineResult,
     ComparisonRemoteBaseline, ComparisonService, ComparisonState, ComparisonTarget,
@@ -5,7 +6,7 @@ use changelens_desktop_lib::comparisons::{
 };
 use changelens_desktop_lib::configure_desktop;
 use changelens_desktop_lib::engine_protocol::{
-    ActionErrorDetail, ActionErrorKind, EngineActionError, OperationErrorType,
+    ActionErrorDetail, ActionErrorKind, EngineActionError, EngineClient, OperationErrorType,
 };
 use changelens_desktop_lib::engine_status::{EngineStatusService, EngineStatusState};
 use changelens_desktop_lib::repositories::{
@@ -798,6 +799,7 @@ fn invoke_command(
         RepositoryState::new(Arc::new(UnusedRepositoryService)),
         RepositoryFolderPickerState::new(Arc::new(UnusedRepositoryFolderPicker)),
         ComparisonState::new(comparison_service),
+        AnalysisState::new(Arc::new(EngineClient::new())),
     )
     .build(mock_context(noop_assets()))
     .expect("the test desktop application should build");

@@ -19,7 +19,6 @@ internal sealed class AnalysisRunStateValueConverter() : ValueConverter<Analysis
             [AnalysisRunState.Capturing] = "capturing",
             [AnalysisRunState.Discovering] = "discovering",
             [AnalysisRunState.Collecting] = "collecting",
-            [AnalysisRunState.Checking] = "checking",
             [AnalysisRunState.Persisting] = "persisting",
             [AnalysisRunState.Completed] = "completed",
             [AnalysisRunState.CompletedWithLimitations] = "completedWithLimitations",

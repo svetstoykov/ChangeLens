@@ -27,15 +27,9 @@ internal sealed class AnalysisRunCoordinator(
         string? path,
         string? target,
         string? freshnessToken,
-        AnalysisCheckSelection checks,
         string? changeContext,
         CancellationToken cancellationToken)
     {
-        if (checks.Tests && !checks.Build)
-        {
-            return OperationError.Validation("Selecting tests requires selecting build.", AnalysisErrorCode.TestsRequireBuild);
-        }
-
         var freshnessResult = await freshnessChecker.CheckAsync(path, target, freshnessToken, cancellationToken);
         if (freshnessResult.IsFailure)
         {
@@ -65,7 +59,6 @@ internal sealed class AnalysisRunCoordinator(
             target!,
             freshnessCheck.TargetRevision!,
             freshnessToken!,
-            checks,
             changeContext,
             requestedAt);
 

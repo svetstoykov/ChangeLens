@@ -134,25 +134,22 @@ internal sealed class EngineHostTestFixture : IAsyncDisposable
     /// <summary>
     ///     Asynchronously accepts an analysis run and wakes the processor for the default repository.
     /// </summary>
-    /// <param name="checks">The deterministic checks selected for the run. Cannot be <see langword="null" />.</param>
     /// <returns>A task whose result contains the accepted run identifier.</returns>
-    internal Task<Guid> AcceptRunAsync(AnalysisCheckSelection checks) =>
-        this.AcceptRunAsync("repository", checks);
+    internal Task<Guid> AcceptRunAsync() =>
+        this.AcceptRunAsync("repository");
 
     /// <summary>
     ///     Asynchronously accepts an analysis run and wakes the processor for another repository.
     /// </summary>
-    /// <param name="checks">The deterministic checks selected for the run. Cannot be <see langword="null" />.</param>
     /// <returns>A task whose result contains the accepted run identifier.</returns>
-    internal Task<Guid> AcceptRunForAnotherRepositoryAsync(AnalysisCheckSelection checks) =>
-        this.AcceptRunAsync("another-repository", checks);
+    internal Task<Guid> AcceptRunForAnotherRepositoryAsync() =>
+        this.AcceptRunAsync("another-repository");
 
     /// <summary>
     ///     Asynchronously accepts an analysis run without waking the processor.
     /// </summary>
-    /// <param name="checks">The deterministic checks selected for the run. Cannot be <see langword="null" />.</param>
     /// <returns>A task whose result contains the accepted run identifier.</returns>
-    internal async Task<Guid> AcceptRunWithoutSignalingAsync(AnalysisCheckSelection checks)
+    internal async Task<Guid> AcceptRunWithoutSignalingAsync()
     {
         const string repositoryName = "repository";
         await this.EnsureRepositoryIsRecordedAsync(repositoryName);
@@ -170,7 +167,6 @@ internal sealed class EngineHostTestFixture : IAsyncDisposable
             "refs/heads/main",
             "89abcdef0123456789abcdef0123456789abcdef",
             new string('0', 64),
-            checks,
             null,
             requestedAt);
         var result = await store.CreateOrReturnActiveAsync(acceptance, TestContext.Current.CancellationToken);
@@ -236,7 +232,7 @@ internal sealed class EngineHostTestFixture : IAsyncDisposable
     /// <returns>A task whose result contains the active orphaned run identifier.</returns>
     internal async Task<Guid> SeedActiveRunLeftByAPreviousProcessAsync()
     {
-        var runId = await this.AcceptRunAsync(new AnalysisCheckSelection(false, false));
+        var runId = await this.AcceptRunAsync();
         await using var scope = this.Host.Services.CreateAsyncScope();
         var store = scope.ServiceProvider.GetRequiredService<IAnalysisRunStore>();
         var claim = await store.ClaimNextPendingAsync(TestContext.Current.CancellationToken);
@@ -474,7 +470,7 @@ internal sealed class EngineHostTestFixture : IAsyncDisposable
         return CreateAsync(temporaryDirectory.DirectoryPath, temporaryDirectory, pipelineRun, completeSuccessfulRuns);
     }
 
-    private async Task<Guid> AcceptRunAsync(string repositoryName, AnalysisCheckSelection checks)
+    private async Task<Guid> AcceptRunAsync(string repositoryName)
     {
         await this.EnsureRepositoryIsRecordedAsync(repositoryName);
         await using var scope = this.Host.Services.CreateAsyncScope();
@@ -485,7 +481,6 @@ internal sealed class EngineHostTestFixture : IAsyncDisposable
             canonicalPath,
             "refs/heads/main",
             new string('0', 64),
-            checks,
             null,
             TestContext.Current.CancellationToken);
         Assert.True(acceptanceResult.IsSuccess);

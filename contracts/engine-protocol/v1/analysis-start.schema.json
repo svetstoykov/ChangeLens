@@ -21,17 +21,11 @@
         "parameters": {
           "type": "object",
           "additionalProperties": false,
-          "required": ["path", "target", "freshnessToken", "checks"],
+          "required": ["path", "target", "freshnessToken"],
           "properties": {
             "path": { "type": "string", "minLength": 1, "maxLength": 8192, "pattern": "^(?=.*\\S)[^\\u0000]+$" },
             "target": { "$ref": "#/$defs/refName" },
             "freshnessToken": { "$ref": "#/$defs/token" },
-            "checks": {
-              "type": "object",
-              "additionalProperties": false,
-              "required": ["build", "tests"],
-              "properties": { "build": { "type": "boolean" }, "tests": { "type": "boolean" } }
-            },
             "changeContext": { "type": ["string", "null"], "maxLength": 8192 }
           }
         }

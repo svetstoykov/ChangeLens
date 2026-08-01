@@ -31,7 +31,6 @@ public sealed class AnalysisProtocolTests
                     path = repository.Path,
                     target = repository.DefaultTarget,
                     freshnessToken,
-                    checks = new { build = false, tests = false },
                 }));
         var startResult = ProtocolResponseAssertions.AssertResultEnvelope(startResponse, "analysis-start-1");
         ProtocolResponseAssertions.AssertExactProperties(startResult, "state", "runId", "requestedAt");
@@ -62,7 +61,6 @@ public sealed class AnalysisProtocolTests
                 path = repository.Path,
                 target = repository.DefaultTarget,
                 freshnessToken,
-                checks = new { build = true, tests = true },
             });
 
         using var first = await engine.SendAsync("analysis.start", "analysis-start-a", parameters);
@@ -101,7 +99,6 @@ public sealed class AnalysisProtocolTests
                     path = repository.Path,
                     target = repository.DefaultTarget,
                     freshnessToken = new string('0', 64),
-                    checks = new { build = false, tests = false },
                 }));
         var result = ProtocolResponseAssertions.AssertResultEnvelope(response, "analysis-start-stale");
         ProtocolResponseAssertions.AssertExactProperties(result, "state");
@@ -129,7 +126,6 @@ public sealed class AnalysisProtocolTests
                     path = repository.Path,
                     target = repository.DefaultTarget,
                     freshnessToken,
-                    checks = new { build = false, tests = false },
                 }));
         var startResult = ProtocolResponseAssertions.AssertResultEnvelope(startResponse, "analysis-cancel-start");
         ProtocolResponseAssertions.AssertExactProperties(startResult, "state", "runId", "requestedAt");
@@ -190,7 +186,6 @@ public sealed class AnalysisProtocolTests
                     path = repository.Path,
                     target = repository.DefaultTarget,
                     freshnessToken,
-                    checks = new { build = false, tests = false },
                 }));
         var startResult = ProtocolResponseAssertions.AssertResultEnvelope(startResponse, "analysis-getactive-start");
         ProtocolResponseAssertions.AssertExactProperties(startResult, "state", "runId", "requestedAt");

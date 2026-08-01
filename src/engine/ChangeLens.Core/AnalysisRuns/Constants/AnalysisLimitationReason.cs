@@ -1,13 +1,10 @@
 namespace ChangeLens.Core.AnalysisRuns.Constants;
 
 /// <summary>
-///     Provides the controlled reasons a deterministic check step is skipped.
+///     Provides the controlled reasons recorded against an analysis step whose outcome reduced the evidence a run collected.
 /// </summary>
 public static class AnalysisLimitationReason
 {
-    /// <summary>The check was not selected. Not a limitation.</summary>
-    public const string Disabled = "disabled";
-
-    /// <summary>The check was selected but its capability is not implemented in this gate. A limitation.</summary>
+    /// <summary>The capability the step serves is unavailable, so the run completes with a limitation.</summary>
     public const string CapabilityUnavailable = "capabilityUnavailable";
 }

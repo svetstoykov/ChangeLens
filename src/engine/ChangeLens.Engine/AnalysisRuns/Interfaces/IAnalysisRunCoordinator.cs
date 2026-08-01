@@ -12,7 +12,6 @@ internal interface IAnalysisRunCoordinator
     /// <param name="path">The repository path, or <see langword="null" /> when unavailable.</param>
     /// <param name="target">The comparison target, or <see langword="null" /> when unavailable.</param>
     /// <param name="freshnessToken">The comparison freshness token, or <see langword="null" /> when unavailable.</param>
-    /// <param name="checks">The deterministic checks selected for the run.</param>
     /// <param name="changeContext">Optional developer-supplied context for the run.</param>
     /// <param name="cancellationToken">The token that cancels the operation.</param>
     /// <returns>A task whose result contains the accepted or rejected start outcome.</returns>
@@ -20,7 +19,6 @@ internal interface IAnalysisRunCoordinator
         string? path,
         string? target,
         string? freshnessToken,
-        AnalysisCheckSelection checks,
         string? changeContext,
         CancellationToken cancellationToken);
 

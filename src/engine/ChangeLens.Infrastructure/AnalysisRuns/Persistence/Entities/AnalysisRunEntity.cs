@@ -59,16 +59,6 @@ internal sealed class AnalysisRunEntity
     public string? ChangeContext { get; set; }
 
     /// <summary>
-    ///     Gets or sets a value indicating whether the build check is enabled for this run.
-    /// </summary>
-    public bool BuildEnabled { get; set; }
-
-    /// <summary>
-    ///     Gets or sets a value indicating whether the tests check is enabled for this run.
-    /// </summary>
-    public bool TestsEnabled { get; set; }
-
-    /// <summary>
     ///     Gets or sets the durable lifecycle state.
     /// </summary>
     public AnalysisRunState State { get; set; }

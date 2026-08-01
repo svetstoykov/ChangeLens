@@ -46,8 +46,6 @@ public sealed class AnalysisGetActiveHandlerTests
         Assert.Equal(expected.State, actual.State);
         Assert.Equal(expected.Repository, actual.Repository);
         Assert.Equal(expected.Comparison, actual.Comparison);
-        Assert.Equal(expected.Checks.Build, actual.Checks.Build);
-        Assert.Equal(expected.Checks.Tests, actual.Checks.Tests);
         Assert.Equal(expected.RequestedAt, actual.RequestedAt);
         Assert.Equal(expected.CaptureStartedAt, actual.CaptureStartedAt);
         Assert.Equal(expected.CancellationRequested, actual.CancellationRequested);
@@ -81,7 +79,6 @@ public sealed class AnalysisGetActiveHandlerTests
             "refs/heads/feature/comparison",
             "89abcdef0123456789abcdef0123456789abcdef",
             new string('0', 64)),
-        new AnalysisCheckSelection(true, true),
         1720000000000,
         1720000000100,
         false,

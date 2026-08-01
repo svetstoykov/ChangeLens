@@ -209,6 +209,26 @@ public sealed class SqliteAnalysisRunStoreTests
     }
 
     /// <summary>
+    ///     Verifies that a limited terminal state and its limitation count survive a durable round trip, so the
+    ///     outcome remains representable before any contributor produces a real limitation.
+    /// </summary>
+    [Fact]
+    public async Task LimitedTerminalStateRoundTripsWithItsLimitationCount()
+    {
+        await using var fixture = await AnalysisRunStoreTestFixture.CreateAsync();
+        var runId = await fixture.CreateAcceptedRunAsync();
+        var terminal = new AnalysisTerminalSummary(AnalysisTerminalKind.CompletedWithLimitations, 10_000, 2, null);
+
+        var commit = await fixture.Store.CommitTerminalAsync(runId, terminal, TestContext.Current.CancellationToken);
+        var detail = await fixture.Store.GetDetailAsync(runId, TestContext.Current.CancellationToken);
+
+        Assert.True(commit.Data);
+        Assert.Equal(AnalysisRunState.CompletedWithLimitations, detail.Data!.State);
+        Assert.Equal(AnalysisTerminalKind.CompletedWithLimitations, detail.Data.Terminal!.Kind);
+        Assert.Equal(2, detail.Data.Terminal.LimitationCount);
+    }
+
+    /// <summary>
     ///     Verifies that finalizing cancelled pending runs commits the durable cancelled terminal state without
     ///     claiming the run, and that the finalized run is no longer claimable.
     /// </summary>

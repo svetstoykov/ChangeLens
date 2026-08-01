@@ -45,7 +45,6 @@ public sealed class AnalysisCapacityProtocolTests
                         path = repository.Path,
                         target = repository.DefaultTarget,
                         freshnessToken,
-                        checks = new { build = true, tests = true },
                         changeContext = new string('a', 8192),
                     }));
             var startResult = ProtocolResponseAssertions.AssertResultEnvelope(startResponse, "analysis-capacity-start");
@@ -78,12 +77,11 @@ public sealed class AnalysisCapacityProtocolTests
             Assert.True(
                 encodedByteCount <= PollProjectionBudgetBytes,
                 $"Expected the poll response to stay at or below 48 KiB but it was {encodedByteCount} bytes.");
-            Assert.Equal("completedWithLimitations", terminalResult.GetProperty("state").GetString());
+            Assert.Equal("completed", terminalResult.GetProperty("state").GetString());
             ProtocolResponseAssertions.AssertExactProperties(
                 terminalResult.GetProperty("terminal"),
                 "kind",
-                "terminalAt",
-                "limitationCount");
+                "terminalAt");
             Assert.InRange(finalSampledPeakWorkingSetBytes, baselineWorkingSetBytes, MaximumEngineWorkingSetBytes);
             Assert.True(
                 workingSetGrowthBytes <= MaximumEngineWorkingSetGrowthBytes,

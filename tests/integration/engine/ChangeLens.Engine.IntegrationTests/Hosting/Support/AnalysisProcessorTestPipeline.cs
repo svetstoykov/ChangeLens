@@ -20,7 +20,6 @@ internal sealed class AnalysisProcessorTestPipeline(
     /// <inheritdoc />
     public async Task RunAsync(
         Guid runId,
-        AnalysisCheckSelection checks,
         CancellationToken userCancellationToken,
         CancellationToken shutdownToken)
     {

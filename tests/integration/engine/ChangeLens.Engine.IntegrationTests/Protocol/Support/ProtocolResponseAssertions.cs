@@ -14,7 +14,6 @@ internal static class ProtocolResponseAssertions
         "state",
         "repository",
         "comparison",
-        "checks",
         "requestedAt",
         "captureStartedAt",
         "capturedAt",
@@ -61,7 +60,6 @@ internal static class ProtocolResponseAssertions
         AssertExactProperties(projection, AnalysisRunProjectionProperties);
         AssertExactProperties(projection.GetProperty("repository"), "repositoryId", "displayName", "canonicalPath", "head");
         AssertExactProperties(projection.GetProperty("comparison"), "target", "targetRevision", "freshnessToken");
-        AssertExactProperties(projection.GetProperty("checks"), "build", "tests");
         Assert.Equal(JsonValueKind.Array, projection.GetProperty("facts").ValueKind);
     }
 

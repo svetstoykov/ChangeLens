@@ -38,10 +38,10 @@
     "runProjection": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["runId", "state", "repository", "comparison", "checks", "requestedAt", "captureStartedAt", "capturedAt", "snapshotId", "cancellationRequested", "facts", "terminal", "interruptedAt", "interruptionReason"],
+      "required": ["runId", "state", "repository", "comparison", "requestedAt", "captureStartedAt", "capturedAt", "snapshotId", "cancellationRequested", "facts", "terminal", "interruptedAt", "interruptionReason"],
       "properties": {
         "runId": { "$ref": "#/$defs/runId" },
-        "state": { "enum": ["pendingCapture", "capturing", "discovering", "collecting", "checking", "persisting", "completed", "completedWithLimitations", "cancelled", "failed", "interrupted"] },
+        "state": { "enum": ["pendingCapture", "capturing", "discovering", "collecting", "persisting", "completed", "completedWithLimitations", "cancelled", "failed", "interrupted"] },
         "repository": {
           "type": "object",
           "additionalProperties": false,
@@ -62,12 +62,6 @@
             "targetRevision": { "$ref": "#/$defs/revision" },
             "freshnessToken": { "$ref": "#/$defs/token" }
           }
-        },
-        "checks": {
-          "type": "object",
-          "additionalProperties": false,
-          "required": ["build", "tests"],
-          "properties": { "build": { "type": "boolean" }, "tests": { "type": "boolean" } }
         },
         "requestedAt": { "$ref": "#/$defs/timestamp" },
         "captureStartedAt": { "anyOf": [{ "$ref": "#/$defs/timestamp" }, { "type": "null" }] },

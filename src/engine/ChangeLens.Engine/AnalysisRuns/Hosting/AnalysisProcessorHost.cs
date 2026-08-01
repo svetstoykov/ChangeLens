@@ -178,7 +178,7 @@ internal sealed class AnalysisProcessorHost(
 
             logger.LogInformation("Analysis processor claimed run {RunId}.", claim.RunId);
             var pipeline = scope.ServiceProvider.GetRequiredService<IAnalysisPipeline>();
-            await pipeline.RunAsync(claim.RunId, claim.Checks, runToken, shutdownToken);
+            await pipeline.RunAsync(claim.RunId, runToken, shutdownToken);
         }
         catch (OperationCanceledException) when (shutdownToken.IsCancellationRequested)
         {

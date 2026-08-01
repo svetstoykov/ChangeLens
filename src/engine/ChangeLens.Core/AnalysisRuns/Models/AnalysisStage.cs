@@ -14,9 +14,6 @@ public enum AnalysisStage
     /// <summary>Completing an empty evidence pass.</summary>
     Collecting,
 
-    /// <summary>Recording deterministic check outcomes.</summary>
-    Checking,
-
     /// <summary>Validating accumulated step outcomes and deriving the terminal summary.</summary>
     Persisting,
 }

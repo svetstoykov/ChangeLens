@@ -17,9 +17,6 @@ public enum AnalysisRunState
     /// <summary>The run is completing an empty evidence pass.</summary>
     Collecting,
 
-    /// <summary>The run is recording deterministic check outcomes.</summary>
-    Checking,
-
     /// <summary>The run is validating accumulated step outcomes and deriving the terminal summary.</summary>
     Persisting,
 

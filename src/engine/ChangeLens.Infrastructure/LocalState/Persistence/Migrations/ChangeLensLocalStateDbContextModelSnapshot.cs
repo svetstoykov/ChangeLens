@@ -27,10 +27,6 @@ namespace ChangeLens.Infrastructure.LocalState.Persistence.Migrations
                         .HasColumnType("INTEGER")
                         .HasColumnName("analysis_started_at_unix_ms");
 
-                    b.Property<bool>("BuildEnabled")
-                        .HasColumnType("INTEGER")
-                        .HasColumnName("build_enabled");
-
                     b.Property<long?>("CancellationRequestedAtUnixMilliseconds")
                         .HasColumnType("INTEGER")
                         .HasColumnName("cancellation_requested_at_unix_ms");
@@ -120,26 +116,20 @@ namespace ChangeLens.Infrastructure.LocalState.Persistence.Migrations
                         .HasColumnType("INTEGER")
                         .HasColumnName("terminal_limitation_count");
 
-                    b.Property<bool>("TestsEnabled")
-                        .HasColumnType("INTEGER")
-                        .HasColumnName("tests_enabled");
-
                     b.HasKey("RunId");
 
                     b.HasIndex("CanonicalRepositoryPathKey")
                         .IsUnique()
                         .HasDatabaseName("IX_analysis_runs_active_repository")
-                        .HasFilter("state IN ('pendingCapture','capturing','discovering','collecting','checking','persisting')");
+                        .HasFilter("state IN ('pendingCapture','capturing','discovering','collecting','persisting')");
 
                     b.ToTable("analysis_runs", null, t =>
                         {
                             t.HasCheckConstraint("CK_analysis_runs_interruption_fields", "(state = 'interrupted' AND interrupted_at_unix_ms IS NOT NULL) OR (state <> 'interrupted' AND interrupted_at_unix_ms IS NULL)");
 
-                            t.HasCheckConstraint("CK_analysis_runs_state", "state IN ('pendingCapture','capturing','discovering','collecting','checking','persisting','completed','completedWithLimitations','cancelled','failed','interrupted')");
+                            t.HasCheckConstraint("CK_analysis_runs_state", "state IN ('pendingCapture','capturing','discovering','collecting','persisting','completed','completedWithLimitations','cancelled','failed','interrupted')");
 
                             t.HasCheckConstraint("CK_analysis_runs_terminal_fields", "(state NOT IN ('completed','completedWithLimitations','cancelled','failed') AND terminal_at_unix_ms IS NULL) OR (state IN ('completed','completedWithLimitations','cancelled','failed') AND terminal_at_unix_ms IS NOT NULL)");
-
-                            t.HasCheckConstraint("CK_analysis_runs_tests_require_build", "tests_enabled = 0 OR build_enabled = 1");
                         });
                 });
 

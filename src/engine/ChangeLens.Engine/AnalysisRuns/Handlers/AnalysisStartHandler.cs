@@ -33,12 +33,10 @@ internal sealed class AnalysisStartHandler(IAnalysisRunCoordinator coordinator, 
         }
 
         var parameters = parametersResult.Data!;
-        var checks = new AnalysisCheckSelection(parameters.Checks.Build, parameters.Checks.Tests);
         var outcomeResult = await coordinator.StartAsync(
             parameters.Path,
             parameters.Target,
             parameters.FreshnessToken,
-            checks,
             parameters.ChangeContext,
             cancellationToken);
         if (outcomeResult.IsFailure)

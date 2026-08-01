@@ -64,7 +64,6 @@ public sealed class AnalysisPollRunHandlerTests
         Assert.Equal("completedWithLimitations", projection.State);
         Assert.Equal(detail.Repository.CanonicalPath, projection.Repository.CanonicalPath);
         Assert.Equal(detail.Comparison.TargetRevision, projection.Comparison.TargetRevision);
-        Assert.Equal(detail.Checks, new AnalysisCheckSelection(projection.Checks.Build, projection.Checks.Tests));
     }
 
     private static AnalysisRunDetail CreateDetail() => new(
@@ -79,7 +78,6 @@ public sealed class AnalysisPollRunHandlerTests
             "refs/heads/feature/comparison",
             "89abcdef0123456789abcdef0123456789abcdef",
             new string('0', 64)),
-        new AnalysisCheckSelection(true, true),
         1720000000000,
         1720000000100,
         false,

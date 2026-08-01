@@ -33,7 +33,7 @@ public sealed class RepositoryLockTests
     {
         await using var fixture = await EngineHostTestFixture.CreateBlockingPipelineAsync();
         await fixture.Host.StartAsync(TestContext.Current.CancellationToken);
-        await fixture.AcceptRunAsync(new AnalysisCheckSelection(false, false));
+        await fixture.AcceptRunAsync();
 
         var response = await fixture.SendRealProtocolRequestAsync(action, fixture.RequestParametersFor(action));
 
@@ -59,7 +59,7 @@ public sealed class RepositoryLockTests
     {
         await using var fixture = await EngineHostTestFixture.CreateBlockingPipelineAsync();
         await fixture.Host.StartAsync(TestContext.Current.CancellationToken);
-        var runId = await fixture.AcceptRunAsync(new AnalysisCheckSelection(false, false));
+        var runId = await fixture.AcceptRunAsync();
 
         var response = await fixture.SendRealProtocolRequestAsync(action, fixture.RequestParametersFor(action, runId));
 
@@ -77,7 +77,7 @@ public sealed class RepositoryLockTests
     {
         await using var fixture = await EngineHostTestFixture.CreateBlockingPipelineAsync();
         await fixture.Host.StartAsync(TestContext.Current.CancellationToken);
-        await fixture.AcceptRunAsync(new AnalysisCheckSelection(false, false));
+        await fixture.AcceptRunAsync();
         var parameters = JsonSerializer.SerializeToElement(new { repositoryId = fixture.RepositoryId.ToString("B") });
 
         var response = await fixture.SendRealProtocolRequestAsync("repositories.removeRecent", parameters);

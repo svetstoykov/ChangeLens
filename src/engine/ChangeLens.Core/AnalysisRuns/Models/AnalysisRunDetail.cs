@@ -11,10 +11,6 @@ namespace ChangeLens.Core.AnalysisRuns.Models;
 /// <param name="Comparison">
 ///     The immutable accepted comparison identity. Cannot be <see langword="null" />.
 /// </param>
-/// <param name="Checks">
-///     The immutable accepted deterministic check selection. Cannot be
-///     <see langword="null" />.
-/// </param>
 /// <param name="RequestedAtUnixMilliseconds">
 ///     When the pending run and repository lock committed.
 /// </param>
@@ -38,7 +34,6 @@ public sealed record AnalysisRunDetail(
     AnalysisRunState State,
     AnalysisRepositoryIdentity Repository,
     AnalysisComparisonIdentity Comparison,
-    AnalysisCheckSelection Checks,
     long RequestedAtUnixMilliseconds,
     long? CaptureStartedAtUnixMilliseconds,
     bool CancellationRequested,

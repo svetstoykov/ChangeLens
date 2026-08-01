@@ -22,11 +22,6 @@ internal sealed class AnalysisStartParameters
     [JsonRequired]
     public string FreshnessToken { get; init; } = null!;
 
-    /// <summary>Gets the explicit deterministic check selection.</summary>
-    /// <value>The selected checks. It cannot be <see langword="null" />.</value>
-    [JsonRequired]
-    public AnalysisCheckSelectionParameters Checks { get; init; } = null!;
-
     /// <summary>Gets the optional developer-supplied change context.</summary>
     /// <value>The developer-supplied context, or <see langword="null" /> when none was provided.</value>
     public string? ChangeContext { get; init; }

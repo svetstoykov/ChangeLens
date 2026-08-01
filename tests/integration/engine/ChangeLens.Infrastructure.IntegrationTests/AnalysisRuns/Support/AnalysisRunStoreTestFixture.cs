@@ -97,7 +97,6 @@ internal sealed class AnalysisRunStoreTestFixture : IAsyncDisposable
             "main",
             "target-revision",
             "freshness-token",
-            new AnalysisCheckSelection(true, true),
             null,
             requestedAtUnixMilliseconds);
 

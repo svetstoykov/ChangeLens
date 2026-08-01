@@ -516,26 +516,18 @@ public sealed class EngineProtocolContractTests
 
     /// <summary>Verifies analysis-start transport structure and identifier bounds.</summary>
     [Theory]
-    [InlineData("""{"protocolVersion":1,"requestId":"id","action":"analysis.start","parameters":{"path":"/repo","target":"refs/heads/main","freshnessToken":"0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"}}""")]
-    [InlineData("""{"protocolVersion":1,"requestId":"id","action":"analysis.start","parameters":{"path":"/repo","target":"refs/heads/main","freshnessToken":"0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef","checks":{"build":true,"tests":false},"checks":{"build":true,"tests":false}}}""")]
+    [InlineData("""{"protocolVersion":1,"requestId":"id","action":"analysis.start","parameters":{"path":"/repo","target":"refs/heads/main"}}""")]
+    [InlineData("""{"protocolVersion":1,"requestId":"id","action":"analysis.start","parameters":{"path":"/repo","target":"refs/heads/main","freshnessToken":"0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef","checks":{"build":true,"tests":false}}}""")]
+    [InlineData("""{"protocolVersion":1,"requestId":"id","action":"analysis.start","parameters":{"path":"/repo","path":"/repo","target":"refs/heads/main","freshnessToken":"0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"}}""")]
     public void AnalysisStartSchemaRejectsMalformedMessages(string json)
     {
         Assert.False(IsContractValid("analysis-start.schema.json", json));
     }
 
-    /// <summary>Verifies the transport schema accepts the cross-field checks shape for Core validation.</summary>
-    [Fact]
-    public void AnalysisStartSchemaAcceptsTestsWithoutBuildAtTransportLevel()
-    {
-        const string request = """{"protocolVersion":1,"requestId":"id","action":"analysis.start","parameters":{"path":"/repo","target":"refs/heads/main","freshnessToken":"0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef","checks":{"build":false,"tests":true}}}""";
-
-        Assert.True(IsContractValid("analysis-start.schema.json", request));
-    }
-
     /// <summary>Verifies analysis-poll-run rejects invalid terminal counts and run identifiers.</summary>
     [Theory]
     [InlineData("""{"protocolVersion":1,"requestId":"id","action":"analysis.pollRun","parameters":{"runId":"not-a-guid"}}""")]
-    [InlineData("""{"protocolVersion":1,"type":"result","requestId":"id","result":{"runId":"0198a1b2-3c4d-4e5f-8a9b-0123456789ab","state":"completedWithLimitations","repository":{"repositoryId":"5298a1b2-3c4d-4e5f-8a9b-0123456789ab","displayName":"repo","canonicalPath":"/repo","head":"0123456789abcdef0123456789abcdef01234567"},"comparison":{"target":"refs/heads/main","targetRevision":"89abcdef0123456789abcdef0123456789abcdef","freshnessToken":"0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"},"checks":{"build":true,"tests":true},"requestedAt":1,"captureStartedAt":null,"capturedAt":null,"snapshotId":null,"cancellationRequested":false,"facts":[],"terminal":{"kind":"completedWithLimitations","terminalAt":2,"limitationCount":-1},"interruptedAt":null,"interruptionReason":null}}""")]
+    [InlineData("""{"protocolVersion":1,"type":"result","requestId":"id","result":{"runId":"0198a1b2-3c4d-4e5f-8a9b-0123456789ab","state":"completedWithLimitations","repository":{"repositoryId":"5298a1b2-3c4d-4e5f-8a9b-0123456789ab","displayName":"repo","canonicalPath":"/repo","head":"0123456789abcdef0123456789abcdef01234567"},"comparison":{"target":"refs/heads/main","targetRevision":"89abcdef0123456789abcdef0123456789abcdef","freshnessToken":"0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"},"requestedAt":1,"captureStartedAt":null,"capturedAt":null,"snapshotId":null,"cancellationRequested":false,"facts":[],"terminal":{"kind":"completedWithLimitations","terminalAt":2,"limitationCount":-1},"interruptedAt":null,"interruptionReason":null}}""")]
     public void AnalysisPollRunSchemaRejectsMalformedMessages(string json)
     {
         Assert.False(IsContractValid("analysis-poll-run.schema.json", json));

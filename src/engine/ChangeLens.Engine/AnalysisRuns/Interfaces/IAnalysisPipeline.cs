@@ -1,5 +1,3 @@
-using ChangeLens.Core.AnalysisRuns.Models;
-
 namespace ChangeLens.Engine.AnalysisRuns.Interfaces;
 
 /// <summary>
@@ -11,9 +9,8 @@ internal interface IAnalysisPipeline
     ///     Asynchronously runs every planned step for one claimed run to a terminal outcome.
     /// </summary>
     /// <param name="runId">The claimed run identifier.</param>
-    /// <param name="checks">The accepted deterministic check selection.</param>
     /// <param name="userCancellationToken">The token that is canceled when the user requests cancellation.</param>
     /// <param name="shutdownToken">The token that is canceled when the host is shutting down.</param>
     /// <returns>A task that represents the asynchronous operation.</returns>
-    Task RunAsync(Guid runId, AnalysisCheckSelection checks, CancellationToken userCancellationToken, CancellationToken shutdownToken);
+    Task RunAsync(Guid runId, CancellationToken userCancellationToken, CancellationToken shutdownToken);
 }

@@ -14,12 +14,6 @@ public static class AnalysisStepId
     /// <summary>The lifecycle step that completes an empty evidence pass.</summary>
     public const string Collect = "analysis.lifecycle.collect";
 
-    /// <summary>The deterministic build check step.</summary>
-    public const string CheckBuild = "analysis.check.build";
-
-    /// <summary>The deterministic test check step.</summary>
-    public const string CheckTests = "analysis.check.tests";
-
     /// <summary>The lifecycle step that derives the terminal summary.</summary>
     public const string Persist = "analysis.lifecycle.persist";
 }

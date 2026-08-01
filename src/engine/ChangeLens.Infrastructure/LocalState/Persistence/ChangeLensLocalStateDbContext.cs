@@ -92,11 +92,8 @@ public sealed class ChangeLensLocalStateDbContext(
             {
                 table.HasCheckConstraint(
                     "CK_analysis_runs_state",
-                    "state IN ('pendingCapture','capturing','discovering','collecting','checking','persisting'," +
+                    "state IN ('pendingCapture','capturing','discovering','collecting','persisting'," +
                     "'completed','completedWithLimitations','cancelled','failed','interrupted')");
-                table.HasCheckConstraint(
-                    "CK_analysis_runs_tests_require_build",
-                    "tests_enabled = 0 OR build_enabled = 1");
                 table.HasCheckConstraint(
                     "CK_analysis_runs_terminal_fields",
                     "(state NOT IN ('completed','completedWithLimitations','cancelled','failed') " +
@@ -121,8 +118,6 @@ public sealed class ChangeLensLocalStateDbContext(
             entity.Property(run => run.TargetRevision).HasColumnName("target_revision").IsRequired();
             entity.Property(run => run.FreshnessToken).HasColumnName("freshness_token").IsRequired();
             entity.Property(run => run.ChangeContext).HasColumnName("change_context");
-            entity.Property(run => run.BuildEnabled).HasColumnName("build_enabled");
-            entity.Property(run => run.TestsEnabled).HasColumnName("tests_enabled");
             entity.Property(run => run.State).HasColumnName("state").HasConversion<AnalysisRunStateValueConverter>();
             entity.Property(run => run.RequestedAtUnixMilliseconds).HasColumnName("requested_at_unix_ms");
             entity.Property(run => run.CaptureStartedAtUnixMilliseconds).HasColumnName("capture_started_at_unix_ms");
@@ -140,7 +135,7 @@ public sealed class ChangeLensLocalStateDbContext(
                 .HasDatabaseName("IX_analysis_runs_active_repository")
                 .IsUnique()
                 .HasFilter(
-                    "state IN ('pendingCapture','capturing','discovering','collecting','checking','persisting')");
+                    "state IN ('pendingCapture','capturing','discovering','collecting','persisting')");
         });
 
         modelBuilder.Entity<AnalysisRunStepEntity>(entity =>

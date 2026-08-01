@@ -8,7 +8,7 @@ namespace ChangeLens.Engine.IntegrationTests.Analysis.Handlers.Support;
 ///     Provides caller-selected analysis coordinator outcomes for action-handler integration tests.
 /// </summary>
 internal sealed class StubAnalysisRunCoordinator(
-    Func<string?, string?, string?, AnalysisCheckSelection, string?, CancellationToken, Task<Result<AnalysisStartOutcome>>>? start = null,
+    Func<string?, string?, string?, string?, CancellationToken, Task<Result<AnalysisStartOutcome>>>? start = null,
     Func<string?, CancellationToken, Task<Result<AnalysisRunDetail?>>>? getActive = null,
     Func<Guid, CancellationToken, Task<Result<AnalysisRunDetail>>>? pollRun = null,
     Func<Guid, CancellationToken, Task<Result>>? cancel = null) : IAnalysisRunCoordinator
@@ -19,10 +19,9 @@ internal sealed class StubAnalysisRunCoordinator(
         string? path,
         string? target,
         string? freshnessToken,
-        AnalysisCheckSelection checks,
         string? changeContext,
         CancellationToken cancellationToken) =>
-        start?.Invoke(path, target, freshnessToken, checks, changeContext, cancellationToken)
+        start?.Invoke(path, target, freshnessToken, changeContext, cancellationToken)
         ?? throw new NotSupportedException("The start operation was not configured.");
 
     public Task<Result<AnalysisRunDetail?>> GetActiveAsync(string? path, CancellationToken cancellationToken) =>

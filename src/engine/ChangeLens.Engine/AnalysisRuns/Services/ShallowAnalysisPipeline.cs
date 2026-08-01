@@ -17,7 +17,6 @@ internal sealed class ShallowAnalysisPipeline(
     /// <inheritdoc />
     public async Task RunAsync(
         Guid runId,
-        AnalysisCheckSelection checks,
         CancellationToken userCancellationToken,
         CancellationToken shutdownToken)
     {
@@ -55,7 +54,7 @@ internal sealed class ShallowAnalysisPipeline(
                 currentState = nextState;
             }
 
-            var outcome = await this.RunStepAsync(runId, entry, checks);
+            var outcome = await this.RunStepAsync(runId, entry);
             if (outcome.State is AnalysisRunStepState.SucceededWithLimitations)
             {
                 limitationCount++;
@@ -64,7 +63,7 @@ internal sealed class ShallowAnalysisPipeline(
 
         var terminalTransition = await store.TransitionStageAsync(
             runId,
-            AnalysisRunState.Checking,
+            AnalysisRunState.Collecting,
             AnalysisRunState.Persisting,
             this.Now(),
             CancellationToken.None);
@@ -97,11 +96,9 @@ internal sealed class ShallowAnalysisPipeline(
         new(AnalysisStepId.Capture, "engine", "lifecycle", 0, AnalysisStage.Capturing),
         new(AnalysisStepId.Discover, "engine", "lifecycle", 1, AnalysisStage.Discovering),
         new(AnalysisStepId.Collect, "engine", "lifecycle", 2, AnalysisStage.Collecting),
-        new(AnalysisStepId.CheckBuild, "engine", "build", 3, AnalysisStage.Checking),
-        new(AnalysisStepId.CheckTests, "engine", "tests", 4, AnalysisStage.Checking),
     ];
 
-    private async Task<AnalysisRunStepOutcome> RunStepAsync(Guid runId, AnalysisRunStepPlanEntry entry, AnalysisCheckSelection checks)
+    private async Task<AnalysisRunStepOutcome> RunStepAsync(Guid runId, AnalysisRunStepPlanEntry entry)
     {
         var beginResult = await store.BeginStepAsync(runId, entry.StepId, this.Now(), CancellationToken.None);
         if (beginResult.IsFailure)
@@ -109,20 +106,11 @@ internal sealed class ShallowAnalysisPipeline(
             return new AnalysisRunStepOutcome(entry.StepId, AnalysisRunStepState.Failed, AnalysisFailureCode.UnexpectedFailure);
         }
 
-        var outcome = entry.StepId switch
-        {
-            AnalysisStepId.CheckBuild => Skip(entry.StepId, checks.Build),
-            AnalysisStepId.CheckTests => Skip(entry.StepId, checks.Tests),
-            _ => new AnalysisRunStepOutcome(entry.StepId, AnalysisRunStepState.Succeeded, null),
-        };
+        var outcome = new AnalysisRunStepOutcome(entry.StepId, AnalysisRunStepState.Succeeded, null);
         var finishResult = await store.FinishStepAsync(runId, outcome, this.Now(), CancellationToken.None);
         return finishResult.IsFailure
             ? new AnalysisRunStepOutcome(entry.StepId, AnalysisRunStepState.Failed, AnalysisFailureCode.UnexpectedFailure)
             : outcome;
-
-        static AnalysisRunStepOutcome Skip(string stepId, bool selected) => selected
-            ? new AnalysisRunStepOutcome(stepId, AnalysisRunStepState.SucceededWithLimitations, AnalysisLimitationReason.CapabilityUnavailable)
-            : new AnalysisRunStepOutcome(stepId, AnalysisRunStepState.Skipped, AnalysisLimitationReason.Disabled);
     }
 
     private async Task CommitCancelledAsync(Guid runId)
@@ -139,7 +127,6 @@ internal sealed class ShallowAnalysisPipeline(
         AnalysisStage.Capturing => AnalysisRunState.Capturing,
         AnalysisStage.Discovering => AnalysisRunState.Discovering,
         AnalysisStage.Collecting => AnalysisRunState.Collecting,
-        AnalysisStage.Checking => AnalysisRunState.Checking,
         _ => throw new ArgumentOutOfRangeException(nameof(stage)),
     };
 }

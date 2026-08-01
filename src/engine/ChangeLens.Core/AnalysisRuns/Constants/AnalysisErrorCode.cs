@@ -10,7 +10,4 @@ public static class AnalysisErrorCode
 
     /// <summary>Identifies a run identifier with no matching durable run.</summary>
     public const string UnknownRun = "analysis.unknownRun";
-
-    /// <summary>Identifies a start request that selects tests without selecting build.</summary>
-    public const string TestsRequireBuild = "analysis.testsRequireBuild";
 }

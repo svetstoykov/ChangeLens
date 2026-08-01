@@ -1,5 +1,4 @@
 #if DEBUG
-using ChangeLens.Core.AnalysisRuns.Models;
 using ChangeLens.Engine.AnalysisRuns.Constants;
 using ChangeLens.Engine.AnalysisRuns.Interfaces;
 
@@ -41,7 +40,6 @@ internal sealed class FileGatedAnalysisPipeline(
     /// <inheritdoc />
     public async Task RunAsync(
         Guid runId,
-        AnalysisCheckSelection checks,
         CancellationToken userCancellationToken,
         CancellationToken shutdownToken)
     {
@@ -54,7 +52,7 @@ internal sealed class FileGatedAnalysisPipeline(
 
         gateCancellation.Token.ThrowIfCancellationRequested();
         File.WriteAllText(this._stepsStartedFile, "started");
-        await this._pipeline.RunAsync(runId, checks, userCancellationToken, shutdownToken);
+        await this._pipeline.RunAsync(runId, userCancellationToken, shutdownToken);
     }
 }
 #endif

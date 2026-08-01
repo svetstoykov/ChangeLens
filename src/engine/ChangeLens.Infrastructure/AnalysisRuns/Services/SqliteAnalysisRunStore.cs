@@ -29,7 +29,6 @@ public sealed class SqliteAnalysisRunStore(
         AnalysisRunState.Capturing,
         AnalysisRunState.Discovering,
         AnalysisRunState.Collecting,
-        AnalysisRunState.Checking,
         AnalysisRunState.Persisting,
     ];
 
@@ -63,8 +62,6 @@ public sealed class SqliteAnalysisRunStore(
             TargetRevision = acceptance.TargetRevision,
             FreshnessToken = acceptance.FreshnessToken,
             ChangeContext = acceptance.ChangeContext,
-            BuildEnabled = acceptance.Checks.Build,
-            TestsEnabled = acceptance.Checks.Tests,
             State = AnalysisRunState.PendingCapture,
             RequestedAtUnixMilliseconds = acceptance.RequestedAtUnixMilliseconds,
         };
@@ -159,7 +156,7 @@ public sealed class SqliteAnalysisRunStore(
         }
 
         logger.LogInformation("Claimed analysis run {RunId}.", candidate.RunId);
-        return new AnalysisRunClaim(candidate.RunId, new AnalysisCheckSelection(candidate.BuildEnabled, candidate.TestsEnabled));
+        return new AnalysisRunClaim(candidate.RunId);
     }
 
     /// <inheritdoc />
@@ -359,7 +356,6 @@ public sealed class SqliteAnalysisRunStore(
             run.State,
             new AnalysisRepositoryIdentity(run.RepositoryId, run.RepositoryDisplayName, run.CanonicalRepositoryPath, run.HeadRevision),
             new AnalysisComparisonIdentity(run.Target, run.TargetRevision, run.FreshnessToken),
-            new AnalysisCheckSelection(run.BuildEnabled, run.TestsEnabled),
             run.RequestedAtUnixMilliseconds,
             run.CaptureStartedAtUnixMilliseconds,
             run.CancellationRequestedAtUnixMilliseconds is not null,

@@ -24,8 +24,6 @@ namespace ChangeLens.Infrastructure.LocalState.Persistence.Migrations
                     target_revision = table.Column<string>(type: "TEXT", nullable: false),
                     freshness_token = table.Column<string>(type: "TEXT", nullable: false),
                     change_context = table.Column<string>(type: "TEXT", nullable: true),
-                    build_enabled = table.Column<bool>(type: "INTEGER", nullable: false),
-                    tests_enabled = table.Column<bool>(type: "INTEGER", nullable: false),
                     state = table.Column<string>(type: "TEXT", nullable: false),
                     requested_at_unix_ms = table.Column<long>(type: "INTEGER", nullable: false),
                     capture_started_at_unix_ms = table.Column<long>(type: "INTEGER", nullable: true),
@@ -43,9 +41,8 @@ namespace ChangeLens.Infrastructure.LocalState.Persistence.Migrations
                 {
                     table.PrimaryKey("PK_analysis_runs", x => x.run_id);
                     table.CheckConstraint("CK_analysis_runs_interruption_fields", "(state = 'interrupted' AND interrupted_at_unix_ms IS NOT NULL) OR (state <> 'interrupted' AND interrupted_at_unix_ms IS NULL)");
-                    table.CheckConstraint("CK_analysis_runs_state", "state IN ('pendingCapture','capturing','discovering','collecting','checking','persisting','completed','completedWithLimitations','cancelled','failed','interrupted')");
+                    table.CheckConstraint("CK_analysis_runs_state", "state IN ('pendingCapture','capturing','discovering','collecting','persisting','completed','completedWithLimitations','cancelled','failed','interrupted')");
                     table.CheckConstraint("CK_analysis_runs_terminal_fields", "(state NOT IN ('completed','completedWithLimitations','cancelled','failed') AND terminal_at_unix_ms IS NULL) OR (state IN ('completed','completedWithLimitations','cancelled','failed') AND terminal_at_unix_ms IS NOT NULL)");
-                    table.CheckConstraint("CK_analysis_runs_tests_require_build", "tests_enabled = 0 OR build_enabled = 1");
                 });
 
             migrationBuilder.CreateTable(
@@ -86,7 +83,7 @@ namespace ChangeLens.Infrastructure.LocalState.Persistence.Migrations
                 table: "analysis_runs",
                 column: "canonical_repository_path_key",
                 unique: true,
-                filter: "state IN ('pendingCapture','capturing','discovering','collecting','checking','persisting')");
+                filter: "state IN ('pendingCapture','capturing','discovering','collecting','persisting')");
         }
 
         /// <inheritdoc />

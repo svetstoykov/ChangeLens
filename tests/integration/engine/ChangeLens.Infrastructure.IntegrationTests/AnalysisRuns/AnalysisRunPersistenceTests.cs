@@ -108,8 +108,6 @@ public sealed class AnalysisRunPersistenceTests
             Target = "main",
             TargetRevision = "def456",
             FreshnessToken = "freshness-token",
-            BuildEnabled = true,
-            TestsEnabled = true,
             State = state,
             RequestedAtUnixMilliseconds = 100,
             TerminalAtUnixMilliseconds = isTerminal ? 200 : null,

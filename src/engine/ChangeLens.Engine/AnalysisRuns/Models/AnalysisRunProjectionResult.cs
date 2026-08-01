@@ -7,7 +7,6 @@ namespace ChangeLens.Engine.AnalysisRuns.Models;
 /// <param name="State">The current protocol state name.</param>
 /// <param name="Repository">The repository identity used by the run.</param>
 /// <param name="Comparison">The accepted comparison identity.</param>
-/// <param name="Checks">The checks selected for the run.</param>
 /// <param name="RequestedAt">The Unix timestamp in milliseconds when the run was requested.</param>
 /// <param name="CaptureStartedAt">The capture start timestamp, or <see langword="null" /> when it has not started.</param>
 /// <param name="CapturedAt">The capture completion timestamp, or <see langword="null" /> when it has not completed.</param>
@@ -22,7 +21,6 @@ internal sealed record AnalysisRunProjectionResult(
     string State,
     AnalysisRepositoryResult Repository,
     AnalysisComparisonResult Comparison,
-    AnalysisCheckSelectionParameters Checks,
     long RequestedAt,
     long? CaptureStartedAt,
     long? CapturedAt,

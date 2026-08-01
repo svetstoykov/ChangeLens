@@ -22,14 +22,13 @@ public sealed class AnalysisStartHandlerTests
         var runId = Guid.Parse("0198a1b2-3c4d-4e5f-8a9b-0123456789ab");
         var handler = new AnalysisStartHandler(
             new StubAnalysisRunCoordinator(
-                start: (_, _, _, _, _, _) => Task.FromResult<Result<AnalysisStartOutcome>>(
+                start: (_, _, _, _, _) => Task.FromResult<Result<AnalysisStartOutcome>>(
                     new AnalysisStartOutcome(AnalysisStartOutcomeKind.Accepted, runId, 42, null))),
             new StubEngineProtocolSerializer(new AnalysisStartParameters
             {
                 Path = "/repo",
                 Target = "refs/heads/main",
                 FreshnessToken = new string('0', 64),
-                Checks = new AnalysisCheckSelectionParameters { Build = true, Tests = true },
             }));
 
         var response = await handler.HandleAsync(CreateRequest(JsonSerializer.SerializeToElement(new { })), TestContext.Current.CancellationToken);
@@ -56,7 +55,7 @@ public sealed class AnalysisStartHandlerTests
         foreach (var outcome in outcomes)
         {
             var handler = new AnalysisStartHandler(
-                new StubAnalysisRunCoordinator(start: (_, _, _, _, _, _) => Task.FromResult<Result<AnalysisStartOutcome>>(outcome)),
+                new StubAnalysisRunCoordinator(start: (_, _, _, _, _) => Task.FromResult<Result<AnalysisStartOutcome>>(outcome)),
                 new StubEngineProtocolSerializer(CreateParameters()));
             var response = await handler.HandleAsync(CreateRequest(JsonSerializer.SerializeToElement(new { })), TestContext.Current.CancellationToken);
             var result = Assert.IsType<ProtocolResultResponse<AnalysisStartResult>>(response).Result;
@@ -77,7 +76,7 @@ public sealed class AnalysisStartHandlerTests
     public async Task CoordinatorFailurePreservesItsErrorCode()
     {
         var handler = new AnalysisStartHandler(
-            new StubAnalysisRunCoordinator(start: (_, _, _, _, _, _) => Task.FromResult<Result<AnalysisStartOutcome>>(
+            new StubAnalysisRunCoordinator(start: (_, _, _, _, _) => Task.FromResult<Result<AnalysisStartOutcome>>(
                 OperationError.NotFound("Repository unavailable.", "analysis.repositoryUnavailable"))),
             new StubEngineProtocolSerializer(CreateParameters()));
 
@@ -105,7 +104,6 @@ public sealed class AnalysisStartHandlerTests
         Path = "/repo",
         Target = "refs/heads/main",
         FreshnessToken = new string('0', 64),
-        Checks = new AnalysisCheckSelectionParameters { Build = true, Tests = false },
     };
 
     private static EngineProtocolRequest CreateRequest(JsonElement parameters = default) => new()

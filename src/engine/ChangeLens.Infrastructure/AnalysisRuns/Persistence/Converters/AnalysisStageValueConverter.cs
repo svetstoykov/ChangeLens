@@ -17,7 +17,6 @@ internal sealed class AnalysisStageValueConverter() : ValueConverter<AnalysisSta
         [AnalysisStage.Capturing] = "capturing",
         [AnalysisStage.Discovering] = "discovering",
         [AnalysisStage.Collecting] = "collecting",
-        [AnalysisStage.Checking] = "checking",
         [AnalysisStage.Persisting] = "persisting",
     }.ToFrozenDictionary();
 

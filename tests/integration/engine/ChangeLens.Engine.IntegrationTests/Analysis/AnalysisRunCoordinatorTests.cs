@@ -26,31 +26,10 @@ public sealed class AnalysisRunCoordinatorTests
             "/repository",
             "refs/heads/main",
             new string('0', 64),
-            new AnalysisCheckSelection(true, true),
             null,
             TestContext.Current.CancellationToken);
 
         Assert.Equal(AnalysisStartOutcomeKind.RejectedStale, outcome.Data!.Kind);
-    }
-
-    [Fact]
-    public async Task TestsWithoutBuildIsRejectedAsValidation()
-    {
-        var coordinator = CreateCoordinator(
-            new StubAnalysisRunStore(),
-            new AnalysisProcessorControl(),
-            new ComparisonFreshnessCheck(ComparisonFreshnessState.Stale, null, null));
-
-        var outcome = await coordinator.StartAsync(
-            "/repository",
-            "refs/heads/main",
-            new string('0', 64),
-            new AnalysisCheckSelection(false, true),
-            null,
-            TestContext.Current.CancellationToken);
-
-        Assert.True(outcome.IsFailure);
-        Assert.Equal("analysis.testsRequireBuild", outcome.Errors[0].Code);
     }
 
     [Fact]
@@ -70,7 +49,6 @@ public sealed class AnalysisRunCoordinatorTests
             "/repository",
             "refs/heads/main",
             new string('0', 64),
-            new AnalysisCheckSelection(true, false),
             null,
             TestContext.Current.CancellationToken);
 
@@ -155,7 +133,6 @@ public sealed class AnalysisRunCoordinatorTests
             "refs/heads/main",
             "89abcdef0123456789abcdef0123456789abcdef",
             new string('0', 64)),
-        new AnalysisCheckSelection(true, false),
         42,
         null,
         false,

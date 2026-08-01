@@ -10,7 +10,6 @@ namespace ChangeLens.Core.AnalysisRuns.Models;
 /// <param name="Target">The exact selected comparison target reference. Cannot be <see langword="null" />.</param>
 /// <param name="TargetRevision">The accepted target revision. Cannot be <see langword="null" />.</param>
 /// <param name="FreshnessToken">The accepted freshness token. Cannot be <see langword="null" />.</param>
-/// <param name="Checks">The immutable accepted deterministic check selection. Cannot be <see langword="null" />.</param>
 /// <param name="ChangeContext">The optional developer-supplied change context, or <see langword="null" />.</param>
 /// <param name="RequestedAtUnixMilliseconds">The acceptance timestamp.</param>
 public sealed record AnalysisRunAcceptance(
@@ -21,6 +20,5 @@ public sealed record AnalysisRunAcceptance(
     string Target,
     string TargetRevision,
     string FreshnessToken,
-    AnalysisCheckSelection Checks,
     string? ChangeContext,
     long RequestedAtUnixMilliseconds);

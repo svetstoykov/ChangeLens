@@ -1,7 +1,10 @@
-import { useState } from "react";
+import { AnalysisStartControl } from "../../Analysis/Components/AnalysisStartControl";
+import type { AnalysisStartRequest } from "../../Analysis/Models/AnalysisStartRequest";
+import type { AnalysisStartOutcome } from "../../Analysis/Models/AnalysisStartOutcome";
 import type { ComparisonClient } from "../Interfaces/ComparisonClient";
 import { useComparisonController } from "../Hooks/useComparisonController";
 import type { RepositoryDescriptor } from "../../Repositories/Models/RepositoryDescriptor";
+import type { ActionError } from "../../Actions/Models/ActionError";
 import { presentActionError } from "../../Actions/Services/presentActionError";
 import { ComparisonSummary } from "./ComparisonSummary";
 import { FreshnessControl } from "./FreshnessControl";
@@ -12,16 +15,25 @@ interface RepositoryWorkspaceProps {
   readonly repository: RepositoryDescriptor;
   readonly preferredTarget: string | null;
   readonly comparisonClient: ComparisonClient;
+  readonly startingAnalysis: boolean;
+  readonly analysisError: ActionError | null;
   readonly onRepositoryRefreshed: (repository: RepositoryDescriptor) => void;
+  readonly onStartAnalysis: (
+    request: AnalysisStartRequest,
+  ) => Promise<AnalysisStartOutcome>;
+  readonly onDismissAnalysisError: () => void;
 }
 
 export function RepositoryWorkspace({
   repository,
   preferredTarget,
   comparisonClient,
+  startingAnalysis,
+  analysisError,
   onRepositoryRefreshed,
+  onStartAnalysis,
+  onDismissAnalysisError,
 }: RepositoryWorkspaceProps) {
-  const [changeContext, setChangeContext] = useState("");
   const controller = useComparisonController({
     repository,
     preferredTarget,
@@ -36,6 +48,25 @@ export function RepositoryWorkspace({
     errorCode === "comparison.inspectionFailed";
   const headName =
     repository.head.kind === "branch" ? repository.head.name : "Detached HEAD";
+  const analysisErrorPresentation =
+    analysisError !== null ? presentActionError(analysisError) : null;
+  const preparedComparison = state.preparedComparison;
+  const canStartAnalysis =
+    preparedComparison !== null &&
+    preparedComparison.readiness.state === "ready" &&
+    state.freshness === "current" &&
+    !state.isPreparing &&
+    !state.isRefreshing;
+
+  async function startAnalysis(changeContext: string | null): Promise<void> {
+    if (preparedComparison === null) return;
+    const outcome = await onStartAnalysis({
+      target: preparedComparison.target.fullName,
+      freshnessToken: preparedComparison.freshnessToken,
+      changeContext,
+    });
+    if (outcome === "stale") controller.refresh();
+  }
 
   return (
     <section
@@ -128,43 +159,33 @@ export function RepositoryWorkspace({
               </div>
             </section>
           ) : null}
-          <section
-            className="change-context"
-            aria-labelledby="change-context-heading"
-          >
-            <header className="setup-card-heading">
-              <span className="step-number" aria-hidden="true">
-                2
-              </span>
+          {analysisErrorPresentation ? (
+            <section className="action-alert" role="alert">
+              <Icon name="warning" />
               <div>
-                <p className="eyebrow">
-                  Change context{" "}
-                  <span className="optional-badge">Optional</span>
-                </p>
-                <h3 id="change-context-heading">
-                  Tell ChangeLens what matters
-                </h3>
-                <p>
-                  Add the task, acceptance criteria, or implementation notes
-                  that should stay with this workspace.
-                </p>
+                <strong>{analysisErrorPresentation.title}</strong>
+                <ul>
+                  {analysisErrorPresentation.messages.map((message, index) => (
+                    <li
+                      key={`${analysisError?.errors[index]?.code ?? "analysis"}-${index}`}
+                    >
+                      {message}
+                    </li>
+                  ))}
+                </ul>
+                <div className="alert-actions">
+                  <button type="button" onClick={onDismissAnalysisError}>
+                    Dismiss
+                  </button>
+                </div>
               </div>
-            </header>
-            <label className="field-label" htmlFor="change-context">
-              Context for this change
-            </label>
-            <textarea
-              id="change-context"
-              value={changeContext}
-              onChange={(event) => setChangeContext(event.target.value)}
-              rows={8}
-              placeholder="For example: add repository intake and compare it with main. Preserve local-only behavior and surface conflicts clearly."
-            />
-            <p className="field-help">
-              <Icon name="shield" />
-              Context remains local and is not sent anywhere in this phase.
-            </p>
-          </section>
+            </section>
+          ) : null}
+          <AnalysisStartControl
+            disabled={!canStartAnalysis}
+            starting={startingAnalysis}
+            onStart={(changeContext) => void startAnalysis(changeContext)}
+          />
         </section>
         <section
           className="current-change-facts"

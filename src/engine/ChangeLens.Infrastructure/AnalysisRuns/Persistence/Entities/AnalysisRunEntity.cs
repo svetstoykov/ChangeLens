@@ -69,8 +69,8 @@ internal sealed class AnalysisRunEntity
     public long RequestedAtUnixMilliseconds { get; set; }
 
     /// <summary>
-    ///     Gets or sets the claim timestamp in UTC Unix milliseconds, or <see langword="null" /> before the run is
-    ///     claimed.
+    ///     Gets or sets the take timestamp in UTC Unix milliseconds, or <see langword="null" /> before the run is
+    ///     taken.
     /// </summary>
     public long? CaptureStartedAtUnixMilliseconds { get; set; }
 

@@ -39,16 +39,16 @@ public interface IAnalysisRunStore
     Task<Result<AnalysisRunDetail?>> GetActiveByRepositoryAsync(string canonicalRepositoryPathKey, CancellationToken cancellationToken);
 
     /// <summary>
-    ///     Asynchronously and atomically claims the oldest pending run that carries no durable cancellation request.
+    ///     Asynchronously and atomically takes the oldest pending run that carries no durable cancellation request.
     /// </summary>
     /// <param name="cancellationToken">A <see cref="CancellationToken" /> to observe while waiting for the task.</param>
-    /// <returns>A task whose result contains the claimed run, or <see langword="null" /> when none is claimable.</returns>
-    Task<Result<AnalysisRunClaim?>> ClaimNextPendingAsync(CancellationToken cancellationToken);
+    /// <returns>A task whose result contains the taken run identifier, or <see langword="null" /> when none is available.</returns>
+    Task<Result<Guid?>> TakeNextPendingAsync(CancellationToken cancellationToken);
 
     /// <summary>
-    ///     Asynchronously establishes the deterministic step plan for a claimed run.
+    ///     Asynchronously establishes the deterministic step plan for a taken run.
     /// </summary>
-    /// <param name="runId">The claimed run identifier.</param>
+    /// <param name="runId">The taken run identifier.</param>
     /// <param name="plan">The ordered step-plan entries. Cannot be <see langword="null" />.</param>
     /// <param name="cancellationToken">A <see cref="CancellationToken" /> to observe while waiting for the task.</param>
     /// <returns>A task representing the asynchronous operation.</returns>
@@ -114,7 +114,7 @@ public interface IAnalysisRunStore
 
     /// <summary>
     ///     Asynchronously and conditionally commits <see cref="AnalysisRunState.Cancelled" /> for every pending run
-    ///     that already carries a durable cancellation request, without claiming or running them.
+    ///     that already carries a durable cancellation request, without taking or running them.
     /// </summary>
     /// <param name="atUnixMilliseconds">The terminal timestamp.</param>
     /// <param name="cancellationToken">A <see cref="CancellationToken" /> to observe while waiting for the task.</param>

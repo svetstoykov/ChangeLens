@@ -227,7 +227,7 @@ internal sealed class EngineHostTestFixture : IAsyncDisposable
     }
 
     /// <summary>
-    ///     Asynchronously creates and claims a durable run without starting the processor host.
+    ///     Asynchronously creates and takes a durable run without starting the processor host.
     /// </summary>
     /// <returns>A task whose result contains the active orphaned run identifier.</returns>
     internal async Task<Guid> SeedActiveRunLeftByAPreviousProcessAsync()
@@ -235,25 +235,25 @@ internal sealed class EngineHostTestFixture : IAsyncDisposable
         var runId = await this.AcceptRunAsync();
         await using var scope = this.Host.Services.CreateAsyncScope();
         var store = scope.ServiceProvider.GetRequiredService<IAnalysisRunStore>();
-        var claim = await store.ClaimNextPendingAsync(TestContext.Current.CancellationToken);
-        Assert.True(claim.IsSuccess);
-        Assert.Equal(runId, claim.Data!.RunId);
+        var take = await store.TakeNextPendingAsync(TestContext.Current.CancellationToken);
+        Assert.True(take.IsSuccess);
+        Assert.Equal(runId, take.Data!.Value);
         return runId;
     }
 
     /// <summary>
-    ///     Asynchronously waits until the processor claims the selected run.
+    ///     Asynchronously waits until the processor takes the selected run.
     /// </summary>
     /// <param name="runId">The identifier of the run to observe.</param>
     /// <param name="timeout">The maximum polling duration.</param>
     /// <returns>A task that represents the asynchronous operation.</returns>
-    internal async Task WaitUntilClaimedAsync(Guid runId, TimeSpan timeout)
+    internal async Task WaitUntilTakenAsync(Guid runId, TimeSpan timeout)
     {
         await this.PollUntilAsync(runId, candidate => candidate.State == AnalysisRunState.Capturing, timeout);
     }
 
     /// <summary>
-    ///     Asynchronously waits until the controlled pipeline begins running a claimed analysis run.
+    ///     Asynchronously waits until the controlled pipeline begins running a taken analysis run.
     /// </summary>
     /// <param name="cancellationToken">The token that bounds the wait.</param>
     /// <returns>A task that represents the asynchronous operation.</returns>

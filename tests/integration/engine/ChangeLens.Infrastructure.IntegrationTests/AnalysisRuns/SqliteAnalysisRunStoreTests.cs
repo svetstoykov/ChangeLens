@@ -7,7 +7,7 @@ namespace ChangeLens.Infrastructure.IntegrationTests.AnalysisRuns;
 
 /// <summary>
 ///     Verifies <see cref="ChangeLens.Infrastructure.AnalysisRuns.Services.SqliteAnalysisRunStore" /> acceptance and
-///     processor-claim behavior against a real SQLite database.
+///     processor-take behavior against a real SQLite database.
 /// </summary>
 public sealed class SqliteAnalysisRunStoreTests
 {
@@ -55,11 +55,11 @@ public sealed class SqliteAnalysisRunStoreTests
     }
 
     /// <summary>
-    ///     Verifies that claiming the next pending run selects deterministically by requested-at timestamp then
+    ///     Verifies that taking the next pending run selects deterministically by requested-at timestamp then
     ///     run identifier.
     /// </summary>
     [Fact]
-    public async Task ClaimIsDeterministicByRequestedAtThenRunId()
+    public async Task TakeIsDeterministicByRequestedAtThenRunId()
     {
         await using var fixture = await AnalysisRunStoreTestFixture.CreateAsync();
         await fixture.SeedRepositoryAsync("/repository-a");
@@ -69,34 +69,34 @@ public sealed class SqliteAnalysisRunStoreTests
         await fixture.Store.CreateOrReturnActiveAsync(later, TestContext.Current.CancellationToken);
         await fixture.Store.CreateOrReturnActiveAsync(earlier, TestContext.Current.CancellationToken);
 
-        var claim = await fixture.Store.ClaimNextPendingAsync(TestContext.Current.CancellationToken);
+        var take = await fixture.Store.TakeNextPendingAsync(TestContext.Current.CancellationToken);
 
-        Assert.NotNull(claim.Data);
-        var claimedRun = await fixture.GetRunAsync(claim.Data!.RunId);
-        Assert.Equal(1_000, claimedRun.RequestedAtUnixMilliseconds);
+        Assert.NotNull(take.Data);
+        var takenRun = await fixture.GetRunAsync(take.Data!.Value);
+        Assert.Equal(1_000, takenRun.RequestedAtUnixMilliseconds);
     }
 
     /// <summary>
-    ///     Verifies that claiming the next pending run transitions the selected row to the capturing state.
+    ///     Verifies that taking the next pending run transitions the selected row to the capturing state.
     /// </summary>
     [Fact]
-    public async Task ClaimTransitionsTheRowToCapturing()
+    public async Task TakeTransitionsTheRowToCapturing()
     {
         await using var fixture = await AnalysisRunStoreTestFixture.CreateAsync();
         await fixture.Store.CreateOrReturnActiveAsync(
             fixture.Acceptance(),
             TestContext.Current.CancellationToken);
 
-        var claim = await fixture.Store.ClaimNextPendingAsync(TestContext.Current.CancellationToken);
+        var take = await fixture.Store.TakeNextPendingAsync(TestContext.Current.CancellationToken);
 
-        Assert.NotNull(claim.Data);
-        var claimedRun = await fixture.GetRunAsync(claim.Data!.RunId);
-        Assert.Equal(AnalysisRunState.Capturing, claimedRun.State);
-        Assert.NotNull(claimedRun.CaptureStartedAtUnixMilliseconds);
+        Assert.NotNull(take.Data);
+        var takenRun = await fixture.GetRunAsync(take.Data!.Value);
+        Assert.Equal(AnalysisRunState.Capturing, takenRun.State);
+        Assert.NotNull(takenRun.CaptureStartedAtUnixMilliseconds);
     }
 
     /// <summary>
-    ///     Verifies that a claimed run's step plan, step begin/finish outcomes, and stage transition all persist
+    ///     Verifies that a taken run's step plan, step begin/finish outcomes, and stage transition all persist
     ///     durably in one coordinated sequence.
     /// </summary>
     [Fact]
@@ -104,7 +104,7 @@ public sealed class SqliteAnalysisRunStoreTests
     {
         await using var fixture = await AnalysisRunStoreTestFixture.CreateAsync();
         var runId = await fixture.CreateAcceptedRunAsync();
-        var claim = await fixture.Store.ClaimNextPendingAsync(TestContext.Current.CancellationToken);
+        var take = await fixture.Store.TakeNextPendingAsync(TestContext.Current.CancellationToken);
         var plan = new[]
         {
             new AnalysisRunStepPlanEntry("analysis.lifecycle.capture", "engine", "lifecycle", 0, AnalysisStage.Capturing),
@@ -124,7 +124,7 @@ public sealed class SqliteAnalysisRunStoreTests
             3_000,
             TestContext.Current.CancellationToken);
 
-        Assert.NotNull(claim.Data);
+        Assert.NotNull(take.Data);
         Assert.True(finish.Data);
         Assert.Equal(AnalysisRunState.Discovering, stageResult.Data);
         var step = await fixture.GetStepAsync(runId, "analysis.lifecycle.capture");
@@ -230,10 +230,10 @@ public sealed class SqliteAnalysisRunStoreTests
 
     /// <summary>
     ///     Verifies that finalizing cancelled pending runs commits the durable cancelled terminal state without
-    ///     claiming the run, and that the finalized run is no longer claimable.
+    ///     taking the run, and that the finalized run is no longer takeable.
     /// </summary>
     [Fact]
-    public async Task FinalizesCancelledPendingRunsWithoutClaimingThem()
+    public async Task FinalizesCancelledPendingRunsWithoutTakingThem()
     {
         await using var fixture = await AnalysisRunStoreTestFixture.CreateAsync();
         var runId = await fixture.CreateAcceptedRunAsync();
@@ -242,10 +242,10 @@ public sealed class SqliteAnalysisRunStoreTests
         var finalizedCount = await fixture.Store.FinalizeCancelledPendingRunsAsync(
             6_000,
             TestContext.Current.CancellationToken);
-        var claim = await fixture.Store.ClaimNextPendingAsync(TestContext.Current.CancellationToken);
+        var take = await fixture.Store.TakeNextPendingAsync(TestContext.Current.CancellationToken);
 
         Assert.Equal(1, finalizedCount.Data);
-        Assert.Null(claim.Data);
+        Assert.Null(take.Data);
         var run = await fixture.GetRunAsync(runId);
         Assert.Equal(AnalysisRunState.Cancelled, run.State);
         Assert.Equal(6_000, run.TerminalAtUnixMilliseconds);

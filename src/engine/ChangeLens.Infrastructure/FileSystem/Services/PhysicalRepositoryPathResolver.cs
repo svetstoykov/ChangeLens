@@ -1,3 +1,4 @@
+using ChangeLens.Core.Diagnostics.Services;
 using ChangeLens.Core.Git.Interfaces;
 using ChangeLens.Core.Repositories.Constants;
 using ChangeLens.Core.Results.Models;
@@ -73,13 +74,19 @@ public sealed class PhysicalRepositoryPathResolver : IRepositoryPathResolver
         }
         catch (UnauthorizedAccessException exception)
         {
-            this._logger.LogDebug(exception, "Path resolution for {Path} failed: access denied.", path);
+            this._logger.LogDebug(
+                exception,
+                "Path resolution for {Path} failed: access denied.",
+                PathSanitizer.RedactHomeDirectory(path));
             return AccessDeniedError;
         }
         catch (Exception exception) when (
             exception is DirectoryNotFoundException or FileNotFoundException)
         {
-            this._logger.LogDebug(exception, "Path resolution for {Path} failed: the directory does not exist.", path);
+            this._logger.LogDebug(
+                exception,
+                "Path resolution for {Path} failed: the directory does not exist.",
+                PathSanitizer.RedactHomeDirectory(path));
             return PathNotFoundError;
         }
         catch (Exception exception) when (

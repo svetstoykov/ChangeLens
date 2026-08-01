@@ -8,6 +8,7 @@ using ChangeLens.Core.LocalState.Interfaces;
 using ChangeLens.Core.Repositories.Models;
 using ChangeLens.Core.Results.Models;
 using ChangeLens.Engine.AnalysisRuns.Interfaces;
+using Microsoft.Extensions.Logging;
 
 namespace ChangeLens.Engine.AnalysisRuns.Services;
 
@@ -20,7 +21,8 @@ internal sealed class AnalysisRunCoordinator(
     IRepositoryPathResolver pathResolver,
     ICanonicalRepositoryPathKeyProvider pathKeyProvider,
     IAnalysisProcessorControl processorControl,
-    TimeProvider timeProvider) : IAnalysisRunCoordinator
+    TimeProvider timeProvider,
+    ILogger<AnalysisRunCoordinator> logger) : IAnalysisRunCoordinator
 {
     /// <inheritdoc />
     public async Task<Result<AnalysisStartOutcome>> StartAsync(
@@ -39,6 +41,9 @@ internal sealed class AnalysisRunCoordinator(
         var freshnessCheck = freshnessResult.Data!;
         if (freshnessCheck.State == ComparisonFreshnessState.Stale)
         {
+            logger.LogInformation(
+                "Rejected analysis run acceptance for target {Target} because the comparison freshness state is stale.",
+                target);
             return new AnalysisStartOutcome(AnalysisStartOutcomeKind.RejectedStale, null, null, null);
         }
 

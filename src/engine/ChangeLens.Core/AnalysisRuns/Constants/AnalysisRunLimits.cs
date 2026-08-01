@@ -5,7 +5,7 @@ namespace ChangeLens.Core.AnalysisRuns.Constants;
 /// </summary>
 public static class AnalysisRunLimits
 {
-    /// <summary>The maximum number of runs the processor claims concurrently.</summary>
+    /// <summary>The maximum number of runs the processor takes concurrently.</summary>
     public const int MaximumConcurrentRuns = 1;
 
     /// <summary>The maximum complete UTF-8 poll-response size with the production serializer.</summary>

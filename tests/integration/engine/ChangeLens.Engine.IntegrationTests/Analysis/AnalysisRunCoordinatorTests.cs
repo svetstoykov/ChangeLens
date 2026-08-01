@@ -7,6 +7,7 @@ using ChangeLens.Engine.IntegrationTests.Analysis.Support;
 using ChangeLens.Engine.IntegrationTests.Comparisons.Handlers.Support;
 using ChangeLens.Infrastructure.FileSystem.Services;
 using ChangeLens.Infrastructure.LocalState.Services;
+using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 
 namespace ChangeLens.Engine.IntegrationTests.Analysis;
@@ -110,7 +111,8 @@ public sealed class AnalysisRunCoordinatorTests
             new PhysicalRepositoryPathResolver(),
             new CanonicalRepositoryPathKeyProvider(),
             processor,
-            TimeProvider.System);
+            TimeProvider.System,
+            NullLogger<AnalysisRunCoordinator>.Instance);
     }
 
     private static ComparisonFreshnessCheck CreateCurrentFreshness() => new(

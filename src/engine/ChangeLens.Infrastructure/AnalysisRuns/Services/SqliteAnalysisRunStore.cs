@@ -88,6 +88,10 @@ public sealed class SqliteAnalysisRunStore(
                     AnalysisFailureCode.UnexpectedFailure);
             }
 
+            logger.LogInformation(
+                "Rejected analysis run acceptance for repository {RepositoryDisplayName} because run {ActiveRunId} is already active.",
+                acceptance.RepositoryDisplayName,
+                activeRunId);
             return new AnalysisStartOutcome(AnalysisStartOutcomeKind.RejectedActive, null, null, activeRunId);
         }
 
@@ -99,7 +103,6 @@ public sealed class SqliteAnalysisRunStore(
     public async Task<Result<AnalysisRunDetail>> GetDetailAsync(Guid runId, CancellationToken cancellationToken)
     {
         var run = await context.AnalysisRuns
-            .Include(entity => entity.Steps)
             .AsNoTracking()
             .FirstOrDefaultAsync(entity => entity.RunId == runId, cancellationToken);
 
@@ -114,7 +117,6 @@ public sealed class SqliteAnalysisRunStore(
         CancellationToken cancellationToken)
     {
         var run = await context.AnalysisRuns
-            .Include(entity => entity.Steps)
             .AsNoTracking()
             .Where(entity => entity.CanonicalRepositoryPathKey == canonicalRepositoryPathKey)
             .Where(entity => ActiveStates.Contains(entity.State))
@@ -124,9 +126,9 @@ public sealed class SqliteAnalysisRunStore(
     }
 
     /// <inheritdoc />
-    public async Task<Result<AnalysisRunClaim?>> ClaimNextPendingAsync(CancellationToken cancellationToken)
+    public async Task<Result<Guid?>> TakeNextPendingAsync(CancellationToken cancellationToken)
     {
-        var claimTimestamp = timeProvider.GetUtcNow().ToUnixTimeMilliseconds();
+        var takeTimestamp = timeProvider.GetUtcNow().ToUnixTimeMilliseconds();
         await using var transaction = await context.Database.BeginTransactionAsync(cancellationToken);
 
         var candidate = await context.AnalysisRuns
@@ -138,7 +140,7 @@ public sealed class SqliteAnalysisRunStore(
 
         if (candidate is null)
         {
-            return (AnalysisRunClaim?)null;
+            return (Guid?)null;
         }
 
         var affected = await context.AnalysisRuns
@@ -146,17 +148,17 @@ public sealed class SqliteAnalysisRunStore(
             .ExecuteUpdateAsync(
                 setters => setters
                     .SetProperty(run => run.State, AnalysisRunState.Capturing)
-                    .SetProperty(run => run.CaptureStartedAtUnixMilliseconds, claimTimestamp),
+                    .SetProperty(run => run.CaptureStartedAtUnixMilliseconds, takeTimestamp),
                 cancellationToken);
         await transaction.CommitAsync(cancellationToken);
 
         if (affected == 0)
         {
-            return (AnalysisRunClaim?)null;
+            return (Guid?)null;
         }
 
-        logger.LogInformation("Claimed analysis run {RunId}.", candidate.RunId);
-        return new AnalysisRunClaim(candidate.RunId);
+        logger.LogInformation("Took analysis run {RunId}.", candidate.RunId);
+        return candidate.RunId;
     }
 
     /// <inheritdoc />

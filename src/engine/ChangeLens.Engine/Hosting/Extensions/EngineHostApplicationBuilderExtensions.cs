@@ -7,7 +7,6 @@ using ChangeLens.Core.Git.Interfaces;
 using ChangeLens.Core.Git.Services;
 using ChangeLens.Core.LocalState.Interfaces;
 using ChangeLens.Core.LocalState.Services;
-using ChangeLens.Engine.AnalysisRuns.Constants;
 using ChangeLens.Engine.AnalysisRuns.Handlers;
 using ChangeLens.Engine.AnalysisRuns.Hosting;
 using ChangeLens.Engine.AnalysisRuns.Interfaces;
@@ -143,28 +142,7 @@ internal static class EngineHostApplicationBuilderExtensions
 
         builder.Services.AddSingleton<IAnalysisProcessorControl, AnalysisProcessorControl>();
         builder.Services.AddScoped<IAnalysisRunStore, SqliteAnalysisRunStore>();
-#if DEBUG
-        var pipelineReleaseFile = builder.Configuration[AnalysisIntegrationTestConstants.PipelineReleaseFileConfigurationKey];
-        if (!string.IsNullOrWhiteSpace(pipelineReleaseFile))
-        {
-            var pipelineEnteredFile = builder.Configuration[AnalysisIntegrationTestConstants.PipelineEnteredFileConfigurationKey]
-                ?? pipelineReleaseFile + ".entered";
-            var pipelineStepsStartedFile = builder.Configuration[
-                AnalysisIntegrationTestConstants.PipelineStepsStartedFileConfigurationKey] ?? pipelineReleaseFile + ".steps-started";
-            builder.Services.AddScoped<ShallowAnalysisPipeline>();
-            builder.Services.AddScoped<IAnalysisPipeline>(serviceProvider => new FileGatedAnalysisPipeline(
-                serviceProvider.GetRequiredService<ShallowAnalysisPipeline>(),
-                pipelineReleaseFile,
-                pipelineEnteredFile,
-                pipelineStepsStartedFile));
-        }
-        else
-        {
-            builder.Services.AddScoped<IAnalysisPipeline, ShallowAnalysisPipeline>();
-        }
-#else
         builder.Services.AddScoped<IAnalysisPipeline, ShallowAnalysisPipeline>();
-#endif
         builder.Services.AddScoped<IAnalysisRunCoordinator, AnalysisRunCoordinator>();
         builder.Services.AddScoped<IRepositoryBusyGuard, RepositoryBusyGuard>();
         builder.Services.AddHostedService<AnalysisProcessorHost>();

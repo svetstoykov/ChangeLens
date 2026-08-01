@@ -1,6 +1,5 @@
 using System.Diagnostics;
 using System.Text.Json;
-using ChangeLens.Engine.AnalysisRuns.Constants;
 using ChangeLens.Engine.IntegrationTests.Support;
 using Xunit;
 using Xunit.Sdk;
@@ -14,35 +13,20 @@ internal sealed class ProtocolTestEngine : IAsyncDisposable
 {
     private readonly Process _process;
     private readonly TemporaryDirectory _localStateDirectory;
-    private readonly string? _pipelineReleaseFile;
-    private readonly string? _pipelineEnteredFile;
-    private readonly string? _pipelineStepsStartedFile;
 
-    private ProtocolTestEngine(
-        Process process,
-        TemporaryDirectory localStateDirectory,
-        string? pipelineReleaseFile,
-        string? pipelineEnteredFile,
-        string? pipelineStepsStartedFile)
+    private ProtocolTestEngine(Process process, TemporaryDirectory localStateDirectory)
     {
         this._process = process;
         this._localStateDirectory = localStateDirectory;
-        this._pipelineReleaseFile = pipelineReleaseFile;
-        this._pipelineEnteredFile = pipelineEnteredFile;
-        this._pipelineStepsStartedFile = pipelineStepsStartedFile;
     }
 
     /// <summary>Gets the owned Engine process for capacity sampling.</summary>
     public Process Process => this._process;
 
-    /// <summary>Gets a value indicating whether the gated production pipeline began step execution.</summary>
-    public bool PipelineStepsStarted => this._pipelineStepsStartedFile is not null && File.Exists(this._pipelineStepsStartedFile);
-
     /// <summary>Starts a real Engine child process.</summary>
     /// <param name="logDirectory">The directory for Engine logs.</param>
-    /// <param name="blockPipelineUntilReleased">Whether analysis pipeline work waits for an explicit release signal.</param>
     /// <returns>A task whose result owns the started Engine process.</returns>
-    public static Task<ProtocolTestEngine> StartAsync(string logDirectory, bool blockPipelineUntilReleased = false)
+    public static Task<ProtocolTestEngine> StartAsync(string logDirectory)
     {
         var engineDll = System.IO.Path.Combine(
             RepositoryPaths.Root,
@@ -59,15 +43,6 @@ internal sealed class ProtocolTestEngine : IAsyncDisposable
         }
 
         var localStateDirectory = new TemporaryDirectory();
-        var releaseFile = blockPipelineUntilReleased
-            ? System.IO.Path.Combine(localStateDirectory.DirectoryPath, "release-analysis-pipeline")
-            : null;
-        var enteredFile = blockPipelineUntilReleased
-            ? System.IO.Path.Combine(localStateDirectory.DirectoryPath, "entered-analysis-pipeline")
-            : null;
-        var stepsStartedFile = blockPipelineUntilReleased
-            ? System.IO.Path.Combine(localStateDirectory.DirectoryPath, "started-analysis-pipeline-steps")
-            : null;
         var startInfo = new ProcessStartInfo("dotnet")
         {
             CreateNoWindow = true,
@@ -78,22 +53,10 @@ internal sealed class ProtocolTestEngine : IAsyncDisposable
         startInfo.Environment["ChangeLens__LocalState__Directory"] = localStateDirectory.DirectoryPath;
         startInfo.Environment["ChangeLens__Logging__FileDirectory"] = logDirectory;
         startInfo.Environment["Serilog__MinimumLevel__Default"] = "Debug";
-        if (releaseFile is not null)
-        {
-            startInfo.Environment[AnalysisIntegrationTestConstants.PipelineReleaseFileEnvironmentVariable] = releaseFile;
-            startInfo.Environment[AnalysisIntegrationTestConstants.PipelineEnteredFileEnvironmentVariable] = enteredFile;
-            startInfo.Environment[AnalysisIntegrationTestConstants.PipelineStepsStartedFileEnvironmentVariable] = stepsStartedFile;
-        }
-        else
-        {
-            startInfo.Environment.Remove(AnalysisIntegrationTestConstants.PipelineReleaseFileEnvironmentVariable);
-            startInfo.Environment.Remove(AnalysisIntegrationTestConstants.PipelineEnteredFileEnvironmentVariable);
-            startInfo.Environment.Remove(AnalysisIntegrationTestConstants.PipelineStepsStartedFileEnvironmentVariable);
-        }
 
         startInfo.ArgumentList.Add(engineDll);
         var process = Process.Start(startInfo) ?? throw new InvalidOperationException("The ChangeLens Engine process did not start.");
-        return Task.FromResult(new ProtocolTestEngine(process, localStateDirectory, releaseFile, enteredFile, stepsStartedFile));
+        return Task.FromResult(new ProtocolTestEngine(process, localStateDirectory));
     }
 
     /// <summary>Asynchronously sends one protocol request and reads its response.</summary>
@@ -103,31 +66,6 @@ internal sealed class ProtocolTestEngine : IAsyncDisposable
     /// <returns>The parsed Engine response.</returns>
     public Task<JsonDocument> SendAsync(string action, string requestId, string parametersJson) =>
         this.SendAsync(action, requestId, parametersJson, TimeSpan.FromSeconds(35));
-
-    /// <summary>Asynchronously waits until the gated pipeline has been entered.</summary>
-    /// <param name="timeout">The maximum wait interval.</param>
-    /// <returns>A task that represents the asynchronous operation.</returns>
-    public async Task WaitUntilPipelineBlockedAsync(TimeSpan timeout)
-    {
-        if (this._pipelineEnteredFile is null)
-        {
-            throw new InvalidOperationException("This Engine was not started with a blocked analysis pipeline.");
-        }
-
-        var startedAt = Stopwatch.GetTimestamp();
-        while (!File.Exists(this._pipelineEnteredFile))
-        {
-            var remaining = timeout - Stopwatch.GetElapsedTime(startedAt);
-            if (remaining <= TimeSpan.Zero)
-            {
-                throw new XunitException($"The analysis pipeline was not observed at its gate within {timeout}.");
-            }
-
-            await Task.Delay(
-                remaining < TimeSpan.FromMilliseconds(10) ? remaining : TimeSpan.FromMilliseconds(10),
-                TestContext.Current.CancellationToken);
-        }
-    }
 
     private async Task<JsonDocument> SendAsync(
         string action,
@@ -238,25 +176,9 @@ internal sealed class ProtocolTestEngine : IAsyncDisposable
         throw new XunitException($"Analysis run {runId} did not reach terminal state within {timeout}; last state was {lastState ?? "unobserved"}.");
     }
 
-    /// <summary>Releases analysis pipeline work blocked by this test process.</summary>
-    public void ReleaseBlockedPipeline()
-    {
-        if (this._pipelineReleaseFile is null)
-        {
-            throw new InvalidOperationException("This Engine was not started with a blocked analysis pipeline.");
-        }
-
-        File.WriteAllText(this._pipelineReleaseFile, "released");
-    }
-
     /// <inheritdoc />
     public async ValueTask DisposeAsync()
     {
-        if (this._pipelineReleaseFile is not null && !File.Exists(this._pipelineReleaseFile))
-        {
-            File.WriteAllText(this._pipelineReleaseFile, "released");
-        }
-
         try
         {
             this._process.StandardInput.Close();

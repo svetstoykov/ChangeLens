@@ -5,7 +5,7 @@ using ChangeLens.Core.Results.Models;
 using ChangeLens.Core.Snapshots.Models;
 using ChangeLens.Infrastructure.AnalysisRuns.Persistence.Entities;
 using ChangeLens.Infrastructure.LocalState.Persistence;
-using ChangeLens.Infrastructure.Snapshots.Services;
+using ChangeLens.Infrastructure.Snapshots.Persistence.Entities;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
@@ -317,7 +317,17 @@ public sealed class SqliteAnalysisRunStore(
             return false;
         }
 
-        SnapshotManifestEntryWriter.Add(context, runId, manifest.Entries);
+        context.SnapshotManifestEntries.AddRange(manifest.Entries.Select(entry => new SnapshotManifestEntryEntity
+        {
+            RunId = runId,
+            Path = entry.Path,
+            OriginalPath = entry.OriginalPath,
+            Category = entry.Category,
+            MergeBaseEntryMode = entry.MergeBaseEntryMode,
+            HeadEntryMode = entry.HeadEntryMode,
+            MergeBaseObjectId = entry.MergeBaseObjectId,
+            HeadObjectId = entry.HeadObjectId,
+        }));
         await context.SaveChangesAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);
 

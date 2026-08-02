@@ -75,8 +75,8 @@ public sealed class SqliteAnalysisRunStore(
         {
             context.Entry(entity).State = EntityState.Detached;
             var activeRunId = await context.AnalysisRuns
-                .Where(run => run.CanonicalRepositoryPathKey == acceptance.CanonicalRepositoryPathKey)
-                .Where(run => ActiveStates.Contains(run.State))
+                .Where(run => run.CanonicalRepositoryPathKey == acceptance.CanonicalRepositoryPathKey
+                    && ActiveStates.Contains(run.State))
                 .Select(run => (Guid?)run.RunId)
                 .FirstOrDefaultAsync(cancellationToken);
 
@@ -115,11 +115,10 @@ public sealed class SqliteAnalysisRunStore(
     {
         var run = await context.AnalysisRuns
             .AsNoTracking()
-            .Where(entity => entity.CanonicalRepositoryPathKey == canonicalRepositoryPathKey)
-            .Where(entity => ActiveStates.Contains(entity.State))
+            .Where(entity => entity.CanonicalRepositoryPathKey == canonicalRepositoryPathKey && ActiveStates.Contains(entity.State))
             .FirstOrDefaultAsync(cancellationToken);
 
-        return run is null ? (AnalysisRunDetail?)null : ToDetail(run);
+        return run is null ? null : ToDetail(run);
     }
 
     /// <inheritdoc />
@@ -129,8 +128,7 @@ public sealed class SqliteAnalysisRunStore(
         await using var transaction = await context.Database.BeginTransactionAsync(cancellationToken);
 
         var candidate = await context.AnalysisRuns
-            .Where(run => run.State == AnalysisRunState.PendingCapture)
-            .Where(run => run.CancellationRequestedAtUnixMilliseconds == null)
+            .Where(run => run.State == AnalysisRunState.PendingCapture && run.CancellationRequestedAtUnixMilliseconds == null)
             .OrderBy(run => run.RequestedAtUnixMilliseconds)
             .ThenBy(run => run.RunId)
             .FirstOrDefaultAsync(cancellationToken);
@@ -245,8 +243,7 @@ public sealed class SqliteAnalysisRunStore(
     public async Task<Result<AnalysisRunDetail>> RequestCancellationAsync(Guid runId, long atUnixMilliseconds, CancellationToken cancellationToken)
     {
         await context.AnalysisRuns
-            .Where(run => run.RunId == runId)
-            .Where(run => ActiveStates.Contains(run.State))
+            .Where(run => run.RunId == runId && ActiveStates.Contains(run.State))
             .Where(run => run.CancellationRequestedAtUnixMilliseconds == null)
             .ExecuteUpdateAsync(
                 setters => setters.SetProperty(run => run.CancellationRequestedAtUnixMilliseconds, atUnixMilliseconds),
@@ -292,8 +289,8 @@ public sealed class SqliteAnalysisRunStore(
         await using var transaction = await context.Database.BeginTransactionAsync(cancellationToken);
 
         var affected = await context.AnalysisRuns
-            .Where(run => run.RunId == runId && run.State == AnalysisRunState.Capturing)
-            .Where(run => run.CapturedAtUnixMilliseconds == null && run.CancellationRequestedAtUnixMilliseconds == null)
+            .Where(run => run.RunId == runId && run.State == AnalysisRunState.Capturing
+                && run.CapturedAtUnixMilliseconds == null && run.CancellationRequestedAtUnixMilliseconds == null)
             .ExecuteUpdateAsync(
                 setters => setters
                     .SetProperty(run => run.CapturedAtUnixMilliseconds, capturedAtUnixMilliseconds)
@@ -349,8 +346,7 @@ public sealed class SqliteAnalysisRunStore(
         };
 
         var affected = await context.AnalysisRuns
-            .Where(run => run.RunId == runId)
-            .Where(run => ActiveStates.Contains(run.State))
+            .Where(run => run.RunId == runId && ActiveStates.Contains(run.State))
             .ExecuteUpdateAsync(
                 setters => setters
                     .SetProperty(run => run.State, nextState)
@@ -366,8 +362,7 @@ public sealed class SqliteAnalysisRunStore(
     public async Task<Result<int>> FinalizeCancelledPendingRunsAsync(long atUnixMilliseconds, CancellationToken cancellationToken)
     {
         var affected = await context.AnalysisRuns
-            .Where(run => run.State == AnalysisRunState.PendingCapture)
-            .Where(run => run.CancellationRequestedAtUnixMilliseconds != null)
+            .Where(run => run.State == AnalysisRunState.PendingCapture && run.CancellationRequestedAtUnixMilliseconds != null)
             .ExecuteUpdateAsync(
                 setters => setters
                     .SetProperty(run => run.State, AnalysisRunState.Cancelled)

@@ -43,7 +43,7 @@ internal sealed class AnalysisGetActiveHandler(IAnalysisRunCoordinator coordinat
             return ProtocolResponseFactory.FromResult(request.RequestId, Result.Success<AnalysisGetActiveResult>(new NoneAnalysisGetActiveResult()));
         }
 
-        var mappedResult = AnalysisProjectionMapper.ToProtocol(activeResult.Data);
+        var mappedResult = AnalysisRunSummaryMapper.ToProtocol(activeResult.Data);
         if (mappedResult.IsFailure)
         {
             return ProtocolResponseFactory.CreateError(request.RequestId, mappedResult.Errors);

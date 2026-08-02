@@ -3,7 +3,7 @@ import type { ActionError } from "../../Actions/Models/ActionError";
 import { presentActionError } from "../../Actions/Services/presentActionError";
 import { Icon } from "../../Visuals/Components/Icon";
 import type { AnalysisFact } from "../Models/AnalysisFact";
-import type { AnalysisRunProjection } from "../Models/AnalysisRunProjection";
+import type { AnalysisRunSummary } from "../Models/AnalysisRunSummary";
 import type { AnalysisActiveStage } from "../Models/AnalysisRunState";
 import { ANALYSIS_ACTIVE_STAGE_ORDER } from "../Models/AnalysisRunState";
 import type { AnalysisTerminalSummary } from "../Models/AnalysisTerminalSummary";
@@ -24,7 +24,7 @@ interface RunStatus {
 }
 
 export interface AnalysisProgressViewProps {
-  readonly projection: AnalysisRunProjection | null;
+  readonly summary: AnalysisRunSummary | null;
   readonly error: ActionError | null;
   readonly actionError: ActionError | null;
   readonly attached: boolean;
@@ -35,7 +35,7 @@ export interface AnalysisProgressViewProps {
 }
 
 export function AnalysisProgressView({
-  projection,
+  summary,
   error,
   actionError,
   attached,
@@ -61,7 +61,7 @@ export function AnalysisProgressView({
     );
   }
 
-  if (projection === null) {
+  if (summary === null) {
     return (
       <section className="analysis-progress" aria-label="Analysis progress">
         <p className="workspace-progress" aria-live="polite">
@@ -73,11 +73,11 @@ export function AnalysisProgressView({
   }
 
   const isTerminalOrInterrupted =
-    projection.terminal !== null || projection.state === "interrupted";
+    summary.terminal !== null || summary.state === "interrupted";
   const currentStageIndex = ANALYSIS_ACTIVE_STAGE_ORDER.findIndex(
-    (stage) => stage === projection.state,
+    (stage) => stage === summary.state,
   );
-  const status = describeRunStatus(projection);
+  const status = describeRunStatus(summary);
 
   return (
     <section
@@ -95,14 +95,14 @@ export function AnalysisProgressView({
             <Icon name="folder" />
           </span>
           <span className="workspace-repository-copy">
-            <strong>{projection.repository.displayName}</strong>
-            <code title={projection.repository.canonicalPath}>
-              {projection.repository.canonicalPath}
+            <strong>{summary.repository.displayName}</strong>
+            <code title={summary.repository.canonicalPath}>
+              {summary.repository.canonicalPath}
             </code>
           </span>
-          <span className="workspace-head" title={projection.comparison.target}>
+          <span className="workspace-head" title={summary.comparison.target}>
             <Icon name="compare" />
-            <code>{projection.comparison.target}</code>
+            <code>{summary.comparison.target}</code>
           </span>
         </section>
       </header>
@@ -169,11 +169,11 @@ export function AnalysisProgressView({
             ) : (
               <button
                 type="button"
-                disabled={projection.cancellationRequested}
+                disabled={summary.cancellationRequested}
                 onClick={onCancel}
               >
                 <Icon name="conflict" />
-                {projection.cancellationRequested
+                {summary.cancellationRequested
                   ? "Cancelling…"
                   : "Cancel analysis"}
               </button>
@@ -190,13 +190,13 @@ export function AnalysisProgressView({
               <h3>Repository facts</h3>
             </div>
           </header>
-          {projection.facts.length === 0 ? (
+          {summary.facts.length === 0 ? (
             <p className="fact-note">
               Facts appear here as ChangeLens reads the captured snapshot.
             </p>
           ) : (
             <dl className="analysis-facts">
-              {projection.facts.map((fact) => (
+              {summary.facts.map((fact) => (
                 <div
                   key={fact.kind}
                   data-tone={
@@ -281,8 +281,8 @@ function describeStage(stage: AnalysisActiveStage): StageCopy {
   }
 }
 
-function describeRunStatus(projection: AnalysisRunProjection): RunStatus {
-  if (projection.state === "interrupted") {
+function describeRunStatus(summary: AnalysisRunSummary): RunStatus {
+  if (summary.state === "interrupted") {
     return {
       heading: "Analysis interrupted",
       detail:
@@ -291,8 +291,8 @@ function describeRunStatus(projection: AnalysisRunProjection): RunStatus {
     };
   }
 
-  if (projection.terminal === null) {
-    return projection.cancellationRequested
+  if (summary.terminal === null) {
+    return summary.cancellationRequested
       ? {
           heading: "Cancelling analysis",
           detail: "Waiting for the engine to stop this run at a safe point.",
@@ -306,7 +306,7 @@ function describeRunStatus(projection: AnalysisRunProjection): RunStatus {
         };
   }
 
-  return describeTerminalStatus(projection.terminal);
+  return describeTerminalStatus(summary.terminal);
 }
 
 function describeTerminalStatus(terminal: AnalysisTerminalSummary): RunStatus {

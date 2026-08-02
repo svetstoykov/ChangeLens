@@ -1,7 +1,7 @@
 namespace ChangeLens.Engine.AnalysisRuns.Models;
 
 /// <summary>
-///     Represents the immutable accepted repository identity in an analysis projection.
+///     Represents the immutable accepted repository identity in an analysis summary.
 /// </summary>
 /// <param name="RepositoryId">The stable identifier of the repository.</param>
 /// <param name="DisplayName">The human-readable repository name.</param>

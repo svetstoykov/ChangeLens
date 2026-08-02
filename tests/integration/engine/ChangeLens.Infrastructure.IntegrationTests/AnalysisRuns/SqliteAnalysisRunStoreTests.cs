@@ -302,7 +302,7 @@ public sealed class SqliteAnalysisRunStoreTests
 
     /// <summary>
     ///     Verifies that reading the active run for a repository with no active run returns a successful result
-    ///     carrying a <see langword="null" /> projection.
+    ///     carrying a <see langword="null" /> detail.
     /// </summary>
     [Fact]
     public async Task GetActiveByRepositoryReturnsNullWhenNoActiveRunExists()

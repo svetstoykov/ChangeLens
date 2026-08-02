@@ -1,4 +1,4 @@
-use crate::analysis::{AnalysisGetActiveResult, AnalysisRunProjection, AnalysisStartResult};
+use crate::analysis::{AnalysisGetActiveResult, AnalysisRunSummary, AnalysisStartResult};
 use crate::engine_protocol::{
     EngineActionError, await_action_task, report_rust_originated_failure,
 };
@@ -40,12 +40,12 @@ pub(crate) async fn analysis_get_active(
     result
 }
 
-/// Polls the current projection of one analysis run.
+/// Polls the current summary of one analysis run.
 #[tauri::command(rename_all = "camelCase")]
 pub(crate) async fn analysis_poll_run(
     state: State<'_, AnalysisState>,
     run_id: String,
-) -> Result<AnalysisRunProjection, EngineActionError> {
+) -> Result<AnalysisRunSummary, EngineActionError> {
     let analysis_service = state.service();
     let result = await_action_task(move || analysis_service.poll_run(&run_id)).await;
 

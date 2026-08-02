@@ -8,63 +8,63 @@ namespace ChangeLens.Engine.AnalysisRuns.Services;
 /// <summary>
 ///     Maps transport-independent analysis run details to their engine protocol representation.
 /// </summary>
-internal static class AnalysisProjectionMapper
+internal static class AnalysisRunSummaryMapper
 {
     /// <summary>Maps one Core detail to its protocol representation.</summary>
-    /// <param name="projection">The analysis run detail to map. Cannot be <see langword="null" />.</param>
-    /// <returns>The protocol projection, or an error when a Core value has no approved protocol representation.</returns>
-    internal static Result<Models.AnalysisRunProjectionResult> ToProtocol(AnalysisRunDetail projection)
+    /// <param name="detail">The analysis run detail to map. Cannot be <see langword="null" />.</param>
+    /// <returns>The protocol summary, or an error when a Core value has no approved protocol representation.</returns>
+    internal static Result<Models.AnalysisRunSummaryResult> ToProtocol(AnalysisRunDetail detail)
     {
-        var stateResult = ToStateString(projection.State);
+        var stateResult = ToStateString(detail.State);
         if (stateResult.IsFailure)
         {
-            return Result.ErrorFromResult<Models.AnalysisRunProjectionResult>(stateResult);
+            return Result.ErrorFromResult<Models.AnalysisRunSummaryResult>(stateResult);
         }
 
-        var terminalResult = projection.Terminal is null
+        var terminalResult = detail.Terminal is null
             ? Result.Success<Models.AnalysisTerminalResult?>(null)
-            : ToTerminal(projection.Terminal);
+            : ToTerminal(detail.Terminal);
         if (terminalResult.IsFailure)
         {
-            return Result.ErrorFromResult<Models.AnalysisRunProjectionResult>(terminalResult);
+            return Result.ErrorFromResult<Models.AnalysisRunSummaryResult>(terminalResult);
         }
 
-        return new Models.AnalysisRunProjectionResult(
-            projection.RunId.ToString(),
+        return new Models.AnalysisRunSummaryResult(
+            detail.RunId.ToString(),
             stateResult.Data!,
             new Models.AnalysisRepositoryResult(
-                projection.Repository.RepositoryId.ToString(),
-                projection.Repository.DisplayName,
-                projection.Repository.CanonicalPath,
-                projection.Repository.HeadRevision),
+                detail.Repository.RepositoryId.ToString(),
+                detail.Repository.DisplayName,
+                detail.Repository.CanonicalPath,
+                detail.Repository.HeadRevision),
             new Models.AnalysisComparisonResult(
-                projection.Comparison.Target,
-                projection.Comparison.TargetRevision,
-                projection.Comparison.FreshnessToken),
-            projection.RequestedAtUnixMilliseconds,
-            projection.CaptureStartedAtUnixMilliseconds,
-            projection.CapturedAtUnixMilliseconds,
-            projection.SnapshotId?.ToString(),
-            projection.CancellationRequested,
-            BuildFacts(projection),
+                detail.Comparison.Target,
+                detail.Comparison.TargetRevision,
+                detail.Comparison.FreshnessToken),
+            detail.RequestedAtUnixMilliseconds,
+            detail.CaptureStartedAtUnixMilliseconds,
+            detail.CapturedAtUnixMilliseconds,
+            detail.SnapshotId?.ToString(),
+            detail.CancellationRequested,
+            BuildFacts(detail),
             terminalResult.Data,
-            projection.InterruptedAtUnixMilliseconds,
-            projection.InterruptionReason);
+            detail.InterruptedAtUnixMilliseconds,
+            detail.InterruptionReason);
     }
 
-    private static IReadOnlyList<Models.AnalysisFactResult> BuildFacts(AnalysisRunDetail projection)
+    private static IReadOnlyList<Models.AnalysisFactResult> BuildFacts(AnalysisRunDetail detail)
     {
-        if (projection.CapturedAtUnixMilliseconds is null || projection.CapturedChangedFileCount is null)
+        if (detail.CapturedAtUnixMilliseconds is null || detail.CapturedChangedFileCount is null)
         {
             return [];
         }
 
         var facts = new List<Models.AnalysisFactResult>(2)
         {
-            new(AnalysisFactKind.ChangedFilesCaptured, projection.CapturedChangedFileCount.Value, null),
+            new(AnalysisFactKind.ChangedFilesCaptured, detail.CapturedChangedFileCount.Value, null),
         };
 
-        var counts = projection.ExcludedUncommittedCounts;
+        var counts = detail.ExcludedUncommittedCounts;
         if (counts is not null && counts.Total > 0)
         {
             facts.Add(new Models.AnalysisFactResult(AnalysisFactKind.ExcludedUncommittedFiles, counts.Total, DescribeExclusions(counts)));

@@ -32,10 +32,10 @@
         "protocolVersion": { "const": 1 },
         "type": { "const": "result" },
         "requestId": { "type": "string", "minLength": 1, "pattern": "\\S" },
-        "result": { "$ref": "#/$defs/runProjection" }
+        "result": { "$ref": "#/$defs/runSummary" }
       }
     },
-    "runProjection": {
+    "runSummary": {
       "type": "object",
       "additionalProperties": false,
       "required": ["runId", "state", "repository", "comparison", "requestedAt", "captureStartedAt", "capturedAt", "snapshotId", "cancellationRequested", "facts", "terminal", "interruptedAt", "interruptionReason"],

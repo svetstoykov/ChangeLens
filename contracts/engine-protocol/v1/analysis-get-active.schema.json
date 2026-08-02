@@ -48,7 +48,7 @@
           "type": "object",
           "additionalProperties": false,
           "required": ["state", "run"],
-          "properties": { "state": { "const": "active" }, "run": { "$ref": "https://changelens.dev/contracts/engine-protocol/v1/analysis-poll-run.schema.json#/$defs/runProjection" } }
+          "properties": { "state": { "const": "active" }, "run": { "$ref": "https://changelens.dev/contracts/engine-protocol/v1/analysis-poll-run.schema.json#/$defs/runSummary" } }
         }
       }
     }

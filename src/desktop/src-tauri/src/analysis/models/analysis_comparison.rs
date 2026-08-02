@@ -3,7 +3,7 @@ use crate::analysis::models::validation::{
 };
 use serde::{Deserialize, Serialize};
 
-/// Represents the immutable accepted comparison identity in an analysis projection.
+/// Represents the immutable accepted comparison identity in an analysis summary.
 #[derive(Clone, Debug, Deserialize, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct AnalysisComparison {

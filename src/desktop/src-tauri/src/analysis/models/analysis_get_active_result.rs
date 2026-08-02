@@ -1,4 +1,4 @@
-use crate::analysis::models::AnalysisRunProjection;
+use crate::analysis::models::AnalysisRunSummary;
 use serde::{Deserialize, Serialize};
 
 /// Represents the tagged active-run lookup union in the engine protocol.
@@ -11,5 +11,5 @@ use serde::{Deserialize, Serialize};
 )]
 pub enum AnalysisGetActiveResult {
     None,
-    Active { run: Box<AnalysisRunProjection> },
+    Active { run: Box<AnalysisRunSummary> },
 }

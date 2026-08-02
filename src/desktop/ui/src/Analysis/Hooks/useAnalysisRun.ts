@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { ActionError } from "../../Actions/Models/ActionError";
 import type { AnalysisClient } from "../Interfaces/AnalysisClient";
-import type { AnalysisRunProjection } from "../Models/AnalysisRunProjection";
+import type { AnalysisRunSummary } from "../Models/AnalysisRunSummary";
 
 const VISIBLE_POLL_DELAY_MS = 250;
 const HIDDEN_POLL_INTERVAL_MS = 2_000;
@@ -15,7 +15,7 @@ const TERMINAL_OR_INTERRUPTED_STATES: ReadonlySet<string> = new Set([
 ]);
 
 export interface UseAnalysisRunResult {
-  readonly projection: AnalysisRunProjection | null;
+  readonly summary: AnalysisRunSummary | null;
   readonly error: ActionError | null;
   readonly retry: () => void;
 }
@@ -24,7 +24,7 @@ export function useAnalysisRun(
   client: AnalysisClient,
   runId: string | null,
 ): UseAnalysisRunResult {
-  const [projection, setProjection] = useState<AnalysisRunProjection | null>(
+  const [summary, setSummary] = useState<AnalysisRunSummary | null>(
     null,
   );
   const [error, setError] = useState<ActionError | null>(null);
@@ -32,7 +32,7 @@ export function useAnalysisRun(
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    setProjection(null);
+    setSummary(null);
     setError(null);
     pollNowRef.current = null;
 
@@ -58,7 +58,7 @@ export function useAnalysisRun(
             return;
           }
 
-          setProjection(result);
+          setSummary(result);
           setError(null);
 
           if (!TERMINAL_OR_INTERRUPTED_STATES.has(result.state)) {
@@ -101,5 +101,5 @@ export function useAnalysisRun(
     pollNowRef.current?.();
   };
 
-  return { projection, error, retry };
+  return { summary, error, retry };
 }

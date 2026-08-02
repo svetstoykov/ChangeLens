@@ -5,7 +5,7 @@ import { presentActionError } from "./Actions/Services/presentActionError";
 import { AnalysisProgressView } from "./Analysis/Components/AnalysisProgressView";
 import { useAnalysisRun } from "./Analysis/Hooks/useAnalysisRun";
 import type { AnalysisClient } from "./Analysis/Interfaces/AnalysisClient";
-import type { AnalysisRunProjection } from "./Analysis/Models/AnalysisRunProjection";
+import type { AnalysisRunSummary } from "./Analysis/Models/AnalysisRunSummary";
 import type { AnalysisStartOutcome } from "./Analysis/Models/AnalysisStartOutcome";
 import type { AnalysisStartRequest } from "./Analysis/Models/AnalysisStartRequest";
 import { AppShell } from "./AppShell";
@@ -377,7 +377,7 @@ export function App({
         return "accepted";
       }
 
-      const existingRun = await readRunProjection(
+      const existingRun = await readRunSummary(
         analysisClient,
         result.activeRunId,
       );
@@ -611,7 +611,7 @@ export function App({
       {workspace && displayedRunId !== null ? (
         <div hidden={showingHistory}>
           <AnalysisProgressView
-            projection={analysisRun.projection}
+            summary={analysisRun.summary}
             error={analysisRun.error}
             actionError={analysisError}
             attached={displayedRunAttached}
@@ -677,10 +677,10 @@ async function readActiveRunId(
   }
 }
 
-async function readRunProjection(
+async function readRunSummary(
   analysisClient: AnalysisClient,
   runId: string,
-): Promise<AnalysisRunProjection | null> {
+): Promise<AnalysisRunSummary | null> {
   try {
     return await analysisClient.pollRun(runId);
   } catch {

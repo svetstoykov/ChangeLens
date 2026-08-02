@@ -1,5 +1,5 @@
 import type { AnalysisGetActiveResult } from "../Models/AnalysisGetActiveResult";
-import type { AnalysisRunProjection } from "../Models/AnalysisRunProjection";
+import type { AnalysisRunSummary } from "../Models/AnalysisRunSummary";
 import type { AnalysisStartResult } from "../Models/AnalysisStartResult";
 
 export interface AnalysisClient {
@@ -10,6 +10,6 @@ export interface AnalysisClient {
     changeContext: string | null,
   ): Promise<AnalysisStartResult>;
   getActive(path: string): Promise<AnalysisGetActiveResult>;
-  pollRun(runId: string): Promise<AnalysisRunProjection>;
+  pollRun(runId: string): Promise<AnalysisRunSummary>;
   cancel(runId: string): Promise<void>;
 }

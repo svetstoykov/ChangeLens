@@ -7,7 +7,7 @@ use crate::analysis::models::{
     AnalysisStartParameters,
 };
 use crate::analysis::{
-    AnalysisGetActiveResult, AnalysisRunProjection, AnalysisService, AnalysisStartResult,
+    AnalysisGetActiveResult, AnalysisRunSummary, AnalysisService, AnalysisStartResult,
 };
 use crate::engine_protocol::{EngineActionError, EngineClient};
 use serde::Deserialize;
@@ -38,7 +38,7 @@ impl AnalysisService for EngineClient {
         )
     }
 
-    fn poll_run(&self, run_id: &str) -> Result<AnalysisRunProjection, EngineActionError> {
+    fn poll_run(&self, run_id: &str) -> Result<AnalysisRunSummary, EngineActionError> {
         self.execute_action(
             ANALYSIS_POLL_RUN_ACTION,
             Some(AnalysisPollRunParameters { run_id }),

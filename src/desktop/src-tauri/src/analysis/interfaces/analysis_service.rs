@@ -1,4 +1,4 @@
-use crate::analysis::{AnalysisGetActiveResult, AnalysisRunProjection, AnalysisStartResult};
+use crate::analysis::{AnalysisGetActiveResult, AnalysisRunSummary, AnalysisStartResult};
 use crate::engine_protocol::EngineActionError;
 
 /// Defines analysis-run actions provided by the local analysis engine.
@@ -15,8 +15,8 @@ pub trait AnalysisService: Send + Sync {
     /// Looks up the active analysis run for a repository, if one exists.
     fn get_active(&self, path: &str) -> Result<AnalysisGetActiveResult, EngineActionError>;
 
-    /// Polls the current projection of one analysis run.
-    fn poll_run(&self, run_id: &str) -> Result<AnalysisRunProjection, EngineActionError>;
+    /// Polls the current summary of one analysis run.
+    fn poll_run(&self, run_id: &str) -> Result<AnalysisRunSummary, EngineActionError>;
 
     /// Requests cancellation of one analysis run.
     fn cancel(&self, run_id: &str) -> Result<(), EngineActionError>;

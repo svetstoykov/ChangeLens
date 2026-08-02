@@ -47,7 +47,7 @@ public sealed class AnalysisPollRunHandlerTests
     }
 
     [Fact]
-    public async Task PopulatedProjectionMapsCompletedWithLimitationsTerminal()
+    public async Task PopulatedSummaryMapsCompletedWithLimitationsTerminal()
     {
         var detail = CreateDetail();
         var handler = new AnalysisPollRunHandler(
@@ -59,12 +59,12 @@ public sealed class AnalysisPollRunHandlerTests
 
         var response = await handler.HandleAsync(CreateRequest(), TestContext.Current.CancellationToken);
 
-        var projection = Assert.IsType<AnalysisRunProjectionResult>(Assert.IsType<ProtocolResultResponse<AnalysisRunProjectionResult>>(response).Result);
-        var terminal = Assert.IsType<CompletedWithLimitationsAnalysisTerminalResult>(projection.Terminal);
+        var summary = Assert.IsType<AnalysisRunSummaryResult>(Assert.IsType<ProtocolResultResponse<AnalysisRunSummaryResult>>(response).Result);
+        var terminal = Assert.IsType<CompletedWithLimitationsAnalysisTerminalResult>(summary.Terminal);
         Assert.Equal(2, terminal.LimitationCount);
-        Assert.Equal("completedWithLimitations", projection.State);
-        Assert.Equal(detail.Repository.CanonicalPath, projection.Repository.CanonicalPath);
-        Assert.Equal(detail.Comparison.TargetRevision, projection.Comparison.TargetRevision);
+        Assert.Equal("completedWithLimitations", summary.State);
+        Assert.Equal(detail.Repository.CanonicalPath, summary.Repository.CanonicalPath);
+        Assert.Equal(detail.Comparison.TargetRevision, summary.Comparison.TargetRevision);
     }
 
     /// <summary>
@@ -113,7 +113,7 @@ public sealed class AnalysisPollRunHandlerTests
         Assert.Equal(AnalysisFactKind.ChangedFilesCaptured, result.Facts[0].Kind);
     }
 
-    private static async Task<AnalysisRunProjectionResult> PollAsync(AnalysisRunDetail detail)
+    private static async Task<AnalysisRunSummaryResult> PollAsync(AnalysisRunDetail detail)
     {
         var handler = new AnalysisPollRunHandler(
             new StubAnalysisRunCoordinator(pollRun: (_, _) => Task.FromResult<Result<AnalysisRunDetail>>(detail)),
@@ -121,7 +121,7 @@ public sealed class AnalysisPollRunHandlerTests
 
         var response = await handler.HandleAsync(CreateRequest(), TestContext.Current.CancellationToken);
 
-        return Assert.IsType<AnalysisRunProjectionResult>(Assert.IsType<ProtocolResultResponse<AnalysisRunProjectionResult>>(response).Result);
+        return Assert.IsType<AnalysisRunSummaryResult>(Assert.IsType<ProtocolResultResponse<AnalysisRunSummaryResult>>(response).Result);
     }
 
     private static AnalysisRunDetail CapturedDetail(Guid snapshotId, int capturedChangedFileCount, ExcludedUncommittedCounts counts) =>

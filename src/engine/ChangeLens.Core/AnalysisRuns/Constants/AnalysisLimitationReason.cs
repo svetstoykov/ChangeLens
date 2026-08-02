@@ -7,4 +7,7 @@ public static class AnalysisLimitationReason
 {
     /// <summary>The capability the step serves is unavailable, so the run completes with a limitation.</summary>
     public const string CapabilityUnavailable = "capabilityUnavailable";
+
+    /// <summary>Uncommitted work existed in the repository and was not part of the captured snapshot.</summary>
+    public const string UncommittedWorkExcluded = "uncommittedWorkExcluded";
 }

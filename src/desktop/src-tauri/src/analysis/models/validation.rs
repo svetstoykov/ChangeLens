@@ -98,6 +98,35 @@ where
     Ok(value)
 }
 
+pub(super) fn deserialize_optional_guid<'de, D>(deserializer: D) -> Result<Option<String>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let value = Option::<String>::deserialize(deserializer)?;
+    match value {
+        Some(candidate)
+            if candidate.len() == 36
+                && [8, 13, 18, 23]
+                    .iter()
+                    .all(|index| candidate.as_bytes()[*index] == b'-')
+                && candidate
+                    .as_bytes()
+                    .iter()
+                    .enumerate()
+                    .all(|(index, byte)| {
+                        [8, 13, 18, 23].contains(&index)
+                            || matches!(byte, b'0'..=b'9' | b'a'..=b'f')
+                    }) =>
+        {
+            Ok(Some(candidate))
+        }
+        Some(_) => Err(D::Error::custom(
+            "the snapshot id must be a lowercase hyphenated GUID",
+        )),
+        None => Ok(None),
+    }
+}
+
 pub(super) fn deserialize_ref_name<'de, D>(deserializer: D) -> Result<String, D::Error>
 where
     D: serde::Deserializer<'de>,

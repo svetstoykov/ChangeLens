@@ -206,6 +206,7 @@ public sealed class EngineProtocolContractTests
         "comparisons-error-no-remote-configured.response.json")]
     [InlineData("analysis-start.schema.json", "analysis-start.accepted.result.json")]
     [InlineData("analysis-poll-run.schema.json", "analysis-poll-run.completed.result.json")]
+    [InlineData("analysis-poll-run.schema.json", "analysis-poll-run.captured.result.json")]
     [InlineData("analysis-get-active.schema.json", "analysis-get-active.active.result.json")]
     [InlineData("analysis-cancel.schema.json", "analysis-cancel.result.json")]
     public void SharedFixtureMatchesSchema(string schemaFileName, string fixtureFileName)
@@ -215,6 +216,22 @@ public sealed class EngineProtocolContractTests
         var result = Schemas[schemaFileName].Evaluate(fixture.RootElement);
 
         Assert.True(result.IsValid);
+    }
+
+    /// <summary>
+    ///     Verifies that a non-GUID snapshot identifier fails poll-result schema validation.
+    /// </summary>
+    [Fact]
+    public void PollResultSchemaRejectsNonGuidSnapshotIdentifier()
+    {
+        var malformed = File.ReadAllText(FixturePath("analysis-poll-run.captured.result.json"))
+            .Replace("\"snapshotId\":\"7198a1b2-3c4d-4e5f-8a9b-0123456789ab\"", "\"snapshotId\":\"snapshot-1\"",
+                StringComparison.Ordinal);
+        using var instance = JsonDocument.Parse(malformed);
+
+        var result = Schemas["analysis-poll-run.schema.json"].Evaluate(instance.RootElement);
+
+        Assert.False(result.IsValid);
     }
 
     /// <summary>

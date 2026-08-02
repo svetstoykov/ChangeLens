@@ -17,9 +17,9 @@ public sealed class AnalysisProcessorHostingTests
 
         await fixture.Host.StartAsync(TestContext.Current.CancellationToken);
         await fixture.WaitForProtocolReadAsync(TestContext.Current.CancellationToken);
-        var projection = await fixture.PollOnceAsync(orphanedRunId);
+        var detail = await fixture.PollOnceAsync(orphanedRunId);
 
-        Assert.Equal(AnalysisRunState.Interrupted, projection.State);
+        Assert.Equal(AnalysisRunState.Interrupted, detail.State);
         await fixture.StopAsync(TestContext.Current.CancellationToken);
     }
 
@@ -30,10 +30,10 @@ public sealed class AnalysisProcessorHostingTests
         await fixture.Host.StartAsync(TestContext.Current.CancellationToken);
         var runId = await fixture.AcceptRunAsync();
 
-        var projection = await fixture.PollUntilTerminalAsync(runId, TimeSpan.FromSeconds(5));
+        var detail = await fixture.PollUntilTerminalAsync(runId, TimeSpan.FromSeconds(5));
 
-        Assert.Equal(AnalysisRunState.Completed, projection.State);
-        Assert.Null(projection.Terminal!.LimitationCount);
+        Assert.Equal(AnalysisRunState.Completed, detail.State);
+        Assert.Null(detail.Terminal!.LimitationCount);
         await fixture.StopAsync(TestContext.Current.CancellationToken);
     }
 
@@ -44,9 +44,9 @@ public sealed class AnalysisProcessorHostingTests
         await fixture.Host.StartAsync(TestContext.Current.CancellationToken);
         var runId = await fixture.AcceptRunWithoutSignalingAsync();
 
-        var projection = await fixture.PollUntilTerminalAsync(runId, TimeSpan.FromSeconds(3));
+        var detail = await fixture.PollUntilTerminalAsync(runId, TimeSpan.FromSeconds(3));
 
-        Assert.Equal(AnalysisRunState.Completed, projection.State);
+        Assert.Equal(AnalysisRunState.Completed, detail.State);
         await fixture.StopAsync(TestContext.Current.CancellationToken);
     }
 
@@ -56,14 +56,14 @@ public sealed class AnalysisProcessorHostingTests
         await using var fixture = await EngineHostTestFixture.CreateFailingFirstRunAsync();
         await fixture.Host.StartAsync(TestContext.Current.CancellationToken);
         var failingRunId = await fixture.AcceptRunAsync();
-        var failingProjection = await fixture.PollUntilTerminalAsync(failingRunId, TimeSpan.FromSeconds(5));
+        var failingDetail = await fixture.PollUntilTerminalAsync(failingRunId, TimeSpan.FromSeconds(5));
         var laterRunId = await fixture.AcceptRunAsync();
 
-        var laterProjection = await fixture.PollUntilTerminalAsync(laterRunId, TimeSpan.FromSeconds(5));
+        var laterDetail = await fixture.PollUntilTerminalAsync(laterRunId, TimeSpan.FromSeconds(5));
 
-        Assert.Equal(AnalysisRunState.Failed, failingProjection.State);
-        Assert.Equal("analysis.unexpectedFailure", failingProjection.Terminal!.FailureCode);
-        Assert.Equal(AnalysisRunState.Completed, laterProjection.State);
+        Assert.Equal(AnalysisRunState.Failed, failingDetail.State);
+        Assert.Equal("analysis.unexpectedFailure", failingDetail.Terminal!.FailureCode);
+        Assert.Equal(AnalysisRunState.Completed, laterDetail.State);
         await fixture.StopAsync(TestContext.Current.CancellationToken);
     }
 
@@ -75,12 +75,12 @@ public sealed class AnalysisProcessorHostingTests
 
         await using var fixture = await EngineHostTestFixture.ReopenAsync(seedFixture);
         await fixture.Host.StartAsync(TestContext.Current.CancellationToken);
-        var projection = await fixture.PollUntilAsync(
+        var detail = await fixture.PollUntilAsync(
             orphanedRunId,
             candidate => candidate.State == AnalysisRunState.Interrupted,
             TimeSpan.FromSeconds(3));
 
-        Assert.Equal("engineStopped", projection.InterruptionReason);
+        Assert.Equal("engineStopped", detail.InterruptionReason);
         await fixture.StopAsync(TestContext.Current.CancellationToken);
     }
 
@@ -93,9 +93,9 @@ public sealed class AnalysisProcessorHostingTests
         await fixture.WaitUntilTakenAsync(firstRunId, TimeSpan.FromSeconds(3));
         var secondRunId = await fixture.AcceptRunForAnotherRepositoryAsync();
 
-        var secondProjection = await fixture.PollOnceAsync(secondRunId);
+        var secondDetail = await fixture.PollOnceAsync(secondRunId);
 
-        Assert.Equal(AnalysisRunState.PendingCapture, secondProjection.State);
+        Assert.Equal(AnalysisRunState.PendingCapture, secondDetail.State);
         fixture.ReleaseBlockingPipeline();
         await fixture.StopAsync(TestContext.Current.CancellationToken);
     }
@@ -109,9 +109,9 @@ public sealed class AnalysisProcessorHostingTests
         await fixture.WaitUntilPipelineStartsAsync(TestContext.Current.CancellationToken);
 
         await fixture.RequestCancellationAsync(runId);
-        var projection = await fixture.PollUntilTerminalAsync(runId, TimeSpan.FromSeconds(3));
+        var detail = await fixture.PollUntilTerminalAsync(runId, TimeSpan.FromSeconds(3));
 
-        Assert.Equal(AnalysisRunState.Cancelled, projection.State);
+        Assert.Equal(AnalysisRunState.Cancelled, detail.State);
         await fixture.StopAsync(TestContext.Current.CancellationToken);
     }
 
@@ -124,9 +124,9 @@ public sealed class AnalysisProcessorHostingTests
         await fixture.WaitUntilTakenAsync(runId, TimeSpan.FromSeconds(3));
 
         await fixture.StopAsync(TestContext.Current.CancellationToken);
-        var projection = await fixture.PollOnceAsync(runId);
+        var detail = await fixture.PollOnceAsync(runId);
 
-        Assert.Equal(AnalysisRunState.Capturing, projection.State);
-        Assert.Null(projection.Terminal);
+        Assert.Equal(AnalysisRunState.Capturing, detail.State);
+        Assert.Null(detail.Terminal);
     }
 }

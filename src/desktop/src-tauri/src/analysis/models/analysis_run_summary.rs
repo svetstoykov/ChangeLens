@@ -5,10 +5,10 @@ use crate::analysis::models::{
 use serde::de::Error;
 use serde::{Deserialize, Serialize};
 
-/// Represents the current-state analysis run projection shared by poll and active-lookup results.
+/// Represents the current-state analysis run summary shared by poll and active-lookup results.
 #[derive(Clone, Debug, Deserialize, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct AnalysisRunProjection {
+pub struct AnalysisRunSummary {
     #[serde(deserialize_with = "deserialize_run_id")]
     pub run_id: String,
     pub state: AnalysisRunState,

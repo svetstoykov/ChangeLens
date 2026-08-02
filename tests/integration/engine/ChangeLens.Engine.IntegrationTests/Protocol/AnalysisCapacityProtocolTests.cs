@@ -12,14 +12,14 @@ namespace ChangeLens.Engine.IntegrationTests.Protocol;
 /// </summary>
 public sealed class AnalysisCapacityProtocolTests
 {
-    private const int PollProjectionBudgetBytes = 48 * 1024;
+    private const int PollSummaryBudgetBytes = 48 * 1024;
     private const long MaximumEngineWorkingSetBytes = 512L * 1024 * 1024;
     private const long MaximumEngineWorkingSetGrowthBytes = 256L * 1024 * 1024;
 
-    /// <summary>Asynchronously verifies maximum accepted change context produces a bounded terminal projection and working set.</summary>
+    /// <summary>Asynchronously verifies maximum accepted change context produces a bounded terminal summary and working set.</summary>
     /// <returns>A task that represents the asynchronous operation.</returns>
     [Fact]
-    public async Task MaximumBoundedPollProjectionStaysAtOrBelow48KiB()
+    public async Task MaximumBoundedPollSummaryStaysAtOrBelow48KiB()
     {
         using var repository = new ProtocolTemporaryGitRepository();
         repository.CommitFile("a.txt", "content");
@@ -75,7 +75,7 @@ public sealed class AnalysisCapacityProtocolTests
 
             var workingSetGrowthBytes = Math.Max(0, finalSampledPeakWorkingSetBytes - baselineWorkingSetBytes);
             Assert.True(
-                encodedByteCount <= PollProjectionBudgetBytes,
+                encodedByteCount <= PollSummaryBudgetBytes,
                 $"Expected the poll response to stay at or below 48 KiB but it was {encodedByteCount} bytes.");
             Assert.Equal("completed", terminalResult.GetProperty("state").GetString());
             ProtocolResponseAssertions.AssertExactProperties(

@@ -30,7 +30,7 @@ public sealed class AnalysisGetActiveHandlerTests
     }
 
     [Fact]
-    public async Task ActiveRunMapsEveryProjectionField()
+    public async Task ActiveRunMapsEverySummaryField()
     {
         var detail = CreateDetail();
         var handler = new AnalysisGetActiveHandler(
@@ -41,7 +41,7 @@ public sealed class AnalysisGetActiveHandlerTests
 
         var actual = Assert.IsType<ActiveAnalysisGetActiveResult>(
             Assert.IsType<ProtocolResultResponse<AnalysisGetActiveResult>>(response).Result).Run;
-        var expected = AnalysisProjectionMapper.ToProtocol(detail).Data!;
+        var expected = AnalysisRunSummaryMapper.ToProtocol(detail).Data!;
         Assert.Equal(expected.RunId, actual.RunId);
         Assert.Equal(expected.State, actual.State);
         Assert.Equal(expected.Repository, actual.Repository);

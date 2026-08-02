@@ -63,7 +63,7 @@ fn invalid_analysis_result_invalidates_the_process() {
 
     let first = client
         .poll_run(RUN_ID)
-        .expect_err("the malformed run projection must fail");
+        .expect_err("the malformed run summary must fail");
     assert_eq!(client.process_id_for_testing(), None);
     let second = client
         .poll_run(RUN_ID)

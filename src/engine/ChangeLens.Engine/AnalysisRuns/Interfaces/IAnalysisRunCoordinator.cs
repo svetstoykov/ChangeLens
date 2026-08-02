@@ -28,10 +28,10 @@ internal interface IAnalysisRunCoordinator
     /// <returns>A task whose result contains the active run, or <see langword="null" /> when none exists.</returns>
     Task<Result<AnalysisRunDetail?>> GetActiveAsync(string? path, CancellationToken cancellationToken);
 
-    /// <summary>Asynchronously reads the current projection of one analysis run.</summary>
+    /// <summary>Asynchronously reads the current detail of one analysis run.</summary>
     /// <param name="runId">The identifier of the run to read.</param>
     /// <param name="cancellationToken">The token that cancels the operation.</param>
-    /// <returns>A task whose result contains the run projection.</returns>
+    /// <returns>A task whose result contains the run detail.</returns>
     Task<Result<AnalysisRunDetail>> PollRunAsync(Guid runId, CancellationToken cancellationToken);
 
     /// <summary>Asynchronously requests cancellation of one analysis run.</summary>

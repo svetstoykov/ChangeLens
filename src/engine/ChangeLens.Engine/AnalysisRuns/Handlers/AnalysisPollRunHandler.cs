@@ -12,7 +12,7 @@ using ChangeLens.Engine.Protocol.Services;
 namespace ChangeLens.Engine.AnalysisRuns.Handlers;
 
 /// <summary>
-///     Handles the action that polls the current projection of one analysis run.
+///     Handles the action that polls the current summary of one analysis run.
 /// </summary>
 internal sealed class AnalysisPollRunHandler(IAnalysisRunCoordinator coordinator, IEngineProtocolSerializer protocolSerializer) : IActionHandler
 {
@@ -39,13 +39,13 @@ internal sealed class AnalysisPollRunHandler(IAnalysisRunCoordinator coordinator
                 OperationError.NotFound("No analysis run matches the supplied identifier.", AnalysisErrorCode.UnknownRun));
         }
 
-        var projectionResult = await coordinator.PollRunAsync(runId, cancellationToken);
-        if (projectionResult.IsFailure)
+        var detailResult = await coordinator.PollRunAsync(runId, cancellationToken);
+        if (detailResult.IsFailure)
         {
-            return ProtocolResponseFactory.CreateError(request.RequestId, projectionResult.Errors);
+            return ProtocolResponseFactory.CreateError(request.RequestId, detailResult.Errors);
         }
 
-        var mappedResult = AnalysisProjectionMapper.ToProtocol(projectionResult.Data!);
+        var mappedResult = AnalysisRunSummaryMapper.ToProtocol(detailResult.Data!);
         return mappedResult.IsFailure
             ? ProtocolResponseFactory.CreateError(request.RequestId, mappedResult.Errors)
             : ProtocolResponseFactory.FromResult(request.RequestId, Result.Success(mappedResult.Data));

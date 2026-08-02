@@ -1,7 +1,7 @@
 namespace ChangeLens.Engine.AnalysisRuns.Models;
 
 /// <summary>
-///     Represents the current-state analysis run projection shared by poll and active-lookup results.
+///     Represents the current-state analysis run summary shared by poll and active-lookup results.
 /// </summary>
 /// <param name="RunId">The identifier assigned to the run.</param>
 /// <param name="State">The current protocol state name.</param>
@@ -16,7 +16,7 @@ namespace ChangeLens.Engine.AnalysisRuns.Models;
 /// <param name="Terminal">The terminal outcome, or <see langword="null" /> while the run is active.</param>
 /// <param name="InterruptedAt">The interruption timestamp, or <see langword="null" /> when the run was not interrupted.</param>
 /// <param name="InterruptionReason">The interruption reason, or <see langword="null" /> when the run was not interrupted.</param>
-internal sealed record AnalysisRunProjectionResult(
+internal sealed record AnalysisRunSummaryResult(
     string RunId,
     string State,
     AnalysisRepositoryResult Repository,

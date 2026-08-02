@@ -1,5 +1,5 @@
 use changelens_desktop_lib::analysis::{
-    AnalysisComparison, AnalysisGetActiveResult, AnalysisRepository, AnalysisRunProjection,
+    AnalysisComparison, AnalysisGetActiveResult, AnalysisRepository, AnalysisRunSummary,
     AnalysisRunState, AnalysisService, AnalysisStartResult, AnalysisState,
 };
 use changelens_desktop_lib::configure_desktop;
@@ -55,7 +55,7 @@ struct FixedAnalysisService {
     calls: Arc<Mutex<Vec<AnalysisCall>>>,
     start_result: Result<AnalysisStartResult, EngineActionError>,
     get_active_result: Result<AnalysisGetActiveResult, EngineActionError>,
-    poll_result: Result<AnalysisRunProjection, EngineActionError>,
+    poll_result: Result<AnalysisRunSummary, EngineActionError>,
     cancel_result: Result<(), EngineActionError>,
 }
 
@@ -85,7 +85,7 @@ impl AnalysisService for FixedAnalysisService {
         self.get_active_result.clone()
     }
 
-    fn poll_run(&self, run_id: &str) -> Result<AnalysisRunProjection, EngineActionError> {
+    fn poll_run(&self, run_id: &str) -> Result<AnalysisRunSummary, EngineActionError> {
         self.record(AnalysisCall::Poll {
             run_id: run_id.to_owned(),
             thread_id: std::thread::current().id(),
@@ -199,7 +199,7 @@ fn analysis_poll_run_forwards_run_id_and_success_shape() {
         tauri::ipc::InvokeBody::Json(serde_json::json!({ "runId": RUN_ID })),
         analysis_service(Arc::clone(&calls), Ok(())),
     )
-    .expect("the analysis projection should be returned");
+    .expect("the analysis summary should be returned");
 
     assert_eq!(response["runId"], RUN_ID);
     assert_eq!(response["state"], "pendingCapture");
@@ -395,7 +395,7 @@ fn analysis_service(
     });
     let poll_result = match operation_error.clone() {
         Some(error) => Err(error),
-        None => Ok(projection()),
+        None => Ok(summary()),
     };
     let cancel_result = match operation_error {
         Some(error) => Err(error),
@@ -464,8 +464,8 @@ impl changelens_desktop_lib::comparisons::ComparisonService for UnusedComparison
     }
 }
 
-fn projection() -> AnalysisRunProjection {
-    AnalysisRunProjection {
+fn summary() -> AnalysisRunSummary {
+    AnalysisRunSummary {
         run_id: RUN_ID.into(),
         state: AnalysisRunState::PendingCapture,
         repository: AnalysisRepository {

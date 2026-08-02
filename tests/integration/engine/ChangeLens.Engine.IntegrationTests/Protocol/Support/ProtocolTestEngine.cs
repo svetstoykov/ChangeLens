@@ -124,7 +124,7 @@ internal sealed class ProtocolTestEngine : IAsyncDisposable
             ?? throw new XunitException("Comparison preparation returned no freshness token.");
     }
 
-    /// <summary>Asynchronously polls one run until its terminal projection is available.</summary>
+    /// <summary>Asynchronously polls one run until its terminal summary is available.</summary>
     /// <param name="runId">The analysis run identifier.</param>
     /// <param name="timeout">The maximum observation interval.</param>
     /// <returns>The terminal poll response.</returns>
@@ -156,7 +156,7 @@ internal sealed class ProtocolTestEngine : IAsyncDisposable
             }
 
             var result = ProtocolResponseAssertions.AssertResultEnvelope(response, requestId);
-            ProtocolResponseAssertions.AssertAnalysisRunProjection(result);
+            ProtocolResponseAssertions.AssertAnalysisRunSummary(result);
             lastState = result.GetProperty("state").GetString();
             if (result.GetProperty("terminal").ValueKind != JsonValueKind.Null)
             {

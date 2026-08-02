@@ -4,7 +4,7 @@ import type { AnalysisRepository } from "./AnalysisRepository";
 import type { AnalysisRunState } from "./AnalysisRunState";
 import type { AnalysisTerminalSummary } from "./AnalysisTerminalSummary";
 
-export interface AnalysisRunProjection {
+export interface AnalysisRunSummary {
   readonly runId: string;
   readonly state: AnalysisRunState;
   readonly repository: AnalysisRepository;

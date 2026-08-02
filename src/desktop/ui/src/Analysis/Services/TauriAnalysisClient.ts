@@ -2,7 +2,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { normalizeActionError } from "../../Actions/Services/normalizeActionError";
 import type { AnalysisClient } from "../Interfaces/AnalysisClient";
 import type { AnalysisGetActiveResult } from "../Models/AnalysisGetActiveResult";
-import type { AnalysisRunProjection } from "../Models/AnalysisRunProjection";
+import type { AnalysisRunSummary } from "../Models/AnalysisRunSummary";
 import type { AnalysisStartResult } from "../Models/AnalysisStartResult";
 
 export class TauriAnalysisClient implements AnalysisClient {
@@ -30,8 +30,8 @@ export class TauriAnalysisClient implements AnalysisClient {
     });
   }
 
-  pollRun(runId: string): Promise<AnalysisRunProjection> {
-    return invoke<AnalysisRunProjection>("analysis_poll_run", { runId }).catch(
+  pollRun(runId: string): Promise<AnalysisRunSummary> {
+    return invoke<AnalysisRunSummary>("analysis_poll_run", { runId }).catch(
       (error: unknown) => {
         throw normalizeActionError(error);
       },

@@ -8,7 +8,7 @@ namespace ChangeLens.Engine.IntegrationTests.Protocol.Support;
 /// </summary>
 internal static class ProtocolResponseAssertions
 {
-    private static readonly string[] AnalysisRunProjectionProperties =
+    private static readonly string[] AnalysisRunSummaryProperties =
     [
         "runId",
         "state",
@@ -53,14 +53,14 @@ internal static class ProtocolResponseAssertions
         return root.GetProperty("errors");
     }
 
-    /// <summary>Asserts the exact gate 2.1 analysis-run projection shape.</summary>
-    /// <param name="projection">The analysis-run projection.</param>
-    internal static void AssertAnalysisRunProjection(JsonElement projection)
+    /// <summary>Asserts the exact gate 2.1 analysis-run summary shape.</summary>
+    /// <param name="summary">The analysis-run summary.</param>
+    internal static void AssertAnalysisRunSummary(JsonElement summary)
     {
-        AssertExactProperties(projection, AnalysisRunProjectionProperties);
-        AssertExactProperties(projection.GetProperty("repository"), "repositoryId", "displayName", "canonicalPath", "head");
-        AssertExactProperties(projection.GetProperty("comparison"), "target", "targetRevision", "freshnessToken");
-        Assert.Equal(JsonValueKind.Array, projection.GetProperty("facts").ValueKind);
+        AssertExactProperties(summary, AnalysisRunSummaryProperties);
+        AssertExactProperties(summary.GetProperty("repository"), "repositoryId", "displayName", "canonicalPath", "head");
+        AssertExactProperties(summary.GetProperty("comparison"), "target", "targetRevision", "freshnessToken");
+        Assert.Equal(JsonValueKind.Array, summary.GetProperty("facts").ValueKind);
     }
 
     /// <summary>Asserts an object contains exactly the expected property names.</summary>

@@ -5,7 +5,7 @@ mod analysis_get_active_parameters;
 mod analysis_get_active_result;
 mod analysis_poll_run_parameters;
 mod analysis_repository;
-mod analysis_run_projection;
+mod analysis_run_summary;
 mod analysis_run_state;
 mod analysis_start_parameters;
 mod analysis_start_result;
@@ -19,7 +19,7 @@ pub(crate) use analysis_get_active_parameters::AnalysisGetActiveParameters;
 pub use analysis_get_active_result::AnalysisGetActiveResult;
 pub(crate) use analysis_poll_run_parameters::AnalysisPollRunParameters;
 pub use analysis_repository::AnalysisRepository;
-pub use analysis_run_projection::AnalysisRunProjection;
+pub use analysis_run_summary::AnalysisRunSummary;
 pub use analysis_run_state::AnalysisRunState;
 pub(crate) use analysis_start_parameters::AnalysisStartParameters;
 pub use analysis_start_result::AnalysisStartResult;
@@ -28,7 +28,7 @@ pub use analysis_terminal::AnalysisTerminal;
 #[cfg(test)]
 mod tests {
     use super::{
-        AnalysisGetActiveResult, AnalysisRunProjection, AnalysisRunState, AnalysisStartResult,
+        AnalysisGetActiveResult, AnalysisRunSummary, AnalysisRunState, AnalysisStartResult,
     };
 
     const ACCEPTED_FIXTURE: &str = include_str!(concat!(
@@ -101,21 +101,21 @@ mod tests {
         let accepted: AnalysisStartResult = result_from_fixture(ACCEPTED_FIXTURE);
         let rejected_stale: AnalysisStartResult = result_from_fixture(REJECTED_STALE_FIXTURE);
         let rejected_active: AnalysisStartResult = result_from_fixture(REJECTED_ACTIVE_FIXTURE);
-        let pending_capture: AnalysisRunProjection = result_from_fixture(PENDING_CAPTURE_FIXTURE);
-        let capturing: AnalysisRunProjection = result_from_fixture(CAPTURING_FIXTURE);
-        let discovering: AnalysisRunProjection = result_from_fixture(DISCOVERING_FIXTURE);
-        let collecting: AnalysisRunProjection = result_from_fixture(COLLECTING_FIXTURE);
-        let persisting: AnalysisRunProjection = result_from_fixture(PERSISTING_FIXTURE);
-        let completed: AnalysisRunProjection = result_from_fixture(COMPLETED_FIXTURE);
-        let completed_with_limitations: AnalysisRunProjection =
+        let pending_capture: AnalysisRunSummary = result_from_fixture(PENDING_CAPTURE_FIXTURE);
+        let capturing: AnalysisRunSummary = result_from_fixture(CAPTURING_FIXTURE);
+        let discovering: AnalysisRunSummary = result_from_fixture(DISCOVERING_FIXTURE);
+        let collecting: AnalysisRunSummary = result_from_fixture(COLLECTING_FIXTURE);
+        let persisting: AnalysisRunSummary = result_from_fixture(PERSISTING_FIXTURE);
+        let completed: AnalysisRunSummary = result_from_fixture(COMPLETED_FIXTURE);
+        let completed_with_limitations: AnalysisRunSummary =
             result_from_fixture(COMPLETED_WITH_LIMITATIONS_FIXTURE);
-        let cancelled: AnalysisRunProjection = result_from_fixture(CANCELLED_FIXTURE);
-        let failed: AnalysisRunProjection = result_from_fixture(FAILED_FIXTURE);
-        let interrupted: AnalysisRunProjection = result_from_fixture(INTERRUPTED_FIXTURE);
+        let cancelled: AnalysisRunSummary = result_from_fixture(CANCELLED_FIXTURE);
+        let failed: AnalysisRunSummary = result_from_fixture(FAILED_FIXTURE);
+        let interrupted: AnalysisRunSummary = result_from_fixture(INTERRUPTED_FIXTURE);
         let get_active_none: AnalysisGetActiveResult = result_from_fixture(GET_ACTIVE_NONE_FIXTURE);
         let get_active_active: AnalysisGetActiveResult =
             result_from_fixture(GET_ACTIVE_ACTIVE_FIXTURE);
-        let captured: AnalysisRunProjection = result_from_fixture(CAPTURED_FIXTURE);
+        let captured: AnalysisRunSummary = result_from_fixture(CAPTURED_FIXTURE);
 
         assert!(matches!(accepted, AnalysisStartResult::Accepted { .. }));
         assert!(matches!(rejected_stale, AnalysisStartResult::RejectedStale));
@@ -162,7 +162,7 @@ mod tests {
             COMPLETED_FIXTURE.replace("\"state\":\"completed\"", "\"state\":\"unknownState\"");
         let value = fixture_result(&malformed);
 
-        serde_json::from_value::<AnalysisRunProjection>(value)
+        serde_json::from_value::<AnalysisRunSummary>(value)
             .expect_err("an unknown state discriminant must be rejected, not defaulted");
     }
 
@@ -177,7 +177,7 @@ mod tests {
 
         let negative_limitation = COMPLETED_WITH_LIMITATIONS_FIXTURE
             .replace("\"limitationCount\":2", "\"limitationCount\":-1");
-        serde_json::from_value::<AnalysisRunProjection>(fixture_result(&negative_limitation))
+        serde_json::from_value::<AnalysisRunSummary>(fixture_result(&negative_limitation))
             .expect_err("a negative limitation count must be rejected");
     }
 
@@ -188,7 +188,7 @@ mod tests {
             "\"snapshotId\":\"snapshot-1\"",
         );
 
-        serde_json::from_value::<AnalysisRunProjection>(fixture_result(&malformed))
+        serde_json::from_value::<AnalysisRunSummary>(fixture_result(&malformed))
             .expect_err("a malformed snapshot id must be rejected");
     }
 

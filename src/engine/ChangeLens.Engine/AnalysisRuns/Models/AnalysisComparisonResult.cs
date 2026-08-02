@@ -1,7 +1,7 @@
 namespace ChangeLens.Engine.AnalysisRuns.Models;
 
 /// <summary>
-///     Represents the immutable accepted comparison identity in an analysis projection.
+///     Represents the immutable accepted comparison identity in an analysis summary.
 /// </summary>
 /// <param name="Target">The exact comparison target reference.</param>
 /// <param name="TargetRevision">The revision resolved for the comparison target.</param>

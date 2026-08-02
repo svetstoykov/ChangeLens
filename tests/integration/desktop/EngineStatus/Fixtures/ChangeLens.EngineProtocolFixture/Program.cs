@@ -572,7 +572,7 @@ async Task WriteAnalysisResultAsync(string requestId, string action, string fixt
             result = new
             {
                 state = "active",
-                run = AnalysisProjection(runId, repositoryId, head, targetRevision, token, "capturing"),
+                run = AnalysisSummary(runId, repositoryId, head, targetRevision, token, "capturing"),
             },
         });
         return;
@@ -590,10 +590,10 @@ async Task WriteAnalysisResultAsync(string requestId, string action, string fixt
         return;
     }
 
-    var projection = AnalysisProjection(runId, repositoryId, head, targetRevision, token, "pendingCapture");
+    var summary = AnalysisSummary(runId, repositoryId, head, targetRevision, token, "pendingCapture");
     if (fixtureMode == "analysis-invalid-result-once")
     {
-        projection = projection with { runId = "not-a-uuid" };
+        summary = summary with { runId = "not-a-uuid" };
     }
 
     await WriteJsonAsync(new
@@ -601,11 +601,11 @@ async Task WriteAnalysisResultAsync(string requestId, string action, string fixt
         protocolVersion = 1,
         type = "result",
         requestId,
-        result = projection,
+        result = summary,
     });
 }
 
-static AnalysisProjectionValue AnalysisProjection(
+static AnalysisSummaryValue AnalysisSummary(
     string runId,
     string repositoryId,
     string head,
@@ -613,7 +613,7 @@ static AnalysisProjectionValue AnalysisProjection(
     string token,
     string state)
 {
-    return new AnalysisProjectionValue(
+    return new AnalysisSummaryValue(
         runId,
         state,
         new AnalysisRepositoryValue(repositoryId, "change_lens", "/projects/change_lens", head),
@@ -754,7 +754,7 @@ async Task WriteJsonAsync<T>(T value)
     await Console.Out.FlushAsync();
 }
 
-record AnalysisProjectionValue(
+record AnalysisSummaryValue(
     string runId,
     string state,
     AnalysisRepositoryValue repository,

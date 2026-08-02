@@ -1,5 +1,5 @@
-import type { AnalysisRunProjection } from "./AnalysisRunProjection";
+import type { AnalysisRunSummary } from "./AnalysisRunSummary";
 
 export type AnalysisGetActiveResult =
   | { readonly state: "none" }
-  | { readonly state: "active"; readonly run: AnalysisRunProjection };
+  | { readonly state: "active"; readonly run: AnalysisRunSummary };

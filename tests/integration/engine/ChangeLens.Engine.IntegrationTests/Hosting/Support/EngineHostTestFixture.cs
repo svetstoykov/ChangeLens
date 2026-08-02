@@ -210,7 +210,7 @@ internal sealed class EngineHostTestFixture : IAsyncDisposable
     }
 
     /// <summary>
-    ///     Asynchronously reads one durable analysis-run projection.
+    ///     Asynchronously reads one durable analysis-run detail.
     /// </summary>
     /// <param name="runId">The identifier of the run to read.</param>
     /// <returns>A task whose result contains the current run detail.</returns>
@@ -248,10 +248,10 @@ internal sealed class EngineHostTestFixture : IAsyncDisposable
         var deadline = DateTimeOffset.UtcNow + timeout;
         while (DateTimeOffset.UtcNow <= deadline)
         {
-            var projection = await this.PollOnceAsync(runId);
-            if (condition(projection))
+            var detail = await this.PollOnceAsync(runId);
+            if (condition(detail))
             {
-                return projection;
+                return detail;
             }
 
             await Task.Delay(TimeSpan.FromMilliseconds(25), TestContext.Current.CancellationToken);
@@ -477,8 +477,8 @@ internal sealed class EngineHostTestFixture : IAsyncDisposable
                 {
                     await using var scope = host!.Services.CreateAsyncScope();
                     var store = scope.ServiceProvider.GetRequiredService<IAnalysisRunStore>();
-                    var projection = await store.GetDetailAsync(expectedRecoveryRunId.Value, cancellationToken);
-                    if (projection is not { IsSuccess: true, Data.State: AnalysisRunState.Interrupted })
+                    var detail = await store.GetDetailAsync(expectedRecoveryRunId.Value, cancellationToken);
+                    if (detail is not { IsSuccess: true, Data.State: AnalysisRunState.Interrupted })
                     {
                         throw new InvalidOperationException("Protocol input was observed before startup recovery completed.");
                     }

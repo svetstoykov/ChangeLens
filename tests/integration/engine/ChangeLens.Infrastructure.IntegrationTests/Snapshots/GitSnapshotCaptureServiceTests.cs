@@ -171,7 +171,8 @@ public sealed class GitSnapshotCaptureServiceTests
         var run = new AnalysisRunDetail(Guid.NewGuid(), AnalysisRunState.Capturing,
             new AnalysisRepositoryIdentity(Guid.NewGuid(), "fixture", repository.RootPath, repository.RootPath,
                 acceptedHeadRevision ?? repository.Revision),
-            new AnalysisComparisonIdentity(target, targetRevision, new string('0', 64)), 1_000, 1_100, false, null, null, null);
+            new AnalysisComparisonIdentity(target, targetRevision, new string('0', 64)), 1_000, 1_100, null, null, null, null, null,
+            false, null, null, null);
 
         var result = await service.CaptureAsync(run, TestContext.Current.CancellationToken);
 

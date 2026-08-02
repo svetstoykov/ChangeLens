@@ -2,8 +2,10 @@ using ChangeLens.Core.AnalysisRuns.Constants;
 using ChangeLens.Core.AnalysisRuns.Interfaces;
 using ChangeLens.Core.AnalysisRuns.Models;
 using ChangeLens.Core.Results.Models;
+using ChangeLens.Core.Snapshots.Models;
 using ChangeLens.Infrastructure.AnalysisRuns.Persistence.Entities;
 using ChangeLens.Infrastructure.LocalState.Persistence;
+using ChangeLens.Infrastructure.Snapshots.Services;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
@@ -254,6 +256,77 @@ public sealed class SqliteAnalysisRunStore(
     }
 
     /// <inheritdoc />
+    public async Task<Result<bool>> CommitCaptureAsync(
+        Guid runId,
+        SnapshotCapture capture,
+        long capturedAtUnixMilliseconds,
+        CancellationToken cancellationToken)
+    {
+        var identity = await context.AnalysisRuns.AsNoTracking().Where(run => run.RunId == runId)
+            .Select(run => new
+            {
+                run.CanonicalRepositoryPathKey,
+                run.Target,
+                run.TargetRevision,
+                run.HeadRevision,
+            })
+            .FirstOrDefaultAsync(cancellationToken);
+
+        if (identity is null)
+        {
+            return OperationError.NotFound("No analysis run matches the supplied identifier.", AnalysisErrorCode.UnknownRun);
+        }
+
+        var manifest = capture.Manifest;
+        if (!StringComparer.Ordinal.Equals(identity.CanonicalRepositoryPathKey, manifest.CanonicalRepositoryPathKey) ||
+            !StringComparer.Ordinal.Equals(identity.Target, manifest.TargetReference) ||
+            !StringComparer.Ordinal.Equals(identity.TargetRevision, manifest.TargetRevision) ||
+            !StringComparer.Ordinal.Equals(identity.HeadRevision, manifest.HeadRevision))
+        {
+            logger.LogError("Analysis run {RunId} rejected a capture whose manifest identity does not match its accepted run.", runId);
+            return OperationError.InvalidOperation("The captured manifest does not match the accepted run identity.",
+                AnalysisFailureCode.UnexpectedFailure);
+        }
+
+        var counts = capture.ExcludedUncommittedCounts;
+        await using var transaction = await context.Database.BeginTransactionAsync(cancellationToken);
+
+        var affected = await context.AnalysisRuns
+            .Where(run => run.RunId == runId && run.State == AnalysisRunState.Capturing)
+            .Where(run => run.CapturedAtUnixMilliseconds == null && run.CancellationRequestedAtUnixMilliseconds == null)
+            .ExecuteUpdateAsync(
+                setters => setters
+                    .SetProperty(run => run.CapturedAtUnixMilliseconds, capturedAtUnixMilliseconds)
+                    .SetProperty(run => run.SnapshotId, manifest.SnapshotId)
+                    .SetProperty(run => run.ManifestHash, manifest.ManifestHash)
+                    .SetProperty(run => run.TargetRevisionAtCapture, manifest.TargetRevision)
+                    .SetProperty(run => run.HeadRevisionAtCapture, manifest.HeadRevision)
+                    .SetProperty(run => run.MergeBaseRevision, manifest.MergeBaseRevision)
+                    .SetProperty(run => run.CapturedChangedFileCount, manifest.Entries.Count)
+                    .SetProperty(run => run.ExcludedUncommittedTotal, counts.Total)
+                    .SetProperty(run => run.ExcludedStagedCount, counts.Staged)
+                    .SetProperty(run => run.ExcludedUnstagedCount, counts.Unstaged)
+                    .SetProperty(run => run.ExcludedUntrackedCount, counts.Untracked)
+                    .SetProperty(run => run.ExcludedConflictedCount, counts.Conflicted),
+                cancellationToken);
+
+        if (affected == 0)
+        {
+            await transaction.RollbackAsync(cancellationToken);
+            logger.LogInformation("Analysis run {RunId} did not commit its capture because durable state already moved on.", runId);
+            return false;
+        }
+
+        SnapshotManifestEntryWriter.Add(context, runId, manifest.Entries);
+        await context.SaveChangesAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
+
+        logger.LogInformation("Analysis run {RunId} committed snapshot {SnapshotId} with {EntryCount} manifest entries.", runId,
+            manifest.SnapshotId, manifest.Entries.Count);
+        return true;
+    }
+
+    /// <inheritdoc />
     public async Task<Result<bool>> CommitTerminalAsync(Guid runId, AnalysisTerminalSummary terminal, CancellationToken cancellationToken)
     {
         var nextState = terminal.Kind switch
@@ -341,6 +414,15 @@ public sealed class SqliteAnalysisRunStore(
             _ => null,
         };
 
+        var excludedUncommittedCounts = run.ExcludedUncommittedTotal is not null
+            ? new ExcludedUncommittedCounts(
+                run.ExcludedUncommittedTotal.Value,
+                run.ExcludedStagedCount!.Value,
+                run.ExcludedUnstagedCount!.Value,
+                run.ExcludedUntrackedCount!.Value,
+                run.ExcludedConflictedCount!.Value)
+            : null;
+
         return new AnalysisRunDetail(
             run.RunId,
             run.State,
@@ -349,6 +431,11 @@ public sealed class SqliteAnalysisRunStore(
             new AnalysisComparisonIdentity(run.Target, run.TargetRevision, run.FreshnessToken),
             run.RequestedAtUnixMilliseconds,
             run.CaptureStartedAtUnixMilliseconds,
+            run.CapturedAtUnixMilliseconds,
+            run.SnapshotId,
+            run.ManifestHash,
+            run.CapturedChangedFileCount,
+            excludedUncommittedCounts,
             run.CancellationRequestedAtUnixMilliseconds is not null,
             terminal,
             run.InterruptedAtUnixMilliseconds,

@@ -1,3 +1,5 @@
+using ChangeLens.Core.Snapshots.Models;
+
 namespace ChangeLens.Core.AnalysisRuns.Models;
 
 /// <summary>
@@ -16,6 +18,23 @@ namespace ChangeLens.Core.AnalysisRuns.Models;
 /// </param>
 /// <param name="CaptureStartedAtUnixMilliseconds">
 ///     When the processor took the run, otherwise <see langword="null" />.
+/// </param>
+/// <param name="CapturedAtUnixMilliseconds">
+///     When the committed snapshot manifest was cut, otherwise <see langword="null" /> before capture completes.
+/// </param>
+/// <param name="SnapshotId">
+///     The identifier of the captured evidence snapshot, or <see langword="null" /> before capture completes.
+/// </param>
+/// <param name="ManifestHash">
+///     The deterministic content hash of the captured manifest, or <see langword="null" /> before capture
+///     completes.
+/// </param>
+/// <param name="CapturedChangedFileCount">
+///     The number of manifest entries captured, or <see langword="null" /> before capture completes.
+/// </param>
+/// <param name="ExcludedUncommittedCounts">
+///     The uncommitted lineage counts excluded from the manifest, or <see langword="null" /> before capture
+///     completes.
 /// </param>
 /// <param name="CancellationRequested">Whether cancellation has been durably requested.</param>
 /// <param name="Terminal">
@@ -36,6 +55,11 @@ public sealed record AnalysisRunDetail(
     AnalysisComparisonIdentity Comparison,
     long RequestedAtUnixMilliseconds,
     long? CaptureStartedAtUnixMilliseconds,
+    long? CapturedAtUnixMilliseconds,
+    Guid? SnapshotId,
+    string? ManifestHash,
+    int? CapturedChangedFileCount,
+    ExcludedUncommittedCounts? ExcludedUncommittedCounts,
     bool CancellationRequested,
     AnalysisTerminalSummary? Terminal,
     long? InterruptedAtUnixMilliseconds,

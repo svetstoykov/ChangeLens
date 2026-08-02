@@ -2,6 +2,7 @@
 using ChangeLens.Infrastructure.LocalState.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -9,9 +10,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace ChangeLens.Infrastructure.LocalState.Persistence.Migrations
 {
     [DbContext(typeof(ChangeLensLocalStateDbContext))]
-    partial class ChangeLensLocalStateDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260802093824_AddSnapshotCapture")]
+    partial class AddSnapshotCapture
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "10.0.10");

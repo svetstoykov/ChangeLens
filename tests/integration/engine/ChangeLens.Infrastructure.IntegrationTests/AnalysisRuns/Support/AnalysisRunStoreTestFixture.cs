@@ -1,4 +1,5 @@
 using ChangeLens.Core.AnalysisRuns.Models;
+using ChangeLens.Core.Snapshots.Models;
 using ChangeLens.Infrastructure.AnalysisRuns.Persistence.Entities;
 using ChangeLens.Infrastructure.AnalysisRuns.Services;
 using ChangeLens.Infrastructure.IntegrationTests.Support;
@@ -6,6 +7,7 @@ using ChangeLens.Infrastructure.LocalState.Models;
 using ChangeLens.Infrastructure.LocalState.Persistence;
 using ChangeLens.Infrastructure.LocalState.Persistence.Entities;
 using ChangeLens.Infrastructure.LocalState.Services;
+using ChangeLens.Infrastructure.Snapshots.Persistence.Entities;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -18,7 +20,7 @@ namespace ChangeLens.Infrastructure.IntegrationTests.AnalysisRuns.Support;
 /// </summary>
 internal sealed class AnalysisRunStoreTestFixture : IAsyncDisposable
 {
-    private const string DefaultCanonicalPath = "/repository";
+    internal const string DefaultCanonicalPath = "/repository";
 
     private readonly TemporaryDirectory _temporaryDirectory;
 
@@ -34,7 +36,7 @@ internal sealed class AnalysisRunStoreTestFixture : IAsyncDisposable
     /// </summary>
     public SqliteAnalysisRunStore Store { get; }
 
-    private ChangeLensLocalStateDbContext Context { get; }
+    internal ChangeLensLocalStateDbContext Context { get; }
 
     /// <summary>
     ///     Asynchronously creates a migrated fixture with one repository seeded at <see cref="DefaultCanonicalPath" />.
@@ -128,6 +130,38 @@ internal sealed class AnalysisRunStoreTestFixture : IAsyncDisposable
         var outcome = await this.Store.CreateOrReturnActiveAsync(this.Acceptance(), CancellationToken.None);
         return outcome.Data!.RunId!.Value;
     }
+
+    /// <summary>Asynchronously accepts a run and advances it to <see cref="AnalysisRunState.Capturing" />.</summary>
+    /// <returns>A task whose result contains the taken run identifier.</returns>
+    public async Task<Guid> CreateCapturingRunAsync()
+    {
+        await this.CreateAcceptedRunAsync();
+        var taken = await this.Store.TakeNextPendingAsync(CancellationToken.None);
+        return taken.Data!.Value;
+    }
+
+    /// <summary>Builds a capture whose header matches the accepted identity of the seeded default repository.</summary>
+    /// <param name="runId">The run the capture belongs to.</param>
+    /// <param name="entryCount">The number of synthetic manifest entries.</param>
+    /// <param name="excludedTotal">The excluded distinct uncommitted lineage total.</param>
+    /// <returns>A capture ready to commit.</returns>
+    public SnapshotCapture Capture(Guid runId, int entryCount, int excludedTotal)
+    {
+        var entries = Enumerable.Range(0, entryCount)
+            .Select(index => new SnapshotManifestEntry($"file-{index}.txt", null, SnapshotChangeCategory.Modified, "100644",
+                "100644", new string('a', 40), new string('c', 40)))
+            .ToArray();
+        var manifest = new SnapshotManifest(Guid.NewGuid(), new string('d', 64), DefaultCanonicalPath, "main",
+            "target-revision", "head-revision", new string('e', 40), entries);
+        return new SnapshotCapture(manifest, new ExcludedUncommittedCounts(excludedTotal, excludedTotal, 0, 0, 0));
+    }
+
+    /// <summary>Asynchronously reads the persisted manifest entries for one run.</summary>
+    /// <param name="runId">The owning run identifier.</param>
+    /// <returns>A task whose result contains the persisted entries.</returns>
+    public async Task<List<SnapshotManifestEntryEntity>> GetManifestEntriesAsync(Guid runId) =>
+        await this.Context.SnapshotManifestEntries.AsNoTracking().Where(entry => entry.RunId == runId)
+            .ToListAsync(CancellationToken.None);
 
     /// <summary>
     ///     Asynchronously disposes the local-state context and deletes the temporary directory.

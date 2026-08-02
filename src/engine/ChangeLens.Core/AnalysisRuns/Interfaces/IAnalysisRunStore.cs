@@ -1,5 +1,6 @@
 using ChangeLens.Core.AnalysisRuns.Models;
 using ChangeLens.Core.Results.Models;
+using ChangeLens.Core.Snapshots.Models;
 
 namespace ChangeLens.Core.AnalysisRuns.Interfaces;
 
@@ -101,6 +102,21 @@ public interface IAnalysisRunStore
     ///     A task whose result contains the current detail, or a failure with <c>analysis.unknownRun</c>.
     /// </returns>
     Task<Result<AnalysisRunDetail>> RequestCancellationAsync(Guid runId, long atUnixMilliseconds, CancellationToken cancellationToken);
+
+    /// <summary>
+    ///     Asynchronously and conditionally commits the captured snapshot manifest header and its entries together,
+    ///     atomically with the capture cut. Only the first successful call for a run commits.
+    /// </summary>
+    /// <param name="runId">The run identifier.</param>
+    /// <param name="capture">The completed capture. Cannot be <see langword="null" />.</param>
+    /// <param name="capturedAtUnixMilliseconds">The capture-completion timestamp.</param>
+    /// <param name="cancellationToken">A <see cref="CancellationToken" /> to observe while waiting for the task.</param>
+    /// <returns>A task whose result is <see langword="true" /> when this call committed the capture.</returns>
+    Task<Result<bool>> CommitCaptureAsync(
+        Guid runId,
+        SnapshotCapture capture,
+        long capturedAtUnixMilliseconds,
+        CancellationToken cancellationToken);
 
     /// <summary>
     ///     Asynchronously and conditionally commits one terminal outcome. Only the first successful call for a run

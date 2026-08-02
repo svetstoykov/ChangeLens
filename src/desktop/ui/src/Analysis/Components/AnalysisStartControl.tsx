@@ -1,22 +1,23 @@
 import { useState } from "react";
 import { Icon } from "../../Visuals/Components/Icon";
+import type { AnalysisStartBlockedReason } from "../Models/AnalysisStartBlockedReason";
 
 const changeContextLimit = 8192;
 
 export interface AnalysisStartControlProps {
-  readonly disabled: boolean;
+  readonly blockedReason: AnalysisStartBlockedReason | null;
   readonly starting: boolean;
   readonly onStart: (changeContext: string | null) => void;
 }
 
 export function AnalysisStartControl({
-  disabled,
+  blockedReason,
   starting,
   onStart,
 }: AnalysisStartControlProps) {
   const [changeContext, setChangeContext] = useState("");
   const trimmedChangeContext = changeContext.trim();
-  const isBlocked = disabled || starting;
+  const isBlocked = blockedReason !== null || starting;
 
   const handleStart = (): void => {
     onStart(trimmedChangeContext.length > 0 ? trimmedChangeContext : null);
@@ -71,11 +72,22 @@ export function AnalysisStartControl({
           {starting ? "Starting…" : "Start analysis"}
         </button>
         <p className="analysis-start-hint">
-          {disabled
-            ? "Prepare a current comparison before starting an analysis."
-            : "ChangeLens records an immutable snapshot of this comparison and collects repository facts."}
+          {describeStartHint(blockedReason)}
         </p>
       </div>
     </section>
   );
+}
+
+function describeStartHint(
+  blockedReason: AnalysisStartBlockedReason | null,
+): string {
+  switch (blockedReason) {
+    case "comparisonNotReady":
+      return "Prepare a current comparison before starting an analysis.";
+    case "noCommittedChanges":
+      return "There are no committed branch changes available for analysis.";
+    default:
+      return "ChangeLens records an immutable snapshot of the committed branch changes and collects repository facts.";
+  }
 }

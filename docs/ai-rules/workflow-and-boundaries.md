@@ -2,6 +2,16 @@
 
 Always in effect. Read this file at the start of every session.
 
+## Replies and References
+
+Write every reply so the user can act on it without opening another document.
+
+- Never cite a document by bare section number, such as `§5`, `section 9`, `D8`, or `gate 2.2`, as the only identifier. Name what the section says, then add the locator in parentheses if it helps someone find it later.
+- State the substance before the source. Write "the phase contract still promises Phase 3 a change inventory covering uncommitted work (section 14)", not "section 14 conflicts".
+- Quote or paraphrase the wording that matters when a claim depends on exact phrasing. Do not make the user retrieve it.
+- Apply the same rule to file references: say what the code at `file.cs:120` does, not just that something is at `file.cs:120`.
+- A reply that lists findings must let the user judge each one on its own. Assume no memory of the source document and no intent to reopen it.
+
 ## Superpowers Skills
 
 Before invoking any `superpowers:*` skill, ask the user for permission and briefly explain why the skill applies. Invoke the skill only after the user explicitly approves its use. If approval is not granted, continue without that skill when possible.

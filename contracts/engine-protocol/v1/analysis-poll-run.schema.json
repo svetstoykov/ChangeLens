@@ -66,7 +66,7 @@
         "requestedAt": { "$ref": "#/$defs/timestamp" },
         "captureStartedAt": { "anyOf": [{ "$ref": "#/$defs/timestamp" }, { "type": "null" }] },
         "capturedAt": { "anyOf": [{ "$ref": "#/$defs/timestamp" }, { "type": "null" }] },
-        "snapshotId": { "type": ["string", "null"], "minLength": 1, "pattern": "\\S" },
+        "snapshotId": { "anyOf": [{ "$ref": "#/$defs/guid" }, { "type": "null" }] },
         "cancellationRequested": { "type": "boolean" },
         "facts": {
           "type": "array",

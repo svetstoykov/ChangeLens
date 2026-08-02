@@ -10,6 +10,7 @@ import { ComparisonSummary } from "./ComparisonSummary";
 import { FreshnessControl } from "./FreshnessControl";
 import { TargetCombobox } from "./TargetCombobox";
 import { Icon } from "../../Visuals/Components/Icon";
+import type { AnalysisStartBlockedReason } from "../../Analysis/Models/AnalysisStartBlockedReason";
 
 interface RepositoryWorkspaceProps {
   readonly repository: RepositoryDescriptor;
@@ -51,12 +52,16 @@ export function RepositoryWorkspace({
   const analysisErrorPresentation =
     analysisError !== null ? presentActionError(analysisError) : null;
   const preparedComparison = state.preparedComparison;
-  const canStartAnalysis =
-    preparedComparison !== null &&
-    preparedComparison.readiness.state === "ready" &&
-    state.freshness === "current" &&
-    !state.isPreparing &&
-    !state.isRefreshing;
+  const startBlockedReason: AnalysisStartBlockedReason | null =
+    preparedComparison === null ||
+    preparedComparison.readiness.state !== "ready" ||
+    state.freshness !== "current" ||
+    state.isPreparing ||
+    state.isRefreshing
+      ? "comparisonNotReady"
+      : preparedComparison.currentWorkCommitCount === 0
+        ? "noCommittedChanges"
+        : null;
 
   async function startAnalysis(changeContext: string | null): Promise<void> {
     if (preparedComparison === null) return;
@@ -182,7 +187,7 @@ export function RepositoryWorkspace({
             </section>
           ) : null}
           <AnalysisStartControl
-            disabled={!canStartAnalysis}
+            blockedReason={startBlockedReason}
             starting={startingAnalysis}
             onStart={(changeContext) => void startAnalysis(changeContext)}
           />

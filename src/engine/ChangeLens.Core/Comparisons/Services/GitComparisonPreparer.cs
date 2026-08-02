@@ -4,6 +4,7 @@ using System.Text;
 using ChangeLens.Core.Comparisons.Constants;
 using ChangeLens.Core.Comparisons.Interfaces;
 using ChangeLens.Core.Comparisons.Models;
+using ChangeLens.Core.Git.Constants;
 using ChangeLens.Core.Git.Interfaces;
 using ChangeLens.Core.Git.Models;
 using ChangeLens.Core.Git.Parsers;
@@ -199,7 +200,7 @@ public sealed class GitComparisonPreparer(
             var beginningStatusResult = await this.RunAsync(
                 beginningRepository.CanonicalPath,
                 startedAt,
-                StatusArguments(),
+                GitComparisonCommandArguments.Status(),
                 actionCancellation.Token);
             if (beginningStatusResult.IsFailure)
             {
@@ -282,19 +283,7 @@ public sealed class GitComparisonPreparer(
             var committedFilesResult = await this.RunAsync(
                 beginningRepository.CanonicalPath,
                 startedAt,
-                [
-                    "diff",
-                    "--raw",
-                    "-z",
-                    "--no-abbrev",
-                    "--full-index",
-                    "--find-renames=50%",
-                    "--no-ext-diff",
-                    "--no-textconv",
-                    mergeBaseRevision,
-                    beginningRepository.Head.Revision,
-                    "--",
-                ],
+                GitComparisonCommandArguments.RawDiff(mergeBaseRevision, beginningRepository.Head.Revision),
                 actionCancellation.Token);
             if (committedFilesResult.IsFailure)
             {
@@ -309,7 +298,7 @@ public sealed class GitComparisonPreparer(
             }
 
             var summaryResult = this._fileSummaryComposer.Compose(
-                ComposeFileRecords(
+                ComparisonFileRecordComposer.Compose(
                     parsedCommittedFiles.Data!,
                     parsedBeginningStatus.Data!));
             if (summaryResult.IsFailure)
@@ -320,7 +309,7 @@ public sealed class GitComparisonPreparer(
             var endingStatusResult = await this.RunAsync(
                 beginningRepository.CanonicalPath,
                 startedAt,
-                StatusArguments(),
+                GitComparisonCommandArguments.Status(),
                 actionCancellation.Token);
             if (endingStatusResult.IsFailure)
             {
@@ -526,92 +515,12 @@ public sealed class GitComparisonPreparer(
 
         return this._commandRunner.RunAsync(
             new GitCommand(
-                DirectArguments(canonicalPath, subcommandArguments),
+                GitComparisonCommandArguments.Direct(canonicalPath, subcommandArguments),
                 remaining,
                 ComparisonLimits.MaximumFactOutputBytes,
                 ComparisonLimits.MaximumDiagnosticBytes,
                 ComparisonErrors()),
             cancellationToken);
-    }
-
-    /// <summary>
-    ///     Prepends the canonical root and fixed safety configuration to a Git subcommand.
-    /// </summary>
-    /// <param name="canonicalPath">The canonical repository root. Cannot be <see langword="null" />.</param>
-    /// <param name="subcommandArguments">
-    ///     The fixed Git subcommand arguments. Cannot be <see langword="null" />.
-    /// </param>
-    /// <returns>The complete separate-argument Git invocation.</returns>
-    private static IReadOnlyList<string> DirectArguments(
-        string canonicalPath,
-        IReadOnlyList<string> subcommandArguments) =>
-        [
-            "-C",
-            canonicalPath,
-            "-c",
-            "core.fsmonitor=false",
-            "-c",
-            "diff.external=",
-            "-c",
-            "diff.trustExitCode=false",
-            "-c",
-            "diff.renames=true",
-            .. subcommandArguments,
-        ];
-
-    /// <summary>
-    ///     Creates the fixed porcelain-v2 status argument sequence used for both consistency reads.
-    /// </summary>
-    /// <returns>The status subcommand arguments.</returns>
-    private static IReadOnlyList<string> StatusArguments() =>
-        [
-            "status",
-            "--porcelain=v2",
-            "-z",
-            "--untracked-files=all",
-            "--ignore-submodules=none",
-            "--find-renames=50%",
-        ];
-
-    /// <summary>
-    ///     Converts parsed committed and non-ignored working-tree facts into composition records.
-    /// </summary>
-    /// <param name="committedFiles">
-    ///     The parsed committed file facts. Cannot be <see langword="null" />.
-    /// </param>
-    /// <param name="workingTree">
-    ///     The parsed beginning working-tree facts. Cannot be <see langword="null" />.
-    /// </param>
-    /// <returns>The file records used for lineage and category composition.</returns>
-    private static IReadOnlyList<ComparisonFileRecord> ComposeFileRecords(
-        IReadOnlyList<GitComparisonFileRecord> committedFiles,
-        IReadOnlyList<GitWorkingTreeRecord> workingTree)
-    {
-        var records = new List<ComparisonFileRecord>(
-            committedFiles.Count + workingTree.Count);
-        records.AddRange(
-            committedFiles.Select(
-                record => new ComparisonFileRecord(
-                    record.Path,
-                    record.OriginalPath,
-                    true,
-                    false,
-                    false,
-                    false,
-                    false)));
-        records.AddRange(
-            workingTree
-                .Where(record => !record.IsIgnored)
-                .Select(
-                    record => new ComparisonFileRecord(
-                        record.Path,
-                        record.OriginalPath,
-                        false,
-                        record.IsStaged,
-                        record.IsUnstaged,
-                        record.IsUntracked,
-                        record.IsConflicted)));
-        return records;
     }
 
     /// <summary>

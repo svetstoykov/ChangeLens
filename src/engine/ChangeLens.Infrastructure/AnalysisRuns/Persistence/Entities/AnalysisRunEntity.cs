@@ -108,7 +108,67 @@ internal sealed class AnalysisRunEntity
     ///     Gets or sets the identifier of the captured evidence snapshot, or <see langword="null" /> before
     ///     capture completes.
     /// </summary>
-    public string? SnapshotId { get; set; }
+    public Guid? SnapshotId { get; set; }
+
+    /// <summary>
+    ///     Gets or sets the deterministic content hash of the captured manifest, or <see langword="null" /> before
+    ///     capture completes.
+    /// </summary>
+    public string? ManifestHash { get; set; }
+
+    /// <summary>
+    ///     Gets or sets the resolved comparison target revision captured at the capture cut, or
+    ///     <see langword="null" /> before capture completes.
+    /// </summary>
+    public string? TargetRevisionAtCapture { get; set; }
+
+    /// <summary>
+    ///     Gets or sets the resolved HEAD revision captured at the capture cut, or <see langword="null" /> before
+    ///     capture completes.
+    /// </summary>
+    public string? HeadRevisionAtCapture { get; set; }
+
+    /// <summary>
+    ///     Gets or sets the unique merge-base revision captured at the capture cut, or <see langword="null" />
+    ///     before capture completes.
+    /// </summary>
+    public string? MergeBaseRevision { get; set; }
+
+    /// <summary>
+    ///     Gets or sets the number of manifest entries captured, or <see langword="null" /> before capture
+    ///     completes.
+    /// </summary>
+    public int? CapturedChangedFileCount { get; set; }
+
+    /// <summary>
+    ///     Gets or sets the total number of distinct excluded uncommitted lineages, or <see langword="null" />
+    ///     before capture completes.
+    /// </summary>
+    public int? ExcludedUncommittedTotal { get; set; }
+
+    /// <summary>
+    ///     Gets or sets the number of distinct excluded lineages with staged changes, or <see langword="null" />
+    ///     before capture completes.
+    /// </summary>
+    public int? ExcludedStagedCount { get; set; }
+
+    /// <summary>
+    ///     Gets or sets the number of distinct excluded lineages with unstaged changes, or <see langword="null" />
+    ///     before capture completes.
+    /// </summary>
+    public int? ExcludedUnstagedCount { get; set; }
+
+    /// <summary>
+    ///     Gets or sets the number of distinct excluded untracked lineages, or <see langword="null" /> before
+    ///     capture completes.
+    /// </summary>
+    public int? ExcludedUntrackedCount { get; set; }
+
+    /// <summary>
+    ///     Gets or sets the number of distinct excluded unmerged lineages, or <see langword="null" /> before
+    ///     capture completes.
+    /// </summary>
+    public int? ExcludedConflictedCount { get; set; }
 
     /// <summary>
     ///     Gets or sets the recorded limitation count for a terminal run, or <see langword="null" /> while the run

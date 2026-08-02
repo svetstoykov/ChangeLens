@@ -1,6 +1,7 @@
 using ChangeLens.Core.AnalysisRuns.Interfaces;
 using ChangeLens.Core.AnalysisRuns.Models;
 using ChangeLens.Core.Results.Models;
+using ChangeLens.Core.Snapshots.Models;
 
 namespace ChangeLens.Engine.IntegrationTests.Analysis.Support;
 
@@ -51,6 +52,13 @@ internal sealed class StubAnalysisRunStore(
         CancellationToken cancellationToken) =>
         requestCancellation?.Invoke(runId, atUnixMilliseconds, cancellationToken)
         ?? throw new NotSupportedException("The cancellation operation was not configured.");
+
+    public Task<Result<bool>> CommitCaptureAsync(
+        Guid runId,
+        SnapshotCapture capture,
+        long capturedAtUnixMilliseconds,
+        CancellationToken cancellationToken) =>
+        throw new NotSupportedException("The capture-commit operation was not configured.");
 
     public Task<Result<bool>> CommitTerminalAsync(
         Guid runId,

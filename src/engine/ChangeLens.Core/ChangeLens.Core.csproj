@@ -4,10 +4,12 @@
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
   </PropertyGroup>
 
   <ItemGroup>
-    <InternalsVisibleTo Include="ChangeLens.Core.UnitTests" />
+    <InternalsVisibleTo Include="ChangeLens.Infrastructure.IntegrationTests" />
+    <InternalsVisibleTo Include="ChangeLens.Engine.IntegrationTests" />
   </ItemGroup>
 
   <ItemGroup>

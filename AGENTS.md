@@ -26,6 +26,7 @@ Read a file before starting work that matches its trigger. When several triggers
 | Writing or changing Rust under `src/desktop/src-tauri` | [`docs/ai-rules/rust-guidelines.md`](docs/ai-rules/rust-guidelines.md) |
 | Writing or changing React, frontend TypeScript, or CSS under `src/desktop/ui` | [`docs/ai-rules/react-guidelines.md`](docs/ai-rules/react-guidelines.md) |
 | Adding or changing tests, or claiming a change is complete | [`docs/ai-rules/testing.md`](docs/ai-rules/testing.md) |
+| Creating, moving, naming, or substantially revising documentation under `docs/` | [`docs/ai-rules/documentation.md`](docs/ai-rules/documentation.md) |
 
 ## Maintaining these rules
 

@@ -1,6 +1,8 @@
 using ChangeLens.Core.AnalysisRuns.Constants;
 using ChangeLens.Core.AnalysisRuns.Interfaces;
 using ChangeLens.Core.AnalysisRuns.Models;
+using ChangeLens.Core.Snapshots.Interfaces;
+using ChangeLens.Core.Snapshots.Models;
 using ChangeLens.Engine.AnalysisRuns.Interfaces;
 using Microsoft.Extensions.Logging;
 
@@ -11,6 +13,7 @@ namespace ChangeLens.Engine.AnalysisRuns.Services;
 /// </summary>
 internal sealed class ShallowAnalysisPipeline(
     IAnalysisRunStore store,
+    ISnapshotCaptureService captureService,
     TimeProvider timeProvider,
     ILogger<ShallowAnalysisPipeline> logger) : IAnalysisPipeline
 {
@@ -69,7 +72,22 @@ internal sealed class ShallowAnalysisPipeline(
                 currentState = nextState;
             }
 
-            var outcome = await this.RunStepAsync(runId, entry);
+            var outcome = await this.RunStepAsync(runId, entry, userCancellationToken);
+            if (outcome.State is AnalysisRunStepState.Failed)
+            {
+                var failed = new AnalysisTerminalSummary(AnalysisTerminalKind.Failed, this.Now(), null,
+                    outcome.Code ?? AnalysisFailureCode.UnexpectedFailure);
+                await store.CommitTerminalAsync(runId, failed, CancellationToken.None);
+                logger.LogWarning("Analysis run {RunId} failed at step {StepId} with {FailureCode}.", runId, entry.StepId, failed.FailureCode);
+                return;
+            }
+
+            if (outcome.State is AnalysisRunStepState.Cancelled)
+            {
+                await this.CommitCancelledAsync(runId);
+                return;
+            }
+
             if (outcome.State is AnalysisRunStepState.SucceededWithLimitations)
             {
                 limitationCount++;
@@ -133,7 +151,10 @@ internal sealed class ShallowAnalysisPipeline(
         new(AnalysisStepId.Collect, "engine", "lifecycle", 2, AnalysisStage.Collecting),
     ];
 
-    private async Task<AnalysisRunStepOutcome> RunStepAsync(Guid runId, AnalysisRunStepPlanEntry entry)
+    private async Task<AnalysisRunStepOutcome> RunStepAsync(
+        Guid runId,
+        AnalysisRunStepPlanEntry entry,
+        CancellationToken userCancellationToken)
     {
         var beginResult = await store.BeginStepAsync(runId, entry.StepId, this.Now(), CancellationToken.None);
         if (beginResult.IsFailure)
@@ -141,12 +162,82 @@ internal sealed class ShallowAnalysisPipeline(
             return new AnalysisRunStepOutcome(entry.StepId, AnalysisRunStepState.Failed, AnalysisFailureCode.UnexpectedFailure);
         }
 
-        var outcome = new AnalysisRunStepOutcome(entry.StepId, AnalysisRunStepState.Succeeded, null);
+        var outcome = entry.StepId == AnalysisStepId.Capture
+            ? await this.ExecuteCaptureAsync(runId, userCancellationToken)
+            : new AnalysisRunStepOutcome(entry.StepId, AnalysisRunStepState.Succeeded, null);
         var finishResult = await store.FinishStepAsync(runId, outcome, this.Now(), CancellationToken.None);
         return finishResult.IsFailure
             ? new AnalysisRunStepOutcome(entry.StepId, AnalysisRunStepState.Failed, AnalysisFailureCode.UnexpectedFailure)
             : outcome;
     }
+
+    private async Task<AnalysisRunStepOutcome> ExecuteCaptureAsync(Guid runId, CancellationToken userCancellationToken)
+    {
+        var detailResult = await store.GetDetailAsync(runId, CancellationToken.None);
+        if (detailResult.IsFailure)
+        {
+            throw new InvalidOperationException(
+                "The analysis pipeline could not read the capture detail. Errors: " +
+                string.Join(", ", detailResult.Errors.Select(error => error.Code)) + ".");
+        }
+
+        var captureResult = await captureService.CaptureAsync(detailResult.Data!, userCancellationToken);
+        if (captureResult.IsFailure)
+        {
+            return new AnalysisRunStepOutcome(
+                AnalysisStepId.Capture,
+                AnalysisRunStepState.Failed,
+                captureResult.Errors[0].Code ?? AnalysisFailureCode.CaptureFailed);
+        }
+
+        var capture = captureResult.Data!;
+        var commitResult = await store.CommitCaptureAsync(runId, capture, this.Now(), CancellationToken.None);
+        if (commitResult.IsFailure)
+        {
+            throw new InvalidOperationException(
+                "The analysis pipeline could not commit the capture. Errors: " +
+                string.Join(", ", commitResult.Errors.Select(error => error.Code)) + ".");
+        }
+
+        if (commitResult.Data)
+        {
+            return this.CaptureOutcome(capture);
+        }
+
+        var durableDetail = await store.GetDetailAsync(runId, CancellationToken.None);
+        if (durableDetail.IsFailure)
+        {
+            throw new InvalidOperationException(
+                "The analysis pipeline could not re-read the capture detail. Errors: " +
+                string.Join(", ", durableDetail.Errors.Select(error => error.Code)) + ".");
+        }
+
+        var detail = durableDetail.Data!;
+        if (detail.CancellationRequested && detail.Terminal is null)
+        {
+            return new AnalysisRunStepOutcome(AnalysisStepId.Capture, AnalysisRunStepState.Cancelled, null);
+        }
+
+        if (detail.SnapshotId is not null && StringComparer.Ordinal.Equals(detail.ManifestHash, capture.Manifest.ManifestHash))
+        {
+            return this.CaptureOutcome(capture);
+        }
+
+        if (detail.Terminal is not null || detail.State != AnalysisRunState.Capturing)
+        {
+            return new AnalysisRunStepOutcome(AnalysisStepId.Capture, AnalysisRunStepState.Cancelled, null);
+        }
+
+        throw new InvalidOperationException("The analysis pipeline observed unexpected durable capture state drift.");
+    }
+
+    private AnalysisRunStepOutcome CaptureOutcome(SnapshotCapture capture) =>
+        capture.ExcludedUncommittedCounts.Total > 0
+            ? new AnalysisRunStepOutcome(
+                AnalysisStepId.Capture,
+                AnalysisRunStepState.SucceededWithLimitations,
+                AnalysisLimitationReason.UncommittedWorkExcluded)
+            : new AnalysisRunStepOutcome(AnalysisStepId.Capture, AnalysisRunStepState.Succeeded, null);
 
     private async Task CommitCancelledAsync(Guid runId)
     {

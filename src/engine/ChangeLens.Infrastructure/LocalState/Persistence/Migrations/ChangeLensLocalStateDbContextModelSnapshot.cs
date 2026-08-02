@@ -49,9 +49,33 @@ namespace ChangeLens.Infrastructure.LocalState.Persistence.Migrations
                         .HasColumnType("INTEGER")
                         .HasColumnName("captured_at_unix_ms");
 
+                    b.Property<int?>("CapturedChangedFileCount")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("captured_changed_file_count");
+
                     b.Property<string>("ChangeContext")
                         .HasColumnType("TEXT")
                         .HasColumnName("change_context");
+
+                    b.Property<int?>("ExcludedConflictedCount")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("excluded_conflicted_count");
+
+                    b.Property<int?>("ExcludedStagedCount")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("excluded_staged_count");
+
+                    b.Property<int?>("ExcludedUncommittedTotal")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("excluded_uncommitted_total");
+
+                    b.Property<int?>("ExcludedUnstagedCount")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("excluded_unstaged_count");
+
+                    b.Property<int?>("ExcludedUntrackedCount")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("excluded_untracked_count");
 
                     b.Property<string>("FreshnessToken")
                         .IsRequired()
@@ -63,6 +87,10 @@ namespace ChangeLens.Infrastructure.LocalState.Persistence.Migrations
                         .HasColumnType("TEXT")
                         .HasColumnName("head_revision");
 
+                    b.Property<string>("HeadRevisionAtCapture")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("head_revision_at_capture");
+
                     b.Property<long?>("InterruptedAtUnixMilliseconds")
                         .HasColumnType("INTEGER")
                         .HasColumnName("interrupted_at_unix_ms");
@@ -70,6 +98,14 @@ namespace ChangeLens.Infrastructure.LocalState.Persistence.Migrations
                     b.Property<string>("InterruptionReason")
                         .HasColumnType("TEXT")
                         .HasColumnName("interruption_reason");
+
+                    b.Property<string>("ManifestHash")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("manifest_hash");
+
+                    b.Property<string>("MergeBaseRevision")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("merge_base_revision");
 
                     b.Property<string>("RepositoryDisplayName")
                         .IsRequired()
@@ -104,6 +140,10 @@ namespace ChangeLens.Infrastructure.LocalState.Persistence.Migrations
                         .HasColumnType("TEXT")
                         .HasColumnName("target_revision");
 
+                    b.Property<string>("TargetRevisionAtCapture")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("target_revision_at_capture");
+
                     b.Property<long?>("TerminalAtUnixMilliseconds")
                         .HasColumnType("INTEGER")
                         .HasColumnName("terminal_at_unix_ms");
@@ -125,7 +165,13 @@ namespace ChangeLens.Infrastructure.LocalState.Persistence.Migrations
 
                     b.ToTable("analysis_runs", null, t =>
                         {
+                            t.HasCheckConstraint("CK_analysis_runs_capture_counts", "(captured_changed_file_count IS NULL OR captured_changed_file_count >= 0) AND (excluded_uncommitted_total IS NULL OR excluded_uncommitted_total >= 0) AND (excluded_staged_count IS NULL OR excluded_staged_count >= 0) AND (excluded_unstaged_count IS NULL OR excluded_unstaged_count >= 0) AND (excluded_untracked_count IS NULL OR excluded_untracked_count >= 0) AND (excluded_conflicted_count IS NULL OR excluded_conflicted_count >= 0)");
+
+                            t.HasCheckConstraint("CK_analysis_runs_capture_fields", "(captured_at_unix_ms IS NULL AND snapshot_id IS NULL AND manifest_hash IS NULL AND target_revision_at_capture IS NULL AND head_revision_at_capture IS NULL AND merge_base_revision IS NULL AND captured_changed_file_count IS NULL AND excluded_uncommitted_total IS NULL AND excluded_staged_count IS NULL AND excluded_unstaged_count IS NULL AND excluded_untracked_count IS NULL AND excluded_conflicted_count IS NULL) OR (captured_at_unix_ms IS NOT NULL AND snapshot_id IS NOT NULL AND manifest_hash IS NOT NULL AND target_revision_at_capture IS NOT NULL AND head_revision_at_capture IS NOT NULL AND merge_base_revision IS NOT NULL AND captured_changed_file_count IS NOT NULL AND excluded_uncommitted_total IS NOT NULL AND excluded_staged_count IS NOT NULL AND excluded_unstaged_count IS NOT NULL AND excluded_untracked_count IS NOT NULL AND excluded_conflicted_count IS NOT NULL)");
+
                             t.HasCheckConstraint("CK_analysis_runs_interruption_fields", "(state = 'interrupted' AND interrupted_at_unix_ms IS NOT NULL) OR (state <> 'interrupted' AND interrupted_at_unix_ms IS NULL)");
+
+                            t.HasCheckConstraint("CK_analysis_runs_manifest_hash", "manifest_hash IS NULL OR (length(manifest_hash) = 64 AND manifest_hash NOT GLOB '*[^0-9a-f]*')");
 
                             t.HasCheckConstraint("CK_analysis_runs_state", "state IN ('pendingCapture','capturing','discovering','collecting','persisting','completed','completedWithLimitations','cancelled','failed','interrupted')");
 
@@ -285,6 +331,59 @@ namespace ChangeLens.Infrastructure.LocalState.Persistence.Migrations
                     b.ToTable("repositories", (string)null);
                 });
 
+            modelBuilder.Entity("ChangeLens.Infrastructure.Snapshots.Persistence.Entities.SnapshotManifestEntryEntity", b =>
+                {
+                    b.Property<string>("RunId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("run_id");
+
+                    b.Property<string>("Path")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("path");
+
+                    b.Property<string>("Category")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("category");
+
+                    b.Property<string>("HeadEntryMode")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("head_entry_mode");
+
+                    b.Property<string>("HeadObjectId")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("head_object_id");
+
+                    b.Property<string>("MergeBaseEntryMode")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("merge_base_entry_mode");
+
+                    b.Property<string>("MergeBaseObjectId")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("merge_base_object_id");
+
+                    b.Property<string>("OriginalPath")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("original_path");
+
+                    b.HasKey("RunId", "Path");
+
+                    b.ToTable("snapshot_manifest_entries", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_snapshot_manifest_entries_category", "category IN ('added','modified','deleted','renamed','typeChanged')");
+
+                            t.HasCheckConstraint("CK_snapshot_manifest_entries_modes", "merge_base_entry_mode IN ('000000','100644','100755','120000','160000') AND head_entry_mode IN ('000000','100644','100755','120000','160000')");
+
+                            t.HasCheckConstraint("CK_snapshot_manifest_entries_object_ids", "length(merge_base_object_id) = length(head_object_id) AND length(head_object_id) IN (40, 64) AND merge_base_object_id NOT GLOB '*[^0-9a-f]*' AND head_object_id NOT GLOB '*[^0-9a-f]*'");
+
+                            t.HasCheckConstraint("CK_snapshot_manifest_entries_original_path", "(category = 'renamed' AND original_path IS NOT NULL) OR (category <> 'renamed' AND original_path IS NULL)");
+                        });
+                });
+
             modelBuilder.Entity("ChangeLens.Infrastructure.AnalysisRuns.Persistence.Entities.AnalysisRunStepEntity", b =>
                 {
                     b.HasOne("ChangeLens.Infrastructure.AnalysisRuns.Persistence.Entities.AnalysisRunEntity", "Run")
@@ -304,6 +403,17 @@ namespace ChangeLens.Infrastructure.LocalState.Persistence.Migrations
                         .OnDelete(DeleteBehavior.SetNull);
 
                     b.Navigation("LastRepository");
+                });
+
+            modelBuilder.Entity("ChangeLens.Infrastructure.Snapshots.Persistence.Entities.SnapshotManifestEntryEntity", b =>
+                {
+                    b.HasOne("ChangeLens.Infrastructure.AnalysisRuns.Persistence.Entities.AnalysisRunEntity", "Run")
+                        .WithMany()
+                        .HasForeignKey("RunId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Run");
                 });
 
             modelBuilder.Entity("ChangeLens.Infrastructure.AnalysisRuns.Persistence.Entities.AnalysisRunEntity", b =>

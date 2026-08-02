@@ -61,6 +61,27 @@ export function ComparisonSummary({
         readiness={preparedComparison.readiness}
         freshness={freshness}
       />
+      {preparedComparison.uncommittedFileTotal > 0 ? (
+        <div className="exclusion-notice" role="status">
+          <Icon name="warning" />
+          <div className="exclusion-notice-body">
+            <strong>
+              {preparedComparison.uncommittedFileTotal}{" "}
+              {preparedComparison.uncommittedFileTotal === 1 ? "file" : "files"}{" "}
+              will not be analyzed
+            </strong>
+            <small>
+              ChangeLens analyzes committed branch changes only. Staged,
+              unstaged, and untracked work is excluded from the snapshot.
+            </small>
+            <small>
+              {preparedComparison.stagedFileCount} staged ·{" "}
+              {preparedComparison.unstagedFileCount} unstaged ·{" "}
+              {preparedComparison.untrackedFileCount} untracked
+            </small>
+          </div>
+        </div>
+      ) : null}
       <dl className="comparison-facts">
         <Fact
           label="Changed files"

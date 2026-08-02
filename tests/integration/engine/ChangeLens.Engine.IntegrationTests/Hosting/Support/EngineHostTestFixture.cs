@@ -4,18 +4,23 @@ using ChangeLens.Core.AnalysisRuns.Models;
 using ChangeLens.Core.Comparisons.Interfaces;
 using ChangeLens.Core.Git.Interfaces;
 using ChangeLens.Core.LocalState.Interfaces;
+using ChangeLens.Core.Snapshots.Interfaces;
 using ChangeLens.Engine.AnalysisRuns.Interfaces;
 using ChangeLens.Engine.Hosting.Extensions;
 using ChangeLens.Engine.Hosting.Services;
 using ChangeLens.Engine.IntegrationTests.Support;
+using ChangeLens.Engine.IntegrationTests.Analysis.Support;
 using ChangeLens.Engine.Logging.Constants;
 using ChangeLens.Engine.Logging.Extensions;
 using ChangeLens.Engine.Protocol.Constants;
 using ChangeLens.Engine.Protocol.Interfaces;
 using ChangeLens.Engine.Protocol.Models;
 using ChangeLens.Engine.Protocol.Services;
+using ChangeLens.Infrastructure.AnalysisRuns.Services;
 using ChangeLens.Infrastructure.FileSystem.Services;
 using ChangeLens.Infrastructure.LocalState.Constants;
+using ChangeLens.Infrastructure.LocalState.Persistence;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
@@ -65,6 +70,35 @@ internal sealed class EngineHostTestFixture : IAsyncDisposable
     internal static async Task<EngineHostTestFixture> CreateAsync()
     {
         return await CreateWithTemporaryDirectoryAsync(null);
+    }
+
+    /// <summary>
+    ///     Asynchronously creates an initialized engine host with a controlled committed snapshot capture service.
+    /// </summary>
+    /// <param name="snapshotCaptureService">The capture service to register. Cannot be <see langword="null" />.</param>
+    /// <returns>A task whose result contains the initialized hosting fixture.</returns>
+    internal static async Task<EngineHostTestFixture> CreateWithSnapshotCaptureAsync(ISnapshotCaptureService snapshotCaptureService)
+    {
+        ArgumentNullException.ThrowIfNull(snapshotCaptureService);
+        var temporaryDirectory = new TemporaryDirectory();
+        return await CreateAsync(temporaryDirectory.DirectoryPath, temporaryDirectory, snapshotCaptureService: snapshotCaptureService);
+    }
+
+    /// <summary>
+    ///     Asynchronously creates an initialized engine host that notifies a callback the instant a capture commit succeeds.
+    /// </summary>
+    /// <param name="snapshotCaptureService">The capture service to register. Cannot be <see langword="null" />.</param>
+    /// <param name="onCaptureCommitted">The callback invoked after the real store commits a capture. Cannot be <see langword="null" />.</param>
+    /// <returns>A task whose result contains the initialized hosting fixture.</returns>
+    internal static async Task<EngineHostTestFixture> CreateWithCaptureCommitObserverAsync(
+        ISnapshotCaptureService snapshotCaptureService,
+        Func<Guid, Task> onCaptureCommitted)
+    {
+        ArgumentNullException.ThrowIfNull(snapshotCaptureService);
+        ArgumentNullException.ThrowIfNull(onCaptureCommitted);
+        var temporaryDirectory = new TemporaryDirectory();
+        return await CreateAsync(temporaryDirectory.DirectoryPath, temporaryDirectory, snapshotCaptureService: snapshotCaptureService,
+            onCaptureCommitted: onCaptureCommitted);
     }
 
     /// <summary>
@@ -283,6 +317,20 @@ internal sealed class EngineHostTestFixture : IAsyncDisposable
     }
 
     /// <summary>
+    ///     Asynchronously counts the persisted snapshot manifest entry rows for one run.
+    /// </summary>
+    /// <param name="runId">The owning run identifier.</param>
+    /// <returns>A task whose result contains the persisted entry count.</returns>
+    internal async Task<int> CountManifestEntriesAsync(Guid runId)
+    {
+        await using var scope = this.Host.Services.CreateAsyncScope();
+        var context = scope.ServiceProvider.GetRequiredService<ChangeLensLocalStateDbContext>();
+        return await context.Database
+            .SqlQueryRaw<int>("SELECT COUNT(*) AS Value FROM snapshot_manifest_entries WHERE run_id = {0}", runId.ToString())
+            .SingleAsync(TestContext.Current.CancellationToken);
+    }
+
+    /// <summary>
     ///     Asynchronously routes one request through the production protocol host and a real request scope.
     /// </summary>
     /// <param name="action">The approved protocol action. Cannot be <see langword="null" />.</param>
@@ -394,7 +442,9 @@ internal sealed class EngineHostTestFixture : IAsyncDisposable
         TemporaryDirectory? temporaryDirectory = null,
         Func<Guid, CancellationToken, CancellationToken, Task>? pipelineRun = null,
         bool completeSuccessfulRuns = false,
-        Guid? expectedRecoveryRunId = null)
+        Guid? expectedRecoveryRunId = null,
+        ISnapshotCaptureService? snapshotCaptureService = null,
+        Func<Guid, Task>? onCaptureCommitted = null)
     {
         var resolvedDirectory = localStateDirectory ?? temporaryDirectory?.DirectoryPath
             ?? throw new ArgumentException("A local-state directory is required.", nameof(localStateDirectory));
@@ -435,6 +485,18 @@ internal sealed class EngineHostTestFixture : IAsyncDisposable
                 });
         builder.Services.Replace(ServiceDescriptor.Singleton<IEngineProtocolTransport>(protocolTransport));
         builder.Services.Replace(ServiceDescriptor.Scoped<IGitComparisonFreshnessChecker, FixtureGitComparisonFreshnessChecker>());
+
+        snapshotCaptureService ??= new FixtureSnapshotCaptureService();
+        builder.Services.Replace(ServiceDescriptor.Scoped<ISnapshotCaptureService>(_ => snapshotCaptureService));
+
+        if (onCaptureCommitted is not null)
+        {
+            builder.Services.Replace(ServiceDescriptor.Scoped<IAnalysisRunStore>(serviceProvider =>
+            {
+                var innerStore = ActivatorUtilities.CreateInstance<SqliteAnalysisRunStore>(serviceProvider);
+                return new CaptureCommitObservingAnalysisRunStore(innerStore, onCaptureCommitted);
+            }));
+        }
 
         if (pipelineRun is not null)
         {

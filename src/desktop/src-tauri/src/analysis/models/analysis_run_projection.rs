@@ -1,4 +1,4 @@
-use crate::analysis::models::validation::deserialize_run_id;
+use crate::analysis::models::validation::{deserialize_optional_guid, deserialize_run_id};
 use crate::analysis::models::{
     AnalysisComparison, AnalysisFact, AnalysisRepository, AnalysisRunState, AnalysisTerminal,
 };
@@ -17,6 +17,7 @@ pub struct AnalysisRunProjection {
     pub requested_at: u64,
     pub capture_started_at: Option<u64>,
     pub captured_at: Option<u64>,
+    #[serde(deserialize_with = "deserialize_optional_guid")]
     pub snapshot_id: Option<String>,
     pub cancellation_requested: bool,
     #[serde(deserialize_with = "deserialize_bounded_facts")]

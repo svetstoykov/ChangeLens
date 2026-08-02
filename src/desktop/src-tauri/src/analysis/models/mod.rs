@@ -91,6 +91,10 @@ mod tests {
         env!("CARGO_MANIFEST_DIR"),
         "/../../../contracts/engine-protocol/v1/fixtures/analysis-get-active.active.result.json"
     ));
+    const CAPTURED_FIXTURE: &str = include_str!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../../contracts/engine-protocol/v1/fixtures/analysis-poll-run.captured.result.json"
+    ));
 
     #[test]
     fn deserializes_every_shared_analysis_fixture() {
@@ -111,6 +115,7 @@ mod tests {
         let get_active_none: AnalysisGetActiveResult = result_from_fixture(GET_ACTIVE_NONE_FIXTURE);
         let get_active_active: AnalysisGetActiveResult =
             result_from_fixture(GET_ACTIVE_ACTIVE_FIXTURE);
+        let captured: AnalysisRunProjection = result_from_fixture(CAPTURED_FIXTURE);
 
         assert!(matches!(accepted, AnalysisStartResult::Accepted { .. }));
         assert!(matches!(rejected_stale, AnalysisStartResult::RejectedStale));
@@ -141,6 +146,14 @@ mod tests {
             get_active_active,
             AnalysisGetActiveResult::Active { .. }
         ));
+        assert_eq!(
+            captured.snapshot_id.as_deref(),
+            Some("7198a1b2-3c4d-4e5f-8a9b-0123456789ab")
+        );
+        assert_eq!(captured.captured_at, Some(1_720_000_000_300));
+        assert_eq!(captured.facts.len(), 2);
+        assert_eq!(captured.facts[0].kind, "changedFilesCaptured");
+        assert_eq!(captured.facts[1].count, 3);
     }
 
     #[test]
@@ -166,6 +179,17 @@ mod tests {
             .replace("\"limitationCount\":2", "\"limitationCount\":-1");
         serde_json::from_value::<AnalysisRunProjection>(fixture_result(&negative_limitation))
             .expect_err("a negative limitation count must be rejected");
+    }
+
+    #[test]
+    fn rejects_malformed_snapshot_id() {
+        let malformed = CAPTURED_FIXTURE.replace(
+            "\"snapshotId\":\"7198a1b2-3c4d-4e5f-8a9b-0123456789ab\"",
+            "\"snapshotId\":\"snapshot-1\"",
+        );
+
+        serde_json::from_value::<AnalysisRunProjection>(fixture_result(&malformed))
+            .expect_err("a malformed snapshot id must be rejected");
     }
 
     fn result_from_fixture<T: serde::de::DeserializeOwned>(fixture: &str) -> T {

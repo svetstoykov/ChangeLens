@@ -1841,6 +1841,33 @@ button.current-navigation-item:not([aria-current="page"]) {
   line-height: 1;
 }
 
+.exclusion-notice {
+  display: flex;
+  min-width: 0;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--warning-border);
+  border-radius: var(--radius-panel);
+  background: var(--warning-soft);
+}
+.exclusion-notice > .icon {
+  width: 19px;
+  height: 19px;
+  flex: none;
+  margin-top: 1px;
+  color: var(--warning);
+}
+.exclusion-notice-body {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+.analysis-facts > div[data-tone="warning"] dt,
+.analysis-facts > div[data-tone="warning"] dd {
+  color: var(--warning);
+}
+
 .icon-button {
   width: 36px;
   min-height: 36px;

@@ -2,6 +2,8 @@ using ChangeLens.Core.AnalysisRuns.Models;
 using ChangeLens.Infrastructure.AnalysisRuns.Persistence.Converters;
 using ChangeLens.Infrastructure.AnalysisRuns.Persistence.Entities;
 using ChangeLens.Infrastructure.LocalState.Persistence.Entities;
+using ChangeLens.Infrastructure.Snapshots.Persistence.Converters;
+using ChangeLens.Infrastructure.Snapshots.Persistence.Entities;
 using Microsoft.EntityFrameworkCore;
 
 namespace ChangeLens.Infrastructure.LocalState.Persistence;
@@ -26,6 +28,8 @@ public sealed class ChangeLensLocalStateDbContext(
     internal DbSet<AnalysisRunEntity> AnalysisRuns => this.Set<AnalysisRunEntity>();
 
     internal DbSet<AnalysisRunStepEntity> AnalysisRunSteps => this.Set<AnalysisRunStepEntity>();
+
+    internal DbSet<SnapshotManifestEntryEntity> SnapshotManifestEntries => this.Set<SnapshotManifestEntryEntity>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -90,6 +94,27 @@ public sealed class ChangeLensLocalStateDbContext(
                     "CK_analysis_runs_interruption_fields",
                     "(state = 'interrupted' AND interrupted_at_unix_ms IS NOT NULL) OR " +
                     "(state <> 'interrupted' AND interrupted_at_unix_ms IS NULL)");
+                table.HasCheckConstraint(
+                    "CK_analysis_runs_capture_fields",
+                    "(captured_at_unix_ms IS NULL AND snapshot_id IS NULL AND manifest_hash IS NULL AND " +
+                    "target_revision_at_capture IS NULL AND head_revision_at_capture IS NULL AND merge_base_revision IS NULL AND " +
+                    "captured_changed_file_count IS NULL AND excluded_uncommitted_total IS NULL AND excluded_staged_count IS NULL AND " +
+                    "excluded_unstaged_count IS NULL AND excluded_untracked_count IS NULL AND excluded_conflicted_count IS NULL) OR " +
+                    "(captured_at_unix_ms IS NOT NULL AND snapshot_id IS NOT NULL AND manifest_hash IS NOT NULL AND " +
+                    "target_revision_at_capture IS NOT NULL AND head_revision_at_capture IS NOT NULL AND merge_base_revision IS NOT NULL AND " +
+                    "captured_changed_file_count IS NOT NULL AND excluded_uncommitted_total IS NOT NULL AND excluded_staged_count IS NOT NULL AND " +
+                    "excluded_unstaged_count IS NOT NULL AND excluded_untracked_count IS NOT NULL AND excluded_conflicted_count IS NOT NULL)");
+                table.HasCheckConstraint(
+                    "CK_analysis_runs_capture_counts",
+                    "(captured_changed_file_count IS NULL OR captured_changed_file_count >= 0) AND " +
+                    "(excluded_uncommitted_total IS NULL OR excluded_uncommitted_total >= 0) AND " +
+                    "(excluded_staged_count IS NULL OR excluded_staged_count >= 0) AND " +
+                    "(excluded_unstaged_count IS NULL OR excluded_unstaged_count >= 0) AND " +
+                    "(excluded_untracked_count IS NULL OR excluded_untracked_count >= 0) AND " +
+                    "(excluded_conflicted_count IS NULL OR excluded_conflicted_count >= 0)");
+                table.HasCheckConstraint(
+                    "CK_analysis_runs_manifest_hash",
+                    "manifest_hash IS NULL OR (length(manifest_hash) = 64 AND manifest_hash NOT GLOB '*[^0-9a-f]*')");
             });
             entity.HasKey(run => run.RunId);
             entity.Property(run => run.RunId).HasColumnName("run_id").HasConversion<string>();
@@ -110,7 +135,17 @@ public sealed class ChangeLensLocalStateDbContext(
             entity.Property(run => run.TerminalAtUnixMilliseconds).HasColumnName("terminal_at_unix_ms");
             entity.Property(run => run.InterruptedAtUnixMilliseconds).HasColumnName("interrupted_at_unix_ms");
             entity.Property(run => run.CancellationRequestedAtUnixMilliseconds).HasColumnName("cancellation_requested_at_unix_ms");
-            entity.Property(run => run.SnapshotId).HasColumnName("snapshot_id");
+            entity.Property(run => run.SnapshotId).HasColumnName("snapshot_id").HasConversion<string>();
+            entity.Property(run => run.ManifestHash).HasColumnName("manifest_hash");
+            entity.Property(run => run.TargetRevisionAtCapture).HasColumnName("target_revision_at_capture");
+            entity.Property(run => run.HeadRevisionAtCapture).HasColumnName("head_revision_at_capture");
+            entity.Property(run => run.MergeBaseRevision).HasColumnName("merge_base_revision");
+            entity.Property(run => run.CapturedChangedFileCount).HasColumnName("captured_changed_file_count");
+            entity.Property(run => run.ExcludedUncommittedTotal).HasColumnName("excluded_uncommitted_total");
+            entity.Property(run => run.ExcludedStagedCount).HasColumnName("excluded_staged_count");
+            entity.Property(run => run.ExcludedUnstagedCount).HasColumnName("excluded_unstaged_count");
+            entity.Property(run => run.ExcludedUntrackedCount).HasColumnName("excluded_untracked_count");
+            entity.Property(run => run.ExcludedConflictedCount).HasColumnName("excluded_conflicted_count");
             entity.Property(run => run.TerminalLimitationCount).HasColumnName("terminal_limitation_count");
             entity.Property(run => run.TerminalFailureCode).HasColumnName("terminal_failure_code");
             entity.Property(run => run.InterruptionReason).HasColumnName("interruption_reason");
@@ -140,6 +175,37 @@ public sealed class ChangeLensLocalStateDbContext(
             entity.Property(step => step.Code).HasColumnName("code");
             entity.HasIndex(step => new { step.RunId, step.Order }).IsUnique();
             entity.HasOne(step => step.Run).WithMany(run => run.Steps).HasForeignKey(step => step.RunId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<SnapshotManifestEntryEntity>(entity =>
+        {
+            entity.ToTable("snapshot_manifest_entries", table =>
+            {
+                table.HasCheckConstraint(
+                    "CK_snapshot_manifest_entries_category",
+                    "category IN ('added','modified','deleted','renamed','typeChanged')");
+                table.HasCheckConstraint(
+                    "CK_snapshot_manifest_entries_original_path",
+                    "(category = 'renamed' AND original_path IS NOT NULL) OR (category <> 'renamed' AND original_path IS NULL)");
+                table.HasCheckConstraint(
+                    "CK_snapshot_manifest_entries_modes",
+                    "merge_base_entry_mode IN ('000000','100644','100755','120000','160000') AND " +
+                    "head_entry_mode IN ('000000','100644','100755','120000','160000')");
+                table.HasCheckConstraint(
+                    "CK_snapshot_manifest_entries_object_ids",
+                    "length(merge_base_object_id) = length(head_object_id) AND length(head_object_id) IN (40, 64) AND " +
+                    "merge_base_object_id NOT GLOB '*[^0-9a-f]*' AND head_object_id NOT GLOB '*[^0-9a-f]*'");
+            });
+            entity.HasKey(entry => new { entry.RunId, entry.Path });
+            entity.Property(entry => entry.RunId).HasColumnName("run_id").HasConversion<string>();
+            entity.Property(entry => entry.Path).HasColumnName("path");
+            entity.Property(entry => entry.OriginalPath).HasColumnName("original_path");
+            entity.Property(entry => entry.Category).HasColumnName("category").HasConversion<SnapshotChangeCategoryValueConverter>();
+            entity.Property(entry => entry.MergeBaseEntryMode).HasColumnName("merge_base_entry_mode").IsRequired();
+            entity.Property(entry => entry.HeadEntryMode).HasColumnName("head_entry_mode").IsRequired();
+            entity.Property(entry => entry.MergeBaseObjectId).HasColumnName("merge_base_object_id").IsRequired();
+            entity.Property(entry => entry.HeadObjectId).HasColumnName("head_object_id").IsRequired();
+            entity.HasOne(entry => entry.Run).WithMany().HasForeignKey(entry => entry.RunId).OnDelete(DeleteBehavior.Cascade);
         });
     }
 }

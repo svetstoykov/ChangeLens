@@ -217,20 +217,20 @@ internal static class GitComparisonOutputParser
 
         while (!reader.IsAtEnd)
         {
-            if (!reader.TryReadNulField(out var header) ||
-                !TryParseRawHeader(header, out var isRename))
+            if (!reader.TryReadNulField(out var header) || !TryParseRawHeader(header, out var parsed))
             {
                 return InspectionFailed;
             }
 
-            if (!isRename)
+            if (parsed.Status != GitRawDiffStatus.Renamed)
             {
                 if (!reader.TryReadNulField(out var path) || path.IsEmpty)
                 {
                     return InspectionFailed;
                 }
 
-                records.Add(new GitComparisonFileRecord(path.ToString(), null));
+                records.Add(new GitComparisonFileRecord(path.ToString(), null, parsed.SourceMode, parsed.TargetMode,
+                    parsed.SourceObjectId, parsed.TargetObjectId, parsed.Status));
                 continue;
             }
 
@@ -242,8 +242,8 @@ internal static class GitComparisonOutputParser
                 return InspectionFailed;
             }
 
-            records.Add(
-                new GitComparisonFileRecord(currentPath.ToString(), originalPath.ToString()));
+            records.Add(new GitComparisonFileRecord(currentPath.ToString(), originalPath.ToString(), parsed.SourceMode,
+                parsed.TargetMode, parsed.SourceObjectId, parsed.TargetObjectId, parsed.Status));
         }
 
         return Result.Success<IReadOnlyList<GitComparisonFileRecord>>(records);
@@ -338,9 +338,9 @@ internal static class GitComparisonOutputParser
         return true;
     }
 
-    private static bool TryParseRawHeader(ReadOnlySpan<char> header, out bool isRename)
+    private static bool TryParseRawHeader(ReadOnlySpan<char> header, out GitRawDiffHeader parsed)
     {
-        isRename = false;
+        parsed = default;
         var fields = new GitFieldReader(header);
 
         if (!fields.TryReadWord(out var prefixedSourceMode) ||
@@ -360,24 +360,48 @@ internal static class GitComparisonOutputParser
 
         var sourceMode = prefixedSourceMode[1..];
 
-        if (!IsSupportedMode(sourceMode) ||
-            !IsSupportedMode(targetMode) ||
-            !AreCompatibleObjectIds(sourceOid, targetOid))
+        if (!IsSupportedMode(sourceMode) || !IsSupportedMode(targetMode) || !AreCompatibleObjectIds(sourceOid, targetOid))
         {
             return false;
         }
 
         if (status is "A" or "D" or "M" or "T")
         {
-            return IsConsistentTransition(status[0], sourceMode, targetMode, sourceOid, targetOid);
+            if (!IsConsistentTransition(status[0], sourceMode, targetMode, sourceOid, targetOid))
+            {
+                return false;
+            }
+
+            parsed = new GitRawDiffHeader(sourceMode.ToString(), targetMode.ToString(), sourceOid.ToString(),
+                targetOid.ToString(), ToStatus(status[0]));
+            return true;
         }
 
-        isRename = IsPaddedRenameScore(status);
+        if (!IsPaddedRenameScore(status) ||
+            !AreBothPresent(sourceMode, targetMode, sourceOid, targetOid) ||
+            !IsSameFileType(sourceMode, targetMode))
+        {
+            return false;
+        }
 
-        return isRename &&
-               AreBothPresent(sourceMode, targetMode, sourceOid, targetOid) &&
-               IsSameFileType(sourceMode, targetMode);
+        parsed = new GitRawDiffHeader(sourceMode.ToString(), targetMode.ToString(), sourceOid.ToString(), targetOid.ToString(),
+            GitRawDiffStatus.Renamed);
+        return true;
     }
+
+    /// <summary>
+    ///     Maps one nonrename raw-diff status letter to its change category.
+    /// </summary>
+    /// <param name="status">The raw status letter, already confirmed to be <c>A</c>, <c>D</c>, <c>M</c>, or <c>T</c>.</param>
+    /// <returns>The mapped change category.</returns>
+    private static GitRawDiffStatus ToStatus(char status) => status switch
+    {
+        'A' => GitRawDiffStatus.Added,
+        'D' => GitRawDiffStatus.Deleted,
+        'M' => GitRawDiffStatus.Modified,
+        'T' => GitRawDiffStatus.TypeChanged,
+        _ => throw new ArgumentOutOfRangeException(nameof(status), status, "The raw diff status is not supported."),
+    };
 
     private static bool TryParseWorkingTreeEntry(
         ReadOnlySpan<char> entry,

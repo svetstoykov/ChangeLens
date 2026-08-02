@@ -197,7 +197,14 @@ export function AnalysisProgressView({
           ) : (
             <dl className="analysis-facts">
               {projection.facts.map((fact) => (
-                <div key={fact.kind}>
+                <div
+                  key={fact.kind}
+                  data-tone={
+                    fact.kind === "excludedUncommittedFiles"
+                      ? "warning"
+                      : "neutral"
+                  }
+                >
                   <dt>{describeFactKind(fact)}</dt>
                   <dd>{fact.count}</dd>
                   {fact.detail === null ? null : (

@@ -1,5 +1,6 @@
 using ChangeLens.Core.Comparisons.Models;
 using ChangeLens.Core.Comparisons.Services;
+using ChangeLens.Core.Git.Constants;
 using ChangeLens.Infrastructure.FileSystem.Services;
 using ChangeLens.Infrastructure.Git.Services;
 using ChangeLens.Infrastructure.IntegrationTests.Git.Support;
@@ -511,6 +512,46 @@ public sealed class GitComparisonPreparerIntegrationTests
         Assert.Equal(64, result.Data!.Repository.Head.Revision.Length);
         Assert.Equal(64, result.Data.Target.Revision.Length);
         Assert.Equal(64, result.Data.MergeBaseRevision.Length);
+    }
+
+    /// <summary>
+    ///     Proves the shared raw-diff and status argument sequences carry every safety flag.
+    /// </summary>
+    [Fact]
+    public void SharedGitArgumentsCarryEverySafetyFlag()
+    {
+        var rawDiff = GitComparisonCommandArguments.RawDiff("aaaa", "bbbb");
+        var status = GitComparisonCommandArguments.Status();
+        var direct = GitComparisonCommandArguments.Direct("/root", ["status"]);
+
+        Assert.Equal(["diff", "--raw", "-z", "--no-abbrev", "--full-index", "--find-renames=50%", "--no-ext-diff",
+            "--no-textconv", "aaaa", "bbbb", "--"], rawDiff);
+        Assert.Equal(["status", "--porcelain=v2", "-z", "--untracked-files=all", "--ignore-submodules=none",
+            "--find-renames=50%"], status);
+        Assert.Equal(["-C", "/root", "-c", "core.fsmonitor=false", "-c", "diff.external=", "-c", "diff.trustExitCode=false",
+            "-c", "diff.renames=true", "status"], direct);
+    }
+
+    /// <summary>
+    ///     Asynchronously proves a rename, a deletion, and an addition survive preparation as distinct lineages.
+    /// </summary>
+    /// <returns>A task that represents the asynchronous operation.</returns>
+    [Fact]
+    public async Task PrepareAsyncRenameAndDeletionKeepDistinctLineages()
+    {
+        using var repository = new TemporaryGitRepository();
+        repository.CommitFile("kept.txt", "kept\n", "add kept");
+        repository.CommitFile("removed.txt", "removed\n", "add removed");
+        repository.CreateLocalBranch("topic");
+        repository.Move("kept.txt", "renamed.txt");
+        repository.Remove("removed.txt");
+        repository.CommitFile("added.txt", "added\n", "rename, delete, and add");
+
+        var result = await PrepareWithoutMutationAsync(repository, "refs/heads/topic");
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal(3, result.Data!.Files.ChangedFileTotal);
+        Assert.Equal(0, result.Data.Files.UncommittedFileTotal);
     }
 
     private static async Task<ChangeLens.Core.Results.Models.Result<PreparedComparison>>

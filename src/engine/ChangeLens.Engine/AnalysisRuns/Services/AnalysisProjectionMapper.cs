@@ -1,5 +1,6 @@
 using ChangeLens.Core.AnalysisRuns.Models;
 using ChangeLens.Core.Results.Models;
+using ChangeLens.Core.Snapshots.Models;
 using ChangeLens.Engine.AnalysisRuns.Constants;
 
 namespace ChangeLens.Engine.AnalysisRuns.Services;
@@ -42,13 +43,60 @@ internal static class AnalysisProjectionMapper
                 projection.Comparison.FreshnessToken),
             projection.RequestedAtUnixMilliseconds,
             projection.CaptureStartedAtUnixMilliseconds,
-            null,
-            null,
+            projection.CapturedAtUnixMilliseconds,
+            projection.SnapshotId?.ToString(),
             projection.CancellationRequested,
-            [],
+            BuildFacts(projection),
             terminalResult.Data,
             projection.InterruptedAtUnixMilliseconds,
             projection.InterruptionReason);
+    }
+
+    private static IReadOnlyList<Models.AnalysisFactResult> BuildFacts(AnalysisRunDetail projection)
+    {
+        if (projection.CapturedAtUnixMilliseconds is null || projection.CapturedChangedFileCount is null)
+        {
+            return [];
+        }
+
+        var facts = new List<Models.AnalysisFactResult>(2)
+        {
+            new(AnalysisFactKind.ChangedFilesCaptured, projection.CapturedChangedFileCount.Value, null),
+        };
+
+        var counts = projection.ExcludedUncommittedCounts;
+        if (counts is not null && counts.Total > 0)
+        {
+            facts.Add(new Models.AnalysisFactResult(AnalysisFactKind.ExcludedUncommittedFiles, counts.Total, DescribeExclusions(counts)));
+        }
+
+        return facts;
+    }
+
+    private static string DescribeExclusions(ExcludedUncommittedCounts counts)
+    {
+        var clauses = new List<string>(4);
+        if (counts.Staged > 0)
+        {
+            clauses.Add($"{counts.Staged} staged");
+        }
+
+        if (counts.Unstaged > 0)
+        {
+            clauses.Add($"{counts.Unstaged} unstaged");
+        }
+
+        if (counts.Untracked > 0)
+        {
+            clauses.Add($"{counts.Untracked} untracked");
+        }
+
+        if (counts.Conflicted > 0)
+        {
+            clauses.Add($"{counts.Conflicted} conflicted");
+        }
+
+        return string.Join(", ", clauses);
     }
 
     private static Result<string> ToStateString(AnalysisRunState state) => state switch

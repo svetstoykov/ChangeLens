@@ -1,4 +1,3 @@
-using ChangeLens.Core.Diagnostics.Services;
 using ChangeLens.Core.Git.Interfaces;
 using ChangeLens.Core.Repositories.Constants;
 using ChangeLens.Core.Results.Models;
@@ -17,6 +16,11 @@ namespace ChangeLens.Infrastructure.FileSystem.Services;
 ///     <para>
 ///         Each path segment is verified before it is used, so missing, inaccessible,
 ///         and link-bearing directories are distinguished consistently.
+///     </para>
+///     <para>
+///         The caller-supplied path is sensitive, so a failure is traced at <c>Debug</c> and the message
+///         template names only the failure category. The path reaches the log through the exception, which
+///         quotes the location it failed on, and stays out of every operator-facing level.
 ///     </para>
 /// </remarks>
 public sealed class PhysicalRepositoryPathResolver : IRepositoryPathResolver
@@ -68,16 +72,13 @@ public sealed class PhysicalRepositoryPathResolver : IRepositoryPathResolver
         }
         catch (UnauthorizedAccessException exception)
         {
-            this._logger.LogDebug(exception, "Path resolution for {Path} failed: access denied.", PathSanitizer.RedactHomeDirectory(path));
+            this._logger.LogDebug(exception, "Path resolution failed: access denied.");
             return AccessDeniedError;
         }
         catch (Exception exception) when (
             exception is DirectoryNotFoundException or FileNotFoundException)
         {
-            this._logger.LogDebug(
-                exception,
-                "Path resolution for {Path} failed: the directory does not exist.",
-                PathSanitizer.RedactHomeDirectory(path));
+            this._logger.LogDebug(exception, "Path resolution failed: the directory does not exist.");
             return PathNotFoundError;
         }
         catch (Exception exception) when (

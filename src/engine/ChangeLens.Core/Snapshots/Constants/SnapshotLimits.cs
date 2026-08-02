@@ -6,7 +6,7 @@ namespace ChangeLens.Core.Snapshots.Constants;
 internal static class SnapshotLimits
 {
     /// <summary>Gets the total budget shared by every Git call in one capture.</summary>
-    internal static readonly TimeSpan CaptureTimeout = TimeSpan.FromSeconds(60);
+    internal static readonly TimeSpan CaptureTimeoutInSeconds = TimeSpan.FromSeconds(60);
 
     /// <summary>Defines the maximum standard-output size for a capture command.</summary>
     internal const int MaximumCaptureOutputBytes = 8 * 1024 * 1024;

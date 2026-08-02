@@ -17,11 +17,18 @@ internal static class ComparisonFileRecordComposer
         IReadOnlyList<GitWorkingTreeRecord> workingTree)
     {
         var records = new List<ComparisonFileRecord>(committedFiles.Count + workingTree.Count);
-        records.AddRange(committedFiles.Select(record => new ComparisonFileRecord(record.Path, record.OriginalPath, true,
-            false, false, false, false)));
-        records.AddRange(workingTree.Where(record => !record.IsIgnored).Select(record => new ComparisonFileRecord(
-            record.Path, record.OriginalPath, false, record.IsStaged, record.IsUnstaged, record.IsUntracked,
-            record.IsConflicted)));
+
+        records
+            .AddRange(committedFiles
+            .Select(record => new ComparisonFileRecord(
+                record.Path, record.OriginalPath, true, false, false, false, false)));
+
+        records
+            .AddRange(workingTree
+            .Where(record => !record.IsIgnored)
+            .Select(record => new ComparisonFileRecord(
+                record.Path, record.OriginalPath, false, record.IsStaged, record.IsUnstaged, record.IsUntracked, record.IsConflicted)));
+
         return records;
     }
 }

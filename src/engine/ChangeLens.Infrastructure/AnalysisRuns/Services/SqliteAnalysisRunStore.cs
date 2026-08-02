@@ -259,7 +259,7 @@ public sealed class SqliteAnalysisRunStore(
         long capturedAtUnixMilliseconds,
         CancellationToken cancellationToken)
     {
-        var identity = await context.AnalysisRuns.AsNoTracking().Where(run => run.RunId == runId)
+        var analysis = await context.AnalysisRuns.AsNoTracking().Where(run => run.RunId == runId)
             .Select(run => new
             {
                 run.CanonicalRepositoryPathKey,
@@ -269,28 +269,30 @@ public sealed class SqliteAnalysisRunStore(
             })
             .FirstOrDefaultAsync(cancellationToken);
 
-        if (identity is null)
+        if (analysis is null)
         {
             return OperationError.NotFound("No analysis run matches the supplied identifier.", AnalysisErrorCode.UnknownRun);
         }
 
         var manifest = capture.Manifest;
-        if (!StringComparer.Ordinal.Equals(identity.CanonicalRepositoryPathKey, manifest.CanonicalRepositoryPathKey) ||
-            !StringComparer.Ordinal.Equals(identity.Target, manifest.TargetReference) ||
-            !StringComparer.Ordinal.Equals(identity.TargetRevision, manifest.TargetRevision) ||
-            !StringComparer.Ordinal.Equals(identity.HeadRevision, manifest.HeadRevision))
+        if (!StringComparer.Ordinal.Equals(analysis.CanonicalRepositoryPathKey, manifest.CanonicalRepositoryPathKey) ||
+            !StringComparer.Ordinal.Equals(analysis.Target, manifest.TargetReference) ||
+            !StringComparer.Ordinal.Equals(analysis.TargetRevision, manifest.TargetRevision) ||
+            !StringComparer.Ordinal.Equals(analysis.HeadRevision, manifest.HeadRevision))
         {
             logger.LogError("Analysis run {RunId} rejected a capture whose manifest identity does not match its accepted run.", runId);
-            return OperationError.InvalidOperation("The captured manifest does not match the accepted run identity.",
-                AnalysisFailureCode.UnexpectedFailure);
+            return OperationError.InvalidOperation(
+                "The captured manifest does not match the accepted run identity.", AnalysisFailureCode.UnexpectedFailure);
         }
 
         var counts = capture.ExcludedUncommittedCounts;
         await using var transaction = await context.Database.BeginTransactionAsync(cancellationToken);
 
         var affected = await context.AnalysisRuns
-            .Where(run => run.RunId == runId && run.State == AnalysisRunState.Capturing
-                && run.CapturedAtUnixMilliseconds == null && run.CancellationRequestedAtUnixMilliseconds == null)
+            .Where(run => run.RunId == runId
+                          && run.State == AnalysisRunState.Capturing
+                          && run.CapturedAtUnixMilliseconds == null
+                          && run.CancellationRequestedAtUnixMilliseconds == null)
             .ExecuteUpdateAsync(
                 setters => setters
                     .SetProperty(run => run.CapturedAtUnixMilliseconds, capturedAtUnixMilliseconds)
@@ -328,8 +330,9 @@ public sealed class SqliteAnalysisRunStore(
         await context.SaveChangesAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);
 
-        logger.LogInformation("Analysis run {RunId} committed snapshot {SnapshotId} with {EntryCount} manifest entries.", runId,
-            manifest.SnapshotId, manifest.Entries.Count);
+        logger.LogInformation("Analysis run {RunId} committed snapshot {SnapshotId} with {EntryCount} manifest entries.",
+            runId, manifest.SnapshotId, manifest.Entries.Count);
+
         return true;
     }
 

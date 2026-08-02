@@ -222,7 +222,7 @@ internal static class GitComparisonOutputParser
                 return InspectionFailed;
             }
 
-            if (parsed.Status != 'R')
+            if (parsed.Status != GitRawDiffStatus.Renamed)
             {
                 if (!reader.TryReadNulField(out var path) || path.IsEmpty)
                 {
@@ -373,7 +373,7 @@ internal static class GitComparisonOutputParser
             }
 
             parsed = new GitRawDiffHeader(sourceMode.ToString(), targetMode.ToString(), sourceOid.ToString(),
-                targetOid.ToString(), status[0]);
+                targetOid.ToString(), ToStatus(status[0]));
             return true;
         }
 
@@ -385,9 +385,23 @@ internal static class GitComparisonOutputParser
         }
 
         parsed = new GitRawDiffHeader(sourceMode.ToString(), targetMode.ToString(), sourceOid.ToString(), targetOid.ToString(),
-            'R');
+            GitRawDiffStatus.Renamed);
         return true;
     }
+
+    /// <summary>
+    ///     Maps one nonrename raw-diff status letter to its change category.
+    /// </summary>
+    /// <param name="status">The raw status letter, already confirmed to be <c>A</c>, <c>D</c>, <c>M</c>, or <c>T</c>.</param>
+    /// <returns>The mapped change category.</returns>
+    private static GitRawDiffStatus ToStatus(char status) => status switch
+    {
+        'A' => GitRawDiffStatus.Added,
+        'D' => GitRawDiffStatus.Deleted,
+        'M' => GitRawDiffStatus.Modified,
+        'T' => GitRawDiffStatus.TypeChanged,
+        _ => throw new ArgumentOutOfRangeException(nameof(status), status, "The raw diff status is not supported."),
+    };
 
     private static bool TryParseWorkingTreeEntry(
         ReadOnlySpan<char> entry,

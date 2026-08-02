@@ -66,15 +66,15 @@ public sealed class GitSnapshotCaptureService(
 
         cancellationToken.ThrowIfCancellationRequested();
         var startedAt = Stopwatch.GetTimestamp();
-        using var deadline = new CancellationTokenSource(SnapshotLimits.CaptureTimeout);
+        using var deadline = new CancellationTokenSource(SnapshotLimits.CaptureTimeoutInSeconds);
         using var actionCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, deadline.Token);
 
         try
         {
             var canonicalPath = run.Repository.CanonicalPath;
 
-            var targetRevisionResult = await this.RunAsync(canonicalPath, startedAt,
-                ["rev-parse", "--verify", run.Comparison.Target + "^{commit}"], actionCancellation.Token);
+            var targetRevisionResult = await this.RunAsync(
+                canonicalPath, startedAt, ["rev-parse", "--verify", run.Comparison.Target + "^{commit}"], actionCancellation.Token);
             if (targetRevisionResult.IsFailure)
             {
                 return Result.ErrorFromResult<SnapshotCapture>(targetRevisionResult);
@@ -134,8 +134,8 @@ public sealed class GitSnapshotCaptureService(
 
             var mergeBaseRevision = parsedMergeBases.Data[0];
 
-            var committedFilesResult = await this.RunAsync(canonicalPath, startedAt,
-                GitComparisonCommandArguments.RawDiff(mergeBaseRevision, headRevision), actionCancellation.Token);
+            var committedFilesResult = await this.RunAsync(
+                canonicalPath, startedAt, GitComparisonCommandArguments.RawDiff(mergeBaseRevision, headRevision), actionCancellation.Token);
             if (committedFilesResult.IsFailure)
             {
                 return Result.ErrorFromResult<SnapshotCapture>(committedFilesResult);
@@ -149,13 +149,11 @@ public sealed class GitSnapshotCaptureService(
 
             if (parsedCommittedFiles.Data!.Count > SnapshotLimits.MaximumManifestEntries)
             {
-                this._logger.LogWarning("Snapshot capture for run {RunId} exceeded the supported manifest entry " +
-                    "limit.", run.RunId);
+                this._logger.LogWarning("Snapshot capture for run {RunId} exceeded the supported manifest entry limit.", run.RunId);
                 return TooLargeError;
             }
 
-            var statusResult = await this.RunAsync(canonicalPath, startedAt, GitComparisonCommandArguments.Status(),
-                actionCancellation.Token);
+            var statusResult = await this.RunAsync(canonicalPath, startedAt, GitComparisonCommandArguments.Status(), actionCancellation.Token);
             if (statusResult.IsFailure)
             {
                 return Result.ErrorFromResult<SnapshotCapture>(statusResult);
@@ -179,10 +177,18 @@ public sealed class GitSnapshotCaptureService(
                 summary.UnstagedFileCount, summary.UntrackedFileCount, summary.ConflictedFileCount);
 
             var entries = parsedCommittedFiles.Data!.Select(ToEntry).ToArray();
-            var manifestHash = SnapshotManifestFingerprint.Create(run.Repository.CanonicalRepositoryPathKey, run.Comparison.Target,
-                targetRevision, headRevision, mergeBaseRevision, entries);
-            var manifest = new SnapshotManifest(Guid.NewGuid(), manifestHash, run.Repository.CanonicalRepositoryPathKey,
-                run.Comparison.Target, targetRevision, headRevision, mergeBaseRevision, entries);
+            var manifestHash = SnapshotManifestFingerprint.Create(
+                run.Repository.CanonicalRepositoryPathKey, run.Comparison.Target, targetRevision, headRevision, mergeBaseRevision, entries);
+
+            var manifest = new SnapshotManifest(
+                Guid.NewGuid(),
+                manifestHash,
+                run.Repository.CanonicalRepositoryPathKey,
+                run.Comparison.Target,
+                targetRevision,
+                headRevision,
+                mergeBaseRevision,
+                entries);
 
             this._logger.LogInformation("Captured snapshot for run {RunId} with {EntryCount} entries and " +
                 "{ExcludedUncommittedTotal} excluded uncommitted lineages in {ElapsedMilliseconds:0.000} ms.", run.RunId,
@@ -209,10 +215,7 @@ public sealed class GitSnapshotCaptureService(
     /// </param>
     /// <returns>A task that represents the asynchronous operation. The task result contains bounded Git output.</returns>
     private Task<Result<GitCommandOutput>> RunAsync(
-        string canonicalPath,
-        long startedAt,
-        IReadOnlyList<string> subcommandArguments,
-        CancellationToken cancellationToken)
+        string canonicalPath, long startedAt, IReadOnlyList<string> subcommandArguments, CancellationToken cancellationToken)
     {
         var remaining = Remaining(startedAt);
         if (remaining <= TimeSpan.Zero)
@@ -249,22 +252,21 @@ public sealed class GitSnapshotCaptureService(
     /// <param name="record">The parsed committed file record. Cannot be <see langword="null" />.</param>
     /// <returns>The manifest entry carrying the record's exact Git facts.</returns>
     private static SnapshotManifestEntry ToEntry(GitComparisonFileRecord record) =>
-        new(record.Path, record.OriginalPath, ToCategory(record.Status), record.SourceMode, record.TargetMode,
-            record.SourceObjectId, record.TargetObjectId);
+        new(record.Path, record.OriginalPath, ToCategory(record.Status), record.SourceMode, record.TargetMode, record.SourceObjectId, record.TargetObjectId);
 
     /// <summary>
-    ///     Maps one raw-diff status character to its snapshot change category.
+    ///     Maps one Git raw-diff status to its snapshot change category.
     /// </summary>
-    /// <param name="status">The raw status character.</param>
+    /// <param name="status">The Git raw-diff status.</param>
     /// <returns>The mapped category.</returns>
     /// <exception cref="ArgumentOutOfRangeException"><paramref name="status" /> is not a supported raw-diff status.</exception>
-    private static SnapshotChangeCategory ToCategory(char status) => status switch
+    private static SnapshotChangeCategory ToCategory(GitRawDiffStatus status) => status switch
     {
-        'A' => SnapshotChangeCategory.Added,
-        'D' => SnapshotChangeCategory.Deleted,
-        'M' => SnapshotChangeCategory.Modified,
-        'T' => SnapshotChangeCategory.TypeChanged,
-        'R' => SnapshotChangeCategory.Renamed,
+        GitRawDiffStatus.Added => SnapshotChangeCategory.Added,
+        GitRawDiffStatus.Deleted => SnapshotChangeCategory.Deleted,
+        GitRawDiffStatus.Modified => SnapshotChangeCategory.Modified,
+        GitRawDiffStatus.TypeChanged => SnapshotChangeCategory.TypeChanged,
+        GitRawDiffStatus.Renamed => SnapshotChangeCategory.Renamed,
         _ => throw new ArgumentOutOfRangeException(nameof(status), status, "The raw diff status is not supported."),
     };
 
@@ -274,14 +276,14 @@ public sealed class GitSnapshotCaptureService(
     /// <param name="output">The captured merge-base output. Cannot be <see langword="null" />.</param>
     /// <returns><see langword="true" /> for exit code one and two empty streams.</returns>
     private static bool IsQuietNoMergeBase(GitCommandOutput output) =>
-        output.ExitCode == 1 && output.StandardOutput.Length == 0 && output.StandardError.Length == 0;
+        output is { ExitCode: 1, StandardOutput.Length: 0, StandardError.Length: 0 };
 
     /// <summary>
     ///     Calculates the time remaining in the single capture budget.
     /// </summary>
     /// <param name="startedAt">The monotonic timestamp at which capture began.</param>
     /// <returns>The remaining duration, which can be nonpositive.</returns>
-    private static TimeSpan Remaining(long startedAt) => SnapshotLimits.CaptureTimeout - Stopwatch.GetElapsedTime(startedAt);
+    private static TimeSpan Remaining(long startedAt) => SnapshotLimits.CaptureTimeoutInSeconds - Stopwatch.GetElapsedTime(startedAt);
 
     /// <summary>
     ///     Creates the immutable terminal-error policy for one capture command.

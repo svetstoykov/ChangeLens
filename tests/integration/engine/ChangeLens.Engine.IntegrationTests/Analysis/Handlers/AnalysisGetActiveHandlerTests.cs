@@ -74,6 +74,7 @@ public sealed class AnalysisGetActiveHandlerTests
             Guid.Parse("5298a1b2-3c4d-4e5f-8a9b-0123456789ab"),
             "change_lens",
             "/projects/change_lens",
+            "/projects/change_lens",
             "0123456789abcdef0123456789abcdef01234567"),
         new AnalysisComparisonIdentity(
             "refs/heads/feature/comparison",

@@ -344,7 +344,8 @@ public sealed class SqliteAnalysisRunStore(
         return new AnalysisRunDetail(
             run.RunId,
             run.State,
-            new AnalysisRepositoryIdentity(run.RepositoryId, run.RepositoryDisplayName, run.CanonicalRepositoryPath, run.HeadRevision),
+            new AnalysisRepositoryIdentity(run.RepositoryId, run.RepositoryDisplayName, run.CanonicalRepositoryPath,
+                run.CanonicalRepositoryPathKey, run.HeadRevision),
             new AnalysisComparisonIdentity(run.Target, run.TargetRevision, run.FreshnessToken),
             run.RequestedAtUnixMilliseconds,
             run.CaptureStartedAtUnixMilliseconds,

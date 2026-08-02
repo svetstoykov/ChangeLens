@@ -7,6 +7,8 @@ using ChangeLens.Core.Git.Interfaces;
 using ChangeLens.Core.Git.Services;
 using ChangeLens.Core.LocalState.Interfaces;
 using ChangeLens.Core.LocalState.Services;
+using ChangeLens.Core.Snapshots.Interfaces;
+using ChangeLens.Core.Snapshots.Services;
 using ChangeLens.Engine.AnalysisRuns.Handlers;
 using ChangeLens.Engine.AnalysisRuns.Hosting;
 using ChangeLens.Engine.AnalysisRuns.Interfaces;
@@ -142,6 +144,7 @@ internal static class EngineHostApplicationBuilderExtensions
 
         builder.Services.AddSingleton<IAnalysisProcessorControl, AnalysisProcessorControl>();
         builder.Services.AddScoped<IAnalysisRunStore, SqliteAnalysisRunStore>();
+        builder.Services.AddScoped<ISnapshotCaptureService, GitSnapshotCaptureService>();
         builder.Services.AddScoped<IAnalysisPipeline, ShallowAnalysisPipeline>();
         builder.Services.AddScoped<IAnalysisRunCoordinator, AnalysisRunCoordinator>();
         builder.Services.AddScoped<IRepositoryBusyGuard, RepositoryBusyGuard>();

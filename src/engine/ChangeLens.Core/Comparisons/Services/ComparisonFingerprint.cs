@@ -1,9 +1,8 @@
-using System.Buffers.Binary;
 using System.Globalization;
 using System.Security.Cryptography;
-using System.Text;
 using ChangeLens.Core.Comparisons.Models;
 using ChangeLens.Core.Git.Models;
+using ChangeLens.Core.Hashing.Services;
 using ChangeLens.Core.Repositories.Models;
 
 namespace ChangeLens.Core.Comparisons.Services;
@@ -13,11 +12,6 @@ namespace ChangeLens.Core.Comparisons.Services;
 /// </summary>
 internal static class ComparisonFingerprint
 {
-    /// <summary>
-    ///     Rejects unpaired UTF-16 surrogates instead of replacing them in fingerprint fields.
-    /// </summary>
-    private static readonly UTF8Encoding StrictUtf8 = new(false, true);
-
     /// <summary>
     ///     Creates a target-set token bound to one repository and exact paging query.
     /// </summary>
@@ -38,12 +32,12 @@ internal static class ComparisonFingerprint
         ArgumentNullException.ThrowIfNull(targets);
 
         using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
-        AppendField(hash, "comparison.target-set.v1");
-        AppendField(hash, "repository.canonical-path");
-        AppendField(hash, canonicalPath);
-        AppendNullableField(hash, "query", query);
-        AppendField(hash, "unsupported-target-count");
-        AppendField(hash, unsupportedTargetCount.ToString(CultureInfo.InvariantCulture));
+        CanonicalFieldHasher.AppendField(hash, "comparison.target-set.v1");
+        CanonicalFieldHasher.AppendField(hash, "repository.canonical-path");
+        CanonicalFieldHasher.AppendField(hash, canonicalPath);
+        CanonicalFieldHasher.AppendNullableField(hash, "query", query);
+        CanonicalFieldHasher.AppendField(hash, "unsupported-target-count");
+        CanonicalFieldHasher.AppendField(hash, unsupportedTargetCount.ToString(CultureInfo.InvariantCulture));
 
         var orderedTargets = targets
             .OrderBy(target => target.FullName, StringComparer.Ordinal)
@@ -52,19 +46,19 @@ internal static class ComparisonFingerprint
             .ThenBy(target => target.Revision, StringComparer.Ordinal)
             .ToArray();
 
-        AppendField(hash, "target-count");
-        AppendField(hash, orderedTargets.Length.ToString(CultureInfo.InvariantCulture));
+        CanonicalFieldHasher.AppendField(hash, "target-count");
+        CanonicalFieldHasher.AppendField(hash, orderedTargets.Length.ToString(CultureInfo.InvariantCulture));
 
         foreach (var target in orderedTargets)
         {
-            AppendField(hash, "target");
-            AppendField(hash, target.Kind == ComparisonTargetKind.Local ? "local" : "remote-tracking");
-            AppendField(hash, target.Name);
-            AppendField(hash, target.FullName);
-            AppendField(hash, target.Revision);
+            CanonicalFieldHasher.AppendField(hash, "target");
+            CanonicalFieldHasher.AppendField(hash, target.Kind == ComparisonTargetKind.Local ? "local" : "remote-tracking");
+            CanonicalFieldHasher.AppendField(hash, target.Name);
+            CanonicalFieldHasher.AppendField(hash, target.FullName);
+            CanonicalFieldHasher.AppendField(hash, target.Revision);
         }
 
-        return Convert.ToHexString(hash.GetHashAndReset()).ToLowerInvariant();
+        return CanonicalFieldHasher.Complete(hash);
     }
 
     /// <summary>
@@ -87,15 +81,15 @@ internal static class ComparisonFingerprint
         ArgumentNullException.ThrowIfNull(workingTree);
 
         using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
-        AppendField(hash, "comparison.freshness.v1");
-        AppendField(hash, "repository.canonical-path");
-        AppendField(hash, repository.CanonicalPath);
+        CanonicalFieldHasher.AppendField(hash, "comparison.freshness.v1");
+        CanonicalFieldHasher.AppendField(hash, "repository.canonical-path");
+        CanonicalFieldHasher.AppendField(hash, repository.CanonicalPath);
         AppendHead(hash, repository.Head);
-        AppendField(hash, "target");
-        AppendField(hash, target.FullName);
-        AppendField(hash, target.Revision);
-        AppendField(hash, "target-set-token");
-        AppendField(hash, targetSetToken);
+        CanonicalFieldHasher.AppendField(hash, "target");
+        CanonicalFieldHasher.AppendField(hash, target.FullName);
+        CanonicalFieldHasher.AppendField(hash, target.Revision);
+        CanonicalFieldHasher.AppendField(hash, "target-set-token");
+        CanonicalFieldHasher.AppendField(hash, targetSetToken);
 
         var orderedRecords = workingTree
             .OrderBy(record => record.Path, StringComparer.Ordinal)
@@ -108,22 +102,22 @@ internal static class ComparisonFingerprint
             .ThenBy(record => record.IsIgnored)
             .ToArray();
 
-        AppendField(hash, "working-tree-record-count");
-        AppendField(hash, orderedRecords.Length.ToString(CultureInfo.InvariantCulture));
+        CanonicalFieldHasher.AppendField(hash, "working-tree-record-count");
+        CanonicalFieldHasher.AppendField(hash, orderedRecords.Length.ToString(CultureInfo.InvariantCulture));
 
         foreach (var record in orderedRecords)
         {
-            AppendField(hash, "working-tree-record");
-            AppendField(hash, record.Path);
-            AppendNullableField(hash, "original-path", record.OriginalPath);
-            AppendBooleanField(hash, "staged", record.IsStaged);
-            AppendBooleanField(hash, "unstaged", record.IsUnstaged);
-            AppendBooleanField(hash, "untracked", record.IsUntracked);
-            AppendBooleanField(hash, "conflicted", record.IsConflicted);
-            AppendBooleanField(hash, "ignored", record.IsIgnored);
+            CanonicalFieldHasher.AppendField(hash, "working-tree-record");
+            CanonicalFieldHasher.AppendField(hash, record.Path);
+            CanonicalFieldHasher.AppendNullableField(hash, "original-path", record.OriginalPath);
+            CanonicalFieldHasher.AppendBooleanField(hash, "staged", record.IsStaged);
+            CanonicalFieldHasher.AppendBooleanField(hash, "unstaged", record.IsUnstaged);
+            CanonicalFieldHasher.AppendBooleanField(hash, "untracked", record.IsUntracked);
+            CanonicalFieldHasher.AppendBooleanField(hash, "conflicted", record.IsConflicted);
+            CanonicalFieldHasher.AppendBooleanField(hash, "ignored", record.IsIgnored);
         }
 
-        return Convert.ToHexString(hash.GetHashAndReset()).ToLowerInvariant();
+        return CanonicalFieldHasher.Complete(hash);
     }
 
     private static void AppendHead(
@@ -135,13 +129,13 @@ internal static class ComparisonFingerprint
         switch (head)
         {
             case BranchRepositoryHead branch:
-                AppendField(hash, "head.branch");
-                AppendField(hash, branch.Name);
-                AppendField(hash, branch.Revision);
+                CanonicalFieldHasher.AppendField(hash, "head.branch");
+                CanonicalFieldHasher.AppendField(hash, branch.Name);
+                CanonicalFieldHasher.AppendField(hash, branch.Revision);
                 break;
             case DetachedRepositoryHead detached:
-                AppendField(hash, "head.detached");
-                AppendField(hash, detached.Revision);
+                CanonicalFieldHasher.AppendField(hash, "head.detached");
+                CanonicalFieldHasher.AppendField(hash, detached.Revision);
                 break;
             default:
                 throw new ArgumentOutOfRangeException(
@@ -149,47 +143,5 @@ internal static class ComparisonFingerprint
                     head.GetType(),
                     "The repository HEAD kind is not supported.");
         }
-    }
-
-    private static void AppendNullableField(
-        IncrementalHash hash,
-        string marker,
-        string? value)
-    {
-        AppendField(hash, marker);
-
-        if (value is null)
-        {
-            AppendField(hash, "absent");
-            return;
-        }
-
-        AppendField(hash, "present");
-        AppendField(hash, value);
-    }
-
-    private static void AppendBooleanField(
-        IncrementalHash hash,
-        string marker,
-        bool value)
-    {
-        AppendField(hash, marker);
-        AppendField(hash, value ? "true" : "false");
-    }
-
-    /// <summary>
-    ///     Appends one UTF-8 field after its four-byte big-endian byte length.
-    /// </summary>
-    /// <param name="hash">The incremental SHA-256 hash that receives the canonical field.</param>
-    /// <param name="value">The field value to encode.</param>
-    private static void AppendField(
-        IncrementalHash hash,
-        string value)
-    {
-        var bytes = StrictUtf8.GetBytes(value);
-        Span<byte> length = stackalloc byte[sizeof(int)];
-        BinaryPrimitives.WriteInt32BigEndian(length, bytes.Length);
-        hash.AppendData(length);
-        hash.AppendData(bytes);
     }
 }

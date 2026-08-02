@@ -105,8 +105,7 @@ public sealed class GitSnapshotCaptureService(
             if (!StringComparer.Ordinal.Equals(targetRevision, run.Comparison.TargetRevision) ||
                 !StringComparer.Ordinal.Equals(headRevision, run.Repository.HeadRevision))
             {
-                this._logger.LogWarning("Snapshot capture for run {RunId} was rejected as stale because the target or " +
-                    "HEAD revision changed since acceptance.", run.RunId);
+                this._logger.LogWarning("Snapshot capture for run {RunId} was rejected as stale because the target or HEAD revision changed since acceptance.", run.RunId);
                 return StaleError;
             }
 
@@ -119,16 +118,14 @@ public sealed class GitSnapshotCaptureService(
 
             if (IsQuietNoMergeBase(mergeBaseResult.Data!))
             {
-                this._logger.LogWarning("Snapshot capture for run {RunId} found no merge base between the accepted " +
-                    "revisions.", run.RunId);
+                this._logger.LogWarning("Snapshot capture for run {RunId} found no merge base between the accepted revisions.", run.RunId);
                 return CaptureFailedError;
             }
 
             var parsedMergeBases = GitComparisonOutputParser.ParseMergeBases(mergeBaseResult.Data!);
             if (parsedMergeBases.IsFailure || parsedMergeBases.Data!.Count != 1)
             {
-                this._logger.LogWarning("Snapshot capture for run {RunId} found an unexpected number of merge bases " +
-                    "between the accepted revisions.", run.RunId);
+                this._logger.LogWarning("Snapshot capture for run {RunId} found an unexpected number of merge bases between the accepted revisions.", run.RunId);
                 return CaptureFailedError;
             }
 
@@ -252,7 +249,8 @@ public sealed class GitSnapshotCaptureService(
     /// <param name="record">The parsed committed file record. Cannot be <see langword="null" />.</param>
     /// <returns>The manifest entry carrying the record's exact Git facts.</returns>
     private static SnapshotManifestEntry ToEntry(GitComparisonFileRecord record) =>
-        new(record.Path, record.OriginalPath, ToCategory(record.Status), record.SourceMode, record.TargetMode, record.SourceObjectId, record.TargetObjectId);
+        new(record.Path, record.OriginalPath, ToCategory(record.Status), record.SourceMode, record.TargetMode,
+            record.SourceObjectId, record.TargetObjectId);
 
     /// <summary>
     ///     Maps one Git raw-diff status to its snapshot change category.

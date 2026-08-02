@@ -1,8 +1,8 @@
 using System.Diagnostics;
 using System.Globalization;
 using System.Text.Json;
-using System.Text.RegularExpressions;
 using ChangeLens.Core.Results.Models;
+using ChangeLens.Engine.IntegrationTests.Protocol.Support;
 using ChangeLens.Engine.IntegrationTests.Support;
 using ChangeLens.Infrastructure.FileSystem.Services;
 using Xunit;
@@ -12,7 +12,7 @@ namespace ChangeLens.Engine.IntegrationTests.Protocol;
 /// <summary>
 ///     Verifies repository and local-state behavior through the real Engine process protocol.
 /// </summary>
-public sealed partial class RepositoryOpenProtocolTests
+public sealed class RepositoryOpenProtocolTests
 {
     /// <summary>
     ///     Verifies repository history, preferred target, theme, restoration, and removal in one real Engine process.
@@ -549,6 +549,45 @@ public sealed partial class RepositoryOpenProtocolTests
         }
     }
 
+    /// <summary>
+    ///     Verifies a failed path resolution traces the failure without naming the path an operator can see.
+    /// </summary>
+    /// <returns>A task that represents the asynchronous operation.</returns>
+    [Fact]
+    public async Task EngineLogsPathResolutionFailureWithoutTheSelectedPathAboveDebug()
+    {
+        var temporaryRoot = CreateTemporaryRoot();
+        var logDirectory = Path.Combine(temporaryRoot, "logs");
+        const string missingSegment = "sensitive missing path";
+
+        try
+        {
+            using var engine = StartEngine(logDirectory, redirectStandardError: true);
+            var request = CreateOpenRequest(
+                "repository-missing-path-request", Path.Combine(temporaryRoot, missingSegment));
+
+            await engine.StandardInput.WriteLineAsync(request);
+            engine.StandardInput.Close();
+
+            using var response = await ReadResponseAsync(engine);
+            await WaitForExitAsync(engine);
+            var standardError = await engine.StandardError.ReadToEndAsync(
+                TestContext.Current.CancellationToken);
+            var logFile = Assert.Single(Directory.GetFiles(logDirectory, "changelens-engine-*.log"));
+            var fileLog = await File.ReadAllTextAsync(
+                logFile,
+                TestContext.Current.CancellationToken);
+
+            Assert.Equal("repository.pathNotFound", FirstErrorCode(response));
+            AssertSafeResolutionFailureLog(standardError, missingSegment);
+            AssertSafeResolutionFailureLog(fileLog, missingSegment);
+        }
+        finally
+        {
+            DeleteTemporaryRoot(temporaryRoot);
+        }
+    }
+
     private static string GitFixtureExecutablePath =>
         Path.Combine(
             AppContext.BaseDirectory,
@@ -588,49 +627,30 @@ public sealed partial class RepositoryOpenProtocolTests
         Assert.Contains("repository.notGitRepository", log, StringComparison.Ordinal);
         Assert.Contains(" in ", log, StringComparison.Ordinal);
         Assert.Contains(" ms.", log, StringComparison.Ordinal);
-        Assert.DoesNotContain(selectedPath, InformationAndAbove(log), StringComparison.Ordinal);
+        Assert.DoesNotContain(selectedPath, EngineLogEntries.InformationAndAbove(log), StringComparison.Ordinal);
         Assert.DoesNotContain("fatal: not a git repository", log, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain(request, log, StringComparison.Ordinal);
         Assert.DoesNotContain(response, log, StringComparison.Ordinal);
     }
 
     /// <summary>
-    ///     Selects the log entries written at <c>Information</c> or above.
+    ///     Asserts a path-resolution failure is diagnosable at <c>Debug</c> and unnamed above it.
     /// </summary>
     /// <remarks>
-    ///     Local filesystem paths are sensitive and must never reach an operator-facing level, but the
-    ///     Git runner deliberately records full command arguments at <c>Debug</c> so a failing invocation
-    ///     can be reproduced.
+    ///     <para>
+    ///         The <c>Debug</c> assertion also proves the failing branch ran. Without it the level assertion
+    ///         would pass for a request that never reached path resolution at all.
+    ///     </para>
     /// </remarks>
     /// <param name="log">The captured log text.</param>
-    /// <returns>The log text with every <c>Debug</c> and <c>Verbose</c> entry removed.</returns>
-    private static string InformationAndAbove(string log)
+    /// <param name="missingSegment">The distinctive directory name of the unresolvable path.</param>
+    private static void AssertSafeResolutionFailureLog(string log, string missingSegment)
     {
-        var retained = new List<string>();
-        var inSuppressedEntry = false;
-
-        foreach (var line in log.Split('\n'))
-        {
-            if (EntryLevel().Match(AnsiEscapes().Replace(line, string.Empty)) is
-                { Success: true } entryStart)
-            {
-                inSuppressedEntry = entryStart.Groups["level"].Value is "DBG" or "VRB";
-            }
-
-            if (!inSuppressedEntry)
-            {
-                retained.Add(line);
-            }
-        }
-
-        return string.Join('\n', retained);
+        Assert.Contains("repository-missing-path-request", log, StringComparison.Ordinal);
+        Assert.Contains("repository.pathNotFound", log, StringComparison.Ordinal);
+        Assert.Contains(missingSegment, log, StringComparison.Ordinal);
+        Assert.DoesNotContain(missingSegment, EngineLogEntries.InformationAndAbove(log), StringComparison.Ordinal);
     }
-
-    [GeneratedRegex(@"^\[[^\]]* (?<level>[A-Z]{3})\] \[")]
-    private static partial Regex EntryLevel();
-
-    [GeneratedRegex(@"\x1B\[[0-9;]*m")]
-    private static partial Regex AnsiEscapes();
 
     private static void AssertProtocolError(
         JsonDocument response,

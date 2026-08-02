@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Globalization;
 using System.Text.Json;
+using ChangeLens.Engine.IntegrationTests.Protocol.Support;
 using ChangeLens.Engine.IntegrationTests.Support;
 using Xunit;
 
@@ -745,12 +746,30 @@ public sealed class ComparisonProtocolTests
         Assert.Equal(expectedNames.Order(StringComparer.Ordinal), actualNames);
     }
 
+    /// <summary>
+    ///     Asserts a captured log carries the correlation facts and none of the caller's sensitive values.
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         The selected path is checked against the operator-facing entries only, because <c>Debug</c>
+    ///         deliberately records the Git command arguments and path-resolution exceptions that reproduce a
+    ///         failing invocation. Every other value is checked against the whole log, at every level.
+    ///     </para>
+    /// </remarks>
+    /// <param name="log">The captured log text.</param>
+    /// <param name="listRequest">The target-listing request payload.</param>
+    /// <param name="listResponse">The target-listing response payload.</param>
+    /// <param name="freshnessRequest">The freshness-check request payload.</param>
+    /// <param name="freshnessResponse">The freshness-check response payload.</param>
+    /// <param name="sensitivePath">The selected repository path, permitted at <c>Debug</c> and below.</param>
+    /// <param name="sensitiveValues">The values that must not appear at any level.</param>
     private static void AssertSafeComparisonLog(
         string log,
         string listRequest,
         string listResponse,
         string freshnessRequest,
         string freshnessResponse,
+        string sensitivePath,
         params string[] sensitiveValues)
     {
         Assert.Contains("comparison-list-log-request", log, StringComparison.Ordinal);
@@ -763,6 +782,7 @@ public sealed class ComparisonProtocolTests
         Assert.DoesNotContain(listResponse, log, StringComparison.Ordinal);
         Assert.DoesNotContain(freshnessRequest, log, StringComparison.Ordinal);
         Assert.DoesNotContain(freshnessResponse, log, StringComparison.Ordinal);
+        Assert.DoesNotContain(sensitivePath, EngineLogEntries.InformationAndAbove(log), StringComparison.Ordinal);
 
         foreach (var value in sensitiveValues)
         {

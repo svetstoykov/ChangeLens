@@ -58,13 +58,14 @@ internal sealed class ComparisonCheckRemoteBaselineHandler(
             return ProtocolResponseFactory.FromResult(request.RequestId, Result.ErrorFromResult<RemoteBaselineResult>(checkResult));
         }
 
-        var result = checkResult.Data! switch
+        var baseline = checkResult.Data!;
+        var result = baseline.State switch
         {
-            { State: RemoteBaselineState.Current, RemoteRevision: { } revision } =>
+            RemoteBaselineState.Current when baseline.RemoteRevision is { } revision =>
                 Result.Success<RemoteBaselineResult>(new CurrentRemoteBaselineResult(revision)),
-            { State: RemoteBaselineState.Moved, RemoteRevision: { } revision } =>
+            RemoteBaselineState.Moved when baseline.RemoteRevision is { } revision =>
                 Result.Success<RemoteBaselineResult>(new MovedRemoteBaselineResult(revision)),
-            { State: RemoteBaselineState.NoRemote } =>
+            RemoteBaselineState.NoRemote =>
                 Result.Success<RemoteBaselineResult>(new NoRemoteRemoteBaselineResult()),
             _ => OperationError.InternalError("The remote baseline check result is not approved for the engine protocol.",
                 ComparisonErrorCode.UnmappedRemoteBaselineState),

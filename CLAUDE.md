@@ -2,6 +2,8 @@
 
 Repository instructions for ChangeLens live in `AGENTS.md`, which indexes bounded rule files under `docs/ai-rules/`.
 
+The entire `docs/` tree is local and gitignored. Never add, stage, or commit anything under `docs/`.
+
 The index and the two always-on rule files are imported below. Read any further file from the trigger table in `AGENTS.md` before starting work that matches its trigger.
 
 @AGENTS.md

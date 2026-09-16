@@ -123,8 +123,6 @@ internal static class EngineHostApplicationBuilderExtensions
         builder.Services.AddScoped<IGitCommandRunner>(services => services.GetRequiredService<GitCliCommandRunner>());
         builder.Services.AddScoped<IGitBinaryCommandRunner>(services => services.GetRequiredService<GitCliCommandRunner>());
         builder.Services.AddScoped<IGitRepositoryInspector, GitRepositoryInspector>();
-        builder.Services.AddSingleton(CreateFrozenGitTreeReaderOptions(builder.Configuration));
-        builder.Services.AddScoped<IFrozenGitTreeReaderFactory, FrozenGitTreeReaderFactory>();
     }
 
     /// <summary>Reads the configured bounds for frozen Git tree access.</summary>
@@ -190,6 +188,8 @@ internal static class EngineHostApplicationBuilderExtensions
 
         builder.Services.AddSingleton<IAnalysisProcessorControl, AnalysisProcessorControl>();
         builder.Services.AddScoped<IAnalysisRunStore, SqliteAnalysisRunStore>();
+        builder.Services.AddSingleton(CreateFrozenGitTreeReaderOptions(builder.Configuration));
+        builder.Services.AddScoped<IFrozenGitTreeReaderFactory, FrozenGitTreeReaderFactory>();
         builder.Services.AddScoped<ISnapshotCaptureService, GitSnapshotCaptureService>();
         builder.Services.AddScoped<IAnalysisPipeline, ShallowAnalysisPipeline>();
         builder.Services.AddScoped<IAnalysisRunCoordinator, AnalysisRunCoordinator>();

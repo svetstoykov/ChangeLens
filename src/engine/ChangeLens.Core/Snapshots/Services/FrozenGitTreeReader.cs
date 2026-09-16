@@ -7,6 +7,7 @@ using ChangeLens.Core.Results.Models;
 using ChangeLens.Core.Snapshots.Constants;
 using ChangeLens.Core.Snapshots.Interfaces;
 using ChangeLens.Core.Snapshots.Models;
+using Microsoft.Extensions.Logging;
 
 namespace ChangeLens.Core.Snapshots.Services;
 
@@ -24,6 +25,7 @@ internal sealed class FrozenGitTreeReader : IFrozenGitTreeReader
     private readonly AnalysisRepositoryIdentity _repository;
     private readonly SnapshotManifest _snapshot;
     private readonly FrozenGitTreeReaderOptions _options;
+    private readonly ILogger<FrozenGitTreeReader> _logger;
     private readonly HashSet<string> _manifestObjectIds;
     private readonly HashSet<string> _treeObjectIds = new(StringComparer.Ordinal);
 
@@ -34,23 +36,27 @@ internal sealed class FrozenGitTreeReader : IFrozenGitTreeReader
     /// <param name="repository">The accepted repository identity. Cannot be <see langword="null" />.</param>
     /// <param name="snapshot">The captured snapshot manifest. Cannot be <see langword="null" />.</param>
     /// <param name="options">The copied reader bounds. Cannot be <see langword="null" />.</param>
+    /// <param name="logger">The logger for reader outcomes. Cannot be <see langword="null" />.</param>
     /// <exception cref="ArgumentNullException">
     ///     <paramref name="commandRunner" />, <paramref name="repository" />, <paramref name="snapshot" />, or
-    ///     <paramref name="options" /> is <see langword="null" />.
+    ///     <paramref name="options" />, or <paramref name="logger" /> is <see langword="null" />.
     /// </exception>
     internal FrozenGitTreeReader(
         IGitBinaryCommandRunner commandRunner,
         AnalysisRepositoryIdentity repository,
         SnapshotManifest snapshot,
-        FrozenGitTreeReaderOptions options)
+        FrozenGitTreeReaderOptions options,
+        ILogger<FrozenGitTreeReader> logger)
     {
         ArgumentNullException.ThrowIfNull(commandRunner);
         ArgumentNullException.ThrowIfNull(repository);
         ArgumentNullException.ThrowIfNull(snapshot);
         ArgumentNullException.ThrowIfNull(options);
+        ArgumentNullException.ThrowIfNull(logger);
         this._commandRunner = commandRunner;
         this._repository = repository;
         this._snapshot = snapshot;
+        this._logger = logger;
         this._options = new FrozenGitTreeReaderOptions
         {
             MaximumBlobBytes = options.MaximumBlobBytes,
@@ -79,12 +85,12 @@ internal sealed class FrozenGitTreeReader : IFrozenGitTreeReader
 
         if (outputResult.Data!.ExitCode != 0)
         {
-            return StaleRevision(this._snapshot.HeadRevision);
+            return this.StaleRevision<FrozenGitTreeListing>("list-tree", this._snapshot.HeadRevision);
         }
 
         if (!TryDecode(outputResult.Data.StandardOutput, out var text))
         {
-            return ReadFailed("The captured Git tree listing was not valid UTF-8.");
+            return this.ReadFailed<FrozenGitTreeListing>("list-tree", "The captured Git tree listing was not valid UTF-8.");
         }
 
         var files = new List<FrozenGitTreeFile>();
@@ -114,7 +120,7 @@ internal sealed class FrozenGitTreeReader : IFrozenGitTreeReader
     {
         if (!this.IsAllowedTreeObject(objectId))
         {
-            return ObjectNotCaptured(objectId);
+            return this.ObjectNotCaptured<FrozenGitBlob>("read-blob", objectId);
         }
 
         return await this.ReadBlobCoreAsync(objectId, cancellationToken);
@@ -136,7 +142,7 @@ internal sealed class FrozenGitTreeReader : IFrozenGitTreeReader
         var afterObjectId = IsAbsentObjectId(entry.HeadObjectId) ? null : entry.HeadObjectId;
         if (beforeObjectId is null && afterObjectId is null)
         {
-            return ReadFailed<FrozenGitBlobDiff>("The captured manifest entry has no readable blob identity.");
+            return this.ReadFailed<FrozenGitBlobDiff>("read-blob-diff", "The captured manifest entry has no readable blob identity.");
         }
 
         FrozenGitBlob? before = null;
@@ -192,11 +198,12 @@ internal sealed class FrozenGitTreeReader : IFrozenGitTreeReader
 
         if (outputResult.Data!.ExitCode is not (0 or 1))
         {
-            return StaleObjectPair<FrozenGitBlobDiff>(beforeObjectId!, afterObjectId!);
+            return this.StaleObjectPair<FrozenGitBlobDiff>("read-blob-diff", beforeObjectId!, afterObjectId!);
         }
 
         if (!TryDecode(outputResult.Data.StandardOutput, out var patch))
         {
+            this.LogSkipped("read-blob-diff", FrozenGitBlobSkipReason.Binary);
             return Result.Success(new FrozenGitBlobDiff([], [], FrozenGitBlobSkipReason.Binary));
         }
 
@@ -220,12 +227,12 @@ internal sealed class FrozenGitTreeReader : IFrozenGitTreeReader
 
         if (commitsResult.Data!.ExitCode != 0)
         {
-            return StaleRevision<FrozenGitHistoryScan>(this._snapshot.MergeBaseRevision);
+            return this.StaleRevision<FrozenGitHistoryScan>("rev-list", this._snapshot.MergeBaseRevision);
         }
 
         if (!TryDecode(commitsResult.Data.StandardOutput, out var commitText))
         {
-            return ReadFailed<FrozenGitHistoryScan>("The captured Git history was not valid UTF-8.");
+            return this.ReadFailed<FrozenGitHistoryScan>("rev-list", "The captured Git history was not valid UTF-8.");
         }
 
         var commitIds = commitText.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
@@ -245,12 +252,12 @@ internal sealed class FrozenGitTreeReader : IFrozenGitTreeReader
 
             if (parentResult.Data!.ExitCode != 0)
             {
-                return StaleRevision<FrozenGitHistoryScan>(commitIds[ordinal]);
+                return this.StaleRevision<FrozenGitHistoryScan>("rev-list-parents", commitIds[ordinal]);
             }
 
             if (!TryDecode(parentResult.Data.StandardOutput, out var parentsText))
             {
-                return ReadFailed<FrozenGitHistoryScan>("The captured Git parent list was not valid UTF-8.");
+                return this.ReadFailed<FrozenGitHistoryScan>("rev-list-parents", "The captured Git parent list was not valid UTF-8.");
             }
 
             var parentIds = parentsText.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
@@ -277,17 +284,18 @@ internal sealed class FrozenGitTreeReader : IFrozenGitTreeReader
 
             if (changesResult.Data!.ExitCode != 0)
             {
-                return StaleRevision<FrozenGitHistoryScan>(commitIds[ordinal]);
+                return this.StaleRevision<FrozenGitHistoryScan>("diff-tree", commitIds[ordinal]);
             }
 
             if (!TryDecode(changesResult.Data.StandardOutput, out var changesText)
                 || !TryParseHistoryPaths(changesText, this._options.MaximumHistoryPathsPerCommit, out var paths, out var isOversized))
             {
-                return ReadFailed<FrozenGitHistoryScan>("The captured Git history changes could not be parsed.");
+                return this.ReadFailed<FrozenGitHistoryScan>("diff-tree", "The captured Git history changes could not be parsed.");
             }
 
             if (isOversized)
             {
+                this.LogBoundExceeded("diff-tree");
                 oversized++;
                 continue;
             }
@@ -313,11 +321,12 @@ internal sealed class FrozenGitTreeReader : IFrozenGitTreeReader
             || !TryDecode(sizeResult.Data.StandardOutput, out var sizeText)
             || !long.TryParse(sizeText.Trim(), NumberStyles.None, CultureInfo.InvariantCulture, out var size))
         {
-            return StaleObject<FrozenGitBlob>(objectId);
+            return this.StaleObject<FrozenGitBlob>("cat-file-size", objectId);
         }
 
         if (size > this._options.MaximumBlobBytes)
         {
+            this.LogBoundExceeded("cat-file-size");
             return Result.Success(new FrozenGitBlob(objectId, [], FrozenGitBlobSkipReason.TooLarge));
         }
 
@@ -337,12 +346,17 @@ internal sealed class FrozenGitTreeReader : IFrozenGitTreeReader
 
         if (outputResult.Data!.ExitCode != 0)
         {
-            return StaleObject<FrozenGitBlob>(objectId);
+            return this.StaleObject<FrozenGitBlob>("cat-file", objectId);
         }
 
         var bytes = outputResult.Data.StandardOutput;
         if (bytes.Length > this._options.MaximumBlobBytes || IsBinary(bytes))
         {
+            if (bytes.Length > this._options.MaximumBlobBytes)
+            {
+                this.LogBoundExceeded("cat-file");
+            }
+
             return Result.Success(new FrozenGitBlob(objectId, [], bytes.Length > this._options.MaximumBlobBytes
                 ? FrozenGitBlobSkipReason.TooLarge
                 : FrozenGitBlobSkipReason.Binary));
@@ -350,6 +364,7 @@ internal sealed class FrozenGitTreeReader : IFrozenGitTreeReader
 
         if (!TryDecode(bytes, out var text))
         {
+            this.LogSkipped("cat-file", FrozenGitBlobSkipReason.Binary);
             return Result.Success(new FrozenGitBlob(objectId, [], FrozenGitBlobSkipReason.Binary));
         }
 
@@ -376,6 +391,42 @@ internal sealed class FrozenGitTreeReader : IFrozenGitTreeReader
             cancellationToken);
         return result;
     }
+
+    private Result<T> ReadFailed<T>(string operation, string message) =>
+        this.LogFailure<T>(operation, OperationError.ExternalDependencyFailure(message, SnapshotErrorCode.ReadFailed));
+
+    private Result<T> StaleRevision<T>(string operation, string revision) =>
+        this.LogFailure<T>(operation, OperationError.Conflict(
+            $"The captured Git revision '{revision}' is unavailable. Re-run the analysis to capture a new snapshot.",
+            SnapshotErrorCode.StaleObject));
+
+    private Result<T> StaleObject<T>(string operation, string objectId) =>
+        this.LogFailure<T>(operation, OperationError.Conflict(
+            $"The captured Git object '{objectId}' is unavailable. Re-run the analysis to capture a new snapshot.",
+            SnapshotErrorCode.StaleObject));
+
+    private Result<T> StaleObjectPair<T>(string operation, string beforeObjectId, string afterObjectId) =>
+        this.LogFailure<T>(operation, OperationError.Conflict(
+            $"The captured Git objects '{beforeObjectId}' and '{afterObjectId}' are unavailable. Re-run the analysis to capture a new snapshot.",
+            SnapshotErrorCode.StaleObject));
+
+    private Result<T> ObjectNotCaptured<T>(string operation, string objectId) =>
+        this.LogFailure<T>(operation, OperationError.Validation(
+            $"The Git object '{objectId}' is not part of the captured snapshot.", SnapshotErrorCode.ObjectNotCaptured));
+
+    private Result<T> LogFailure<T>(string operation, OperationError error)
+    {
+        this._logger.LogWarning("Frozen Git snapshot operation {Operation} returned error code {ErrorCode}.", operation, error.Code);
+        return error;
+    }
+
+    private void LogBoundExceeded(string operation) => this._logger.LogWarning(
+        "Frozen Git snapshot operation {Operation} exceeded its configured bound with error code {ErrorCode}.",
+        operation, SnapshotErrorCode.ReadFailed);
+
+    private void LogSkipped(string operation, FrozenGitBlobSkipReason reason) => this._logger.LogWarning(
+        "Frozen Git snapshot operation {Operation} skipped content with reason {SkipReason} and error code {ErrorCode}.",
+        operation, reason, SnapshotErrorCode.ReadFailed);
 
     private static GitCommandErrorPolicy CommandErrors() => new(
         OperationError.Timeout("Frozen Git access exceeded its allowed time.", SnapshotErrorCode.ReadFailed),
@@ -573,37 +624,6 @@ internal sealed class FrozenGitTreeReader : IFrozenGitTreeReader
     private static int DiffOutputBytes() => 16 * 1024 * 1024;
 
     private static int HistoryOutputBytes() => 16 * 1024 * 1024;
-
-    private static Result<T> ReadFailed<T>(string message) =>
-        OperationError.ExternalDependencyFailure(message, SnapshotErrorCode.ReadFailed);
-
-    private static Result<FrozenGitTreeListing> ReadFailed(string message) =>
-        ReadFailed<FrozenGitTreeListing>(message);
-
-    private static Result<T> StaleRevision<T>(string revision) =>
-        OperationError.Conflict(
-            $"The captured Git revision '{revision}' is unavailable. Re-run the analysis to capture a new snapshot.",
-            SnapshotErrorCode.StaleObject);
-
-    private static Result<FrozenGitTreeListing> StaleRevision(string revision) =>
-        StaleRevision<FrozenGitTreeListing>(revision);
-
-    private static Result<T> StaleObject<T>(string objectId) =>
-        OperationError.Conflict(
-            $"The captured Git object '{objectId}' is unavailable. Re-run the analysis to capture a new snapshot.",
-            SnapshotErrorCode.StaleObject);
-
-    private static Result<T> StaleObjectPair<T>(string beforeObjectId, string afterObjectId) =>
-        OperationError.Conflict(
-            $"The captured Git objects '{beforeObjectId}' and '{afterObjectId}' are unavailable. Re-run the analysis to capture a new snapshot.",
-            SnapshotErrorCode.StaleObject);
-
-    private static Result<T> ObjectNotCaptured<T>(string objectId) =>
-        OperationError.Validation(
-            $"The Git object '{objectId}' is not part of the captured snapshot.", SnapshotErrorCode.ObjectNotCaptured);
-
-    private static Result<FrozenGitBlob> ObjectNotCaptured(string objectId) =>
-        ObjectNotCaptured<FrozenGitBlob>(objectId);
 
     private static readonly OperationError ReadOutputLimitError = OperationError.UnprocessableInput(
         "Frozen Git output exceeded the configured bound.", SnapshotErrorCode.ReadFailed);

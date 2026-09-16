@@ -4,6 +4,7 @@ using ChangeLens.Core.Results.Models;
 using ChangeLens.Core.Snapshots.Constants;
 using ChangeLens.Core.Snapshots.Interfaces;
 using ChangeLens.Core.Snapshots.Models;
+using Microsoft.Extensions.Logging;
 
 namespace ChangeLens.Core.Snapshots.Services;
 
@@ -12,15 +13,19 @@ namespace ChangeLens.Core.Snapshots.Services;
 /// </summary>
 /// <param name="commandRunner">The binary-safe installed Git command runner. Cannot be <see langword="null" />.</param>
 /// <param name="options">The configured frozen-read bounds. Cannot be <see langword="null" />.</param>
+/// <param name="loggerFactory">The logger factory for frozen-read outcomes. Cannot be <see langword="null" />.</param>
 /// <exception cref="ArgumentNullException">
-///     <paramref name="commandRunner" /> or <paramref name="options" /> is <see langword="null" />.
+///     <paramref name="commandRunner" />, <paramref name="options" />, or <paramref name="loggerFactory" /> is
+///     <see langword="null" />.
 /// </exception>
 public sealed class FrozenGitTreeReaderFactory(
     IGitBinaryCommandRunner commandRunner,
-    FrozenGitTreeReaderOptions options) : IFrozenGitTreeReaderFactory
+    FrozenGitTreeReaderOptions options,
+    ILoggerFactory loggerFactory) : IFrozenGitTreeReaderFactory
 {
     private readonly IGitBinaryCommandRunner _commandRunner = commandRunner ?? throw new ArgumentNullException(nameof(commandRunner));
     private readonly FrozenGitTreeReaderOptions _options = options ?? throw new ArgumentNullException(nameof(options));
+    private readonly ILoggerFactory _loggerFactory = loggerFactory ?? throw new ArgumentNullException(nameof(loggerFactory));
 
     /// <inheritdoc />
     public Result<IFrozenGitTreeReader> Open(
@@ -47,7 +52,13 @@ public sealed class FrozenGitTreeReaderFactory(
                 SnapshotErrorCode.InvalidSnapshot);
         }
 
-        return Result.Success<IFrozenGitTreeReader>(new FrozenGitTreeReader(this._commandRunner, repository, snapshot, this._options));
+        return Result.Success<IFrozenGitTreeReader>(
+            new FrozenGitTreeReader(
+                this._commandRunner,
+                repository,
+                snapshot,
+                this._options,
+                this._loggerFactory.CreateLogger<FrozenGitTreeReader>()));
     }
 
     private static bool ArePositive(FrozenGitTreeReaderOptions options) =>

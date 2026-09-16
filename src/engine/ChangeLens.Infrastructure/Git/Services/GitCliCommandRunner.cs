@@ -52,6 +52,7 @@ public sealed class GitCliCommandRunner : IGitCommandRunner, IGitBinaryCommandRu
 
     private readonly string _executablePath;
     private readonly ReadOnlyCollection<string> _executableArguments;
+    private readonly ReadOnlyDictionary<string, string> _processEnvironment;
     private readonly Func<Stream, int, CancellationToken, Task<byte[]>> _readBoundedAsync;
     private readonly ILogger<GitCliCommandRunner> _logger;
 
@@ -109,6 +110,34 @@ public sealed class GitCliCommandRunner : IGitCommandRunner, IGitBinaryCommandRu
     }
 
     /// <summary>
+    ///     Initializes the installed Git command runner with additional child-process environment values.
+    /// </summary>
+    /// <param name="processEnvironment">The additional child-process environment values. Cannot be <see langword="null" />.</param>
+    /// <param name="logger">The logger for command execution outcomes, or <see langword="null" /> to log nowhere.</param>
+    /// <exception cref="ArgumentNullException"><paramref name="processEnvironment" /> is <see langword="null" />.</exception>
+    internal GitCliCommandRunner(IReadOnlyDictionary<string, string> processEnvironment, ILogger<GitCliCommandRunner>? logger = null)
+        : this(GitProcessConstants.DefaultExecutable, [], processEnvironment, logger)
+    {
+    }
+
+    /// <summary>
+    ///     Initializes a Git command runner with additional child-process environment values.
+    /// </summary>
+    /// <param name="executablePath">The configured executable path or name. Cannot be <see langword="null" />.</param>
+    /// <param name="executableArguments">The immutable prefix arguments. Cannot be <see langword="null" />.</param>
+    /// <param name="processEnvironment">The additional child-process environment values. Cannot be <see langword="null" />.</param>
+    /// <param name="logger">The logger for command execution outcomes, or <see langword="null" /> to log nowhere.</param>
+    /// <exception cref="ArgumentNullException"><paramref name="processEnvironment" /> is <see langword="null" />.</exception>
+    internal GitCliCommandRunner(
+        string executablePath,
+        IEnumerable<string> executableArguments,
+        IReadOnlyDictionary<string, string> processEnvironment,
+        ILogger<GitCliCommandRunner>? logger = null)
+        : this(executablePath, executableArguments, ReadBoundedAsync, logger, ValidateProcessEnvironment(processEnvironment))
+    {
+    }
+
+    /// <summary>
     ///     This is an internal API that supports the library infrastructure and is not
     ///     subject to the same compatibility standards as public APIs. It may be changed
     ///     or removed without notice in any release.
@@ -126,6 +155,9 @@ public sealed class GitCliCommandRunner : IGitCommandRunner, IGitBinaryCommandRu
     /// <param name="logger">
     ///     The logger for command execution outcomes, or <see langword="null" /> to log nowhere.
     /// </param>
+    /// <param name="processEnvironment">
+    ///     The additional environment values applied to each child process, or <see langword="null" /> for none.
+    /// </param>
     /// <exception cref="ArgumentException">
     ///     <paramref name="executablePath" /> is empty or contains only white-space characters.
     ///     -or-
@@ -139,7 +171,8 @@ public sealed class GitCliCommandRunner : IGitCommandRunner, IGitBinaryCommandRu
         string executablePath,
         IEnumerable<string> executableArguments,
         Func<Stream, int, CancellationToken, Task<byte[]>> readBoundedAsync,
-        ILogger<GitCliCommandRunner>? logger = null)
+        ILogger<GitCliCommandRunner>? logger = null,
+        IReadOnlyDictionary<string, string>? processEnvironment = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(executablePath);
         ArgumentNullException.ThrowIfNull(executableArguments);
@@ -155,6 +188,9 @@ public sealed class GitCliCommandRunner : IGitCommandRunner, IGitBinaryCommandRu
 
         this._executablePath = executablePath;
         this._executableArguments = Array.AsReadOnly(copiedArguments);
+        this._processEnvironment = new ReadOnlyDictionary<string, string>(
+            processEnvironment?.ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal)
+                ?? new Dictionary<string, string>(StringComparer.Ordinal));
         this._readBoundedAsync = readBoundedAsync;
         this._logger = logger ?? NullLogger<GitCliCommandRunner>.Instance;
     }
@@ -170,15 +206,49 @@ public sealed class GitCliCommandRunner : IGitCommandRunner, IGitBinaryCommandRu
     }
 
     /// <inheritdoc />
-    public async Task<Result<GitCommandOutput>> RunAsync(
+    public Task<Result<GitCommandOutput>> RunAsync(GitCommand command, CancellationToken cancellationToken) =>
+        this.ExecuteAsync<GitCommandOutput, string>(
+            command,
+            cancellationToken,
+            StrictUtf8.GetString,
+            static (exitCode, standardOutput, standardError) =>
+                new GitCommandOutput(exitCode, standardOutput, standardError),
+            binaryOutput: false);
+
+    /// <inheritdoc />
+    public Task<Result<GitBinaryCommandOutput>> RunBinaryAsync(GitCommand command, CancellationToken cancellationToken) =>
+        this.ExecuteAsync<GitBinaryCommandOutput, byte[]>(
+            command,
+            cancellationToken,
+            static standardOutput => standardOutput,
+            static (exitCode, standardOutput, standardError) =>
+                new GitBinaryCommandOutput(exitCode, standardOutput, standardError),
+            binaryOutput: true);
+
+    /// <summary>
+    ///     Executes a bounded Git process and decodes its captured streams into the requested output type.
+    /// </summary>
+    /// <typeparam name="TOutput">The output type returned after process execution.</typeparam>
+    /// <typeparam name="TStandardOutput">The decoded standard-output type.</typeparam>
+    /// <param name="command">The immutable Git command. Cannot be <see langword="null" />.</param>
+    /// <param name="cancellationToken">The caller cancellation token.</param>
+    /// <param name="decodeStandardOutput">
+    ///     The decoder for captured standard output. Cannot be <see langword="null" />.
+    /// </param>
+    /// <param name="createOutput">The output factory. Cannot be <see langword="null" />.</param>
+    /// <param name="binaryOutput"><see langword="true" /> when binary execution diagnostics should be logged.</param>
+    /// <returns>A task that represents the asynchronous operation. The task result contains the execution outcome.</returns>
+    private async Task<Result<TOutput>> ExecuteAsync<TOutput, TStandardOutput>(
         GitCommand command,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        Func<byte[], TStandardOutput> decodeStandardOutput,
+        Func<int, TStandardOutput, string, TOutput> createOutput,
+        bool binaryOutput)
     {
         ArgumentNullException.ThrowIfNull(command);
         cancellationToken.ThrowIfCancellationRequested();
 
         var startedAt = Stopwatch.GetTimestamp();
-
         using var process = new Process
         {
             StartInfo = this.CreateStartInfo(command),
@@ -189,7 +259,7 @@ public sealed class GitCliCommandRunner : IGitCommandRunner, IGitBinaryCommandRu
             if (!process.Start())
             {
                 this._logger.LogWarning("Git executable {ExecutablePath} did not start.", PathSanitizer.RedactHomeDirectory(this._executablePath));
-                return Unavailable();
+                return UnavailableError;
             }
         }
         catch (Exception exception) when (
@@ -203,7 +273,7 @@ public sealed class GitCliCommandRunner : IGitCommandRunner, IGitBinaryCommandRu
                 exception,
                 "Git executable {ExecutablePath} is unavailable.",
                 PathSanitizer.RedactHomeDirectory(this._executablePath));
-            return Unavailable();
+            return UnavailableError;
         }
 
         using var timeout = new CancellationTokenSource(command.Timeout);
@@ -258,23 +328,38 @@ public sealed class GitCliCommandRunner : IGitCommandRunner, IGitBinaryCommandRu
 
             try
             {
-                this._logger.LogDebug(
-                    "Ran Git command 'git {Arguments}', exit code {ExitCode}, in " +
-                    "{ElapsedMilliseconds:0.000} ms.",
-                    string.Join(' ', command.Arguments),
-                    process.ExitCode,
-                    Stopwatch.GetElapsedTime(startedAt).TotalMilliseconds);
-                return Result.Success(
-                    new GitCommandOutput(
+                if (binaryOutput)
+                {
+                    this._logger.LogDebug(
+                        "Ran Git binary command 'git {Arguments}', exit code {ExitCode}, in " +
+                        "{ElapsedMilliseconds:0.000} ms.",
+                        string.Join(' ', command.Arguments),
                         process.ExitCode,
-                        StrictUtf8.GetString(standardOutputBytes),
+                        Stopwatch.GetElapsedTime(startedAt).TotalMilliseconds);
+                }
+                else
+                {
+                    this._logger.LogDebug(
+                        "Ran Git command 'git {Arguments}', exit code {ExitCode}, in " +
+                        "{ElapsedMilliseconds:0.000} ms.",
+                        string.Join(' ', command.Arguments),
+                        process.ExitCode,
+                        Stopwatch.GetElapsedTime(startedAt).TotalMilliseconds);
+                }
+
+                return Result.Success(
+                    createOutput(
+                        process.ExitCode,
+                        decodeStandardOutput(standardOutputBytes),
                         StrictUtf8.GetString(standardErrorBytes)));
             }
             catch (DecoderFallbackException exception)
             {
                 this._logger.LogWarning(
                     exception,
-                    "Git {Subcommand} command produced output that could not be decoded as UTF-8.",
+                    binaryOutput
+                        ? "Git {Subcommand} command produced diagnostics that could not be decoded as UTF-8."
+                        : "Git {Subcommand} command produced output that could not be decoded as UTF-8.",
                     Subcommand(command));
                 return command.ErrorPolicy.InspectionFailed;
             }
@@ -304,140 +389,6 @@ public sealed class GitCliCommandRunner : IGitCommandRunner, IGitBinaryCommandRu
         }
     }
 
-    /// <inheritdoc />
-    public async Task<Result<GitBinaryCommandOutput>> RunBinaryAsync(
-        GitCommand command,
-        CancellationToken cancellationToken)
-    {
-        ArgumentNullException.ThrowIfNull(command);
-        cancellationToken.ThrowIfCancellationRequested();
-
-        var startedAt = Stopwatch.GetTimestamp();
-        using var process = new Process
-        {
-            StartInfo = this.CreateStartInfo(command),
-        };
-
-        try
-        {
-            if (!process.Start())
-            {
-                this._logger.LogWarning("Git executable {ExecutablePath} did not start.", PathSanitizer.RedactHomeDirectory(this._executablePath));
-                return Result.Fail<GitBinaryCommandOutput>(UnavailableError);
-            }
-        }
-        catch (Exception exception) when (
-            exception is Win32Exception
-                or FileNotFoundException
-                or DirectoryNotFoundException
-                or UnauthorizedAccessException
-                or InvalidOperationException)
-        {
-            this._logger.LogWarning(
-                exception,
-                "Git executable {ExecutablePath} is unavailable.",
-                PathSanitizer.RedactHomeDirectory(this._executablePath));
-            return Result.Fail<GitBinaryCommandOutput>(UnavailableError);
-        }
-
-        using var timeout = new CancellationTokenSource(command.Timeout);
-        using var executionCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeout.Token);
-        var standardOutputTask = this._readBoundedAsync(
-            process.StandardOutput.BaseStream,
-            command.MaximumStandardOutputBytes,
-            executionCancellation.Token);
-        var standardErrorTask = this._readBoundedAsync(
-            process.StandardError.BaseStream,
-            command.MaximumStandardErrorBytes,
-            executionCancellation.Token);
-        var exitTask = process.WaitForExitAsync(CancellationToken.None);
-        var completionTask = WaitForCompletionOrLimitAsync(
-            exitTask,
-            standardOutputTask,
-            standardErrorTask,
-            command.MaximumStandardOutputBytes,
-            command.MaximumStandardErrorBytes);
-        Task[] cleanupTasks =
-        [
-            exitTask,
-            standardOutputTask,
-            standardErrorTask,
-            completionTask,
-        ];
-
-        try
-        {
-            var exceededLimit = await completionTask.WaitAsync(executionCancellation.Token);
-            if (exceededLimit)
-            {
-                await TerminateAndCleanUpAsync(process, executionCancellation, cleanupTasks);
-                this._logger.LogWarning(
-                    "Git {Subcommand} command exceeded its output bound after " +
-                    "{ElapsedMilliseconds:0.000} ms.",
-                    Subcommand(command), Stopwatch.GetElapsedTime(startedAt).TotalMilliseconds);
-                return Result.Fail<GitBinaryCommandOutput>(command.ErrorPolicy.OutputLimitExceeded);
-            }
-
-            var standardOutputBytes = await standardOutputTask;
-            var standardErrorBytes = await standardErrorTask;
-            if (standardOutputBytes.Length > command.MaximumStandardOutputBytes
-                || standardErrorBytes.Length > command.MaximumStandardErrorBytes)
-            {
-                this._logger.LogWarning(
-                    "Git {Subcommand} command exceeded its output bound after " +
-                    "{ElapsedMilliseconds:0.000} ms.",
-                    Subcommand(command), Stopwatch.GetElapsedTime(startedAt).TotalMilliseconds);
-                return Result.Fail<GitBinaryCommandOutput>(command.ErrorPolicy.OutputLimitExceeded);
-            }
-
-            try
-            {
-                this._logger.LogDebug(
-                    "Ran Git binary command 'git {Arguments}', exit code {ExitCode}, in " +
-                    "{ElapsedMilliseconds:0.000} ms.",
-                    string.Join(' ', command.Arguments),
-                    process.ExitCode,
-                    Stopwatch.GetElapsedTime(startedAt).TotalMilliseconds);
-                return Result.Success(
-                    new GitBinaryCommandOutput(
-                        process.ExitCode,
-                        standardOutputBytes,
-                        StrictUtf8.GetString(standardErrorBytes)));
-            }
-            catch (DecoderFallbackException exception)
-            {
-                this._logger.LogWarning(
-                    exception,
-                    "Git {Subcommand} command produced diagnostics that could not be decoded as UTF-8.",
-                    Subcommand(command));
-                return Result.Fail<GitBinaryCommandOutput>(command.ErrorPolicy.InspectionFailed);
-            }
-        }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-        {
-            await TerminateAndCleanUpAsync(process, executionCancellation, cleanupTasks);
-            cancellationToken.ThrowIfCancellationRequested();
-            throw;
-        }
-        catch (OperationCanceledException) when (timeout.IsCancellationRequested)
-        {
-            await TerminateAndCleanUpAsync(process, executionCancellation, cleanupTasks);
-            this._logger.LogWarning(
-                "Git {Subcommand} command timed out after {ElapsedMilliseconds:0.000} ms.",
-                Subcommand(command), Stopwatch.GetElapsedTime(startedAt).TotalMilliseconds);
-            return Result.Fail<GitBinaryCommandOutput>(command.ErrorPolicy.TimedOut);
-        }
-        catch (Exception exception) when (exception is IOException or InvalidOperationException)
-        {
-            await TerminateAndCleanUpAsync(process, executionCancellation, cleanupTasks);
-            this._logger.LogWarning(
-                exception,
-                "Git {Subcommand} command failed after {ElapsedMilliseconds:0.000} ms.",
-                Subcommand(command), Stopwatch.GetElapsedTime(startedAt).TotalMilliseconds);
-            return Result.Fail<GitBinaryCommandOutput>(command.ErrorPolicy.InspectionFailed);
-        }
-    }
-
     /// <summary>
     ///     Creates the direct process configuration with immutable argument boundaries and the safe Git environment.
     /// </summary>
@@ -461,6 +412,11 @@ public sealed class GitCliCommandRunner : IGitCommandRunner, IGitBinaryCommandRu
         foreach (var argument in command.Arguments)
         {
             startInfo.ArgumentList.Add(argument);
+        }
+
+        foreach (var (name, value) in this._processEnvironment)
+        {
+            startInfo.Environment[name] = value;
         }
 
         startInfo.Environment[GitProcessConstants.OptionalLocksEnvironmentVariable] =
@@ -707,5 +663,9 @@ public sealed class GitCliCommandRunner : IGitCommandRunner, IGitBinaryCommandRu
         return "unknown";
     }
 
-    private static Result<GitCommandOutput> Unavailable() => UnavailableError;
+    private static IReadOnlyDictionary<string, string> ValidateProcessEnvironment(IReadOnlyDictionary<string, string> processEnvironment)
+    {
+        ArgumentNullException.ThrowIfNull(processEnvironment);
+        return processEnvironment;
+    }
 }

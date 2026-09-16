@@ -1,4 +1,6 @@
 using ChangeLens.Core.AnalysisRuns.Models;
+using ChangeLens.Core.Git.Constants;
+using ChangeLens.Core.Git.Interfaces;
 using ChangeLens.Core.Results.Models;
 using ChangeLens.Core.Snapshots.Constants;
 using ChangeLens.Core.Snapshots.Interfaces;
@@ -6,6 +8,9 @@ using ChangeLens.Core.Snapshots.Models;
 using ChangeLens.Core.Snapshots.Services;
 using ChangeLens.Infrastructure.Git.Services;
 using ChangeLens.Infrastructure.IntegrationTests.Git.Support;
+using ChangeLens.Infrastructure.IntegrationTests.Snapshots.Support;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 
 namespace ChangeLens.Infrastructure.IntegrationTests.Snapshots;
@@ -110,9 +115,8 @@ public sealed class FrozenGitTreeReaderIntegrationTests
             revision,
             revision,
             [new SnapshotManifestEntry("fixture.txt", null, SnapshotChangeCategory.Modified, "100644", "100644", objectId, objectId)]);
-        var reader = OpenReader(repository, snapshot);
         var hostileGitDirectory = Path.Combine(hostileRepository.RootPath, ".git");
-        var hostileSelectors = new Dictionary<string, string?>
+        var hostileSelectors = new Dictionary<string, string>
         {
             ["GIT_DIR"] = hostileGitDirectory,
             ["GIT_WORK_TREE"] = hostileRepository.RootPath,
@@ -128,9 +132,9 @@ public sealed class FrozenGitTreeReaderIntegrationTests
             ["GIT_REPLACE_REF_BASE"] = "refs/replace/hostile/",
         };
 
-        var result = await RunWithEnvironmentAsync(
-            hostileSelectors,
-            () => reader.ReadBlobAsync(objectId, TestContext.Current.CancellationToken));
+        var runner = new GitCliCommandRunner(hostileSelectors);
+        var reader = OpenReader(repository, snapshot, runner: runner);
+        var result = await reader.ReadBlobAsync(objectId, TestContext.Current.CancellationToken);
 
         Assert.True(result.IsSuccess);
         Assert.Equal(["initial fixture content"], Assert.IsType<FrozenGitBlob>(result.Data).Lines);
@@ -150,11 +154,107 @@ public sealed class FrozenGitTreeReaderIntegrationTests
             repository.Revision,
             repository.Revision,
             [new SnapshotManifestEntry("missing.txt", null, SnapshotChangeCategory.Added, "000000", "100644", new string('0', 40), missingObjectId)]);
-        var reader = OpenReader(repository, snapshot);
+        var logger = new RecordingSnapshotLogger<FrozenGitTreeReader>();
+        var reader = OpenReader(repository, snapshot, logger: logger);
 
         var result = await reader.ReadBlobAsync(missingObjectId, TestContext.Current.CancellationToken);
 
         AssertFailure(result, ErrorType.Conflict, SnapshotErrorCode.StaleObject);
+        AssertWarning(logger, SnapshotErrorCode.StaleObject, repository.RootPath, missingObjectId);
+    }
+
+    /// <summary>
+    ///     Asynchronously records a stable authorization code without exposing the requested object identity.
+    /// </summary>
+    /// <returns>A task that represents the asynchronous operation.</returns>
+    [Fact]
+    public async Task ReadBlobAsync_ObjectNotCaptured_LogsStableCodeWithoutSensitiveValues()
+    {
+        using var repository = new TemporaryGitRepository();
+        var requestedObjectId = new string('e', 40);
+        var snapshot = CreateSnapshot(repository, repository.Revision, repository.Revision, []);
+        var logger = new RecordingSnapshotLogger<FrozenGitTreeReader>();
+        var reader = OpenReader(repository, snapshot, logger: logger);
+
+        var result = await reader.ReadBlobAsync(requestedObjectId, TestContext.Current.CancellationToken);
+
+        AssertFailure(result, ErrorType.Validation, SnapshotErrorCode.ObjectNotCaptured);
+        AssertWarning(logger, SnapshotErrorCode.ObjectNotCaptured, repository.RootPath, requestedObjectId);
+    }
+
+    /// <summary>
+    ///     Asynchronously records a decode failure with its stable code and no captured bytes.
+    /// </summary>
+    /// <returns>A task that represents the asynchronous operation.</returns>
+    [Fact]
+    public async Task ListTreeAsync_InvalidUtf8_LogsStableCodeWithoutCapturedBytes()
+    {
+        using var repository = new TemporaryGitRepository();
+        var runner = CreateFixtureRunner("invalid-utf8");
+        var snapshot = CreateSnapshot(repository, repository.Revision, repository.Revision, []);
+        var logger = new RecordingSnapshotLogger<FrozenGitTreeReader>();
+        var reader = OpenReader(repository, snapshot, runner: runner, logger: logger);
+
+        var result = await reader.ListTreeAsync(TestContext.Current.CancellationToken);
+
+        AssertFailure(result, ErrorType.ExternalDependencyFailure, SnapshotErrorCode.ReadFailed);
+        AssertWarning(logger, SnapshotErrorCode.ReadFailed, repository.RootPath, "fixture");
+    }
+
+    /// <summary>
+    ///     Asynchronously records a blob decode skip with its stable code and no blob content.
+    /// </summary>
+    /// <returns>A task that represents the asynchronous operation.</returns>
+    [Fact]
+    public async Task ReadBlobAsync_InvalidUtf8_LogsStableCodeWithoutBlobContent()
+    {
+        using var repository = new TemporaryGitRepository();
+        var invalidPath = Path.Combine(repository.RootPath, "invalid.txt");
+        await File.WriteAllBytesAsync(invalidPath, [0xc3, 0x28], TestContext.Current.CancellationToken);
+        repository.Stage("invalid.txt");
+        TemporaryGitRepository.RunGit(
+            ["-C", repository.RootPath, "commit", "--quiet", "--no-gpg-sign", "-m", "add invalid blob"]);
+
+        var objectId = ResolveBlob(repository, repository.Revision, "invalid.txt");
+        var snapshot = CreateSnapshot(
+            repository,
+            repository.Revision,
+            repository.Revision,
+            [new SnapshotManifestEntry(
+                "invalid.txt", null, SnapshotChangeCategory.Added, "000000", "100644", new string('0', objectId.Length), objectId)]);
+        var logger = new RecordingSnapshotLogger<FrozenGitTreeReader>();
+        var reader = OpenReader(repository, snapshot, logger: logger);
+
+        var result = await reader.ReadBlobAsync(objectId, TestContext.Current.CancellationToken);
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal(FrozenGitBlobSkipReason.Binary, Assert.IsType<FrozenGitBlob>(result.Data).SkipReason);
+        AssertWarning(logger, SnapshotErrorCode.ReadFailed, repository.RootPath, "(");
+    }
+
+    /// <summary>
+    ///     Forwards a command failure without recording a duplicate reader warning.
+    /// </summary>
+    /// <returns>A task that represents the asynchronous operation.</returns>
+    [Fact]
+    public async Task ReadBlobAsync_CommandFailure_ForwardsWithoutDuplicateReaderWarning()
+    {
+        using var repository = new TemporaryGitRepository();
+        var objectId = ResolveBlob(repository, repository.Revision, "fixture.txt");
+        var runner = new GitCliCommandRunner(
+            Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"), "missing-git"), []);
+        var snapshot = CreateSnapshot(
+            repository,
+            repository.Revision,
+            repository.Revision,
+            [new SnapshotManifestEntry("fixture.txt", null, SnapshotChangeCategory.Modified, "100644", "100644", objectId, objectId)]);
+        var logger = new RecordingSnapshotLogger<FrozenGitTreeReader>();
+        var reader = OpenReader(repository, snapshot, runner: runner, logger: logger);
+
+        var result = await reader.ReadBlobAsync(objectId, TestContext.Current.CancellationToken);
+
+        AssertFailure(result, ErrorType.ExternalDependencyFailure, GitErrorCode.Unavailable);
+        Assert.Empty(logger.Entries);
     }
 
     /// <summary>
@@ -258,11 +358,13 @@ public sealed class FrozenGitTreeReaderIntegrationTests
         repository.CommitFile("large.txt", "123456789\n", "add large file");
         var largeEntry = CreateAddedEntry(repository, repository.Revision, "large.txt");
         var options = new FrozenGitTreeReaderOptions { MaximumBlobBytes = 5 };
-        var largeReader = OpenReader(repository, CreateSnapshot(repository, binaryHead, repository.Revision, [largeEntry]), options);
+        var logger = new RecordingSnapshotLogger<FrozenGitTreeReader>();
+        var largeReader = OpenReader(repository, CreateSnapshot(repository, binaryHead, repository.Revision, [largeEntry]), options, logger: logger);
         var largeResult = await largeReader.ReadBlobAsync(largeEntry.HeadObjectId, TestContext.Current.CancellationToken);
 
         Assert.True(largeResult.IsSuccess);
         Assert.Equal(FrozenGitBlobSkipReason.TooLarge, Assert.IsType<FrozenGitBlob>(largeResult.Data).SkipReason);
+        AssertWarning(logger, SnapshotErrorCode.ReadFailed, repository.RootPath);
     }
 
     /// <summary>
@@ -310,11 +412,12 @@ public sealed class FrozenGitTreeReaderIntegrationTests
         TemporaryGitRepository.RunGit(["-C", repository.RootPath, "add", "--", "."]);
         TemporaryGitRepository.RunGit(["-C", repository.RootPath, "commit", "--quiet", "--no-gpg-sign", "-m", "bulk change"]);
         var snapshot = CreateSnapshot(repository, repository.Revision, repository.Revision, []);
+        var logger = new RecordingSnapshotLogger<FrozenGitTreeReader>();
         var reader = OpenReader(repository, snapshot, new FrozenGitTreeReaderOptions
         {
             MaximumHistoryCommits = 1,
             MaximumHistoryPathsPerCommit = 2,
-        });
+        }, logger: logger);
 
         var result = await reader.ReadHistoryAsync(TestContext.Current.CancellationToken);
 
@@ -323,16 +426,19 @@ public sealed class FrozenGitTreeReaderIntegrationTests
         Assert.Equal(1, history.CommitsInspected);
         Assert.Equal(1, history.OversizedCommitsSkipped);
         Assert.Empty(history.Commits);
+        AssertWarning(logger, SnapshotErrorCode.ReadFailed, repository.RootPath);
     }
 
     private static IFrozenGitTreeReader OpenReader(
         TemporaryGitRepository repository,
         SnapshotManifest snapshot,
-        FrozenGitTreeReaderOptions? options = null)
+        FrozenGitTreeReaderOptions? options = null,
+        IGitBinaryCommandRunner? runner = null,
+        ILogger<FrozenGitTreeReader>? logger = null)
     {
         var key = Path.GetFullPath(repository.RootPath);
         var identity = new AnalysisRepositoryIdentity(Guid.NewGuid(), "fixture", key, key, snapshot.HeadRevision);
-        var result = OpenReaderResult(repository, snapshot, options);
+        var result = OpenReaderResult(repository, snapshot, options, runner, logger);
         Assert.True(result.IsSuccess);
         return Assert.IsAssignableFrom<IFrozenGitTreeReader>(result.Data);
     }
@@ -340,11 +446,37 @@ public sealed class FrozenGitTreeReaderIntegrationTests
     private static Result<IFrozenGitTreeReader> OpenReaderResult(
         TemporaryGitRepository repository,
         SnapshotManifest snapshot,
-        FrozenGitTreeReaderOptions? options = null)
+        FrozenGitTreeReaderOptions? options = null,
+        IGitBinaryCommandRunner? runner = null,
+        ILogger<FrozenGitTreeReader>? logger = null)
     {
         var key = Path.GetFullPath(repository.RootPath);
         var identity = new AnalysisRepositoryIdentity(Guid.NewGuid(), "fixture", key, key, snapshot.HeadRevision);
-        return new FrozenGitTreeReaderFactory(new GitCliCommandRunner(), options ?? new FrozenGitTreeReaderOptions()).Open(identity, snapshot);
+        return new FrozenGitTreeReaderFactory(
+            runner ?? new GitCliCommandRunner(), options ?? new FrozenGitTreeReaderOptions(),
+            logger is null ? NullLoggerFactory.Instance : new RecordingSnapshotLoggerFactory(logger)).Open(identity, snapshot);
+    }
+
+    private static GitCliCommandRunner CreateFixtureRunner(string mode) =>
+        new(
+            Environment.GetEnvironmentVariable("DOTNET_HOST_PATH") ?? "dotnet",
+            [Path.Combine(AppContext.BaseDirectory, "ChangeLens.GitProcessFixture.dll")],
+            new Dictionary<string, string> { ["CHANGELENS_GIT_FIXTURE_MODE"] = mode });
+
+    private static void AssertWarning<T>(
+        RecordingSnapshotLogger<T> logger,
+        string errorCode,
+        string sensitivePath,
+        string? sensitiveValue = null)
+    {
+        var entry = Assert.Single(logger.Entries);
+        Assert.Equal(LogLevel.Warning, entry.Level);
+        Assert.Contains(errorCode, entry.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain(sensitivePath, entry.Message, StringComparison.Ordinal);
+        if (sensitiveValue is not null)
+        {
+            Assert.DoesNotContain(sensitiveValue, entry.Message, StringComparison.Ordinal);
+        }
     }
 
     private static SnapshotManifest CreateSnapshot(
@@ -393,29 +525,4 @@ public sealed class FrozenGitTreeReaderIntegrationTests
         Assert.Equal(code, error.Code);
     }
 
-    private static async Task<T> RunWithEnvironmentAsync<T>(
-        IReadOnlyDictionary<string, string?> values,
-        Func<Task<T>> operation)
-    {
-        var previousValues = values.Keys.ToDictionary(
-            key => key,
-            Environment.GetEnvironmentVariable,
-            StringComparer.Ordinal);
-        foreach (var (key, value) in values)
-        {
-            Environment.SetEnvironmentVariable(key, value);
-        }
-
-        try
-        {
-            return await operation();
-        }
-        finally
-        {
-            foreach (var (key, value) in previousValues)
-            {
-                Environment.SetEnvironmentVariable(key, value);
-            }
-        }
-    }
 }

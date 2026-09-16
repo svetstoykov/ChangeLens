@@ -38,7 +38,7 @@ namespace ChangeLens.Infrastructure.Git.Services;
 ///         handle to that descendant tree.
 ///     </para>
 /// </remarks>
-public sealed class GitCliCommandRunner : IGitCommandRunner
+public sealed class GitCliCommandRunner : IGitCommandRunner, IGitBinaryCommandRunner
 {
     /// <summary>
     ///     Rejects malformed UTF-8 output instead of replacing invalid bytes.
@@ -304,6 +304,140 @@ public sealed class GitCliCommandRunner : IGitCommandRunner
         }
     }
 
+    /// <inheritdoc />
+    public async Task<Result<GitBinaryCommandOutput>> RunBinaryAsync(
+        GitCommand command,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(command);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        var startedAt = Stopwatch.GetTimestamp();
+        using var process = new Process
+        {
+            StartInfo = this.CreateStartInfo(command),
+        };
+
+        try
+        {
+            if (!process.Start())
+            {
+                this._logger.LogWarning("Git executable {ExecutablePath} did not start.", PathSanitizer.RedactHomeDirectory(this._executablePath));
+                return Result.Fail<GitBinaryCommandOutput>(UnavailableError);
+            }
+        }
+        catch (Exception exception) when (
+            exception is Win32Exception
+                or FileNotFoundException
+                or DirectoryNotFoundException
+                or UnauthorizedAccessException
+                or InvalidOperationException)
+        {
+            this._logger.LogWarning(
+                exception,
+                "Git executable {ExecutablePath} is unavailable.",
+                PathSanitizer.RedactHomeDirectory(this._executablePath));
+            return Result.Fail<GitBinaryCommandOutput>(UnavailableError);
+        }
+
+        using var timeout = new CancellationTokenSource(command.Timeout);
+        using var executionCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeout.Token);
+        var standardOutputTask = this._readBoundedAsync(
+            process.StandardOutput.BaseStream,
+            command.MaximumStandardOutputBytes,
+            executionCancellation.Token);
+        var standardErrorTask = this._readBoundedAsync(
+            process.StandardError.BaseStream,
+            command.MaximumStandardErrorBytes,
+            executionCancellation.Token);
+        var exitTask = process.WaitForExitAsync(CancellationToken.None);
+        var completionTask = WaitForCompletionOrLimitAsync(
+            exitTask,
+            standardOutputTask,
+            standardErrorTask,
+            command.MaximumStandardOutputBytes,
+            command.MaximumStandardErrorBytes);
+        Task[] cleanupTasks =
+        [
+            exitTask,
+            standardOutputTask,
+            standardErrorTask,
+            completionTask,
+        ];
+
+        try
+        {
+            var exceededLimit = await completionTask.WaitAsync(executionCancellation.Token);
+            if (exceededLimit)
+            {
+                await TerminateAndCleanUpAsync(process, executionCancellation, cleanupTasks);
+                this._logger.LogWarning(
+                    "Git {Subcommand} command exceeded its output bound after " +
+                    "{ElapsedMilliseconds:0.000} ms.",
+                    Subcommand(command), Stopwatch.GetElapsedTime(startedAt).TotalMilliseconds);
+                return Result.Fail<GitBinaryCommandOutput>(command.ErrorPolicy.OutputLimitExceeded);
+            }
+
+            var standardOutputBytes = await standardOutputTask;
+            var standardErrorBytes = await standardErrorTask;
+            if (standardOutputBytes.Length > command.MaximumStandardOutputBytes
+                || standardErrorBytes.Length > command.MaximumStandardErrorBytes)
+            {
+                this._logger.LogWarning(
+                    "Git {Subcommand} command exceeded its output bound after " +
+                    "{ElapsedMilliseconds:0.000} ms.",
+                    Subcommand(command), Stopwatch.GetElapsedTime(startedAt).TotalMilliseconds);
+                return Result.Fail<GitBinaryCommandOutput>(command.ErrorPolicy.OutputLimitExceeded);
+            }
+
+            try
+            {
+                this._logger.LogDebug(
+                    "Ran Git binary command 'git {Arguments}', exit code {ExitCode}, in " +
+                    "{ElapsedMilliseconds:0.000} ms.",
+                    string.Join(' ', command.Arguments),
+                    process.ExitCode,
+                    Stopwatch.GetElapsedTime(startedAt).TotalMilliseconds);
+                return Result.Success(
+                    new GitBinaryCommandOutput(
+                        process.ExitCode,
+                        standardOutputBytes,
+                        StrictUtf8.GetString(standardErrorBytes)));
+            }
+            catch (DecoderFallbackException exception)
+            {
+                this._logger.LogWarning(
+                    exception,
+                    "Git {Subcommand} command produced diagnostics that could not be decoded as UTF-8.",
+                    Subcommand(command));
+                return Result.Fail<GitBinaryCommandOutput>(command.ErrorPolicy.InspectionFailed);
+            }
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            await TerminateAndCleanUpAsync(process, executionCancellation, cleanupTasks);
+            cancellationToken.ThrowIfCancellationRequested();
+            throw;
+        }
+        catch (OperationCanceledException) when (timeout.IsCancellationRequested)
+        {
+            await TerminateAndCleanUpAsync(process, executionCancellation, cleanupTasks);
+            this._logger.LogWarning(
+                "Git {Subcommand} command timed out after {ElapsedMilliseconds:0.000} ms.",
+                Subcommand(command), Stopwatch.GetElapsedTime(startedAt).TotalMilliseconds);
+            return Result.Fail<GitBinaryCommandOutput>(command.ErrorPolicy.TimedOut);
+        }
+        catch (Exception exception) when (exception is IOException or InvalidOperationException)
+        {
+            await TerminateAndCleanUpAsync(process, executionCancellation, cleanupTasks);
+            this._logger.LogWarning(
+                exception,
+                "Git {Subcommand} command failed after {ElapsedMilliseconds:0.000} ms.",
+                Subcommand(command), Stopwatch.GetElapsedTime(startedAt).TotalMilliseconds);
+            return Result.Fail<GitBinaryCommandOutput>(command.ErrorPolicy.InspectionFailed);
+        }
+    }
+
     /// <summary>
     ///     Creates the direct process configuration with immutable argument boundaries and the safe Git environment.
     /// </summary>
@@ -346,6 +480,11 @@ public sealed class GitCliCommandRunner : IGitCommandRunner
         startInfo.Environment[GitProcessConstants.ExternalDiffEnvironmentVariable] = string.Empty;
         startInfo.Environment[GitProcessConstants.SshCommandEnvironmentVariable] =
             GitProcessConstants.BatchModeSshCommandValue;
+        foreach (var variable in GitProcessConstants.RepositorySelectorEnvironmentVariables)
+        {
+            startInfo.Environment.Remove(variable);
+        }
+
         return startInfo;
     }
 

@@ -8,6 +8,8 @@ using ChangeLens.Core.Git.Services;
 using ChangeLens.Core.LocalState.Interfaces;
 using ChangeLens.Core.LocalState.Services;
 using ChangeLens.Core.Snapshots.Interfaces;
+using ChangeLens.Core.Snapshots.Constants;
+using ChangeLens.Core.Snapshots.Models;
 using ChangeLens.Core.Snapshots.Services;
 using ChangeLens.Engine.AnalysisRuns.Handlers;
 using ChangeLens.Engine.AnalysisRuns.Hosting;
@@ -33,6 +35,7 @@ using ChangeLens.Infrastructure.LocalState.Services;
 using ChangeLens.Infrastructure.AnalysisRuns.Services;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 
@@ -116,9 +119,52 @@ internal static class EngineHostApplicationBuilderExtensions
         builder.Services.Configure<GitCommandRunnerOptions>(
             options => options.ExecutablePath =
                 builder.Configuration[RepositoryInspectionConfigurationConstants.GitExecutableConfigurationKey]);
-        builder.Services.AddScoped<IGitCommandRunner, GitCliCommandRunner>();
+        builder.Services.AddScoped<GitCliCommandRunner>();
+        builder.Services.AddScoped<IGitCommandRunner>(services => services.GetRequiredService<GitCliCommandRunner>());
+        builder.Services.AddScoped<IGitBinaryCommandRunner>(services => services.GetRequiredService<GitCliCommandRunner>());
         builder.Services.AddScoped<IGitRepositoryInspector, GitRepositoryInspector>();
+        builder.Services.AddSingleton(CreateFrozenGitTreeReaderOptions(builder.Configuration));
+        builder.Services.AddScoped<IFrozenGitTreeReaderFactory, FrozenGitTreeReaderFactory>();
     }
+
+    /// <summary>Reads the configured bounds for frozen Git tree access.</summary>
+    /// <param name="configuration">The engine configuration. Cannot be <see langword="null" />.</param>
+    /// <returns>The configured bounds, using safe defaults for absent or malformed values.</returns>
+    private static FrozenGitTreeReaderOptions CreateFrozenGitTreeReaderOptions(IConfiguration configuration)
+    {
+        ArgumentNullException.ThrowIfNull(configuration);
+        var defaults = new FrozenGitTreeReaderOptions();
+        return new FrozenGitTreeReaderOptions
+        {
+            MaximumBlobBytes = ReadPositiveInt(
+                configuration, FrozenGitTreeReaderConfigurationConstants.MaximumBlobBytesKey, defaults.MaximumBlobBytes),
+            MaximumTreeFiles = ReadPositiveInt(
+                configuration, FrozenGitTreeReaderConfigurationConstants.MaximumTreeFilesKey, defaults.MaximumTreeFiles),
+            MaximumHistoryCommits = ReadPositiveInt(
+                configuration, FrozenGitTreeReaderConfigurationConstants.MaximumHistoryCommitsKey, defaults.MaximumHistoryCommits),
+            MaximumHistoryPathsPerCommit = ReadPositiveInt(
+                configuration, FrozenGitTreeReaderConfigurationConstants.MaximumHistoryPathsPerCommitKey,
+                defaults.MaximumHistoryPathsPerCommit),
+            CommandTimeout = ReadPositiveTimeSpan(
+                configuration, FrozenGitTreeReaderConfigurationConstants.CommandTimeoutKey, defaults.CommandTimeout),
+        };
+    }
+
+    /// <summary>Reads one positive integer configuration value.</summary>
+    /// <param name="configuration">The engine configuration. Cannot be <see langword="null" />.</param>
+    /// <param name="key">The configuration key. Cannot be <see langword="null" />.</param>
+    /// <param name="fallback">The value used when the key is absent or invalid.</param>
+    /// <returns>The positive configured value or <paramref name="fallback" />.</returns>
+    private static int ReadPositiveInt(IConfiguration configuration, string key, int fallback) =>
+        int.TryParse(configuration[key], out var value) && value > 0 ? value : fallback;
+
+    /// <summary>Reads one positive duration configuration value.</summary>
+    /// <param name="configuration">The engine configuration. Cannot be <see langword="null" />.</param>
+    /// <param name="key">The configuration key. Cannot be <see langword="null" />.</param>
+    /// <param name="fallback">The value used when the key is absent or invalid.</param>
+    /// <returns>The positive configured duration or <paramref name="fallback" />.</returns>
+    private static TimeSpan ReadPositiveTimeSpan(IConfiguration configuration, string key, TimeSpan fallback) =>
+        TimeSpan.TryParse(configuration[key], out var value) && value > TimeSpan.Zero ? value : fallback;
 
     /// <summary>Registers comparison services.</summary>
     /// <param name="builder">The host application builder to configure. Cannot be <see langword="null" />.</param>

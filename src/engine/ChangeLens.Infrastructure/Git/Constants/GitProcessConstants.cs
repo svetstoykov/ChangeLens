@@ -81,6 +81,25 @@ internal static class GitProcessConstants
     internal const string SshCommandEnvironmentVariable = "GIT_SSH_COMMAND";
 
     /// <summary>
+    ///     Environment variables that can redirect Git repository, object, ref namespace, or shallow-history reads.
+    /// </summary>
+    internal static readonly string[] RepositorySelectorEnvironmentVariables =
+    [
+        "GIT_DIR",
+        "GIT_WORK_TREE",
+        "GIT_COMMON_DIR",
+        "GIT_INDEX_FILE",
+        "GIT_OBJECT_DIRECTORY",
+        "GIT_ALTERNATE_OBJECT_DIRECTORIES",
+        "GIT_NAMESPACE",
+        "GIT_SHALLOW_FILE",
+        "GIT_CEILING_DIRECTORIES",
+        "GIT_DISCOVERY_ACROSS_FILESYSTEM",
+        "GIT_NO_REPLACE_OBJECTS",
+        "GIT_REPLACE_REF_BASE",
+    ];
+
+    /// <summary>
     ///     The SSH command value that fails immediately instead of waiting on a credential prompt that no terminal is
     ///     attached to answer.
     /// </summary>

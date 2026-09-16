@@ -1,4 +1,6 @@
 using System.Diagnostics;
+using ChangeLens.Core.ChangeAnatomy.Interfaces;
+using ChangeLens.Core.ChangeAnatomy.Models;
 using ChangeLens.Core.EngineStatus.Interfaces;
 using ChangeLens.Core.LocalState.Constants;
 using ChangeLens.Core.LocalState.Interfaces;
@@ -160,13 +162,19 @@ public sealed class EngineServiceScopeTests
 
         Assert.DoesNotContain(builder.Services, descriptor => descriptor.ServiceType == typeof(FrozenGitTreeReaderOptions));
         Assert.DoesNotContain(builder.Services, descriptor => descriptor.ServiceType == typeof(IFrozenGitTreeReaderFactory));
+        Assert.DoesNotContain(builder.Services, descriptor => descriptor.ServiceType == typeof(ChangeAnatomyOptions));
+        Assert.DoesNotContain(builder.Services, descriptor => descriptor.ServiceType == typeof(IChangeAnatomyService));
 
         builder.AddAnalysisRunServices();
 
         var optionsDescriptor = Assert.Single(builder.Services, descriptor => descriptor.ServiceType == typeof(FrozenGitTreeReaderOptions));
         var factoryDescriptor = Assert.Single(builder.Services, descriptor => descriptor.ServiceType == typeof(IFrozenGitTreeReaderFactory));
+        var anatomyOptionsDescriptor = Assert.Single(builder.Services, descriptor => descriptor.ServiceType == typeof(ChangeAnatomyOptions));
+        var anatomyServiceDescriptor = Assert.Single(builder.Services, descriptor => descriptor.ServiceType == typeof(IChangeAnatomyService));
         Assert.Equal(ServiceLifetime.Singleton, optionsDescriptor.Lifetime);
         Assert.Equal(ServiceLifetime.Scoped, factoryDescriptor.Lifetime);
+        Assert.Equal(ServiceLifetime.Singleton, anatomyOptionsDescriptor.Lifetime);
+        Assert.Equal(ServiceLifetime.Scoped, anatomyServiceDescriptor.Lifetime);
     }
 
     private static IHost CreateHost(string localStateDirectory)

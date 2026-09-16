@@ -1,3 +1,7 @@
+using ChangeLens.Core.ChangeAnatomy.Interfaces;
+using ChangeLens.Core.ChangeAnatomy.Models;
+using ChangeLens.Core.ChangeAnatomy.Services;
+using ChangeLens.Core.ChangeAnatomy.Constants;
 using ChangeLens.Core.AnalysisRuns.Interfaces;
 using ChangeLens.Core.AnalysisRuns.Services;
 using ChangeLens.Core.Comparisons.Interfaces;
@@ -148,6 +152,24 @@ internal static class EngineHostApplicationBuilderExtensions
         };
     }
 
+    /// <summary>Reads the configured bounds for deterministic change anatomy.</summary>
+    /// <param name="configuration">The engine configuration. Cannot be <see langword="null" />.</param>
+    /// <returns>The configured anatomy bounds, using safe defaults for absent or malformed values.</returns>
+    private static ChangeAnatomyOptions CreateChangeAnatomyOptions(IConfiguration configuration)
+    {
+        ArgumentNullException.ThrowIfNull(configuration);
+        var defaults = new ChangeAnatomyOptions();
+        return new ChangeAnatomyOptions
+        {
+            MinimumKeyLength = ReadPositiveInt(configuration, ChangeAnatomyConfigurationConstants.MinimumKeyLengthKey,
+                defaults.MinimumKeyLength),
+            MaximumKeysPerFile = ReadPositiveInt(configuration, ChangeAnatomyConfigurationConstants.MaximumKeysPerFileKey,
+                defaults.MaximumKeysPerFile),
+            MaximumOccurrencesPerKey = ReadPositiveInt(configuration, ChangeAnatomyConfigurationConstants.MaximumOccurrencesPerKeyKey,
+                defaults.MaximumOccurrencesPerKey),
+        };
+    }
+
     /// <summary>Reads one positive integer configuration value.</summary>
     /// <param name="configuration">The engine configuration. Cannot be <see langword="null" />.</param>
     /// <param name="key">The configuration key. Cannot be <see langword="null" />.</param>
@@ -189,7 +211,9 @@ internal static class EngineHostApplicationBuilderExtensions
         builder.Services.AddSingleton<IAnalysisProcessorControl, AnalysisProcessorControl>();
         builder.Services.AddScoped<IAnalysisRunStore, SqliteAnalysisRunStore>();
         builder.Services.AddSingleton(CreateFrozenGitTreeReaderOptions(builder.Configuration));
+        builder.Services.AddSingleton(CreateChangeAnatomyOptions(builder.Configuration));
         builder.Services.AddScoped<IFrozenGitTreeReaderFactory, FrozenGitTreeReaderFactory>();
+        builder.Services.AddScoped<IChangeAnatomyService, ChangeAnatomyService>();
         builder.Services.AddScoped<ISnapshotCaptureService, GitSnapshotCaptureService>();
         builder.Services.AddScoped<IAnalysisPipeline, ShallowAnalysisPipeline>();
         builder.Services.AddScoped<IAnalysisRunCoordinator, AnalysisRunCoordinator>();

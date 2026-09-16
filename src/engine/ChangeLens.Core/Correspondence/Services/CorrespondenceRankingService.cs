@@ -253,8 +253,9 @@ public sealed class CorrespondenceRankingService(
     ///     </para>
     ///     <para>
     ///         History names a renamed file by its old path, so anchors match either spelling and are reported under the
-    ///         current path. Each pair is capped, and a candidate's pairs are scaled together rather than truncated, so
-    ///         every changed file it co-changed with stays visible while history cannot outweigh rare shared text.
+    ///         current path. One commit that names both spellings still counts once. Each pair is capped, and a
+    ///         candidate's pairs are scaled together rather than truncated, so every changed file it co-changed with
+    ///         stays visible while history cannot outweigh rare shared text.
     ///     </para>
     /// </remarks>
     /// <param name="history">The bounded history scan.</param>
@@ -287,7 +288,8 @@ public sealed class CorrespondenceRankingService(
         foreach (var commit in history.Commits)
         {
             var commitPaths = commit.Paths.OrderBy(path => path, StringComparer.Ordinal).ToArray();
-            var anchors = commitPaths.Where(currentPathByHistoricalPath.ContainsKey).ToArray();
+            var anchors = commitPaths.Where(currentPathByHistoricalPath.ContainsKey)
+                .Select(path => currentPathByHistoricalPath[path]).Distinct(StringComparer.Ordinal).ToArray();
             if (anchors.Length == 0)
             {
                 continue;
@@ -304,7 +306,7 @@ public sealed class CorrespondenceRankingService(
                         continue;
                     }
 
-                    var key = (currentPathByHistoricalPath[anchor], candidateFile.Id);
+                    var key = (anchor, candidateFile.Id);
                     var tally = coChanges.GetValueOrDefault(key);
                     coChanges[key] = (tally.Count + 1, tally.WeightedCount + recency);
                 }

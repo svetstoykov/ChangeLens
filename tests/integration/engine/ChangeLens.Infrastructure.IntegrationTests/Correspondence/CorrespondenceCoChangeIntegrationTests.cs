@@ -124,4 +124,68 @@ public sealed class CorrespondenceCoChangeIntegrationTests
         Assert.Contains(partner.Signals, signal => signal is CoChangeCorrespondenceSignal);
         Assert.DoesNotContain(ranking.Candidates, candidate => candidate.Path.StartsWith("crowd", StringComparison.Ordinal));
     }
+
+    /// <summary>
+    ///     Asynchronously adds a co-change signal from history that names a renamed changed file by its original path.
+    /// </summary>
+    /// <returns>A task that represents the asynchronous operation.</returns>
+    [Fact]
+    public async Task RankAsync_RenamedChangedFileMatchesHistoryAtOriginalPath()
+    {
+        using var repository = new TemporaryGitRepository();
+        CorrespondenceRankingHarness.CommitFiles(repository, "history original path and partner", [
+            ("kept.txt", "flindermox\n"),
+            ("partner.txt", "greshvalt\n"),
+        ]);
+        var mergeBase = repository.Revision;
+        repository.Move("kept.txt", "renamed.txt");
+        TemporaryGitRepository.RunGit(["-C", repository.RootPath, "commit", "--quiet", "--no-gpg-sign", "-m", "rename kept"]);
+        var head = repository.Revision;
+        var renamedEntry = SnapshotManifestEntryFixtures.CreateEntry(
+            repository, mergeBase, head, "kept.txt", "renamed.txt", SnapshotChangeCategory.Renamed);
+
+        var result = await CorrespondenceRankingHarness.RankAsync(repository, mergeBase, head, [renamedEntry]);
+
+        Assert.True(result.IsSuccess);
+        var ranking = result.Data!;
+        var partner = ranking.Candidates.Single(candidate => candidate.Path == "partner.txt");
+        var coChange = Assert.Single(partner.Signals.OfType<CoChangeCorrespondenceSignal>());
+        Assert.Equal("renamed.txt", coChange.ChangedPath);
+        Assert.Equal(1, coChange.CommitCount);
+        Assert.True(ranking.Diagnostics.HistoryAnchorCommitCount >= 1);
+    }
+
+    /// <summary>
+    ///     Asynchronously counts a history commit once when it names both spellings of a renamed changed file.
+    /// </summary>
+    /// <returns>A task that represents the asynchronous operation.</returns>
+    [Fact]
+    public async Task RankAsync_HistoryCommitNamingBothRenameSpellingsCountsOnce()
+    {
+        using var repository = new TemporaryGitRepository();
+        CorrespondenceRankingHarness.CommitFiles(repository, "seed partner", [("partner.txt", "greshvalt\n")]);
+        CorrespondenceRankingHarness.CommitFiles(repository, "seed original path", [("kept.txt", "flindermox\n")]);
+        repository.Move("kept.txt", "renamed.txt");
+        repository.WriteFile("partner.txt", "greshvalt lerbatsov\n");
+        repository.Stage("partner.txt");
+        TemporaryGitRepository.RunGit(
+            ["-C", repository.RootPath, "commit", "--quiet", "--no-gpg-sign", "-m", "rename kept with partner"]);
+        repository.Move("renamed.txt", "kept.txt");
+        TemporaryGitRepository.RunGit(["-C", repository.RootPath, "commit", "--quiet", "--no-gpg-sign", "-m", "rename back"]);
+        var mergeBase = repository.Revision;
+        repository.Move("kept.txt", "renamed.txt");
+        TemporaryGitRepository.RunGit(["-C", repository.RootPath, "commit", "--quiet", "--no-gpg-sign", "-m", "rename kept again"]);
+        var head = repository.Revision;
+        var renamedEntry = SnapshotManifestEntryFixtures.CreateEntry(
+            repository, mergeBase, head, "kept.txt", "renamed.txt", SnapshotChangeCategory.Renamed);
+
+        var result = await CorrespondenceRankingHarness.RankAsync(repository, mergeBase, head, [renamedEntry]);
+
+        Assert.True(result.IsSuccess);
+        var ranking = result.Data!;
+        var partner = ranking.Candidates.Single(candidate => candidate.Path == "partner.txt");
+        var coChange = Assert.Single(partner.Signals.OfType<CoChangeCorrespondenceSignal>());
+        Assert.Equal("renamed.txt", coChange.ChangedPath);
+        Assert.Equal(1, coChange.CommitCount);
+    }
 }

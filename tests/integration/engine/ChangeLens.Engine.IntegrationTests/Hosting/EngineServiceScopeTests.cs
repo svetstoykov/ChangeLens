@@ -1,6 +1,9 @@
 using System.Diagnostics;
 using ChangeLens.Core.ChangeAnatomy.Interfaces;
 using ChangeLens.Core.ChangeAnatomy.Models;
+using ChangeLens.Core.Correspondence.Constants;
+using ChangeLens.Core.Correspondence.Interfaces;
+using ChangeLens.Core.Correspondence.Models;
 using ChangeLens.Core.EngineStatus.Interfaces;
 using ChangeLens.Core.LocalState.Constants;
 using ChangeLens.Core.LocalState.Interfaces;
@@ -164,6 +167,8 @@ public sealed class EngineServiceScopeTests
         Assert.DoesNotContain(builder.Services, descriptor => descriptor.ServiceType == typeof(IFrozenGitTreeReaderFactory));
         Assert.DoesNotContain(builder.Services, descriptor => descriptor.ServiceType == typeof(ChangeAnatomyOptions));
         Assert.DoesNotContain(builder.Services, descriptor => descriptor.ServiceType == typeof(IChangeAnatomyService));
+        Assert.DoesNotContain(builder.Services, descriptor => descriptor.ServiceType == typeof(CorrespondenceOptions));
+        Assert.DoesNotContain(builder.Services, descriptor => descriptor.ServiceType == typeof(ICorrespondenceRankingService));
 
         builder.AddAnalysisRunServices();
 
@@ -171,10 +176,39 @@ public sealed class EngineServiceScopeTests
         var factoryDescriptor = Assert.Single(builder.Services, descriptor => descriptor.ServiceType == typeof(IFrozenGitTreeReaderFactory));
         var anatomyOptionsDescriptor = Assert.Single(builder.Services, descriptor => descriptor.ServiceType == typeof(ChangeAnatomyOptions));
         var anatomyServiceDescriptor = Assert.Single(builder.Services, descriptor => descriptor.ServiceType == typeof(IChangeAnatomyService));
+        var correspondenceOptionsDescriptor = Assert.Single(builder.Services, descriptor => descriptor.ServiceType == typeof(CorrespondenceOptions));
+        var correspondenceRankingDescriptor = Assert.Single(
+            builder.Services, descriptor => descriptor.ServiceType == typeof(ICorrespondenceRankingService));
         Assert.Equal(ServiceLifetime.Singleton, optionsDescriptor.Lifetime);
         Assert.Equal(ServiceLifetime.Scoped, factoryDescriptor.Lifetime);
         Assert.Equal(ServiceLifetime.Singleton, anatomyOptionsDescriptor.Lifetime);
         Assert.Equal(ServiceLifetime.Scoped, anatomyServiceDescriptor.Lifetime);
+        Assert.Equal(ServiceLifetime.Singleton, correspondenceOptionsDescriptor.Lifetime);
+        Assert.Equal(ServiceLifetime.Scoped, correspondenceRankingDescriptor.Lifetime);
+    }
+
+    /// <summary>
+    ///     Verifies correspondence options read configured values and keep defaults for absent or malformed ones.
+    /// </summary>
+    [Fact]
+    public void CorrespondenceOptionsReadConfiguredValues()
+    {
+        var builder = Host.CreateApplicationBuilder();
+
+        builder.AddRepositoryServices();
+        builder.Configuration[CorrespondenceConfigurationConstants.MaximumCandidatesKey] = "7";
+        builder.Configuration[CorrespondenceConfigurationConstants.IncludeCoChangeKey] = "false";
+        builder.Configuration[CorrespondenceConfigurationConstants.MaximumReasonsPerCandidateKey] = "not-a-number";
+
+        builder.AddAnalysisRunServices();
+
+        var correspondenceOptionsDescriptor = Assert.Single(builder.Services, descriptor => descriptor.ServiceType == typeof(CorrespondenceOptions));
+        var options =Assert.IsType<CorrespondenceOptions>(correspondenceOptionsDescriptor.ImplementationInstance);
+
+        Assert.Equal(7, options.MaximumCandidates);
+        Assert.False(options.IncludeCoChange);
+        Assert.Equal(16, options.MaximumReasonsPerCandidate);
+        Assert.Equal(2_000, options.MaximumIndexedKeysPerFile);
     }
 
     private static IHost CreateHost(string localStateDirectory)

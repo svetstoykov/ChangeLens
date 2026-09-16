@@ -6,6 +6,10 @@ using ChangeLens.Core.AnalysisRuns.Interfaces;
 using ChangeLens.Core.AnalysisRuns.Services;
 using ChangeLens.Core.Comparisons.Interfaces;
 using ChangeLens.Core.Comparisons.Services;
+using ChangeLens.Core.Correspondence.Constants;
+using ChangeLens.Core.Correspondence.Interfaces;
+using ChangeLens.Core.Correspondence.Models;
+using ChangeLens.Core.Correspondence.Services;
 using ChangeLens.Core.EngineStatus.Interfaces;
 using ChangeLens.Core.Git.Interfaces;
 using ChangeLens.Core.Git.Services;
@@ -170,6 +174,24 @@ internal static class EngineHostApplicationBuilderExtensions
         };
     }
 
+    /// <summary>Reads the configured bounds and weights for correspondence ranking.</summary>
+    /// <param name="configuration">The engine configuration. Cannot be <see langword="null" />.</param>
+    /// <returns>The configured correspondence options, using safe defaults for absent or malformed values.</returns>
+    private static CorrespondenceOptions CreateCorrespondenceOptions(IConfiguration configuration)
+    {
+        ArgumentNullException.ThrowIfNull(configuration);
+        var defaults = new CorrespondenceOptions();
+        return new CorrespondenceOptions
+        {
+            MaximumCandidates = ReadPositiveInt(configuration, CorrespondenceConfigurationConstants.MaximumCandidatesKey, defaults.MaximumCandidates),
+            MaximumIndexedKeysPerFile = ReadPositiveInt(
+                configuration, CorrespondenceConfigurationConstants.MaximumIndexedKeysPerFileKey, defaults.MaximumIndexedKeysPerFile),
+            MaximumReasonsPerCandidate = ReadPositiveInt(
+                configuration, CorrespondenceConfigurationConstants.MaximumReasonsPerCandidateKey, defaults.MaximumReasonsPerCandidate),
+            IncludeCoChange = ReadBoolean(configuration, CorrespondenceConfigurationConstants.IncludeCoChangeKey, defaults.IncludeCoChange),
+        };
+    }
+
     /// <summary>Reads one positive integer configuration value.</summary>
     /// <param name="configuration">The engine configuration. Cannot be <see langword="null" />.</param>
     /// <param name="key">The configuration key. Cannot be <see langword="null" />.</param>
@@ -185,6 +207,14 @@ internal static class EngineHostApplicationBuilderExtensions
     /// <returns>The positive configured duration or <paramref name="fallback" />.</returns>
     private static TimeSpan ReadPositiveTimeSpan(IConfiguration configuration, string key, TimeSpan fallback) =>
         TimeSpan.TryParse(configuration[key], out var value) && value > TimeSpan.Zero ? value : fallback;
+
+    /// <summary>Reads one Boolean configuration value.</summary>
+    /// <param name="configuration">The engine configuration. Cannot be <see langword="null" />.</param>
+    /// <param name="key">The configuration key. Cannot be <see langword="null" />.</param>
+    /// <param name="fallback">The value used when the key is absent or invalid.</param>
+    /// <returns>The configured value or <paramref name="fallback" />.</returns>
+    private static bool ReadBoolean(IConfiguration configuration, string key, bool fallback) =>
+        bool.TryParse(configuration[key], out var value) ? value : fallback;
 
     /// <summary>Registers comparison services.</summary>
     /// <param name="builder">The host application builder to configure. Cannot be <see langword="null" />.</param>
@@ -214,6 +244,8 @@ internal static class EngineHostApplicationBuilderExtensions
         builder.Services.AddSingleton(CreateChangeAnatomyOptions(builder.Configuration));
         builder.Services.AddScoped<IFrozenGitTreeReaderFactory, FrozenGitTreeReaderFactory>();
         builder.Services.AddScoped<IChangeAnatomyService, ChangeAnatomyService>();
+        builder.Services.AddSingleton(CreateCorrespondenceOptions(builder.Configuration));
+        builder.Services.AddScoped<ICorrespondenceRankingService, CorrespondenceRankingService>();
         builder.Services.AddScoped<ISnapshotCaptureService, GitSnapshotCaptureService>();
         builder.Services.AddScoped<IAnalysisPipeline, ShallowAnalysisPipeline>();
         builder.Services.AddScoped<IAnalysisRunCoordinator, AnalysisRunCoordinator>();

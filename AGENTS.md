@@ -2,6 +2,8 @@
 
 This file is an index. The rules live in `docs/ai-rules/` as bounded context files so that only the relevant ones are loaded for a given task.
 
+The entire `docs/` tree is local and gitignored, including `docs/ai-rules/`. Never add, stage, or commit anything under `docs/`. Read the rule files from disk when they are present; a published clone does not contain them.
+
 ## Always read
 
 Read these two files before doing anything else in a session. They are short and always apply.
@@ -32,3 +34,4 @@ Read a file before starting work that matches its trigger. When several triggers
 
 - Add a durable engineering rule to the file whose trigger already covers it. Create a new bounded file only when a genuinely new area appears, and add its trigger row here in the same change.
 - Keep detailed and frequently changing product requirements in `docs/product` or feature-specific specifications, not in `docs/ai-rules/`.
+- Edits under `docs/` stay on this machine. They are never part of a commit.

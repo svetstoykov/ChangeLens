@@ -112,14 +112,9 @@ _ReSharper*/
 
 # Local agent workflow material
 .kilo/
-docs/superpowers/
 
-# Product and design material stays local. Only docs/ai-rules is versioned.
-docs/architecture/
-docs/decisions/
-docs/evaluation/
-docs/product/
-docs/tech-debt/
+# The entire docs/ tree is local. Nothing under it is versioned, including ai-rules.
+/docs/
 
 # Operating-system metadata
 .DS_Store

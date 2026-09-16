@@ -38,13 +38,13 @@ public sealed class GitCliCommandRunnerTests
             "Здравей 🌍",
             $"$(touch {shellMarker})",
         };
-        var runner = CreateRunner();
-
+        var previousFixtureMode = Environment.GetEnvironmentVariable("CHANGELENS_GIT_FIXTURE_MODE");
         var result = await RunInFixtureModeAsync(
             "inspect",
-            () => runner.RunAsync(CreateCommand(arguments), CancellationToken.None));
+            runner => runner.RunAsync(CreateCommand(arguments), CancellationToken.None));
 
         Assert.True(result.IsSuccess);
+        Assert.Equal(previousFixtureMode, Environment.GetEnvironmentVariable("CHANGELENS_GIT_FIXTURE_MODE"));
         Assert.False(File.Exists(shellMarker));
         using var document = JsonDocument.Parse(Assert.IsType<GitCommandOutput>(result.Data).StandardOutput);
         var receivedArguments = document.RootElement
@@ -72,13 +72,15 @@ public sealed class GitCliCommandRunnerTests
     [Fact]
     public async Task Constructor_MutablePrefixArguments_CopiesValues()
     {
-        var executableArguments = new[] { FixtureAssemblyPath };
-        var runner = new GitCliCommandRunner(DotnetExecutablePath, executableArguments);
-        executableArguments[0] = "changed-after-construction.dll";
-
-        var result = await RunInFixtureModeAsync(
+        var result = await RunInFixtureEnvironmentAsync(
             "success",
-            () => runner.RunAsync(CreateCommand([]), CancellationToken.None));
+            environment =>
+            {
+                var executableArguments = new[] { FixtureAssemblyPath };
+                var runner = CreateRunner(environment, executableArguments);
+                executableArguments[0] = "changed-after-construction.dll";
+                return runner.RunAsync(CreateCommand([]), CancellationToken.None);
+            });
 
         Assert.True(result.IsSuccess);
     }
@@ -90,11 +92,9 @@ public sealed class GitCliCommandRunnerTests
     [Fact]
     public async Task RunAsync_Success_CapturesStreamsSeparately()
     {
-        var runner = CreateRunner();
-
         var result = await RunInFixtureModeAsync(
             "success",
-            () => runner.RunAsync(CreateCommand([]), CancellationToken.None));
+            runner => runner.RunAsync(CreateCommand([]), CancellationToken.None));
 
         Assert.True(result.IsSuccess);
         var output = Assert.IsType<GitCommandOutput>(result.Data);
@@ -110,17 +110,69 @@ public sealed class GitCliCommandRunnerTests
     [Fact]
     public async Task RunAsync_NonzeroExit_ReturnsCapturedOutput()
     {
-        var runner = CreateRunner();
-
         var result = await RunInFixtureModeAsync(
             "nonzero",
-            () => runner.RunAsync(CreateCommand([]), CancellationToken.None));
+            runner => runner.RunAsync(CreateCommand([]), CancellationToken.None));
 
         Assert.True(result.IsSuccess);
         var output = Assert.IsType<GitCommandOutput>(result.Data);
         Assert.Equal(128, output.ExitCode);
         Assert.Equal("fixture nonzero output", output.StandardOutput);
         Assert.Equal("fixture nonzero error", output.StandardError);
+    }
+
+    /// <summary>
+    ///     Asynchronously preserves binary standard output bytes without UTF-8 decoding.
+    /// </summary>
+    /// <returns>A task that represents the asynchronous operation.</returns>
+    [Fact]
+    public async Task RunBinaryAsync_Success_PreservesExactStandardOutputBytes()
+    {
+        var result = await RunInFixtureModeAsync(
+            "invalid-utf8",
+            runner => runner.RunBinaryAsync(CreateCommand([]), CancellationToken.None));
+
+        Assert.True(result.IsSuccess);
+        var output = Assert.IsType<GitBinaryCommandOutput>(result.Data);
+        Assert.Equal([0xc3, 0x28], output.StandardOutput);
+        Assert.Equal(string.Empty, output.StandardError);
+    }
+
+    /// <summary>
+    ///     Asynchronously preserves binary standard output and diagnostics for a nonzero process exit.
+    /// </summary>
+    /// <returns>A task that represents the asynchronous operation.</returns>
+    [Fact]
+    public async Task RunBinaryAsync_NonzeroExit_ReturnsCapturedOutput()
+    {
+        var result = await RunInFixtureModeAsync(
+            "nonzero",
+            runner => runner.RunBinaryAsync(CreateCommand([]), CancellationToken.None));
+
+        Assert.True(result.IsSuccess);
+        var output = Assert.IsType<GitBinaryCommandOutput>(result.Data);
+        Assert.Equal(128, output.ExitCode);
+        Assert.Equal(Encoding.UTF8.GetBytes("fixture nonzero output"), output.StandardOutput);
+        Assert.Equal("fixture nonzero error", output.StandardError);
+    }
+
+    /// <summary>
+    ///     Asynchronously applies the configured output bound to binary standard output.
+    /// </summary>
+    /// <returns>A task that represents the asynchronous operation.</returns>
+    [Fact]
+    public async Task RunBinaryAsync_StreamExceedingItsBound_ReturnsSuppliedOutputLimitError()
+    {
+        var outputLimitError = OperationError.UnprocessableInput("Output limit.", "comparison.tooLarge");
+
+        var result = await RunInFixtureModeAsync(
+            "large-stdout",
+            runner => runner.RunBinaryAsync(
+                CreateCommand([], maximumStandardOutputBytes: 64 * 1024, outputLimitError: outputLimitError),
+                CancellationToken.None));
+
+        Assert.Same(outputLimitError, Assert.Single(result.Errors));
+        Assert.Null(result.Data);
     }
 
     /// <summary>
@@ -149,12 +201,11 @@ public sealed class GitCliCommandRunnerTests
     [InlineData("large-stderr")]
     public async Task RunAsync_StreamExceedingItsOwnBound_ReturnsSuppliedOutputLimitError(string mode)
     {
-        var runner = CreateRunner();
         var outputLimitError = OperationError.UnprocessableInput("Output limit.", "comparison.tooLarge");
 
         var result = await RunInFixtureModeAsync(
             mode,
-            () => runner.RunAsync(
+            runner => runner.RunAsync(
                 CreateCommand(
                     [],
                     maximumStandardOutputBytes: mode == "large-stdout" ? 64 * 1024 : null,
@@ -173,11 +224,9 @@ public sealed class GitCliCommandRunnerTests
     [Fact]
     public async Task RunAsync_LargeStandardOutputBelowSeparateCeiling_Succeeds()
     {
-        var runner = CreateRunner();
-
         var result = await RunInFixtureModeAsync(
             "large-stdout",
-            () => runner.RunAsync(CreateCommand([]), CancellationToken.None));
+            runner => runner.RunAsync(CreateCommand([]), CancellationToken.None));
 
         Assert.True(result.IsSuccess);
         Assert.Equal(128 * 1024, Assert.IsType<GitCommandOutput>(result.Data).StandardOutput.Length);
@@ -190,8 +239,6 @@ public sealed class GitCliCommandRunnerTests
     [Fact]
     public async Task RunAsync_ExactComparisonFactAndDiagnosticLimits_Succeeds()
     {
-        var runner = CreateRunner();
-
         var result = await RunInFixtureModeAsync(
             "raw-committed-records",
             new Dictionary<string, string>
@@ -200,7 +247,7 @@ public sealed class GitCliCommandRunnerTests
                 ["CHANGELENS_GIT_FIXTURE_PATH_LENGTH"] = "924",
                 ["CHANGELENS_GIT_FIXTURE_STDERR_BYTES"] = (64 * 1024).ToString(CultureInfo.InvariantCulture),
             },
-            () => runner.RunAsync(CreateCommand([]), CancellationToken.None));
+            runner => runner.RunAsync(CreateCommand([]), CancellationToken.None));
 
         Assert.True(result.IsSuccess);
         var output = Assert.IsType<GitCommandOutput>(result.Data);
@@ -218,8 +265,6 @@ public sealed class GitCliCommandRunnerTests
         using var temporaryDirectory = new TemporaryDirectory();
         var childProcessIdPath = Path.Combine(temporaryDirectory.DirectoryPath, "child.pid");
         var tooLarge = OperationError.UnprocessableInput("Output limit.", "comparison.tooLarge");
-        var runner = CreateRunner();
-
         try
         {
             var result = await RunInFixtureModeAsync(
@@ -233,7 +278,7 @@ public sealed class GitCliCommandRunnerTests
                     ["CHANGELENS_GIT_FIXTURE_CHILD_PROCESS_ID_PATH"] = childProcessIdPath,
                     ["CHANGELENS_GIT_FIXTURE_WAIT_AFTER_WRITE"] = "true",
                 },
-                () => runner.RunAsync(
+                runner => runner.RunAsync(
                     CreateCommand([], outputLimitError: tooLarge),
                     CancellationToken.None));
 
@@ -255,12 +300,11 @@ public sealed class GitCliCommandRunnerTests
     [Fact]
     public async Task RunAsync_InvalidUtf8_ReturnsSuppliedInspectionFailure()
     {
-        var runner = CreateRunner();
         var inspectionError = OperationError.ExternalDependencyFailure("Inspection failed.", "comparison.failed");
 
         var result = await RunInFixtureModeAsync(
             "invalid-utf8",
-            () => runner.RunAsync(CreateCommand([], inspectionError: inspectionError), CancellationToken.None));
+            runner => runner.RunAsync(CreateCommand([], inspectionError: inspectionError), CancellationToken.None));
 
         var error = Assert.Single(result.Errors);
         Assert.Same(inspectionError, error);
@@ -275,14 +319,12 @@ public sealed class GitCliCommandRunnerTests
     public async Task RunAsync_RedirectedStreamReadFailure_ReturnsSuppliedInspectionFailure()
     {
         var inspectionError = OperationError.ExternalDependencyFailure("Inspection failed.", "comparison.failed");
-        var runner = new GitCliCommandRunner(
-            DotnetExecutablePath,
-            [FixtureAssemblyPath],
-            ThrowRedirectedStreamReadFailureAsync);
-
-        var result = await RunInFixtureModeAsync(
-            "sleep",
-            () => runner.RunAsync(CreateCommand([], inspectionError: inspectionError), CancellationToken.None));
+        var environment = new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["CHANGELENS_GIT_FIXTURE_MODE"] = "sleep",
+        };
+        var runner = CreateRunner(environment, [FixtureAssemblyPath], ThrowRedirectedStreamReadFailureAsync);
+        var result = await runner.RunAsync(CreateCommand([], inspectionError: inspectionError), CancellationToken.None);
 
         Assert.Same(inspectionError, Assert.Single(result.Errors));
     }
@@ -297,13 +339,11 @@ public sealed class GitCliCommandRunnerTests
         using var temporaryDirectory = new TemporaryDirectory();
         var childProcessIdPath = Path.Combine(temporaryDirectory.DirectoryPath, "child.pid");
         var outputLimitError = OperationError.UnprocessableInput("Output limit.", "comparison.tooLarge");
-        var runner = CreateRunner();
-
         try
         {
             var result = await RunInFixtureModeAsync(
                 "spawn-child-and-large-stdout",
-                () => runner.RunAsync(
+                runner => runner.RunAsync(
                     CreateCommand(
                         [childProcessIdPath],
                         maximumStandardOutputBytes: 64 * 1024,
@@ -329,16 +369,60 @@ public sealed class GitCliCommandRunnerTests
     {
         using var temporaryDirectory = new TemporaryDirectory();
         var childProcessIdPath = Path.Combine(temporaryDirectory.DirectoryPath, "child.pid");
-        var runner = CreateRunner();
         var timedOut = OperationError.Timeout("Timed out.", "comparison.timedOut");
 
         var result = await RunInFixtureModeAsync(
             "spawn-child",
-            () => runner.RunAsync(
+            runner => runner.RunAsync(
                 CreateCommand([childProcessIdPath], TimeSpan.FromSeconds(2), timedOutError: timedOut),
                 CancellationToken.None));
 
         Assert.Same(timedOut, Assert.Single(result.Errors));
+        var childProcessId = await ReadProcessIdAsync(childProcessIdPath);
+        await AssertProcessReapedAsync(childProcessId);
+    }
+
+    /// <summary>
+    ///     Asynchronously times out, terminates, and reaps a controlled binary process tree.
+    /// </summary>
+    /// <returns>A task that represents the asynchronous operation.</returns>
+    [Fact]
+    public async Task RunBinaryAsync_InternalTimeout_KillsAndReapsProcessTree()
+    {
+        using var temporaryDirectory = new TemporaryDirectory();
+        var childProcessIdPath = Path.Combine(temporaryDirectory.DirectoryPath, "child.pid");
+        var timedOut = OperationError.Timeout("Timed out.", "comparison.timedOut");
+
+        var result = await RunInFixtureModeAsync(
+            "spawn-child",
+            runner => runner.RunBinaryAsync(
+                CreateCommand([childProcessIdPath], TimeSpan.FromSeconds(2), timedOutError: timedOut),
+                CancellationToken.None));
+
+        Assert.Same(timedOut, Assert.Single(result.Errors));
+        var childProcessId = await ReadProcessIdAsync(childProcessIdPath);
+        await AssertProcessReapedAsync(childProcessId);
+    }
+
+    /// <summary>
+    ///     Asynchronously terminates and reaps a controlled binary process tree when caller cancellation wins.
+    /// </summary>
+    /// <returns>A task that represents the asynchronous operation.</returns>
+    [Fact]
+    public async Task RunBinaryAsync_CallerCancellation_KillsAndReapsProcessTreeAndRethrows()
+    {
+        using var temporaryDirectory = new TemporaryDirectory();
+        var childProcessIdPath = Path.Combine(temporaryDirectory.DirectoryPath, "child.pid");
+        using var cancellationTokenSource = new CancellationTokenSource(TimeSpan.FromSeconds(2));
+
+        var exception = await Assert.ThrowsAsync<OperationCanceledException>(
+            () => RunInFixtureModeAsync(
+                "spawn-child",
+                runner => runner.RunBinaryAsync(
+                    CreateCommand([childProcessIdPath], TimeSpan.FromSeconds(10)),
+                    cancellationTokenSource.Token)));
+
+        Assert.Equal(cancellationTokenSource.Token, exception.CancellationToken);
         var childProcessId = await ReadProcessIdAsync(childProcessIdPath);
         await AssertProcessReapedAsync(childProcessId);
     }
@@ -353,12 +437,10 @@ public sealed class GitCliCommandRunnerTests
         using var temporaryDirectory = new TemporaryDirectory();
         var childProcessIdPath = Path.Combine(temporaryDirectory.DirectoryPath, "child.pid");
         using var cancellationTokenSource = new CancellationTokenSource(TimeSpan.FromSeconds(2));
-        var runner = CreateRunner();
-
         var exception = await Assert.ThrowsAsync<OperationCanceledException>(
             () => RunInFixtureModeAsync(
                 "spawn-child",
-                () => runner.RunAsync(
+                runner => runner.RunAsync(
                     CreateCommand([childProcessIdPath], TimeSpan.FromSeconds(10)),
                     cancellationTokenSource.Token)));
 
@@ -377,13 +459,11 @@ public sealed class GitCliCommandRunnerTests
     {
         using var temporaryDirectory = new TemporaryDirectory();
         var childProcessIdPath = Path.Combine(temporaryDirectory.DirectoryPath, "child.pid");
-        var runner = CreateRunner();
-
         try
         {
             var result = await RunInFixtureModeAsync(
                     "spawn-inheriting-child-and-exit",
-                    () => runner.RunAsync(
+                    runner => runner.RunAsync(
                         CreateCommand([childProcessIdPath], TimeSpan.FromSeconds(1)),
                         CancellationToken.None))
                 .WaitAsync(
@@ -408,14 +488,12 @@ public sealed class GitCliCommandRunnerTests
         using var temporaryDirectory = new TemporaryDirectory();
         var childProcessIdPath = Path.Combine(temporaryDirectory.DirectoryPath, "child.pid");
         using var cancellationTokenSource = new CancellationTokenSource(TimeSpan.FromSeconds(1));
-        var runner = CreateRunner();
-
         try
         {
             var exception = await Assert.ThrowsAsync<OperationCanceledException>(
                 () => RunInFixtureModeAsync(
                         "spawn-inheriting-child-and-exit",
-                        () => runner.RunAsync(
+                        runner => runner.RunAsync(
                             CreateCommand([childProcessIdPath], TimeSpan.FromSeconds(10)),
                             cancellationTokenSource.Token))
                     .WaitAsync(
@@ -436,8 +514,19 @@ public sealed class GitCliCommandRunnerTests
     private static string FixtureAssemblyPath =>
         Path.Combine(AppContext.BaseDirectory, "ChangeLens.GitProcessFixture.dll");
 
-    private static GitCliCommandRunner CreateRunner() =>
-        new(DotnetExecutablePath, [FixtureAssemblyPath]);
+    private static GitCliCommandRunner CreateRunner(IReadOnlyDictionary<string, string> processEnvironment) =>
+        new(DotnetExecutablePath, [FixtureAssemblyPath], processEnvironment);
+
+    private static GitCliCommandRunner CreateRunner(
+        IReadOnlyDictionary<string, string> processEnvironment,
+        IEnumerable<string> executableArguments) =>
+        new(DotnetExecutablePath, executableArguments, processEnvironment);
+
+    private static GitCliCommandRunner CreateRunner(
+        IReadOnlyDictionary<string, string> processEnvironment,
+        IEnumerable<string> executableArguments,
+        Func<Stream, int, CancellationToken, Task<byte[]>> readBoundedAsync) =>
+        new(DotnetExecutablePath, executableArguments, readBoundedAsync, processEnvironment: processEnvironment);
 
     private static Task<byte[]> ThrowRedirectedStreamReadFailureAsync(
         Stream stream,
@@ -477,42 +566,41 @@ public sealed class GitCliCommandRunnerTests
 
     private static async Task<T> RunInFixtureModeAsync<T>(
         string mode,
-        Func<Task<T>> operation)
+        Func<GitCliCommandRunner, Task<T>> operation)
         => await RunInFixtureModeAsync(
             mode,
             new Dictionary<string, string>(StringComparer.Ordinal),
             operation);
 
-    private static async Task<T> RunInFixtureModeAsync<T>(
+    private static async Task<T> RunInFixtureEnvironmentAsync<T>(
+        string mode,
+        Func<IReadOnlyDictionary<string, string>, Task<T>> operation)
+        => await RunInFixtureEnvironmentAsync(
+            mode,
+            new Dictionary<string, string>(StringComparer.Ordinal),
+            operation);
+
+    private static async Task<T> RunInFixtureEnvironmentAsync<T>(
         string mode,
         IReadOnlyDictionary<string, string> variables,
-        Func<Task<T>> operation)
+        Func<IReadOnlyDictionary<string, string>, Task<T>> operation)
     {
-        const string variableName = "CHANGELENS_GIT_FIXTURE_MODE";
-        var previousMode = Environment.GetEnvironmentVariable(variableName);
-        var previousValues = variables.ToDictionary(
+        var processEnvironment = variables.ToDictionary(
             pair => pair.Key,
-            pair => Environment.GetEnvironmentVariable(pair.Key),
+            pair => pair.Value,
             StringComparer.Ordinal);
-        Environment.SetEnvironmentVariable(variableName, mode);
-        foreach (var (name, value) in variables)
-        {
-            Environment.SetEnvironmentVariable(name, value);
-        }
-
-        try
-        {
-            return await operation();
-        }
-        finally
-        {
-            Environment.SetEnvironmentVariable(variableName, previousMode);
-            foreach (var (name, value) in previousValues)
-            {
-                Environment.SetEnvironmentVariable(name, value);
-            }
-        }
+        processEnvironment["CHANGELENS_GIT_FIXTURE_MODE"] = mode;
+        return await operation(processEnvironment);
     }
+
+    private static Task<T> RunInFixtureModeAsync<T>(
+        string mode,
+        IReadOnlyDictionary<string, string> variables,
+        Func<GitCliCommandRunner, Task<T>> operation)
+        => RunInFixtureEnvironmentAsync(
+            mode,
+            variables,
+            processEnvironment => operation(CreateRunner(processEnvironment)));
 
     private static OperationError AssertFailure(
         Result<GitCommandOutput> result,

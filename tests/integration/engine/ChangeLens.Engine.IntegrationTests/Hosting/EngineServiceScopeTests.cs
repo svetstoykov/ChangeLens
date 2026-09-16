@@ -2,6 +2,8 @@ using System.Diagnostics;
 using ChangeLens.Core.EngineStatus.Interfaces;
 using ChangeLens.Core.LocalState.Constants;
 using ChangeLens.Core.LocalState.Interfaces;
+using ChangeLens.Core.Snapshots.Interfaces;
+using ChangeLens.Core.Snapshots.Models;
 using ChangeLens.Engine.Hosting.Extensions;
 using ChangeLens.Engine.Hosting.Services;
 using ChangeLens.Engine.IntegrationTests.Support;
@@ -144,6 +146,27 @@ public sealed class EngineServiceScopeTests
         Assert.True(result.IsFailure);
         Assert.Equal(LocalStateErrorCode.Unavailable, Assert.Single(result.Errors).Code);
         Assert.False(File.Exists(paths.DatabasePath));
+    }
+
+    /// <summary>
+    ///     Keeps frozen snapshot reader registration with analysis-run services and preserves its lifetimes.
+    /// </summary>
+    [Fact]
+    public void FrozenSnapshotReaderRegistrationBelongsToAnalysisRunServices()
+    {
+        var builder = Host.CreateApplicationBuilder();
+
+        builder.AddRepositoryServices();
+
+        Assert.DoesNotContain(builder.Services, descriptor => descriptor.ServiceType == typeof(FrozenGitTreeReaderOptions));
+        Assert.DoesNotContain(builder.Services, descriptor => descriptor.ServiceType == typeof(IFrozenGitTreeReaderFactory));
+
+        builder.AddAnalysisRunServices();
+
+        var optionsDescriptor = Assert.Single(builder.Services, descriptor => descriptor.ServiceType == typeof(FrozenGitTreeReaderOptions));
+        var factoryDescriptor = Assert.Single(builder.Services, descriptor => descriptor.ServiceType == typeof(IFrozenGitTreeReaderFactory));
+        Assert.Equal(ServiceLifetime.Singleton, optionsDescriptor.Lifetime);
+        Assert.Equal(ServiceLifetime.Scoped, factoryDescriptor.Lifetime);
     }
 
     private static IHost CreateHost(string localStateDirectory)

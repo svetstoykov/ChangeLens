@@ -40,10 +40,12 @@ public sealed class ChangeAnatomyServiceIntegrationTests
         TemporaryGitRepository.RunGit(["-C", repository.RootPath, "add", "--", "added.cs", "modified.txt"]);
         TemporaryGitRepository.RunGit(["-C", repository.RootPath, "commit", "--quiet", "--no-gpg-sign", "-m", "apply change categories"]);
         var head = repository.Revision;
-        var added = CreateAddedEntry(repository, head, "added.cs");
-        var modified = CreateEntry(repository, mergeBase, head, "modified.txt", "modified.txt", SnapshotChangeCategory.Modified);
-        var deleted = CreateDeletedEntry(repository, mergeBase, "deleted.txt");
-        var renamed = CreateEntry(repository, mergeBase, head, "old-name.cs", "new-name.cs", SnapshotChangeCategory.Renamed);
+        var added = SnapshotManifestEntryFixtures.CreateAddedEntry(repository, head, "added.cs");
+        var modified = SnapshotManifestEntryFixtures.CreateEntry(
+            repository, mergeBase, head, "modified.txt", "modified.txt", SnapshotChangeCategory.Modified);
+        var deleted = SnapshotManifestEntryFixtures.CreateDeletedEntry(repository, mergeBase, "deleted.txt");
+        var renamed = SnapshotManifestEntryFixtures.CreateEntry(
+            repository, mergeBase, head, "old-name.cs", "new-name.cs", SnapshotChangeCategory.Renamed);
         var result = await AnalyzeAsync(repository, mergeBase, head, [added, modified, deleted, renamed]);
 
         Assert.True(result.IsSuccess);
@@ -85,10 +87,13 @@ public sealed class ChangeAnatomyServiceIntegrationTests
         TemporaryGitRepository.RunGit(["-C", repository.RootPath, "add", "--", "package-lock.json", "credential.txt"]);
         TemporaryGitRepository.RunGit(["-C", repository.RootPath, "commit", "--quiet", "--no-gpg-sign", "-m", "apply exclusions"]);
         var head = repository.Revision;
-        var firstRename = CreateEntry(repository, mergeBase, head, "vendor/old.cs", "renamed.cs", SnapshotChangeCategory.Renamed);
-        var secondRename = CreateEntry(repository, mergeBase, head, "safe.cs", "vendor/new.cs", SnapshotChangeCategory.Renamed);
-        var lockEntry = CreateAddedEntry(repository, head, "package-lock.json");
-        var credentialEntry = CreateEntry(repository, mergeBase, head, "credential.txt", "credential.txt", SnapshotChangeCategory.Modified);
+        var firstRename = SnapshotManifestEntryFixtures.CreateEntry(
+            repository, mergeBase, head, "vendor/old.cs", "renamed.cs", SnapshotChangeCategory.Renamed);
+        var secondRename = SnapshotManifestEntryFixtures.CreateEntry(
+            repository, mergeBase, head, "safe.cs", "vendor/new.cs", SnapshotChangeCategory.Renamed);
+        var lockEntry = SnapshotManifestEntryFixtures.CreateAddedEntry(repository, head, "package-lock.json");
+        var credentialEntry = SnapshotManifestEntryFixtures.CreateEntry(
+            repository, mergeBase, head, "credential.txt", "credential.txt", SnapshotChangeCategory.Modified);
         var result = await AnalyzeAsync(repository, mergeBase, head, [firstRename, secondRename, lockEntry, credentialEntry]);
 
         Assert.True(result.IsSuccess);
@@ -115,7 +120,7 @@ public sealed class ChangeAnatomyServiceIntegrationTests
         repository.Stage("data.dat");
         repository.CreateSubmodule();
         var head = repository.Revision;
-        var binaryEntry = CreateAddedEntry(repository, head, "data.dat");
+        var binaryEntry = SnapshotManifestEntryFixtures.CreateAddedEntry(repository, head, "data.dat");
         var submodulePath = "child module";
         var submoduleRevision = TemporaryGitRepository.RunGit(["-C", Path.Combine(repository.RootPath, submodulePath), "rev-parse", "HEAD"])
             .StandardOutput.Trim();
@@ -151,7 +156,7 @@ public sealed class ChangeAnatomyServiceIntegrationTests
         repository.Stage("state.txt");
         TemporaryGitRepository.RunGit(["-C", repository.RootPath, "commit", "--quiet", "--no-gpg-sign", "-m", "change multiline state"]);
         var head = repository.Revision;
-        var entry = CreateEntry(repository, mergeBase, head, "state.txt", "state.txt", SnapshotChangeCategory.Modified);
+        var entry = SnapshotManifestEntryFixtures.CreateEntry(repository, mergeBase, head, "state.txt", "state.txt", SnapshotChangeCategory.Modified);
         var result = await AnalyzeAsync(repository, mergeBase, head, [entry]);
 
         Assert.True(result.IsSuccess);
@@ -179,8 +184,8 @@ public sealed class ChangeAnatomyServiceIntegrationTests
         repository.Stage("cap.txt");
         TemporaryGitRepository.RunGit(["-C", repository.RootPath, "commit", "--quiet", "--no-gpg-sign", "-m", "change caps"]);
         var head = repository.Revision;
-        var zeroEntry = CreateEntry(repository, mergeBase, head, "a", "a", SnapshotChangeCategory.Modified);
-        var capEntry = CreateEntry(repository, mergeBase, head, "cap.txt", "cap.txt", SnapshotChangeCategory.Modified);
+        var zeroEntry = SnapshotManifestEntryFixtures.CreateEntry(repository, mergeBase, head, "a", "a", SnapshotChangeCategory.Modified);
+        var capEntry = SnapshotManifestEntryFixtures.CreateEntry(repository, mergeBase, head, "cap.txt", "cap.txt", SnapshotChangeCategory.Modified);
         var logger = new RecordingSnapshotLogger<ChangeAnatomyService>();
         var result = await AnalyzeAsync(
             repository,
@@ -232,7 +237,7 @@ public sealed class ChangeAnatomyServiceIntegrationTests
         var mergeBase = repository.Revision;
         repository.CommitFile("captured.txt", "capturedName = \"captured-value\";\n", "capture content");
         var head = repository.Revision;
-        var entry = CreateAddedEntry(repository, head, "captured.txt");
+        var entry = SnapshotManifestEntryFixtures.CreateAddedEntry(repository, head, "captured.txt");
         repository.WriteFile("captured.txt", "worktreeName = \"worktree-value\";\n");
 
         var result = await AnalyzeAsync(repository, mergeBase, head, [entry]);
@@ -295,51 +300,5 @@ public sealed class ChangeAnatomyServiceIntegrationTests
         var service = new ChangeAnatomyService(
             readerFactory, options ?? new ChangeAnatomyOptions(), logger ?? NullLogger<ChangeAnatomyService>.Instance);
         return await service.AnalyzeAsync(identity, snapshot, cancellationToken ?? TestContext.Current.CancellationToken);
-    }
-
-    private static SnapshotManifestEntry CreateAddedEntry(TemporaryGitRepository repository, string head, string path)
-    {
-        var objectId = ResolveBlob(repository, head, path);
-        return new SnapshotManifestEntry(
-            path,
-            null,
-            SnapshotChangeCategory.Added,
-            new string('0', 6),
-            "100644",
-            new string('0', objectId.Length),
-            objectId);
-    }
-
-    private static SnapshotManifestEntry CreateDeletedEntry(TemporaryGitRepository repository, string mergeBase, string path)
-    {
-        var objectId = ResolveBlob(repository, mergeBase, path);
-        return new SnapshotManifestEntry(
-            path,
-            null,
-            SnapshotChangeCategory.Deleted,
-            "100644",
-            new string('0', 6),
-            objectId,
-            new string('0', objectId.Length));
-    }
-
-    private static SnapshotManifestEntry CreateEntry(
-        TemporaryGitRepository repository,
-        string mergeBase,
-        string head,
-        string mergeBasePath,
-        string headPath,
-        SnapshotChangeCategory category)
-    {
-        var mergeBaseObjectId = ResolveBlob(repository, mergeBase, mergeBasePath);
-        var headObjectId = ResolveBlob(repository, head, headPath);
-        return new SnapshotManifestEntry(headPath, mergeBasePath, category, "100644", "100644", mergeBaseObjectId, headObjectId);
-    }
-
-    private static string ResolveBlob(TemporaryGitRepository repository, string revision, string path)
-    {
-        var output = TemporaryGitRepository.RunGit(["-C", repository.RootPath, "rev-parse", $"{revision}:{path}"]);
-        Assert.Equal(0, output.ExitCode);
-        return output.StandardOutput.Trim();
     }
 }

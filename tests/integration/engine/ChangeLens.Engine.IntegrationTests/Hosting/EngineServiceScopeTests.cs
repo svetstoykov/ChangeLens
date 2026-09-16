@@ -1,10 +1,16 @@
 using System.Diagnostics;
 using ChangeLens.Core.ChangeAnatomy.Interfaces;
 using ChangeLens.Core.ChangeAnatomy.Models;
+using ChangeLens.Core.ContextPolicy.Constants;
+using ChangeLens.Core.ContextPolicy.Interfaces;
+using ChangeLens.Core.ContextPolicy.Models;
 using ChangeLens.Core.Correspondence.Constants;
 using ChangeLens.Core.Correspondence.Interfaces;
 using ChangeLens.Core.Correspondence.Models;
 using ChangeLens.Core.EngineStatus.Interfaces;
+using ChangeLens.Core.EvidenceGraph.Constants;
+using ChangeLens.Core.EvidenceGraph.Interfaces;
+using ChangeLens.Core.EvidenceGraph.Models;
 using ChangeLens.Core.LocalState.Constants;
 using ChangeLens.Core.LocalState.Interfaces;
 using ChangeLens.Core.Snapshots.Interfaces;
@@ -169,6 +175,10 @@ public sealed class EngineServiceScopeTests
         Assert.DoesNotContain(builder.Services, descriptor => descriptor.ServiceType == typeof(IChangeAnatomyService));
         Assert.DoesNotContain(builder.Services, descriptor => descriptor.ServiceType == typeof(CorrespondenceOptions));
         Assert.DoesNotContain(builder.Services, descriptor => descriptor.ServiceType == typeof(ICorrespondenceRankingService));
+        Assert.DoesNotContain(builder.Services, descriptor => descriptor.ServiceType == typeof(EvidenceGraphOptions));
+        Assert.DoesNotContain(builder.Services, descriptor => descriptor.ServiceType == typeof(IEvidenceGraphService));
+        Assert.DoesNotContain(builder.Services, descriptor => descriptor.ServiceType == typeof(ContextPolicyOptions));
+        Assert.DoesNotContain(builder.Services, descriptor => descriptor.ServiceType == typeof(IContextPolicyService));
 
         builder.AddAnalysisRunServices();
 
@@ -185,6 +195,38 @@ public sealed class EngineServiceScopeTests
         Assert.Equal(ServiceLifetime.Scoped, anatomyServiceDescriptor.Lifetime);
         Assert.Equal(ServiceLifetime.Singleton, correspondenceOptionsDescriptor.Lifetime);
         Assert.Equal(ServiceLifetime.Scoped, correspondenceRankingDescriptor.Lifetime);
+        var graphOptionsDescriptor = Assert.Single(builder.Services, descriptor => descriptor.ServiceType == typeof(EvidenceGraphOptions));
+        var graphServiceDescriptor = Assert.Single(builder.Services, descriptor => descriptor.ServiceType == typeof(IEvidenceGraphService));
+        var policyOptionsDescriptor = Assert.Single(builder.Services, descriptor => descriptor.ServiceType == typeof(ContextPolicyOptions));
+        var policyServiceDescriptor = Assert.Single(builder.Services, descriptor => descriptor.ServiceType == typeof(IContextPolicyService));
+        Assert.Equal(ServiceLifetime.Singleton, graphOptionsDescriptor.Lifetime);
+        Assert.Equal(ServiceLifetime.Scoped, graphServiceDescriptor.Lifetime);
+        Assert.Equal(ServiceLifetime.Singleton, policyOptionsDescriptor.Lifetime);
+        Assert.Equal(ServiceLifetime.Scoped, policyServiceDescriptor.Lifetime);
+    }
+
+    /// <summary>
+    ///     Verifies evidence graph and context policy options read configured values and keep defaults for malformed ones.
+    /// </summary>
+    [Fact]
+    public void EvidenceGraphAndContextPolicyOptionsReadConfiguredValues()
+    {
+        var builder = Host.CreateApplicationBuilder();
+
+        builder.Configuration[EvidenceGraphConfigurationConstants.MaximumQuoteWindowNodesKey] = "30";
+        builder.Configuration[EvidenceGraphConfigurationConstants.MaximumEdgesKey] = "-4";
+        builder.Configuration[ContextPolicyConfigurationConstants.MaximumDisclosedCharactersPerNodeKey] = "2000";
+
+        builder.AddAnalysisRunServices();
+
+        var graphDescriptor = Assert.Single(builder.Services, descriptor => descriptor.ServiceType == typeof(EvidenceGraphOptions));
+        var graphOptions = Assert.IsType<EvidenceGraphOptions>(graphDescriptor.ImplementationInstance);
+        var policyDescriptor = Assert.Single(builder.Services, descriptor => descriptor.ServiceType == typeof(ContextPolicyOptions));
+        var policyOptions = Assert.IsType<ContextPolicyOptions>(policyDescriptor.ImplementationInstance);
+
+        Assert.Equal(30, graphOptions.MaximumQuoteWindowNodes);
+        Assert.Equal(400, graphOptions.MaximumEdges);
+        Assert.Equal(2_000, policyOptions.MaximumDisclosedCharactersPerNode);
     }
 
     /// <summary>

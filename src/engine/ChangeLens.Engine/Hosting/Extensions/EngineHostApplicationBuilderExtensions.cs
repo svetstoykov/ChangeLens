@@ -6,11 +6,19 @@ using ChangeLens.Core.AnalysisRuns.Interfaces;
 using ChangeLens.Core.AnalysisRuns.Services;
 using ChangeLens.Core.Comparisons.Interfaces;
 using ChangeLens.Core.Comparisons.Services;
+using ChangeLens.Core.ContextPolicy.Constants;
+using ChangeLens.Core.ContextPolicy.Interfaces;
+using ChangeLens.Core.ContextPolicy.Models;
+using ChangeLens.Core.ContextPolicy.Services;
 using ChangeLens.Core.Correspondence.Constants;
 using ChangeLens.Core.Correspondence.Interfaces;
 using ChangeLens.Core.Correspondence.Models;
 using ChangeLens.Core.Correspondence.Services;
 using ChangeLens.Core.EngineStatus.Interfaces;
+using ChangeLens.Core.EvidenceGraph.Constants;
+using ChangeLens.Core.EvidenceGraph.Interfaces;
+using ChangeLens.Core.EvidenceGraph.Models;
+using ChangeLens.Core.EvidenceGraph.Services;
 using ChangeLens.Core.Git.Interfaces;
 using ChangeLens.Core.Git.Services;
 using ChangeLens.Core.LocalState.Interfaces;
@@ -192,6 +200,35 @@ internal static class EngineHostApplicationBuilderExtensions
         };
     }
 
+    /// <summary>Reads the configured bounds for evidence graph construction.</summary>
+    /// <param name="configuration">The engine configuration. Cannot be <see langword="null" />.</param>
+    /// <returns>The configured evidence graph options, using safe defaults for absent or malformed values.</returns>
+    private static EvidenceGraphOptions CreateEvidenceGraphOptions(IConfiguration configuration)
+    {
+        ArgumentNullException.ThrowIfNull(configuration);
+        var defaults = new EvidenceGraphOptions();
+        return new EvidenceGraphOptions
+        {
+            MaximumQuoteWindowNodes = ReadPositiveInt(
+                configuration, EvidenceGraphConfigurationConstants.MaximumQuoteWindowNodesKey, defaults.MaximumQuoteWindowNodes),
+            MaximumEdges = ReadPositiveInt(configuration, EvidenceGraphConfigurationConstants.MaximumEdgesKey, defaults.MaximumEdges),
+        };
+    }
+
+    /// <summary>Reads the configured bounds for context policy disclosure.</summary>
+    /// <param name="configuration">The engine configuration. Cannot be <see langword="null" />.</param>
+    /// <returns>The configured context policy options, using safe defaults for absent or malformed values.</returns>
+    private static ContextPolicyOptions CreateContextPolicyOptions(IConfiguration configuration)
+    {
+        ArgumentNullException.ThrowIfNull(configuration);
+        var defaults = new ContextPolicyOptions();
+        return new ContextPolicyOptions
+        {
+            MaximumDisclosedCharactersPerNode = ReadPositiveInt(
+                configuration, ContextPolicyConfigurationConstants.MaximumDisclosedCharactersPerNodeKey, defaults.MaximumDisclosedCharactersPerNode),
+        };
+    }
+
     /// <summary>Reads one positive integer configuration value.</summary>
     /// <param name="configuration">The engine configuration. Cannot be <see langword="null" />.</param>
     /// <param name="key">The configuration key. Cannot be <see langword="null" />.</param>
@@ -246,6 +283,10 @@ internal static class EngineHostApplicationBuilderExtensions
         builder.Services.AddScoped<IChangeAnatomyService, ChangeAnatomyService>();
         builder.Services.AddSingleton(CreateCorrespondenceOptions(builder.Configuration));
         builder.Services.AddScoped<ICorrespondenceRankingService, CorrespondenceRankingService>();
+        builder.Services.AddSingleton(CreateEvidenceGraphOptions(builder.Configuration));
+        builder.Services.AddScoped<IEvidenceGraphService, EvidenceGraphService>();
+        builder.Services.AddSingleton(CreateContextPolicyOptions(builder.Configuration));
+        builder.Services.AddScoped<IContextPolicyService, ContextPolicyService>();
         builder.Services.AddScoped<ISnapshotCaptureService, GitSnapshotCaptureService>();
         builder.Services.AddScoped<IAnalysisPipeline, ShallowAnalysisPipeline>();
         builder.Services.AddScoped<IAnalysisRunCoordinator, AnalysisRunCoordinator>();

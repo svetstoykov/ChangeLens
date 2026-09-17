@@ -2,6 +2,7 @@ using System.Diagnostics;
 using ChangeLens.Core.Results.Models;
 using ChangeLens.Engine.Hosting.Constants;
 using ChangeLens.Engine.Protocol.Constants;
+using ChangeLens.Engine.Protocol.Helpers;
 using ChangeLens.Engine.Protocol.Interfaces;
 using ChangeLens.Engine.Protocol.Models;
 using Microsoft.Extensions.DependencyInjection;

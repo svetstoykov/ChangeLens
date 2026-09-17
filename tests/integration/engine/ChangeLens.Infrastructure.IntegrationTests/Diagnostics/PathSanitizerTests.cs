@@ -1,4 +1,4 @@
-using ChangeLens.Core.Diagnostics.Services;
+using ChangeLens.Core.Diagnostics.Helpers;
 using ChangeLens.Core.Repositories.Models;
 using Xunit;
 

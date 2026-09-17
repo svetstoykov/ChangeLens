@@ -6,7 +6,7 @@ using ChangeLens.Engine.Preferences.Constants;
 using ChangeLens.Engine.Preferences.Models;
 using ChangeLens.Engine.Protocol.Interfaces;
 using ChangeLens.Engine.Protocol.Models;
-using ChangeLens.Engine.Protocol.Services;
+using ChangeLens.Engine.Protocol.Helpers;
 
 namespace ChangeLens.Engine.Preferences.Handlers;
 

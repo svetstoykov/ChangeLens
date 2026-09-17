@@ -3,8 +3,8 @@ using ChangeLens.Core.Results.Models;
 using ChangeLens.Engine.Comparisons.Constants;
 using ChangeLens.Engine.Comparisons.Interfaces;
 using ChangeLens.Engine.Comparisons.Models;
+using ChangeLens.Engine.Protocol.Helpers;
 using ChangeLens.Engine.Protocol.Interfaces;
-using ChangeLens.Engine.Protocol.Services;
 using Microsoft.Extensions.Logging;
 
 namespace ChangeLens.Engine.Comparisons.Services;

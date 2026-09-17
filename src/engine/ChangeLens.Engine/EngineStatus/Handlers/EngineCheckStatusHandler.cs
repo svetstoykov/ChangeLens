@@ -1,8 +1,8 @@
 using ChangeLens.Core.EngineStatus.Interfaces;
 using ChangeLens.Engine.EngineStatus.Constants;
+using ChangeLens.Engine.Protocol.Helpers;
 using ChangeLens.Engine.Protocol.Interfaces;
 using ChangeLens.Engine.Protocol.Models;
-using ChangeLens.Engine.Protocol.Services;
 
 namespace ChangeLens.Engine.EngineStatus.Handlers;
 

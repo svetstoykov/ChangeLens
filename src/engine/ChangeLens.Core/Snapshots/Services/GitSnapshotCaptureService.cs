@@ -1,14 +1,15 @@
 using System.Diagnostics;
 using ChangeLens.Core.AnalysisRuns.Constants;
 using ChangeLens.Core.AnalysisRuns.Models;
+using ChangeLens.Core.Comparisons.Helpers;
 using ChangeLens.Core.Comparisons.Interfaces;
-using ChangeLens.Core.Comparisons.Services;
 using ChangeLens.Core.Git.Constants;
 using ChangeLens.Core.Git.Interfaces;
 using ChangeLens.Core.Git.Models;
 using ChangeLens.Core.Git.Parsers;
 using ChangeLens.Core.Results.Models;
 using ChangeLens.Core.Snapshots.Constants;
+using ChangeLens.Core.Snapshots.Helpers;
 using ChangeLens.Core.Snapshots.Interfaces;
 using ChangeLens.Core.Snapshots.Models;
 using Microsoft.Extensions.Logging;

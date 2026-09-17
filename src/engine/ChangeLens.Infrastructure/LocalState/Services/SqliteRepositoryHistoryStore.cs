@@ -2,6 +2,7 @@ using ChangeLens.Core.LocalState.Interfaces;
 using ChangeLens.Core.LocalState.Models;
 using ChangeLens.Core.Results.Models;
 using ChangeLens.Infrastructure.LocalState.Constants;
+using ChangeLens.Infrastructure.LocalState.Helpers;
 using ChangeLens.Infrastructure.LocalState.Persistence;
 using ChangeLens.Infrastructure.LocalState.Persistence.Entities;
 using Microsoft.EntityFrameworkCore;

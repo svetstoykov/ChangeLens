@@ -1,0 +1,132 @@
+using System.Text.Json;
+using ChangeLens.Core.Results.Models;
+using ChangeLens.Engine.Protocol.Constants;
+using ChangeLens.Engine.Protocol.Models;
+
+namespace ChangeLens.Engine.Protocol.Helpers;
+
+/// <summary>
+///     Provides transport mapping from capability outcomes to engine protocol responses.
+/// </summary>
+internal static class ProtocolResponseFactory
+{
+    /// <summary>
+    ///     Creates a correlated result response for a direct value.
+    /// </summary>
+    /// <typeparam name="T">The result payload type.</typeparam>
+    /// <param name="requestId">The request identifier, or <see langword="null" /> when the input was rejected.</param>
+    /// <param name="value">The result payload.</param>
+    /// <returns>A typed protocol result response.</returns>
+    internal static ProtocolResultResponse<T> CreateWithValue<T>(string requestId, T value) =>
+        new(
+            EngineProtocolConstants.CurrentVersion,
+            EngineProtocolConstants.ResultResponseType,
+            requestId,
+            value);
+
+    /// <summary>
+    ///     Maps a payload-free Result to a correlated result or error response.
+    /// </summary>
+    /// <param name="requestId">The request identifier. Cannot be <see langword="null" />.</param>
+    /// <param name="result">The capability result. Cannot be <see langword="null" />.</param>
+    /// <returns>A payload-free result response on success; otherwise, an ordered error response.</returns>
+    /// <exception cref="ArgumentNullException">
+    ///     <paramref name="result" /> is <see langword="null" />.
+    /// </exception>
+    internal static ProtocolResponse FromResult(string? requestId, Result result)
+    {
+        ArgumentNullException.ThrowIfNull(result);
+
+        return result.IsFailure
+            ? CreateError(requestId, result.Errors)
+            : CreateWithValue<JsonElement?>(requestId!, null);
+    }
+
+    /// <summary>
+    ///     Maps a typed Result to a correlated result or error response.
+    /// </summary>
+    /// <typeparam name="T">The result payload type.</typeparam>
+    /// <param name="requestId">The request identifier, or <see langword="null" /> when the input was rejected.</param>
+    /// <param name="result">The capability result. Cannot be <see langword="null" />.</param>
+    /// <returns>A typed result response on success; otherwise, an ordered error response.</returns>
+    /// <exception cref="ArgumentNullException">
+    ///     <paramref name="result" /> is <see langword="null" />.
+    /// </exception>
+    internal static ProtocolResponse FromResult<T>(string? requestId, Result<T> result)
+    {
+        ArgumentNullException.ThrowIfNull(result);
+
+        return result.IsFailure
+            ? CreateError(requestId, result.Errors)
+            : CreateWithValue(requestId!, result.Data);
+    }
+
+    /// <summary>
+    ///     Maps one directly created error to a correlated protocol response.
+    /// </summary>
+    /// <param name="requestId">The request identifier, or <see langword="null" /> when unavailable.</param>
+    /// <param name="error">The error to map. Cannot be <see langword="null" />.</param>
+    /// <returns>The correlated error response.</returns>
+    /// <exception cref="ArgumentNullException">
+    ///     <paramref name="error" /> is <see langword="null" />.
+    /// </exception>
+    internal static ProtocolResponse FromError(string? requestId, OperationError error)
+    {
+        ArgumentNullException.ThrowIfNull(error);
+
+        return CreateError(requestId, [error]);
+    }
+
+    /// <summary>
+    ///     Creates the standard validation failure for a parameterized action whose parameters were omitted.
+    /// </summary>
+    /// <param name="requestId">The correlated request identifier. Cannot be <see langword="null" />.</param>
+    /// <param name="action">The fixed parameterized action. Cannot be <see langword="null" />.</param>
+    /// <returns>The correlated invalid-request response.</returns>
+    internal static ProtocolResponse MissingParameters(string requestId, string action) =>
+        FromError(requestId, OperationError.Validation($"The {action} action requires parameters.", EngineErrorCode.InvalidRequest));
+
+    /// <summary>
+    ///     Creates an error response while preserving every valid source error in order.
+    /// </summary>
+    /// <param name="requestId">The request identifier, or <see langword="null" /> when unavailable.</param>
+    /// <param name="errors">The source errors. Cannot be <see langword="null" />.</param>
+    /// <returns>The ordered error response, or a sanitized internal error for an invalid source contract.</returns>
+    /// <exception cref="ArgumentNullException">
+    ///     <paramref name="errors" /> is <see langword="null" />.
+    /// </exception>
+    internal static ProtocolErrorResponse CreateError(string? requestId, IReadOnlyList<OperationError> errors)
+    {
+        ArgumentNullException.ThrowIfNull(errors);
+
+        if (errors.Count == 0 || errors.Any(
+                error => string.IsNullOrWhiteSpace(error.Code) ||
+                         string.IsNullOrWhiteSpace(error.Message)))
+        {
+            return CreateUnexpectedFailure(requestId);
+        }
+
+        return new ProtocolErrorResponse(
+            EngineProtocolConstants.CurrentVersion,
+            EngineProtocolConstants.ErrorResponseType,
+            requestId,
+            errors.Select(error => new ProtocolError(error.Type, error.Code!, error.Message)).ToArray());
+    }
+
+    /// <summary>
+    ///     Creates the sanitized error returned for an unexpected or invalid internal condition.
+    /// </summary>
+    /// <param name="requestId">The request identifier, or <see langword="null" /> when unavailable.</param>
+    /// <returns>A response containing one stable internal error.</returns>
+    internal static ProtocolErrorResponse CreateUnexpectedFailure(string? requestId) =>
+        new(
+            EngineProtocolConstants.CurrentVersion,
+            EngineProtocolConstants.ErrorResponseType,
+            requestId,
+            [
+                new ProtocolError(
+                    ErrorType.InternalError,
+                    EngineErrorCode.UnexpectedFailure,
+                    EngineProtocolConstants.UnexpectedFailureMessage),
+            ]);
+}

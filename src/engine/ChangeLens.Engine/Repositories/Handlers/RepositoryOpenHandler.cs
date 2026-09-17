@@ -4,7 +4,7 @@ using ChangeLens.Core.Results.Models;
 using ChangeLens.Core.AnalysisRuns.Interfaces;
 using ChangeLens.Engine.Protocol.Interfaces;
 using ChangeLens.Engine.Protocol.Models;
-using ChangeLens.Engine.Protocol.Services;
+using ChangeLens.Engine.Protocol.Helpers;
 using ChangeLens.Engine.Repositories.Constants;
 using ChangeLens.Engine.Repositories.Models;
 

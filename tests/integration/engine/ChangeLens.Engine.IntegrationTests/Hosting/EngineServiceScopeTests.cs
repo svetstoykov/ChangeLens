@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Globalization;
 using ChangeLens.Core.ChangeAnatomy.Interfaces;
 using ChangeLens.Core.ChangeAnatomy.Models;
 using ChangeLens.Core.ContextPolicy.Constants;
@@ -8,6 +9,9 @@ using ChangeLens.Core.Correspondence.Constants;
 using ChangeLens.Core.Correspondence.Interfaces;
 using ChangeLens.Core.Correspondence.Models;
 using ChangeLens.Core.EngineStatus.Interfaces;
+using ChangeLens.Core.EvidenceBinder.Interfaces;
+using ChangeLens.Core.EvidenceBinder.Models;
+using ChangeLens.Core.EvidenceBinder.Constants;
 using ChangeLens.Core.EvidenceGraph.Constants;
 using ChangeLens.Core.EvidenceGraph.Interfaces;
 using ChangeLens.Core.EvidenceGraph.Models;
@@ -179,6 +183,8 @@ public sealed class EngineServiceScopeTests
         Assert.DoesNotContain(builder.Services, descriptor => descriptor.ServiceType == typeof(IEvidenceGraphService));
         Assert.DoesNotContain(builder.Services, descriptor => descriptor.ServiceType == typeof(ContextPolicyOptions));
         Assert.DoesNotContain(builder.Services, descriptor => descriptor.ServiceType == typeof(IContextPolicyService));
+        Assert.DoesNotContain(builder.Services, descriptor => descriptor.ServiceType == typeof(EvidenceBinderOptions));
+        Assert.DoesNotContain(builder.Services, descriptor => descriptor.ServiceType == typeof(IEvidenceBinderService));
 
         builder.AddAnalysisRunServices();
 
@@ -199,10 +205,14 @@ public sealed class EngineServiceScopeTests
         var graphServiceDescriptor = Assert.Single(builder.Services, descriptor => descriptor.ServiceType == typeof(IEvidenceGraphService));
         var policyOptionsDescriptor = Assert.Single(builder.Services, descriptor => descriptor.ServiceType == typeof(ContextPolicyOptions));
         var policyServiceDescriptor = Assert.Single(builder.Services, descriptor => descriptor.ServiceType == typeof(IContextPolicyService));
+        var binderOptionsDescriptor = Assert.Single(builder.Services, descriptor => descriptor.ServiceType == typeof(EvidenceBinderOptions));
+        var binderServiceDescriptor = Assert.Single(builder.Services, descriptor => descriptor.ServiceType == typeof(IEvidenceBinderService));
         Assert.Equal(ServiceLifetime.Singleton, graphOptionsDescriptor.Lifetime);
         Assert.Equal(ServiceLifetime.Scoped, graphServiceDescriptor.Lifetime);
         Assert.Equal(ServiceLifetime.Singleton, policyOptionsDescriptor.Lifetime);
         Assert.Equal(ServiceLifetime.Scoped, policyServiceDescriptor.Lifetime);
+        Assert.Equal(ServiceLifetime.Singleton, binderOptionsDescriptor.Lifetime);
+        Assert.Equal(ServiceLifetime.Scoped, binderServiceDescriptor.Lifetime);
     }
 
     /// <summary>
@@ -227,6 +237,35 @@ public sealed class EngineServiceScopeTests
         Assert.Equal(30, graphOptions.MaximumQuoteWindowNodes);
         Assert.Equal(400, graphOptions.MaximumEdges);
         Assert.Equal(2_000, policyOptions.MaximumDisclosedCharactersPerNode);
+    }
+
+    /// <summary>
+    ///     Verifies the binder capacity derives from 3.25 characters per declared context token under a comma-decimal culture.
+    /// </summary>
+    [Fact]
+    public void EvidenceBinderOptionsDeriveConfiguredCapacity()
+    {
+        var originalCulture = CultureInfo.CurrentCulture;
+        try
+        {
+            CultureInfo.CurrentCulture = new CultureInfo("de-DE");
+            var builder = Host.CreateApplicationBuilder();
+            builder.Configuration[EvidenceBinderConfigurationConstants.ContextWindowTokensKey] = "128000";
+            builder.Configuration[EvidenceBinderConfigurationConstants.CuratorOutputCharactersKey] = "176000";
+            builder.Configuration[EvidenceBinderConfigurationConstants.PromptReserveCharactersKey] = "12000";
+            builder.Configuration[EvidenceBinderConfigurationConstants.TargetUtilizationKey] = "0.5";
+
+            builder.AddAnalysisRunServices();
+
+            var descriptor = Assert.Single(builder.Services, service => service.ServiceType == typeof(EvidenceBinderOptions));
+            var options = Assert.IsType<EvidenceBinderOptions>(descriptor.ImplementationInstance);
+            Assert.Equal(228_000, options.EffectiveMaximumBinderCharacters);
+            Assert.Equal(114_000, options.TargetBinderCharacters);
+        }
+        finally
+        {
+            CultureInfo.CurrentCulture = originalCulture;
+        }
     }
 
     /// <summary>

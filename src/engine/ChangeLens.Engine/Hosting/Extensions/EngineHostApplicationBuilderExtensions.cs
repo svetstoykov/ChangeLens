@@ -1,3 +1,4 @@
+using System.Globalization;
 using ChangeLens.Core.ChangeAnatomy.Interfaces;
 using ChangeLens.Core.ChangeAnatomy.Models;
 using ChangeLens.Core.ChangeAnatomy.Services;
@@ -15,6 +16,10 @@ using ChangeLens.Core.Correspondence.Interfaces;
 using ChangeLens.Core.Correspondence.Models;
 using ChangeLens.Core.Correspondence.Services;
 using ChangeLens.Core.EngineStatus.Interfaces;
+using ChangeLens.Core.EvidenceBinder.Constants;
+using ChangeLens.Core.EvidenceBinder.Interfaces;
+using ChangeLens.Core.EvidenceBinder.Models;
+using ChangeLens.Core.EvidenceBinder.Services;
 using ChangeLens.Core.EvidenceGraph.Constants;
 using ChangeLens.Core.EvidenceGraph.Interfaces;
 using ChangeLens.Core.EvidenceGraph.Models;
@@ -229,6 +234,27 @@ internal static class EngineHostApplicationBuilderExtensions
         };
     }
 
+    /// <summary>Reads the configured evidence binder limits.</summary>
+    /// <param name="configuration">The engine configuration. Cannot be <see langword="null" />.</param>
+    /// <returns>The configured binder limits, using safe defaults for absent or malformed values.</returns>
+    private static EvidenceBinderOptions CreateEvidenceBinderOptions(IConfiguration configuration)
+    {
+        ArgumentNullException.ThrowIfNull(configuration);
+        var defaults = new EvidenceBinderOptions();
+        return new EvidenceBinderOptions
+        {
+            ContextWindowTokens = ReadPositiveInt(
+                configuration, EvidenceBinderConfigurationConstants.ContextWindowTokensKey, defaults.ContextWindowTokens),
+            CuratorOutputCharacters = ReadNonNegativeInt(
+                configuration, EvidenceBinderConfigurationConstants.CuratorOutputCharactersKey, defaults.CuratorOutputCharacters),
+            PromptReserveCharacters = ReadNonNegativeInt(
+                configuration, EvidenceBinderConfigurationConstants.PromptReserveCharactersKey, defaults.PromptReserveCharacters),
+            MaximumBinderCharacters = ReadOptionalPositiveInt(
+                configuration, EvidenceBinderConfigurationConstants.MaximumBinderCharactersKey),
+            TargetUtilization = ReadFraction(configuration, EvidenceBinderConfigurationConstants.TargetUtilizationKey, defaults.TargetUtilization),
+        };
+    }
+
     /// <summary>Reads one positive integer configuration value.</summary>
     /// <param name="configuration">The engine configuration. Cannot be <see langword="null" />.</param>
     /// <param name="key">The configuration key. Cannot be <see langword="null" />.</param>
@@ -236,6 +262,31 @@ internal static class EngineHostApplicationBuilderExtensions
     /// <returns>The positive configured value or <paramref name="fallback" />.</returns>
     private static int ReadPositiveInt(IConfiguration configuration, string key, int fallback) =>
         int.TryParse(configuration[key], out var value) && value > 0 ? value : fallback;
+
+    /// <summary>Reads a non-negative integer configuration value.</summary>
+    /// <param name="configuration">The engine configuration. Cannot be <see langword="null" />.</param>
+    /// <param name="key">The configuration key. Cannot be <see langword="null" />.</param>
+    /// <param name="fallback">The value used when the key is absent or invalid.</param>
+    /// <returns>The configured value or <paramref name="fallback" />.</returns>
+    private static int ReadNonNegativeInt(IConfiguration configuration, string key, int fallback) =>
+        int.TryParse(configuration[key], out var value) && value >= 0 ? value : fallback;
+
+    /// <summary>Reads an optional positive integer configuration value.</summary>
+    /// <param name="configuration">The engine configuration. Cannot be <see langword="null" />.</param>
+    /// <param name="key">The configuration key. Cannot be <see langword="null" />.</param>
+    /// <returns>The configured value, or <see langword="null" /> when absent or invalid.</returns>
+    private static int? ReadOptionalPositiveInt(IConfiguration configuration, string key) =>
+        int.TryParse(configuration[key], out var value) && value > 0 ? value : null;
+
+    /// <summary>Reads a fractional configuration value in the inclusive range zero to one.</summary>
+    /// <param name="configuration">The engine configuration. Cannot be <see langword="null" />.</param>
+    /// <param name="key">The configuration key. Cannot be <see langword="null" />.</param>
+    /// <param name="fallback">The value used when the key is absent or invalid.</param>
+    /// <returns>The configured fraction or <paramref name="fallback" />.</returns>
+    private static double ReadFraction(IConfiguration configuration, string key, double fallback) =>
+        double.TryParse(configuration[key], NumberStyles.Float, CultureInfo.InvariantCulture, out var value) && value > 0 && value <= 1
+            ? value
+            : fallback;
 
     /// <summary>Reads one positive duration configuration value.</summary>
     /// <param name="configuration">The engine configuration. Cannot be <see langword="null" />.</param>
@@ -287,6 +338,8 @@ internal static class EngineHostApplicationBuilderExtensions
         builder.Services.AddScoped<IEvidenceGraphService, EvidenceGraphService>();
         builder.Services.AddSingleton(CreateContextPolicyOptions(builder.Configuration));
         builder.Services.AddScoped<IContextPolicyService, ContextPolicyService>();
+        builder.Services.AddSingleton(CreateEvidenceBinderOptions(builder.Configuration));
+        builder.Services.AddScoped<IEvidenceBinderService, EvidenceBinderService>();
         builder.Services.AddScoped<ISnapshotCaptureService, GitSnapshotCaptureService>();
         builder.Services.AddScoped<IAnalysisPipeline, ShallowAnalysisPipeline>();
         builder.Services.AddScoped<IAnalysisRunCoordinator, AnalysisRunCoordinator>();

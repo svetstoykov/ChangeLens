@@ -3,8 +3,7 @@ namespace ChangeLens.Core.EvidenceBinder.Models;
 /// <summary>
 ///     Represents assembly sizes, coverage counters, policy diagnostics, and budget-ladder decisions.
 /// </summary>
-/// <param name="BinderCharacterCount">The post-assembly binder payload size.</param>
-/// <param name="PayloadCharacterCount">The curator payload size at initial assembly.</param>
+/// <param name="BinderCharacterCount">The curator payload size measured after the budget ladder.</param>
 /// <param name="TokenEstimate">The character-based token estimate at 3.25 characters per token.</param>
 /// <param name="TargetCharacters">The ordinary ladder target.</param>
 /// <param name="BudgetCharacters">The hard binder cap.</param>
@@ -20,7 +19,6 @@ namespace ChangeLens.Core.EvidenceBinder.Models;
 /// <param name="PolicyInvariantViolationNodeIds">The node ids dropped for policy invariant violations.</param>
 public sealed record BinderDiagnostics(
     int BinderCharacterCount,
-    int PayloadCharacterCount,
     int TokenEstimate,
     int TargetCharacters,
     int BudgetCharacters,
@@ -33,10 +31,4 @@ public sealed record BinderDiagnostics(
     int ChangedFileCount,
     int ChangedFilesWithoutEvidenceCount,
     int OrientationPathCount,
-    IReadOnlyList<string> PolicyInvariantViolationNodeIds)
-{
-    /// <summary>
-    ///     Gets the post-assembly binder character count using the prototype's established name.
-    /// </summary>
-    public int CharacterCount => this.BinderCharacterCount;
-}
+    IReadOnlyList<string> PolicyInvariantViolationNodeIds);

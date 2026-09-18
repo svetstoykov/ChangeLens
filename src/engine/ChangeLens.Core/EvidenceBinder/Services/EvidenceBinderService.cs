@@ -9,6 +9,7 @@ using ChangeLens.Core.EvidenceBinder.Models;
 using ChangeLens.Core.EvidenceGraph.Models;
 using ChangeLens.Core.Results.Models;
 using ChangeLens.Core.Snapshots.Models;
+using Microsoft.Extensions.Logging;
 using EvidenceBinderModel = ChangeLens.Core.EvidenceBinder.Models.EvidenceBinder;
 
 namespace ChangeLens.Core.EvidenceBinder.Services;
@@ -31,15 +32,19 @@ public sealed class EvidenceBinderService : IEvidenceBinderService
     private static readonly IReadOnlyList<string> TrackShapes = ["Walk", "ParticipantMap", "PurposeCards"];
 
     private readonly EvidenceBinderOptions _options;
+    private readonly ILogger<EvidenceBinderService> _logger;
 
     /// <summary>
     ///     Initializes a new instance of the <see cref="EvidenceBinderService" /> class.
     /// </summary>
     /// <param name="options">The binder limits. Cannot be <see langword="null" />.</param>
-    public EvidenceBinderService(EvidenceBinderOptions options)
+    /// <param name="logger">The logger for binder outcomes and ladder flow. Cannot be <see langword="null" />.</param>
+    public EvidenceBinderService(EvidenceBinderOptions options, ILogger<EvidenceBinderService> logger)
     {
         ArgumentNullException.ThrowIfNull(options);
+        ArgumentNullException.ThrowIfNull(logger);
         this._options = options;
+        this._logger = logger;
     }
 
     /// <inheritdoc />
@@ -50,6 +55,9 @@ public sealed class EvidenceBinderService : IEvidenceBinderService
 
         if (!this.ValidateOptions(out var optionsError))
         {
+            this._logger.LogWarning(
+                "Evidence binder rejected the configured limits for run {RunId} with {ErrorCode}.",
+                request.Run.RunId, EvidenceBinderErrorCode.InvalidOptions);
             return OperationError.Validation(optionsError!, EvidenceBinderErrorCode.InvalidOptions);
         }
 
@@ -211,7 +219,6 @@ public sealed class EvidenceBinderService : IEvidenceBinderService
             var diagnostics = new BinderDiagnostics(
                 0,
                 0,
-                0,
                 targetCharacters,
                 maxCharacters,
                 false,
@@ -266,9 +273,16 @@ public sealed class EvidenceBinderService : IEvidenceBinderService
 
                 evidence.RemoveAt(index);
                 edges.RemoveAll(edge => edge.FromNodeId == nodeId || edge.ToNodeId == nodeId);
-                foreach (var file in changedFiles.Where(file => file.EvidenceNodeIds.Contains(nodeId)))
+                for (var fileIndex = 0; fileIndex < changedFiles.Count; fileIndex++)
                 {
-                    (file.EvidenceNodeIds as List<string>)?.Remove(nodeId);
+                    var file = changedFiles[fileIndex];
+                    if (!file.EvidenceNodeIds.Contains(nodeId, StringComparer.Ordinal))
+                    {
+                        continue;
+                    }
+
+                    var retainedIds = file.EvidenceNodeIds.Where(id => !string.Equals(id, nodeId, StringComparison.Ordinal)).ToList();
+                    changedFiles[fileIndex] = file with { EvidenceNodeIds = retainedIds };
                 }
 
                 omissions.Add((EvidenceBinderOmissionKind.BudgetDropped, step, nodeId));
@@ -303,6 +317,10 @@ public sealed class EvidenceBinderService : IEvidenceBinderService
         var characterCount = EvidenceBinderJson.SerializePayload(binder).Length;
         if (characterCount > maxCharacters)
         {
+            this._logger.LogWarning(
+                "Evidence binder for run {RunId} measured {BinderCharacterCount} characters after ladder steps {LadderSteps}, "
+                + "exceeding the {BudgetCharacters}-character cap with {ErrorCode}.",
+                request.Run.RunId, characterCount, ladderSteps, maxCharacters, EvidenceBinderErrorCode.BudgetExceeded);
             return OperationError.UnprocessableInput(
                 $"The curator payload is {characterCount} characters after the evidence budget ladder, exceeding the "
                 + $"{maxCharacters}-character hard cap.", EvidenceBinderErrorCode.BudgetExceeded);
@@ -311,10 +329,27 @@ public sealed class EvidenceBinderService : IEvidenceBinderService
         var diagnostics = binder.Diagnostics with
         {
             BinderCharacterCount = characterCount,
-            PayloadCharacterCount = characterCount,
             TokenEstimate = (int)Math.Ceiling(characterCount / CharactersPerToken),
             BudgetBinding = ladderSteps.Count > 0,
         };
+
+        this._logger.LogInformation(
+            "Evidence binder assembled for run {RunId} with {EvidenceCount} evidence nodes, {MatchEdgeCount} match edges, and "
+            + "{BinderCharacterCount} characters against a {TargetCharacters}-character target, budget binding {BudgetBinding}.",
+            request.Run.RunId, diagnostics.EvidenceCount, diagnostics.MatchEdgeCount, characterCount, targetCharacters,
+            diagnostics.BudgetBinding);
+        if (ladderSteps.Count > 0)
+        {
+            var droppedNodeCount = omissions.Count(entry =>
+                entry.Kind == EvidenceBinderOmissionKind.BudgetDropped && entry.Reason != EvidenceBinderLadderStep.Orientation);
+            this._logger.LogDebug(
+                "Evidence binder ladder for run {RunId} applied {LadderSteps}, dropping {BudgetDroppedNodeCount} evidence nodes and "
+                + "leaving {OrientationPathCount} orientation paths across {ChangedFileCount} changed files, "
+                + "{ChangedFilesWithoutEvidenceCount} of them without evidence.",
+                request.Run.RunId, ladderSteps, droppedNodeCount, diagnostics.OrientationPathCount, diagnostics.ChangedFileCount,
+                diagnostics.ChangedFilesWithoutEvidenceCount);
+        }
+
         return binder with { Diagnostics = diagnostics };
     }
 
@@ -401,9 +436,14 @@ public sealed class EvidenceBinderService : IEvidenceBinderService
         var remaining = options.MaximumOrientationPaths;
         foreach (var directory in focusPaths.Select(DirectoryOf).Distinct(StringComparer.Ordinal).OrderBy(path => path, StringComparer.Ordinal))
         {
-            if (remaining <= 0 || !byDirectory.TryGetValue(directory, out var siblings))
+            if (remaining <= 0)
             {
                 break;
+            }
+
+            if (!byDirectory.TryGetValue(directory, out var siblings))
+            {
+                continue;
             }
 
             var take = Math.Min(Math.Min(options.MaximumOrientationPathsPerDirectory, remaining), siblings.Count);

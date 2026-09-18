@@ -1,3 +1,4 @@
+using System.Globalization;
 using ChangeLens.Core.ChangeAnatomy.Interfaces;
 using ChangeLens.Core.ChangeAnatomy.Models;
 using ChangeLens.Core.ChangeAnatomy.Services;
@@ -283,7 +284,9 @@ internal static class EngineHostApplicationBuilderExtensions
     /// <param name="fallback">The value used when the key is absent or invalid.</param>
     /// <returns>The configured fraction or <paramref name="fallback" />.</returns>
     private static double ReadFraction(IConfiguration configuration, string key, double fallback) =>
-        double.TryParse(configuration[key], out var value) && value > 0 && value <= 1 ? value : fallback;
+        double.TryParse(configuration[key], NumberStyles.Float, CultureInfo.InvariantCulture, out var value) && value > 0 && value <= 1
+            ? value
+            : fallback;
 
     /// <summary>Reads one positive duration configuration value.</summary>
     /// <param name="configuration">The engine configuration. Cannot be <see langword="null" />.</param>

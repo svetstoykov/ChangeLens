@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Globalization;
 using ChangeLens.Core.ChangeAnatomy.Interfaces;
 using ChangeLens.Core.ChangeAnatomy.Models;
 using ChangeLens.Core.ContextPolicy.Constants;
@@ -239,23 +240,32 @@ public sealed class EngineServiceScopeTests
     }
 
     /// <summary>
-    ///     Verifies the binder capacity derives from 3.25 characters per declared context token.
+    ///     Verifies the binder capacity derives from 3.25 characters per declared context token under a comma-decimal culture.
     /// </summary>
     [Fact]
     public void EvidenceBinderOptionsDeriveConfiguredCapacity()
     {
-        var builder = Host.CreateApplicationBuilder();
-        builder.Configuration[EvidenceBinderConfigurationConstants.ContextWindowTokensKey] = "128000";
-        builder.Configuration[EvidenceBinderConfigurationConstants.CuratorOutputCharactersKey] = "176000";
-        builder.Configuration[EvidenceBinderConfigurationConstants.PromptReserveCharactersKey] = "12000";
-        builder.Configuration[EvidenceBinderConfigurationConstants.TargetUtilizationKey] = "0.75";
+        var originalCulture = CultureInfo.CurrentCulture;
+        try
+        {
+            CultureInfo.CurrentCulture = new CultureInfo("de-DE");
+            var builder = Host.CreateApplicationBuilder();
+            builder.Configuration[EvidenceBinderConfigurationConstants.ContextWindowTokensKey] = "128000";
+            builder.Configuration[EvidenceBinderConfigurationConstants.CuratorOutputCharactersKey] = "176000";
+            builder.Configuration[EvidenceBinderConfigurationConstants.PromptReserveCharactersKey] = "12000";
+            builder.Configuration[EvidenceBinderConfigurationConstants.TargetUtilizationKey] = "0.5";
 
-        builder.AddAnalysisRunServices();
+            builder.AddAnalysisRunServices();
 
-        var descriptor = Assert.Single(builder.Services, service => service.ServiceType == typeof(EvidenceBinderOptions));
-        var options = Assert.IsType<EvidenceBinderOptions>(descriptor.ImplementationInstance);
-        Assert.Equal(228_000, options.EffectiveMaximumBinderCharacters);
-        Assert.Equal(171_000, options.TargetBinderCharacters);
+            var descriptor = Assert.Single(builder.Services, service => service.ServiceType == typeof(EvidenceBinderOptions));
+            var options = Assert.IsType<EvidenceBinderOptions>(descriptor.ImplementationInstance);
+            Assert.Equal(228_000, options.EffectiveMaximumBinderCharacters);
+            Assert.Equal(114_000, options.TargetBinderCharacters);
+        }
+        finally
+        {
+            CultureInfo.CurrentCulture = originalCulture;
+        }
     }
 
     /// <summary>

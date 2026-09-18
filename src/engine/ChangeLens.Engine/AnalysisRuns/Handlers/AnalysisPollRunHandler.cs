@@ -2,12 +2,12 @@ using System.Text.Json;
 using ChangeLens.Core.AnalysisRuns.Constants;
 using ChangeLens.Core.Results.Models;
 using ChangeLens.Engine.AnalysisRuns.Constants;
+using ChangeLens.Engine.AnalysisRuns.Helpers;
 using ChangeLens.Engine.AnalysisRuns.Interfaces;
 using ChangeLens.Engine.AnalysisRuns.Models;
-using ChangeLens.Engine.AnalysisRuns.Services;
+using ChangeLens.Engine.Protocol.Helpers;
 using ChangeLens.Engine.Protocol.Interfaces;
 using ChangeLens.Engine.Protocol.Models;
-using ChangeLens.Engine.Protocol.Services;
 
 namespace ChangeLens.Engine.AnalysisRuns.Handlers;
 

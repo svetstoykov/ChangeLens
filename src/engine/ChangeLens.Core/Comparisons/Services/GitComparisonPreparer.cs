@@ -2,6 +2,7 @@ using System.Buffers;
 using System.Diagnostics;
 using System.Text;
 using ChangeLens.Core.Comparisons.Constants;
+using ChangeLens.Core.Comparisons.Helpers;
 using ChangeLens.Core.Comparisons.Interfaces;
 using ChangeLens.Core.Comparisons.Models;
 using ChangeLens.Core.Git.Constants;

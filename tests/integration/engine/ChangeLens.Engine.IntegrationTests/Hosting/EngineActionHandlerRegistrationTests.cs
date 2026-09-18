@@ -1,4 +1,4 @@
-using ChangeLens.Engine.Hosting.Services;
+using ChangeLens.Engine.Hosting.Helpers;
 using ChangeLens.Engine.IntegrationTests.Protocol.Support;
 using ChangeLens.Engine.Protocol.Constants;
 using ChangeLens.Engine.Protocol.Interfaces;

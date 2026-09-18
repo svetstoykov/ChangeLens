@@ -6,7 +6,7 @@ using ChangeLens.Engine.Comparisons.Constants;
 using ChangeLens.Engine.Comparisons.Models;
 using ChangeLens.Engine.Protocol.Interfaces;
 using ChangeLens.Engine.Protocol.Models;
-using ChangeLens.Engine.Protocol.Services;
+using ChangeLens.Engine.Protocol.Helpers;
 
 namespace ChangeLens.Engine.Comparisons.Handlers;
 

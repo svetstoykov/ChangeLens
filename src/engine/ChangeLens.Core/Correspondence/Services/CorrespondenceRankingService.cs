@@ -1,7 +1,8 @@
 using System.Diagnostics;
 using ChangeLens.Core.AnalysisRuns.Models;
+using ChangeLens.Core.ChangeAnatomy.Helpers;
 using ChangeLens.Core.ChangeAnatomy.Models;
-using ChangeLens.Core.ChangeAnatomy.Services;
+using ChangeLens.Core.Correspondence.Helpers;
 using ChangeLens.Core.Correspondence.Interfaces;
 using ChangeLens.Core.Correspondence.Models;
 using ChangeLens.Core.Results.Models;

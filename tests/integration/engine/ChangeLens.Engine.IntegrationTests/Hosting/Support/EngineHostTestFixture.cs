@@ -7,7 +7,7 @@ using ChangeLens.Core.LocalState.Interfaces;
 using ChangeLens.Core.Snapshots.Interfaces;
 using ChangeLens.Engine.AnalysisRuns.Interfaces;
 using ChangeLens.Engine.Hosting.Extensions;
-using ChangeLens.Engine.Hosting.Services;
+using ChangeLens.Engine.Hosting.Helpers;
 using ChangeLens.Engine.IntegrationTests.Support;
 using ChangeLens.Engine.IntegrationTests.Analysis.Support;
 using ChangeLens.Engine.Logging.Constants;

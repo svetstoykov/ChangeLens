@@ -1,7 +1,7 @@
 using ChangeLens.Core.EngineStatus.Interfaces;
 using ChangeLens.Core.Results.Models;
 using ChangeLens.Infrastructure.LocalState.Persistence;
-using ChangeLens.Infrastructure.LocalState.Services;
+using ChangeLens.Infrastructure.LocalState.Helpers;
 
 namespace ChangeLens.Infrastructure.EngineStatus.Services;
 

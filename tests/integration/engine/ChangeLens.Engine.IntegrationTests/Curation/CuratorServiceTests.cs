@@ -11,6 +11,7 @@ using ChangeLens.Core.ModelCompletion.Constants;
 using ChangeLens.Core.ModelCompletion.Models;
 using ChangeLens.Core.Results.Models;
 using ChangeLens.Engine.Hosting.Extensions;
+using ChangeLens.Engine.Hosting.Helpers;
 using ChangeLens.Engine.IntegrationTests.Curation.Support;
 using ChangeLens.Engine.IntegrationTests.DraftValidation.Support;
 using Microsoft.Extensions.DependencyInjection;
@@ -185,7 +186,9 @@ public sealed class CuratorServiceTests
         var builder = Host.CreateApplicationBuilder();
         builder.Configuration[EvidenceBinderConfigurationConstants.PromptReserveCharactersKey] = "1";
 
-        var exception = Assert.Throws<InvalidOperationException>(() => builder.AddAnalysisRunServices());
+        builder.AddAnalysisRunServices();
+
+        var exception = Assert.Throws<InvalidOperationException>(() => EngineStartupValidator.Validate(builder.Services));
 
         Assert.Contains("prompt reserve", exception.Message, StringComparison.OrdinalIgnoreCase);
     }
@@ -197,7 +200,9 @@ public sealed class CuratorServiceTests
         builder.Configuration[EvidenceBinderConfigurationConstants.CuratorOutputCharactersKey] = "10";
         builder.Configuration[CuratorConfigurationConstants.MaximumOutputCharactersKey] = "20";
 
-        var exception = Assert.Throws<InvalidOperationException>(() => builder.AddAnalysisRunServices());
+        builder.AddAnalysisRunServices();
+
+        var exception = Assert.Throws<InvalidOperationException>(() => EngineStartupValidator.Validate(builder.Services));
 
         Assert.Contains("output", exception.Message, StringComparison.OrdinalIgnoreCase);
     }

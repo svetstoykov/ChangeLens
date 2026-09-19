@@ -58,8 +58,9 @@ public sealed class OpenAiCompatibleModelCompletionClientTests
         using var body = JsonDocument.Parse(request.Body);
         var root = body.RootElement;
         Assert.Equal("fixture-model", root.GetProperty("model").GetString());
-        Assert.Equal(321, root.GetProperty("max_tokens").GetInt32());
-        Assert.Equal(0, root.GetProperty("temperature").GetDouble());
+        Assert.Equal(321, root.GetProperty("max_completion_tokens").GetInt32());
+        Assert.False(root.TryGetProperty("max_tokens", out _));
+        Assert.False(root.TryGetProperty("temperature", out _));
         Assert.Equal("json_object", root.GetProperty("response_format").GetProperty("type").GetString());
         Assert.Equal("high", root.GetProperty("reasoning_effort").GetString());
         Assert.False(root.TryGetProperty("tools", out _));
@@ -68,6 +69,38 @@ public sealed class OpenAiCompatibleModelCompletionClientTests
         Assert.Equal(SystemMessage, messages[0].GetProperty("content").GetString());
         Assert.Equal("user", messages[1].GetProperty("role").GetString());
         Assert.Equal(UserMessage, messages[1].GetProperty("content").GetString());
+    }
+
+    /// <summary>
+    ///     Asynchronously sends temperature 0 and omits reasoning effort when the call is not a reasoning request.
+    /// </summary>
+    /// <returns>A task that represents the asynchronous operation.</returns>
+    [Fact]
+    public async Task CompleteJsonAsync_RequestWithoutReasoningSendsTemperatureAndOmitsReasoningEffort()
+    {
+        await using var server = await LoopbackHttpServer.StartAsync(
+            static (_, _) => Task.FromResult(SuccessResponse("{\"ok\":true}")));
+        using var httpClient = new HttpClient();
+        var client = CreateClient(
+            httpClient,
+            new ModelCompletionOptions
+            {
+                BaseUrl = new Uri(server.BaseAddress, "v1").ToString(),
+                Model = "fixture-model",
+                ApiKey = ApiKey,
+            });
+
+        var result = await client.CompleteJsonAsync(
+            new ModelCompletionRequest(SystemMessage, UserMessage, 321),
+            CancellationToken.None);
+
+        Assert.True(result.IsSuccess);
+        using var body = JsonDocument.Parse(Assert.Single(server.Requests).Body);
+        var root = body.RootElement;
+        Assert.Equal(321, root.GetProperty("max_completion_tokens").GetInt32());
+        Assert.Equal(0, root.GetProperty("temperature").GetDouble());
+        Assert.False(root.TryGetProperty("max_tokens", out _));
+        Assert.False(root.TryGetProperty("reasoning_effort", out _));
     }
 
     /// <summary>
@@ -198,18 +231,16 @@ public sealed class OpenAiCompatibleModelCompletionClientTests
     [Fact]
     public async Task CompleteJsonAsync_ProviderDelayReturnsTimeoutError()
     {
-        await using var server = await LoopbackHttpServer.StartAsync(
-            async (_, _) =>
-            {
-                await Task.Delay(TimeSpan.FromMilliseconds(300));
-                return SuccessResponse("{\"ok\":true}");
-            });
+        var requestReceived = CreateRequestReceivedSignal();
+        await using var server = await StartBlockingServerAsync(requestReceived);
         using var httpClient = new HttpClient();
         var options = CreateOptions(server);
-        options.RequestTimeout = TimeSpan.FromMilliseconds(30);
+        options.RequestTimeout = TimeSpan.FromSeconds(2);
         var client = CreateClient(httpClient, options);
 
-        var result = await client.CompleteJsonAsync(CreateRequest(), CancellationToken.None);
+        var completion = client.CompleteJsonAsync(CreateRequest(), CancellationToken.None);
+        await WaitForSignalAsync(requestReceived);
+        var result = await completion.WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken);
 
         AssertFailure(result, ErrorType.Timeout, "modelCompletion.timeout");
         Assert.Equal(1, server.RequestCount);
@@ -222,20 +253,20 @@ public sealed class OpenAiCompatibleModelCompletionClientTests
     [Fact]
     public async Task CompleteJsonAsync_CallerCancellationThrowsCancellationException()
     {
-        await using var server = await LoopbackHttpServer.StartAsync(
-            async (_, _) =>
-            {
-                await Task.Delay(TimeSpan.FromMilliseconds(300));
-                return SuccessResponse("{\"ok\":true}");
-            });
+        var requestReceived = CreateRequestReceivedSignal();
+        await using var server = await StartBlockingServerAsync(requestReceived);
         using var httpClient = new HttpClient();
         var options = CreateOptions(server);
-        options.RequestTimeout = TimeSpan.FromSeconds(2);
+        options.RequestTimeout = TimeSpan.FromSeconds(10);
         var client = CreateClient(httpClient, options);
-        using var cancellation = new CancellationTokenSource(TimeSpan.FromMilliseconds(30));
+        using var cancellation = new CancellationTokenSource();
+
+        var completion = client.CompleteJsonAsync(CreateRequest(), cancellation.Token);
+        await WaitForSignalAsync(requestReceived);
+        cancellation.Cancel();
 
         await Assert.ThrowsAnyAsync<OperationCanceledException>(
-            () => client.CompleteJsonAsync(CreateRequest(), cancellation.Token));
+            () => completion.WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken));
         Assert.Equal(1, server.RequestCount);
     }
 
@@ -246,22 +277,81 @@ public sealed class OpenAiCompatibleModelCompletionClientTests
     [Fact]
     public async Task CompleteJsonAsync_CallerCancellationLogsSanitizedOutcome()
     {
-        await using var server = await LoopbackHttpServer.StartAsync(
-            async (_, _) =>
-            {
-                await Task.Delay(TimeSpan.FromMilliseconds(300));
-                return SuccessResponse("{\"ok\":true}");
-            });
+        var requestReceived = CreateRequestReceivedSignal();
+        await using var server = await StartBlockingServerAsync(requestReceived);
         using var httpClient = new HttpClient();
         var logger = new RecordingModelCompletionLogger<OpenAiCompatibleModelCompletionClient>();
-        var client = CreateClient(httpClient, CreateOptions(server), logger);
-        using var cancellation = new CancellationTokenSource(TimeSpan.FromMilliseconds(30));
+        var options = CreateOptions(server);
+        options.RequestTimeout = TimeSpan.FromSeconds(10);
+        var client = CreateClient(httpClient, options, logger);
+        using var cancellation = new CancellationTokenSource();
+
+        var completion = client.CompleteJsonAsync(CreateRequest(), cancellation.Token);
+        await WaitForSignalAsync(requestReceived);
+        cancellation.Cancel();
 
         await Assert.ThrowsAnyAsync<OperationCanceledException>(
-            () => client.CompleteJsonAsync(CreateRequest(), cancellation.Token));
+            () => completion.WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken));
 
         Assert.Contains(logger.Entries, entry => entry.Message.Contains("canceled", StringComparison.Ordinal));
         Assert.All(logger.Entries, entry => Assert.DoesNotContain(ApiKey, entry.Message, StringComparison.Ordinal));
+    }
+
+    /// <summary>
+    ///     Asynchronously rejects a successful provider body that exceeds the transport byte budget.
+    /// </summary>
+    /// <returns>A task that represents the asynchronous operation.</returns>
+    [Fact]
+    public async Task CompleteJsonAsync_OversizedSuccessBodyReturnsMalformedResponse()
+    {
+        await using var server = await LoopbackHttpServer.StartAsync(
+            static (_, _) => Task.FromResult(SuccessResponse(new string('a', 4_000))));
+        using var httpClient = new HttpClient();
+        var options = CreateOptions(server);
+        options.MaximumResponseBytes = 512;
+        var client = CreateClient(httpClient, options);
+
+        var result = await client.CompleteJsonAsync(CreateRequest(), CancellationToken.None);
+
+        AssertFailure(result, ErrorType.ExternalDependencyFailure, "modelCompletion.malformedResponse");
+        Assert.Equal(1, server.RequestCount);
+    }
+
+    /// <summary>
+    ///     Asynchronously maps HTTP failures without reading or bounding the error body.
+    /// </summary>
+    /// <returns>A task that represents the asynchronous operation.</returns>
+    [Fact]
+    public async Task CompleteJsonAsync_HttpFailureDoesNotMaterializeErrorBody()
+    {
+        const string providerBody = "provider body must stay out of the error";
+        await using var server = await LoopbackHttpServer.StartAsync(
+            (_, _) => Task.FromResult(new LoopbackHttpResponse(500, new string('e', 8_000) + providerBody)));
+        using var httpClient = new HttpClient();
+        var options = CreateOptions(server);
+        options.MaximumResponseBytes = 64;
+        var client = CreateClient(httpClient, options);
+
+        var result = await client.CompleteJsonAsync(CreateRequest(), CancellationToken.None);
+
+        AssertFailure(result, ErrorType.ExternalDependencyFailure, "modelCompletion.providerUnavailable");
+        Assert.DoesNotContain(providerBody, Assert.Single(result.Errors).Message, StringComparison.Ordinal);
+        Assert.Equal(1, server.RequestCount);
+    }
+
+    /// <summary>
+    ///     Verifies the transport byte budget includes JSON escaping and envelope headroom beyond UTF-8 expansion.
+    /// </summary>
+    [Fact]
+    public void ResponseByteBudgetIncludesEnvelopeAndJsonEscapingBeyondUtf8()
+    {
+        const int characters = 1_000;
+        var budget = ModelCompletionTransportConstants.ResponseByteBudget(characters);
+
+        Assert.True(budget > characters * 4);
+        Assert.True(
+            budget >= (characters * ModelCompletionTransportConstants.JsonStringExpansionFactor)
+            + ModelCompletionTransportConstants.EnvelopeHeadroomBytes);
     }
 
     /// <summary>
@@ -398,6 +488,20 @@ public sealed class OpenAiCompatibleModelCompletionClientTests
                 Assert.DoesNotContain(responseSecret, entry.Message, StringComparison.Ordinal);
             });
     }
+
+    private static TaskCompletionSource CreateRequestReceivedSignal() =>
+        new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+    private static Task WaitForSignalAsync(TaskCompletionSource signal) =>
+        signal.Task.WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken);
+
+    private static Task<LoopbackHttpServer> StartBlockingServerAsync(TaskCompletionSource requestReceived) =>
+        LoopbackHttpServer.StartAsync(async (_, cancellationToken) =>
+        {
+            requestReceived.TrySetResult();
+            await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+            return SuccessResponse("{\"ok\":true}");
+        });
 
     private static ModelCompletionRequest CreateRequest() =>
         new(SystemMessage, UserMessage, 128, ModelReasoningEffort.Low);

@@ -95,10 +95,33 @@ public sealed class LoopbackHttpServer : IAsyncDisposable
     private async Task HandleClientAsync(TcpClient client)
     {
         using var stream = client.GetStream();
-        var request = await ReadRequestAsync(stream, this._shutdown.Token);
+        LoopbackHttpRequest request;
+        try
+        {
+            request = await ReadRequestAsync(stream, this._shutdown.Token);
+        }
+        catch (IOException)
+        {
+            return;
+        }
+        catch (SocketException)
+        {
+            return;
+        }
+
         this._requests.Enqueue(request);
         var response = await this._handler(request, this._shutdown.Token);
-        await WriteResponseAsync(stream, response, this._shutdown.Token);
+
+        try
+        {
+            await WriteResponseAsync(stream, response, this._shutdown.Token);
+        }
+        catch (IOException)
+        {
+        }
+        catch (SocketException)
+        {
+        }
     }
 
     private static async Task<LoopbackHttpRequest> ReadRequestAsync(Stream stream, CancellationToken cancellationToken)

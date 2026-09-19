@@ -387,7 +387,6 @@ internal static class EngineHostApplicationBuilderExtensions
         builder.Services.AddScoped<IContextPolicyService, ContextPolicyService>();
         var binderOptions = CreateEvidenceBinderOptions(builder.Configuration);
         var curatorOptions = CreateCuratorOptions(builder.Configuration);
-        CuratorConfigurationValidator.Validate(binderOptions, curatorOptions);
         builder.Services.AddSingleton(binderOptions);
         builder.Services.AddSingleton(curatorOptions);
         builder.Services.AddScoped<IEvidenceBinderService, EvidenceBinderService>();
@@ -398,6 +397,7 @@ internal static class EngineHostApplicationBuilderExtensions
             options.Model = configured.Model;
             options.ApiKey = configured.ApiKey;
             options.RequestTimeout = configured.RequestTimeout;
+            options.MaximumResponseBytes = ModelCompletionTransportConstants.ResponseByteBudget(curatorOptions.MaximumOutputCharacters);
         });
         builder.Services.AddModelCompletionClient();
         builder.Services.AddScoped<ICuratorService, CuratorService>();

@@ -8,6 +8,7 @@ using ChangeLens.Core.ModelCompletion.Constants;
 using ChangeLens.Core.ModelCompletion.Interfaces;
 using ChangeLens.Core.ModelCompletion.Models;
 using ChangeLens.Core.Results.Models;
+using ChangeLens.Infrastructure.ModelCompletion.Constants;
 using ChangeLens.Infrastructure.ModelCompletion.Models;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -97,7 +98,7 @@ public sealed class OpenAiCompatibleModelCompletionClient : IModelCompletionClie
                 ],
                 request.MaximumOutputTokens,
                 new OpenAiCompatibleResponseFormat("json_object"),
-                0,
+                request.ReasoningEffort is null ? 0 : null,
                 request.ReasoningEffort?.ToString().ToLowerInvariant()),
             RequestSerializerOptions);
 
@@ -125,8 +126,8 @@ public sealed class OpenAiCompatibleModelCompletionClient : IModelCompletionClie
                 return this.FinishFailure(error, startedAt, (int)response.StatusCode, ErrorOutcome(error));
             }
 
-            var responseBody = await response.Content.ReadAsStringAsync(requestCancellation.Token);
-            if (!TryParseCompletion(responseBody, model, out var completion))
+            var responseBody = await this.ReadBoundedResponseBodyAsync(response.Content, requestCancellation.Token);
+            if (responseBody is null || !TryParseCompletion(responseBody, model, out var completion))
             {
                 return this.FinishFailure(
                     OperationError.ExternalDependencyFailure(
@@ -181,6 +182,46 @@ public sealed class OpenAiCompatibleModelCompletionClient : IModelCompletionClie
                 null,
                 "providerUnavailable");
         }
+    }
+
+    /// <summary>
+    ///     Asynchronously reads a successful provider body up to the configured byte budget.
+    /// </summary>
+    /// <param name="content">The HTTP response content. Cannot be <see langword="null" />.</param>
+    /// <param name="cancellationToken">The token used to cancel the read.</param>
+    /// <returns>
+    ///     A task whose result is the UTF-8 body, or <see langword="null" /> when the body exceeds the budget.
+    /// </returns>
+    /// <exception cref="ArgumentNullException"><paramref name="content" /> is <see langword="null" />.</exception>
+    private async Task<string?> ReadBoundedResponseBodyAsync(HttpContent content, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(content);
+
+        var maximumBytes = this._options.MaximumResponseBytes > 0
+            ? this._options.MaximumResponseBytes
+            : ModelCompletionTransportConstants.ResponseByteBudget(ModelCompletionTransportConstants.DefaultMaximumOutputCharacters);
+        await using var stream = await content.ReadAsStreamAsync(cancellationToken);
+        using var buffer = new MemoryStream();
+        var chunk = new byte[8192];
+        var total = 0;
+        while (true)
+        {
+            var read = await stream.ReadAsync(chunk.AsMemory(), cancellationToken);
+            if (read == 0)
+            {
+                break;
+            }
+
+            total += read;
+            if (total > maximumBytes)
+            {
+                return null;
+            }
+
+            buffer.Write(chunk, 0, read);
+        }
+
+        return Encoding.UTF8.GetString(buffer.GetBuffer(), 0, (int)buffer.Length);
     }
 
     private static bool TryCreateEndpoint(string? baseUrl, out Uri endpoint)

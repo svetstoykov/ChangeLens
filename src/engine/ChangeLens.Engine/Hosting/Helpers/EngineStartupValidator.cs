@@ -1,3 +1,6 @@
+using ChangeLens.Core.Curation.Models;
+using ChangeLens.Core.Curation.Services;
+using ChangeLens.Core.EvidenceBinder.Models;
 using ChangeLens.Engine.Protocol.Constants;
 using ChangeLens.Engine.Protocol.Interfaces;
 using Microsoft.Extensions.DependencyInjection;
@@ -9,7 +12,8 @@ namespace ChangeLens.Engine.Hosting.Helpers;
 /// </summary>
 /// <remarks>
 ///     Validation inspects descriptors and resolves nothing, so it runs before the service provider is built and
-///     the provider is never built when an invariant fails.
+///     the provider is never built when an invariant fails. Curator reserve checks run when both option instances
+///     are registered, then action-handler registrations are matched against the approved action list.
 /// </remarks>
 internal static class EngineStartupValidator
 {
@@ -19,15 +23,45 @@ internal static class EngineStartupValidator
     /// <param name="services">The composed service descriptors. Cannot be <see langword="null" />.</param>
     /// <exception cref="ArgumentNullException"><paramref name="services" /> is <see langword="null" />.</exception>
     /// <exception cref="InvalidOperationException">
-    ///     The approved actions are blank or duplicated, or handler registrations are unkeyed, keyed by a non-string
+    ///     The curator call limits are not positive, the binder reserves cannot hold the configured call,
+    ///     the approved actions are blank or duplicated, or handler registrations are unkeyed, keyed by a non-string
     ///     or blank value, unapproved, missing, or duplicated.
     /// </exception>
     internal static void Validate(IServiceCollection services)
     {
         ArgumentNullException.ThrowIfNull(services);
 
+        ValidateCuratorConfiguration(services);
         ValidateActionHandlerRegistrations(services);
     }
+
+    /// <summary>
+    ///     Validates registered curator and binder option instances against the shared reserve rules.
+    /// </summary>
+    /// <param name="services">The composed service descriptors.</param>
+    /// <remarks>
+    ///     Both <see cref="EvidenceBinderOptions" /> and <see cref="CuratorOptions" /> must be present as
+    ///     implementation instances. When either is missing, this invariant is skipped so a handler-only
+    ///     service collection can still be validated.
+    /// </remarks>
+    /// <exception cref="InvalidOperationException">
+    ///     The curator call limits are not positive, or the binder reserves cannot hold the configured call.
+    /// </exception>
+    private static void ValidateCuratorConfiguration(IServiceCollection services)
+    {
+        var binderOptions = FindImplementationInstance<EvidenceBinderOptions>(services);
+        var curatorOptions = FindImplementationInstance<CuratorOptions>(services);
+        if (binderOptions is null || curatorOptions is null)
+        {
+            return;
+        }
+
+        CuratorConfigurationValidator.Validate(binderOptions, curatorOptions);
+    }
+
+    private static T? FindImplementationInstance<T>(IServiceCollection services)
+        where T : class =>
+        services.FirstOrDefault(descriptor => descriptor.ServiceType == typeof(T))?.ImplementationInstance as T;
 
     /// <summary>Validates that action-handler registrations exactly match the approved action list.</summary>
     /// <param name="services">The composed service descriptors.</param>

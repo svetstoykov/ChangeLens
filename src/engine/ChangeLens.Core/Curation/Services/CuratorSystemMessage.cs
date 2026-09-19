@@ -247,8 +247,8 @@ public static class CuratorSystemMessage
         builder.AppendLine("Return exactly one JSON object. No markdown fence, no prose before or after it. Shape:");
         builder.AppendLine(OutputSchema);
         builder.AppendLine(
-            "`thesis` is the editorial overview of this draft and remains visible in curation diagnostics. The published thesis is derived later from "
-            + "whichever track summaries survive checking.");
+            "`thesis` is the editorial overview of this draft and remains visible in curation diagnostics. The published thesis is derived later "
+            + "from whichever track summaries survive checking.");
         builder.AppendLine(
             "Omit `orderedSteps`, `purposes`, `relationships`, or `matchEdgeIds` rather than emitting an empty placeholder. If the quotes support "
             + "nothing at all, return a thesis citing the evidence you did read and an empty `tracks` array. That is a valid, useful answer.");

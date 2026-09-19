@@ -1,3 +1,5 @@
+using ChangeLens.Infrastructure.ModelCompletion.Constants;
+
 namespace ChangeLens.Infrastructure.ModelCompletion.Models;
 
 /// <summary>
@@ -24,4 +26,13 @@ public sealed class ModelCompletionOptions
     ///     Gets or sets the maximum time allowed for one provider request. The default is two minutes.
     /// </summary>
     public TimeSpan RequestTimeout { get; set; } = TimeSpan.FromMinutes(2);
+
+    /// <summary>
+    ///     Gets or sets the maximum number of bytes read from a successful provider response body.
+    /// </summary>
+    /// <remarks>
+    ///     The default covers the curator output-character cap with JSON-escape and envelope headroom.
+    /// </remarks>
+    public int MaximumResponseBytes { get; set; } =
+        ModelCompletionTransportConstants.ResponseByteBudget(ModelCompletionTransportConstants.DefaultMaximumOutputCharacters);
 }

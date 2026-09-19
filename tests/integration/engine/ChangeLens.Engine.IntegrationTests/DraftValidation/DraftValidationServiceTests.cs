@@ -148,6 +148,29 @@ public sealed class DraftValidationServiceTests
     }
 
     [Fact]
+    public void SelfLoopRelationshipIsRemovedWithoutCountingAsAnUncitedEndpoint()
+    {
+        var binder = DraftValidationFixtureBinderBuilder.Create(["n1"]);
+        var draft = Draft(
+            [Participant("caller", ["n1"])],
+            [Relationship("r1", "caller", "caller", ["n1"])],
+            summaryNodes: ["n1"],
+            thesisNodes: ["n1"]);
+
+        var outcome = Validate(draft, binder);
+
+        Assert.Equal("caller", Assert.Single(outcome.Draft.Tracks.Single().Participants).Id);
+        Assert.Empty(outcome.Draft.Tracks.Single().Relationships);
+        Assert.Equal(0, outcome.UncitedEndpointCount);
+        Assert.Equal(0, outcome.InvalidReferenceCount);
+        Assert.Contains(
+            outcome.Removals,
+            removal => removal.Scope == "relationship"
+                && removal.Id == "r1"
+                && removal.Reason.Contains("same participant", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public void InvalidKindIsCountedEvenWhenTheRelationshipIsRemoved()
     {
         var binder = DraftValidationFixtureBinderBuilder.Create(["n1", "n2"]);

@@ -240,7 +240,7 @@ public static class CuratorSystemMessage
         builder.Append("  relationships per track       at most ").AppendLine(contract.Limits.MaximumRelationshipsPerTrack.ToString());
         builder.Append("  orderedSteps, purposes        at most ").Append(contract.Limits.MaximumItemsPerTrack + " each");
         builder.AppendLine();
-        builder.Append("  any text field                at most ").Append(contract.Limits.MaximumStatementCharacters).AppendLine(" characters");
+        builder.Append("  statements, explanations      at most ").Append(contract.Limits.MaximumStatementCharacters).AppendLine(" characters");
         builder.Append("  every id                      ").AppendLine(contract.Limits.IdFormat);
         builder.AppendLine();
         builder.AppendLine("OUTPUT");

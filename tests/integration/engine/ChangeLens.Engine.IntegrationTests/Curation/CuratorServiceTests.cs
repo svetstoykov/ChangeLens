@@ -140,6 +140,8 @@ public sealed class CuratorServiceTests
         Assert.Contains("Worked hub example", prompt, StringComparison.Ordinal);
         Assert.Contains("fromParticipantId", prompt, StringComparison.Ordinal);
         Assert.Contains("matchEdgeIds", prompt, StringComparison.Ordinal);
+        Assert.Contains("  statements, explanations      at most ", prompt, StringComparison.Ordinal);
+        Assert.DoesNotContain("any text field", prompt, StringComparison.Ordinal);
     }
 
     [Fact]

@@ -252,15 +252,15 @@ public sealed class EngineServiceScopeTests
             var builder = Host.CreateApplicationBuilder();
             builder.Configuration[EvidenceBinderConfigurationConstants.ContextWindowTokensKey] = "128000";
             builder.Configuration[EvidenceBinderConfigurationConstants.CuratorOutputCharactersKey] = "176000";
-            builder.Configuration[EvidenceBinderConfigurationConstants.PromptReserveCharactersKey] = "12000";
+            builder.Configuration[EvidenceBinderConfigurationConstants.PromptReserveCharactersKey] = "16000";
             builder.Configuration[EvidenceBinderConfigurationConstants.TargetUtilizationKey] = "0.5";
 
             builder.AddAnalysisRunServices();
 
             var descriptor = Assert.Single(builder.Services, service => service.ServiceType == typeof(EvidenceBinderOptions));
             var options = Assert.IsType<EvidenceBinderOptions>(descriptor.ImplementationInstance);
-            Assert.Equal(228_000, options.EffectiveMaximumBinderCharacters);
-            Assert.Equal(114_000, options.TargetBinderCharacters);
+            Assert.Equal(224_000, options.EffectiveMaximumBinderCharacters);
+            Assert.Equal(112_000, options.TargetBinderCharacters);
         }
         finally
         {

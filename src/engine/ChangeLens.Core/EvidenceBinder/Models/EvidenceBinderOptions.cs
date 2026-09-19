@@ -21,9 +21,10 @@ public sealed class EvidenceBinderOptions
     public int CuratorOutputCharacters { get; set; } = 176_000;
 
     /// <summary>
-    ///     Gets or sets the curator prompt reserve in characters. The default is 12,000 characters.
+    ///     Gets or sets the curator prompt reserve in characters. The default is 16,000 characters, which covers the
+    ///     complete curator instructions and worked examples.
     /// </summary>
-    public int PromptReserveCharacters { get; set; } = 12_000;
+    public int PromptReserveCharacters { get; set; } = 16_000;
 
     /// <summary>
     ///     Gets or sets an optional hard binder cap in characters. Null derives the cap from the context window.

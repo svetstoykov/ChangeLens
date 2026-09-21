@@ -1,0 +1,119 @@
+using ChangeLens.Core.ClaimChecking.Models;
+using ChangeLens.Core.Publication.Models;
+using ChangeLens.Core.Publication.Services;
+using Microsoft.Extensions.Logging.Abstractions;
+using Xunit;
+using ChangeLens.Engine.IntegrationTests.Publication.Support;
+
+namespace ChangeLens.Engine.IntegrationTests.Publication;
+
+/// <summary>Verifies publication orchestration around the default and checked paths.</summary>
+public sealed class PublicationServiceTests
+{
+    /// <summary>Verifies checker-off publication remains unchecked and does not create bound-not-used entries.</summary>
+    [Fact]
+    public async Task CheckerOffPublishesValidatedDraftWithUncheckedCitations()
+    {
+        var checking = new RecordingClaimCheckingService(new ClaimCheckingOutcome(
+            ChangeLens.Core.MentalModels.Models.MentalModel.Empty, PublicationTestFixtures.Summary()));
+        var frontier = new RecordingFrontierService();
+        var service = new PublicationService(checking, frontier, new ClaimCheckingOptions(),
+            NullLogger<PublicationService>.Instance);
+        var binder = PublicationTestFixtures.Binder("n1");
+        var request = new PublicationRequest(
+            PublicationTestFixtures.Validation("n1"), binder, PublicationTestFixtures.Graph("n1"),
+            PublicationTestFixtures.Policy(), PublicationTestFixtures.Ranking());
+
+        var result = await service.PublishAsync(request, TestContext.Current.CancellationToken);
+
+        Assert.True(result.IsSuccess);
+        Assert.False(checking.Called);
+        Assert.Null(frontier.UsedNodeIds);
+        Assert.NotEmpty(result.Data!.ReadingModel.Citations);
+        Assert.All(result.Data.ReadingModel.Citations, citation => Assert.Equal(CitationProvenance.Unchecked, citation.Provenance));
+        Assert.DoesNotContain(result.Data.EvidenceFrontier.Entries, entry => entry.OmissionKind == "boundNotUsed");
+    }
+
+    /// <summary>Verifies a removed checked claim leaves its bound quote available to the frontier.</summary>
+    [Fact]
+    public async Task RemovedClaimIsAbsentAndItsQuoteReachesFrontier()
+    {
+        var checking = new RecordingClaimCheckingService(new ClaimCheckingOutcome(
+            ChangeLens.Core.MentalModels.Models.MentalModel.Empty, PublicationTestFixtures.Summary()));
+        var frontier = new RecordingFrontierService();
+        var service = new PublicationService(checking, frontier, new ClaimCheckingOptions { Enabled = true },
+            NullLogger<PublicationService>.Instance, new RecordingClaimChecker());
+        var binder = PublicationTestFixtures.Binder("n1");
+        var request = new PublicationRequest(
+            PublicationTestFixtures.Validation("n1"), binder, PublicationTestFixtures.Graph("n1"),
+            PublicationTestFixtures.Policy(), PublicationTestFixtures.Ranking());
+
+        var result = await service.PublishAsync(request, TestContext.Current.CancellationToken);
+
+        Assert.True(result.IsSuccess);
+        Assert.True(checking.Called);
+        Assert.Empty(result.Data!.ReadingModel.Areas);
+        Assert.Contains(result.Data.EvidenceFrontier.Entries, entry => entry.NodeId == "n1" && entry.OmissionKind == "boundNotUsed");
+    }
+
+    /// <summary>Verifies unchecked participant citations do not count as checker-used evidence.</summary>
+    [Fact]
+    public async Task ParticipantCitationsDoNotShrinkFrontier()
+    {
+        var checkedModel = new ChangeLens.Core.MentalModels.Models.MentalModel(null, [
+            new ChangeLens.Core.MentalModels.Models.MentalModelTrack(
+                "track", "Track", null, "ParticipantList",
+                [new ChangeLens.Core.Curation.Models.DraftParticipant("participant", "Participant", "role", true, ["n1"])],
+                [], [], []),
+        ]);
+        var checking = new RecordingClaimCheckingService(new ClaimCheckingOutcome(checkedModel, PublicationTestFixtures.Summary()));
+        var frontier = new RecordingFrontierService();
+        var service = new PublicationService(checking, frontier, new ClaimCheckingOptions { Enabled = true },
+            NullLogger<PublicationService>.Instance, new RecordingClaimChecker());
+        var binder = PublicationTestFixtures.Binder("n1");
+        var request = new PublicationRequest(
+            PublicationTestFixtures.Validation("n1"), binder, PublicationTestFixtures.Graph("n1"),
+            PublicationTestFixtures.Policy(), PublicationTestFixtures.Ranking());
+
+        var result = await service.PublishAsync(request, TestContext.Current.CancellationToken);
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal(CitationProvenance.Unchecked, Assert.Single(result.Data!.ReadingModel.Citations).Provenance);
+        Assert.Contains(result.Data.EvidenceFrontier.Entries, entry => entry.NodeId == "n1" && entry.OmissionKind == "boundNotUsed");
+    }
+
+    /// <summary>Verifies duplicate claim citations withheld by publication do not count as checked frontier usage.</summary>
+    [Fact]
+    public async Task DuplicateClaimCitationsDoNotShrinkFrontier()
+    {
+        var duplicate = new ChangeLens.Core.MentalModels.Models.MentalModelStatement("duplicate", "Duplicate", ["n1"], []);
+        var checkedModel = new ChangeLens.Core.MentalModels.Models.MentalModel(null, [
+            new ChangeLens.Core.MentalModels.Models.MentalModelTrack("one", "One", duplicate, "Walk", [], [], [], []),
+            new ChangeLens.Core.MentalModels.Models.MentalModelTrack(
+                "two",
+                "Two",
+                duplicate with { EvidenceNodeIds = ["n2"] },
+                "Walk",
+                [],
+                [],
+                [],
+                []),
+        ]);
+        var checking = new RecordingClaimCheckingService(new ClaimCheckingOutcome(checkedModel, PublicationTestFixtures.Summary()));
+        var frontier = new RecordingFrontierService();
+        var service = new PublicationService(checking, frontier, new ClaimCheckingOptions { Enabled = true },
+            NullLogger<PublicationService>.Instance, new RecordingClaimChecker());
+        var binder = PublicationTestFixtures.Binder("n1", "n2");
+        var request = new PublicationRequest(
+            PublicationTestFixtures.Validation("n1"), binder, PublicationTestFixtures.Graph("n1", "n2"),
+            PublicationTestFixtures.Policy(), PublicationTestFixtures.Ranking());
+
+        var result = await service.PublishAsync(request, TestContext.Current.CancellationToken);
+
+        Assert.True(result.IsSuccess);
+        Assert.Empty(result.Data!.ReadingModel.Citations);
+        Assert.Empty(frontier.UsedNodeIds!);
+        Assert.Contains(result.Data.EvidenceFrontier.Entries, entry => entry.NodeId == "n1" && entry.OmissionKind == "boundNotUsed");
+        Assert.Contains(result.Data.EvidenceFrontier.Entries, entry => entry.NodeId == "n2" && entry.OmissionKind == "boundNotUsed");
+    }
+}

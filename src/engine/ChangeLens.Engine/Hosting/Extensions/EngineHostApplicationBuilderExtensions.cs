@@ -15,6 +15,10 @@ using ChangeLens.Core.ContextPolicy.Constants;
 using ChangeLens.Core.ContextPolicy.Interfaces;
 using ChangeLens.Core.ContextPolicy.Models;
 using ChangeLens.Core.ContextPolicy.Services;
+using ChangeLens.Core.ClaimChecking.Constants;
+using ChangeLens.Core.ClaimChecking.Interfaces;
+using ChangeLens.Core.ClaimChecking.Models;
+using ChangeLens.Core.ClaimChecking.Services;
 using ChangeLens.Core.Correspondence.Constants;
 using ChangeLens.Core.Correspondence.Interfaces;
 using ChangeLens.Core.Correspondence.Models;
@@ -30,11 +34,17 @@ using ChangeLens.Core.EvidenceGraph.Constants;
 using ChangeLens.Core.EvidenceGraph.Interfaces;
 using ChangeLens.Core.EvidenceGraph.Models;
 using ChangeLens.Core.EvidenceGraph.Services;
+using ChangeLens.Core.EvidenceFrontier.Constants;
+using ChangeLens.Core.EvidenceFrontier.Interfaces;
+using ChangeLens.Core.EvidenceFrontier.Models;
+using ChangeLens.Core.EvidenceFrontier.Services;
 using ChangeLens.Core.Git.Interfaces;
 using ChangeLens.Core.Git.Services;
 using ChangeLens.Core.LocalState.Interfaces;
 using ChangeLens.Core.LocalState.Services;
 using ChangeLens.Core.ModelCompletion.Models;
+using ChangeLens.Core.Publication.Interfaces;
+using ChangeLens.Core.Publication.Services;
 using ChangeLens.Core.Snapshots.Interfaces;
 using ChangeLens.Core.Snapshots.Constants;
 using ChangeLens.Core.Snapshots.Models;
@@ -244,6 +254,33 @@ internal static class EngineHostApplicationBuilderExtensions
         };
     }
 
+    /// <summary>Reads the configured evidence-frontier bounds.</summary>
+    /// <param name="configuration">The engine configuration. Cannot be <see langword="null" />.</param>
+    /// <returns>The configured frontier options, using safe defaults for absent or malformed values.</returns>
+    private static EvidenceFrontierOptions CreateEvidenceFrontierOptions(IConfiguration configuration)
+    {
+        ArgumentNullException.ThrowIfNull(configuration);
+        var defaults = new EvidenceFrontierOptions();
+        return new EvidenceFrontierOptions
+        {
+            MaximumEntries = int.TryParse(configuration[EvidenceFrontierConfigurationConstants.MaximumEntriesKey], out var value)
+                ? value
+                : defaults.MaximumEntries,
+        };
+    }
+
+    /// <summary>Reads the configured claim-checking switch.</summary>
+    /// <param name="configuration">The engine configuration. Cannot be <see langword="null" />.</param>
+    /// <returns>The configured claim-checking options.</returns>
+    private static ClaimCheckingOptions CreateClaimCheckingOptions(IConfiguration configuration)
+    {
+        ArgumentNullException.ThrowIfNull(configuration);
+        return new ClaimCheckingOptions
+        {
+            Enabled = ReadBoolean(configuration, ClaimCheckingConfigurationConstants.EnabledKey, false),
+        };
+    }
+
     /// <summary>Reads the configured evidence binder limits.</summary>
     /// <param name="configuration">The engine configuration. Cannot be <see langword="null" />.</param>
     /// <returns>The configured binder limits, using safe defaults for absent or malformed values.</returns>
@@ -385,6 +422,11 @@ internal static class EngineHostApplicationBuilderExtensions
         builder.Services.AddScoped<IEvidenceGraphService, EvidenceGraphService>();
         builder.Services.AddSingleton(CreateContextPolicyOptions(builder.Configuration));
         builder.Services.AddScoped<IContextPolicyService, ContextPolicyService>();
+        builder.Services.AddSingleton(CreateEvidenceFrontierOptions(builder.Configuration));
+        builder.Services.AddSingleton(CreateClaimCheckingOptions(builder.Configuration));
+        builder.Services.AddScoped<IEvidenceFrontierService, EvidenceFrontierService>();
+        builder.Services.AddScoped<IClaimCheckingService, ClaimCheckingService>();
+        builder.Services.AddScoped<IPublicationService, PublicationService>();
         var binderOptions = CreateEvidenceBinderOptions(builder.Configuration);
         var curatorOptions = CreateCuratorOptions(builder.Configuration);
         builder.Services.AddSingleton(binderOptions);

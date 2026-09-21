@@ -7,7 +7,7 @@ namespace ChangeLens.Core.EvidenceBinder.Models;
 /// <param name="MaximumParticipantsPerTrack">The maximum participants per track.</param>
 /// <param name="MaximumRelationshipsPerTrack">The maximum relationships per track.</param>
 /// <param name="MaximumItemsPerTrack">The maximum ordered steps or purposes per track.</param>
-/// <param name="MaximumStatementCharacters">The maximum statement size.</param>
+/// <param name="MaximumStatementCharacters">The maximum size of statement text and relationship explanations.</param>
 /// <param name="IdFormat">The allowed identifier format.</param>
 public sealed record CuratorLimits(
     int MaximumTracks,

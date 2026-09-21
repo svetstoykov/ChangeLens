@@ -5,6 +5,10 @@ using ChangeLens.Core.ChangeAnatomy.Services;
 using ChangeLens.Core.ChangeAnatomy.Constants;
 using ChangeLens.Core.AnalysisRuns.Interfaces;
 using ChangeLens.Core.AnalysisRuns.Services;
+using ChangeLens.Core.Curation.Constants;
+using ChangeLens.Core.Curation.Interfaces;
+using ChangeLens.Core.Curation.Models;
+using ChangeLens.Core.Curation.Services;
 using ChangeLens.Core.Comparisons.Interfaces;
 using ChangeLens.Core.Comparisons.Services;
 using ChangeLens.Core.ContextPolicy.Constants;
@@ -15,6 +19,8 @@ using ChangeLens.Core.Correspondence.Constants;
 using ChangeLens.Core.Correspondence.Interfaces;
 using ChangeLens.Core.Correspondence.Models;
 using ChangeLens.Core.Correspondence.Services;
+using ChangeLens.Core.DraftValidation.Interfaces;
+using ChangeLens.Core.DraftValidation.Services;
 using ChangeLens.Core.EngineStatus.Interfaces;
 using ChangeLens.Core.EvidenceBinder.Constants;
 using ChangeLens.Core.EvidenceBinder.Interfaces;
@@ -28,6 +34,7 @@ using ChangeLens.Core.Git.Interfaces;
 using ChangeLens.Core.Git.Services;
 using ChangeLens.Core.LocalState.Interfaces;
 using ChangeLens.Core.LocalState.Services;
+using ChangeLens.Core.ModelCompletion.Models;
 using ChangeLens.Core.Snapshots.Interfaces;
 using ChangeLens.Core.Snapshots.Constants;
 using ChangeLens.Core.Snapshots.Models;
@@ -54,6 +61,9 @@ using ChangeLens.Infrastructure.LocalState.Models;
 using ChangeLens.Infrastructure.LocalState.Persistence;
 using ChangeLens.Infrastructure.LocalState.Services;
 using ChangeLens.Infrastructure.AnalysisRuns.Services;
+using ChangeLens.Infrastructure.ModelCompletion.Constants;
+using ChangeLens.Infrastructure.ModelCompletion.Extensions;
+using ChangeLens.Infrastructure.ModelCompletion.Models;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -255,6 +265,43 @@ internal static class EngineHostApplicationBuilderExtensions
         };
     }
 
+    /// <summary>Reads the configured curator call limits.</summary>
+    /// <param name="configuration">The engine configuration. Cannot be <see langword="null" />.</param>
+    /// <returns>The configured curator limits, using safe defaults for absent or malformed values.</returns>
+    private static CuratorOptions CreateCuratorOptions(IConfiguration configuration)
+    {
+        ArgumentNullException.ThrowIfNull(configuration);
+        var defaults = new CuratorOptions();
+        return new CuratorOptions
+        {
+            MaximumOutputCharacters = ReadPositiveInt(
+                configuration, CuratorConfigurationConstants.MaximumOutputCharactersKey, defaults.MaximumOutputCharacters),
+            MaximumOutputTokens = ReadPositiveInt(
+                configuration, CuratorConfigurationConstants.MaximumOutputTokensKey, defaults.MaximumOutputTokens),
+            ReasoningEffort = Enum.TryParse<ModelReasoningEffort>(
+                configuration[CuratorConfigurationConstants.ReasoningEffortKey], true, out var reasoningEffort)
+                ? reasoningEffort
+                : defaults.ReasoningEffort,
+        };
+    }
+
+    /// <summary>Reads the configured OpenAI-compatible model completion provider settings.</summary>
+    /// <param name="configuration">The engine configuration. Cannot be <see langword="null" />.</param>
+    /// <returns>The provider settings, which may omit credentials so calls can fail at call time.</returns>
+    private static ModelCompletionOptions CreateModelCompletionOptions(IConfiguration configuration)
+    {
+        ArgumentNullException.ThrowIfNull(configuration);
+        var defaults = new ModelCompletionOptions();
+        return new ModelCompletionOptions
+        {
+            BaseUrl = configuration[ModelCompletionConfigurationConstants.BaseUrlKey],
+            Model = configuration[ModelCompletionConfigurationConstants.ModelKey],
+            ApiKey = configuration[ModelCompletionConfigurationConstants.ApiKeyKey],
+            RequestTimeout = ReadPositiveTimeSpan(
+                configuration, ModelCompletionConfigurationConstants.RequestTimeoutKey, defaults.RequestTimeout),
+        };
+    }
+
     /// <summary>Reads one positive integer configuration value.</summary>
     /// <param name="configuration">The engine configuration. Cannot be <see langword="null" />.</param>
     /// <param name="key">The configuration key. Cannot be <see langword="null" />.</param>
@@ -338,8 +385,23 @@ internal static class EngineHostApplicationBuilderExtensions
         builder.Services.AddScoped<IEvidenceGraphService, EvidenceGraphService>();
         builder.Services.AddSingleton(CreateContextPolicyOptions(builder.Configuration));
         builder.Services.AddScoped<IContextPolicyService, ContextPolicyService>();
-        builder.Services.AddSingleton(CreateEvidenceBinderOptions(builder.Configuration));
+        var binderOptions = CreateEvidenceBinderOptions(builder.Configuration);
+        var curatorOptions = CreateCuratorOptions(builder.Configuration);
+        builder.Services.AddSingleton(binderOptions);
+        builder.Services.AddSingleton(curatorOptions);
         builder.Services.AddScoped<IEvidenceBinderService, EvidenceBinderService>();
+        builder.Services.Configure<ModelCompletionOptions>(options =>
+        {
+            var configured = CreateModelCompletionOptions(builder.Configuration);
+            options.BaseUrl = configured.BaseUrl;
+            options.Model = configured.Model;
+            options.ApiKey = configured.ApiKey;
+            options.RequestTimeout = configured.RequestTimeout;
+            options.MaximumResponseBytes = ModelCompletionTransportConstants.ResponseByteBudget(curatorOptions.MaximumOutputCharacters);
+        });
+        builder.Services.AddModelCompletionClient();
+        builder.Services.AddScoped<ICuratorService, CuratorService>();
+        builder.Services.AddScoped<IDraftValidationService, DraftValidationService>();
         builder.Services.AddScoped<ISnapshotCaptureService, GitSnapshotCaptureService>();
         builder.Services.AddScoped<IAnalysisPipeline, ShallowAnalysisPipeline>();
         builder.Services.AddScoped<IAnalysisRunCoordinator, AnalysisRunCoordinator>();

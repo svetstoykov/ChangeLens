@@ -21,15 +21,6 @@ public sealed class EvidenceBinderService : IEvidenceBinderService
 {
     private const double CharactersPerToken = 3.25;
     private const string DeveloperContextLabel = "developer-supplied hint, not evidence";
-    private const string IdFormat = "letters, digits, '-', '_' and '.' only; at most 120 characters; unique within its track";
-
-    private static readonly IReadOnlyList<string> RelationshipKinds =
-    [
-        "invokes", "returns", "reads", "writes", "publishes", "subscribes", "configures", "supersedes", "covers",
-        "documents", "contains", "depends-on",
-    ];
-
-    private static readonly IReadOnlyList<string> TrackShapes = ["Walk", "ParticipantMap", "PurposeCards"];
 
     private readonly EvidenceBinderOptions _options;
     private readonly ILogger<EvidenceBinderService> _logger;
@@ -201,15 +192,15 @@ public sealed class EvidenceBinderService : IEvidenceBinderService
         }
 
         BinderContract Contract() => new(
-            RelationshipKinds,
-            TrackShapes,
+            CuratorContractConstants.RelationshipKinds,
+            CuratorContractConstants.TrackShapes,
             new CuratorLimits(
                 this._options.MaximumTracks,
                 this._options.MaximumParticipantsPerTrack,
                 this._options.MaximumRelationshipsPerTrack,
                 this._options.MaximumItemsPerTrack,
                 this._options.MaximumStatementCharacters,
-                IdFormat));
+                CuratorContractConstants.IdFormat));
 
         EvidenceBinderModel BuildBinder()
         {

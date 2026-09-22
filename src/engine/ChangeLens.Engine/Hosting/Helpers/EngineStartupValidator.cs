@@ -1,6 +1,9 @@
+using ChangeLens.Core.ClaimChecking.Interfaces;
+using ChangeLens.Core.ClaimChecking.Models;
 using ChangeLens.Core.Curation.Models;
 using ChangeLens.Core.Curation.Services;
 using ChangeLens.Core.EvidenceBinder.Models;
+using ChangeLens.Core.EvidenceFrontier.Models;
 using ChangeLens.Engine.Protocol.Constants;
 using ChangeLens.Engine.Protocol.Interfaces;
 using Microsoft.Extensions.DependencyInjection;
@@ -13,7 +16,8 @@ namespace ChangeLens.Engine.Hosting.Helpers;
 /// <remarks>
 ///     Validation inspects descriptors and resolves nothing, so it runs before the service provider is built and
 ///     the provider is never built when an invariant fails. Curator reserve checks run when both option instances
-///     are registered, then action-handler registrations are matched against the approved action list.
+///     are registered, publication options enforce checker and frontier invariants, then action-handler registrations
+///     are matched against the approved action list.
 /// </remarks>
 internal static class EngineStartupValidator
 {
@@ -24,6 +28,7 @@ internal static class EngineStartupValidator
     /// <exception cref="ArgumentNullException"><paramref name="services" /> is <see langword="null" />.</exception>
     /// <exception cref="InvalidOperationException">
     ///     The curator call limits are not positive, the binder reserves cannot hold the configured call,
+    ///     checking is enabled without an adapter, the frontier cap is not positive, or
     ///     the approved actions are blank or duplicated, or handler registrations are unkeyed, keyed by a non-string
     ///     or blank value, unapproved, missing, or duplicated.
     /// </exception>
@@ -32,6 +37,7 @@ internal static class EngineStartupValidator
         ArgumentNullException.ThrowIfNull(services);
 
         ValidateCuratorConfiguration(services);
+        ValidatePublicationConfiguration(services);
         ValidateActionHandlerRegistrations(services);
     }
 
@@ -62,6 +68,28 @@ internal static class EngineStartupValidator
     private static T? FindImplementationInstance<T>(IServiceCollection services)
         where T : class =>
         services.FirstOrDefault(descriptor => descriptor.ServiceType == typeof(T))?.ImplementationInstance as T;
+
+    /// <summary>Validates publication checker and frontier bounds before the service provider is built.</summary>
+    /// <param name="services">The composed service descriptors.</param>
+    /// <exception cref="InvalidOperationException">
+    ///     Claim checking is enabled without a checker adapter, or the frontier entry cap is not positive.
+    /// </exception>
+    private static void ValidatePublicationConfiguration(IServiceCollection services)
+    {
+        var checkerOptions = FindImplementationInstance<ClaimCheckingOptions>(services);
+        if (checkerOptions is { Enabled: true } && !services.Any(descriptor => descriptor.ServiceType == typeof(IClaimChecker)))
+        {
+            throw new InvalidOperationException(
+                "Publication configuration enables claim checking, but no IClaimChecker adapter is registered.");
+        }
+
+        var frontierOptions = FindImplementationInstance<EvidenceFrontierOptions>(services);
+        if (frontierOptions is not null && frontierOptions.MaximumEntries <= 0)
+        {
+            throw new InvalidOperationException(
+                $"Publication configuration requires a positive evidence frontier maximum entry count; received {frontierOptions.MaximumEntries}.");
+        }
+    }
 
     /// <summary>Validates that action-handler registrations exactly match the approved action list.</summary>
     /// <param name="services">The composed service descriptors.</param>

@@ -1,0 +1,16 @@
+id: F02
+description: >-
+  F01 plus a dirty worktree: the parser is edited and staged, then edited again unstaged; label.ts is edited
+  unstaged; scratch.txt is untracked. Every dirty edit carries a unique marker that must never leave the machine.
+base: F01
+uncommitted:
+  - append: { path: src/parse-name.ts, text: "// staged-marker-only\n" }
+    stage: true
+  - append: { path: src/parse-name.ts, text: "// unstaged-marker-only\n" }
+  - append: { path: src/label.ts, text: "// second-unstaged-marker-only\n" }
+  - write: { path: scratch.txt, text: "untracked-marker-only\n" }
+markers:
+  - staged-marker-only
+  - unstaged-marker-only
+  - second-unstaged-marker-only
+  - untracked-marker-only

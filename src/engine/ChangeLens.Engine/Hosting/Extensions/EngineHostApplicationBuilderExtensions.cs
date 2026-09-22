@@ -269,15 +269,26 @@ internal static class EngineHostApplicationBuilderExtensions
         };
     }
 
-    /// <summary>Reads the configured claim-checking switch.</summary>
+    /// <summary>Reads the configured claim-checking switch and checker call limits.</summary>
     /// <param name="configuration">The engine configuration. Cannot be <see langword="null" />.</param>
-    /// <returns>The configured claim-checking options.</returns>
+    /// <returns>The configured claim-checking options, using safe defaults for absent or malformed values.</returns>
     private static ClaimCheckingOptions CreateClaimCheckingOptions(IConfiguration configuration)
     {
         ArgumentNullException.ThrowIfNull(configuration);
+        var defaults = new ClaimCheckingOptions();
         return new ClaimCheckingOptions
         {
-            Enabled = ReadBoolean(configuration, ClaimCheckingConfigurationConstants.EnabledKey, false),
+            Enabled = ReadBoolean(configuration, ClaimCheckingConfigurationConstants.EnabledKey, defaults.Enabled),
+            MaximumClaims = ReadPositiveInt(configuration, ClaimCheckingConfigurationConstants.MaximumClaimsKey, defaults.MaximumClaims),
+            MaximumPayloadCharacters = ReadPositiveInt(
+                configuration, ClaimCheckingConfigurationConstants.MaximumPayloadCharactersKey, defaults.MaximumPayloadCharacters),
+            Attempts = ReadPositiveInt(configuration, ClaimCheckingConfigurationConstants.AttemptsKey, defaults.Attempts),
+            ReasoningEffort = Enum.TryParse<ModelReasoningEffort>(
+                configuration[ClaimCheckingConfigurationConstants.ReasoningEffortKey], true, out var reasoningEffort)
+                ? reasoningEffort
+                : defaults.ReasoningEffort,
+            MaximumOutputTokens = ReadPositiveInt(
+                configuration, ClaimCheckingConfigurationConstants.MaximumOutputTokensKey, defaults.MaximumOutputTokens),
         };
     }
 
@@ -443,6 +454,7 @@ internal static class EngineHostApplicationBuilderExtensions
         });
         builder.Services.AddModelCompletionClient();
         builder.Services.AddScoped<ICuratorService, CuratorService>();
+        builder.Services.AddScoped<IClaimChecker, ModelClaimChecker>();
         builder.Services.AddScoped<IDraftValidationService, DraftValidationService>();
         builder.Services.AddScoped<ISnapshotCaptureService, GitSnapshotCaptureService>();
         builder.Services.AddScoped<IAnalysisPipeline, AnalysisPipeline>();

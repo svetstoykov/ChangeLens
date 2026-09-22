@@ -7,6 +7,8 @@ import type { AnalysisRunSummary } from "../Models/AnalysisRunSummary";
 import type { AnalysisActiveStage } from "../Models/AnalysisRunState";
 import { ANALYSIS_ACTIVE_STAGE_ORDER } from "../Models/AnalysisRunState";
 import type { AnalysisTerminalSummary } from "../Models/AnalysisTerminalSummary";
+import { ReadingModelPanel } from "./ReadingModelPanel";
+import { ValidationRemovalList } from "./ValidationRemovalList";
 
 type StageStatus = "complete" | "active" | "pending";
 
@@ -216,6 +218,16 @@ export function AnalysisProgressView({
           )}
         </section>
       </div>
+      {summary.readingModel !== null &&
+      (summary.state === "completed" ||
+        summary.state === "completedWithLimitations") ? (
+        <>
+          <ReadingModelPanel model={summary.readingModel} />
+          {summary.validationRemovals !== null ? (
+            <ValidationRemovalList removals={summary.validationRemovals} />
+          ) : null}
+        </>
+      ) : null}
     </section>
   );
 }
@@ -265,18 +277,20 @@ function describeStage(stage: AnalysisActiveStage): StageCopy {
       };
     case "discovering":
       return {
-        label: "Discovering repository structure",
-        description: "Reading manifests and repository layout.",
+        label: "Reading the frozen change",
+        description:
+          "Extracting keys, ranking unchanged files, and quoting the snapshot.",
       };
     case "collecting":
       return {
-        label: "Collecting evidence",
-        description: "Gathering source-control and syntactic facts.",
+        label: "Writing the change story",
+        description:
+          "Requesting one curator draft and checking it against the quotes.",
       };
     case "persisting":
       return {
-        label: "Persisting the run",
-        description: "Writing durable local run artifacts.",
+        label: "Saving the run",
+        description: "Writing the reading model into the local run.",
       };
   }
 }
@@ -306,10 +320,16 @@ function describeRunStatus(summary: AnalysisRunSummary): RunStatus {
         };
   }
 
-  return describeTerminalStatus(summary.terminal);
+  return describeTerminalStatus(
+    summary.terminal,
+    summary.readingModel !== null,
+  );
 }
 
-function describeTerminalStatus(terminal: AnalysisTerminalSummary): RunStatus {
+function describeTerminalStatus(
+  terminal: AnalysisTerminalSummary,
+  readingModelShown: boolean,
+): RunStatus {
   switch (terminal.kind) {
     case "completed":
       return {
@@ -320,7 +340,9 @@ function describeTerminalStatus(terminal: AnalysisTerminalSummary): RunStatus {
     case "completedWithLimitations":
       return {
         heading: "Analysis complete with limitations",
-        detail: `${terminal.limitationCount} ${terminal.limitationCount === 1 ? "limitation" : "limitations"} were recorded while collecting evidence.`,
+        detail: readingModelShown
+          ? `${terminal.limitationCount} analysis ${pluralize("step", terminal.limitationCount)} finished with limitations; the limitations are listed below.`
+          : `${terminal.limitationCount} analysis ${pluralize("step", terminal.limitationCount)} finished with limitations. Reading details are not available for this run.`,
         tone: "warning",
       };
     case "cancelled":
@@ -356,7 +378,23 @@ function statusIconName(
 }
 
 function describeFactKind(fact: AnalysisFact): string {
-  return fact.kind
+  return factKindLabels[fact.kind] ?? splitCamelCase(fact.kind);
+}
+
+const factKindLabels: Readonly<Record<string, string>> = {
+  changedFilesCaptured: "Changed files captured",
+  excludedUncommittedFiles: "Uncommitted files excluded",
+  correspondenceCandidates: "Unchanged files ranked",
+  disclosedEvidenceNodes: "Evidence nodes disclosed",
+  validationRemovals: "Draft items removed",
+};
+
+function splitCamelCase(value: string): string {
+  return value
     .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
     .replace(/^./, (character) => character.toUpperCase());
+}
+
+function pluralize(word: string, count: number): string {
+  return count === 1 ? word : `${word}s`;
 }

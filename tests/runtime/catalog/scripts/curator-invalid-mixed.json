@@ -1,0 +1,78 @@
+{
+  "id": "curator-invalid-mixed",
+  "description": "F01 curator draft with prohibited material: an unknown thesis citation, an invalid relationship kind, a relationship that does not cite one endpoint, and an unknown dropped node. Mechanical validation should remove four items and still publish.",
+  "exchanges": [
+    {
+      "role": "curator",
+      "reply": {
+        "usage": { "prompt_tokens": 1500, "completion_tokens": 96 },
+        "content": {
+          "thesis": {
+            "text": "A draft with deliberately invalid references.",
+            "evidenceNodeIds": [
+              { "$node": { "path": "src/parse-name.ts", "side": "After" } },
+              { "$node": { "path": "src/label.ts", "side": "After" } },
+              "unknown-node"
+            ]
+          },
+          "tracks": [
+            {
+              "id": "invalid-draft",
+              "title": "Validation probes",
+              "summary": {
+                "text": "The summary keeps one disclosed citation.",
+                "evidenceNodeIds": [
+                  { "$node": { "path": "src/parse-name.ts", "side": "After" } },
+                  { "$node": { "path": "src/label.ts", "side": "After" } }
+                ]
+              },
+              "shape": "ParticipantMap",
+              "participants": [
+                {
+                  "id": "one",
+                  "name": "One",
+                  "role": "first",
+                  "changed": true,
+                  "evidenceNodeIds": [{ "$node": { "path": "src/parse-name.ts", "side": "After" } }]
+                },
+                {
+                  "id": "two",
+                  "name": "Two",
+                  "role": "second",
+                  "changed": false,
+                  "evidenceNodeIds": [{ "$node": { "index": 1 } }]
+                }
+              ],
+              "relationships": [
+                {
+                  "id": "unknown-kind",
+                  "fromParticipantId": "one",
+                  "toParticipantId": "two",
+                  "kind": "bogus",
+                  "explanation": "invalid kind",
+                  "evidenceNodeIds": [
+                    { "$node": { "path": "src/parse-name.ts", "side": "After" } },
+                    { "$node": { "path": "src/label.ts", "side": "After" } }
+                  ],
+                  "matchEdgeIds": []
+                },
+                {
+                  "id": "uncited-endpoint",
+                  "fromParticipantId": "one",
+                  "toParticipantId": "two",
+                  "kind": "invokes",
+                  "explanation": "missing the second endpoint citation",
+                  "evidenceNodeIds": [{ "$node": { "path": "src/parse-name.ts", "side": "After" } }],
+                  "matchEdgeIds": []
+                }
+              ],
+              "orderedSteps": [],
+              "purposes": []
+            }
+          ],
+          "droppedNodeIds": ["unknown-drop"]
+        }
+      }
+    }
+  ]
+}

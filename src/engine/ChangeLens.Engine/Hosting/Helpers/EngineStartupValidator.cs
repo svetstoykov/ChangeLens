@@ -28,7 +28,7 @@ internal static class EngineStartupValidator
     /// <exception cref="ArgumentNullException"><paramref name="services" /> is <see langword="null" />.</exception>
     /// <exception cref="InvalidOperationException">
     ///     The curator call limits are not positive, the binder reserves cannot hold the configured call,
-    ///     checking is enabled without an adapter, the frontier cap is not positive, or
+    ///     checking is enabled without an adapter or with a non-positive checker limit, the frontier cap is not positive, or
     ///     the approved actions are blank or duplicated, or handler registrations are unkeyed, keyed by a non-string
     ///     or blank value, unapproved, missing, or duplicated.
     /// </exception>
@@ -72,7 +72,8 @@ internal static class EngineStartupValidator
     /// <summary>Validates publication checker and frontier bounds before the service provider is built.</summary>
     /// <param name="services">The composed service descriptors.</param>
     /// <exception cref="InvalidOperationException">
-    ///     Claim checking is enabled without a checker adapter, or the frontier entry cap is not positive.
+    ///     Claim checking is enabled without a checker adapter or with a non-positive checker limit, or the frontier entry
+    ///     cap is not positive.
     /// </exception>
     private static void ValidatePublicationConfiguration(IServiceCollection services)
     {
@@ -81,6 +82,15 @@ internal static class EngineStartupValidator
         {
             throw new InvalidOperationException(
                 "Publication configuration enables claim checking, but no IClaimChecker adapter is registered.");
+        }
+
+        if (checkerOptions is { Enabled: true }
+            && (checkerOptions.MaximumClaims <= 0 || checkerOptions.MaximumPayloadCharacters <= 0 || checkerOptions.Attempts <= 0
+                || checkerOptions.MaximumOutputTokens <= 0))
+        {
+            throw new InvalidOperationException(
+                "Publication configuration enables claim checking, but the checker claim count, payload characters, attempts, and "
+                + "output tokens must all be positive.");
         }
 
         var frontierOptions = FindImplementationInstance<EvidenceFrontierOptions>(services);

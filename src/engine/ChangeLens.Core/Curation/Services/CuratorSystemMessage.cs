@@ -258,7 +258,12 @@ public static class CuratorSystemMessage
         return builder.ToString();
     }
 
-    private static void AppendRelationshipKinds(StringBuilder builder, IReadOnlyList<string> relationshipKinds)
+    /// <summary>
+    ///     Appends one line per relationship kind with its meaning, where A is the `from` participant and B the `to`.
+    /// </summary>
+    /// <param name="builder">The prompt builder to append to.</param>
+    /// <param name="relationshipKinds">The closed relationship kinds, in prompt order.</param>
+    internal static void AppendRelationshipKinds(StringBuilder builder, IReadOnlyList<string> relationshipKinds)
     {
         foreach (var kind in relationshipKinds)
         {

@@ -31,7 +31,7 @@ public sealed class ReadingModelBuilderTests
             "track",
             "Track",
             new MentalModelStatement("summary", "A summary", ["n1"], []),
-            "Walk",
+            CuratorContractConstants.Walk,
             [],
             [],
             [],
@@ -55,8 +55,8 @@ public sealed class ReadingModelBuilderTests
         var graph = FixtureGraph("n1", "n2");
         var duplicate = new MentalModelStatement("duplicate", "duplicate", ["n1"], []);
         var model = new MentalModel(null, [
-            new MentalModelTrack("one", "One", duplicate, "Walk", [], [], [], []),
-            new MentalModelTrack("two", "Two", duplicate, "Walk", [], [], [], []),
+            new MentalModelTrack("one", "One", duplicate, CuratorContractConstants.Walk, [], [], [], []),
+            new MentalModelTrack("two", "Two", duplicate, CuratorContractConstants.Walk, [], [], [], []),
         ]);
         var citations = new[]
         {
@@ -102,7 +102,7 @@ public sealed class ReadingModelBuilderTests
             "track",
             "Track",
             new MentalModelStatement("summary", "Summary", ["n1"], [first, second, first]),
-            "Walk",
+            CuratorContractConstants.Walk,
             [],
             [],
             [],

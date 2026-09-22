@@ -1,3 +1,4 @@
+using ChangeLens.Core.EvidenceBinder.Constants;
 using ChangeLens.Core.MentalModels.Models;
 using ChangeLens.Core.Publication.Models;
 
@@ -22,9 +23,9 @@ public static class ShapeRepairer
         var declared = track.Shape;
         var declaredPopulated = declared switch
         {
-            "Walk" => track.OrderedSteps.Count > 0,
-            "ParticipantMap" => track.Relationships.Count > 0,
-            "PurposeCards" => track.Purposes.Count > 0,
+            CuratorContractConstants.Walk => track.OrderedSteps.Count > 0,
+            CuratorContractConstants.ParticipantMap => track.Relationships.Count > 0,
+            CuratorContractConstants.PurposeCards => track.Purposes.Count > 0,
             _ => false,
         };
         if (declaredPopulated)
@@ -33,11 +34,11 @@ public static class ShapeRepairer
         }
 
         var published = track.OrderedSteps.Count > 0
-            ? "Walk"
+            ? CuratorContractConstants.Walk
             : track.Relationships.Count > 0
-                ? "ParticipantMap"
+                ? CuratorContractConstants.ParticipantMap
                 : track.Purposes.Count > 0
-                    ? "PurposeCards"
+                    ? CuratorContractConstants.PurposeCards
                     : declared;
         if (!string.Equals(declared, published, StringComparison.Ordinal))
         {

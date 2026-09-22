@@ -14,8 +14,6 @@ namespace ChangeLens.Core.ClaimChecking.Helpers;
 /// </summary>
 internal static class ClaimVerdictApplier
 {
-    private const string SupersedesKind = "supersedes";
-
     /// <summary>
     ///     Applies a parsed checker reply to a published mental model.
     /// </summary>
@@ -251,7 +249,7 @@ internal static class ClaimVerdictApplier
                     continue;
                 }
 
-                if (!string.Equals(verdict.CorrectedKind, SupersedesKind, StringComparison.Ordinal))
+                if (!string.Equals(verdict.CorrectedKind, CuratorContractConstants.Supersedes, StringComparison.Ordinal))
                 {
                     continue;
                 }

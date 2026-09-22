@@ -91,11 +91,4 @@ public static class CitationBuilder
             }
         }
     }
-
-    private sealed record Claimant(
-        string ClaimId,
-        IReadOnlyList<string> NodeIds,
-        IReadOnlyList<FocusRange> Focus,
-        bool IsThesis,
-        bool IsParticipant);
 }

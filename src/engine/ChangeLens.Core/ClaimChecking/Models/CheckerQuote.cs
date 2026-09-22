@@ -1,4 +1,5 @@
 using ChangeLens.Core.ChangeAnatomy.Models;
+using ChangeLens.Core.ClaimChecking.Constants;
 
 namespace ChangeLens.Core.ClaimChecking.Models;
 
@@ -10,7 +11,10 @@ namespace ChangeLens.Core.ClaimChecking.Models;
 /// <param name="Side">The comparison side containing the quote.</param>
 /// <param name="StartLine">The first quoted line, or zero for a manifest fact.</param>
 /// <param name="EndLine">The last quoted line, or zero for a manifest fact.</param>
-/// <param name="Role">The relationship endpoint role, or <see langword="null" /> for other claims.</param>
+/// <param name="Role">
+///     The relationship endpoint role. One of the <see cref="CheckerQuoteRole" /> values, or
+///     <see langword="null" /> for other claims.
+/// </param>
 /// <param name="NumberedText">The quote text with absolute line numbers.</param>
 public sealed record CheckerQuote(
     string NodeId,

@@ -225,7 +225,7 @@ public static class ReadingModelBuilder
             assurances.Add(new ReadingAssurance(ReadingAssuranceKind.CheckerFailed, "Claim checking failed or returned an unreadable reply."));
         }
 
-        if (model.Tracks.SelectMany(track => track.Relationships).Any(relationship => relationship.Kind == "covers"))
+        if (model.Tracks.SelectMany(track => track.Relationships).Any(relationship => relationship.Kind == CuratorContractConstants.Covers))
         {
             assurances.Add(new ReadingAssurance(ReadingAssuranceKind.TestsNotExecuted, "The published model contains a covers relationship."));
         }

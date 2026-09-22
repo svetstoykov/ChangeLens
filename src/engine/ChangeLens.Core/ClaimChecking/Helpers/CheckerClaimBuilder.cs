@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text;
+using ChangeLens.Core.ClaimChecking.Constants;
 using ChangeLens.Core.ClaimChecking.Models;
 using ChangeLens.Core.Curation.Models;
 using ChangeLens.Core.EvidenceBinder.Models;
@@ -27,17 +28,17 @@ internal static class CheckerClaimBuilder
         {
             if (track.Summary is not null)
             {
-                claims.Add(Statement(track.Summary, "summary", evidence));
+                claims.Add(Statement(track.Summary, CheckerClaimType.Summary, evidence));
             }
 
             foreach (var step in track.OrderedSteps)
             {
-                claims.Add(Statement(step, "step", evidence));
+                claims.Add(Statement(step, CheckerClaimType.Step, evidence));
             }
 
             foreach (var purpose in track.Purposes)
             {
-                claims.Add(Statement(purpose, "purpose", evidence));
+                claims.Add(Statement(purpose, CheckerClaimType.Purpose, evidence));
             }
 
             var participants = track.Participants.ToDictionary(participant => participant.Id, StringComparer.Ordinal);
@@ -55,7 +56,7 @@ internal static class CheckerClaimBuilder
                 var quotes = Quotes(relationship.EvidenceNodeIds, evidence, from, to);
                 claims.Add(new CheckerClaim(
                     relationship.ClaimId,
-                    "relationship",
+                    CheckerClaimType.Relationship,
                     text,
                     relationship.Kind,
                     fromText,
@@ -105,15 +106,15 @@ internal static class CheckerClaimBuilder
     {
         if (from is not null && from.EvidenceNodeIds.Contains(nodeId, StringComparer.Ordinal))
         {
-            return "from";
+            return CheckerQuoteRole.From;
         }
 
         if (to is not null && to.EvidenceNodeIds.Contains(nodeId, StringComparer.Ordinal))
         {
-            return "to";
+            return CheckerQuoteRole.To;
         }
 
-        return from is null && to is null ? null : "context";
+        return from is null && to is null ? null : CheckerQuoteRole.Context;
     }
 
     private static string NumberedText(BinderEvidence evidence)

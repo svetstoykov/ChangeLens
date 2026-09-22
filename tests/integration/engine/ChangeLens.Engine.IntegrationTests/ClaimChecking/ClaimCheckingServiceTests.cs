@@ -1,8 +1,10 @@
+using ChangeLens.Core.ClaimChecking.Constants;
 using ChangeLens.Core.ClaimChecking.Models;
 using ChangeLens.Core.ClaimChecking.Services;
 using ChangeLens.Core.Curation.Models;
 using ChangeLens.Core.DraftValidation.Models;
 using ChangeLens.Core.DraftValidation.Services;
+using ChangeLens.Core.EvidenceBinder.Constants;
 using ChangeLens.Core.EvidenceBinder.Models;
 using ChangeLens.Core.MentalModels.Helpers;
 using ChangeLens.Core.MentalModels.Models;
@@ -24,19 +26,19 @@ public sealed class ClaimCheckingServiceTests
     {
         var binder = Binder(["n1", "n2"]);
         var validation = Validate(
-            Draft(relationships: [Relationship("r1", "p1", "p2", ["n1", "n2"], "invokes", "The complete explanation.")]),
+            Draft(relationships: [Relationship("r1", "p1", "p2", ["n1", "n2"], CuratorContractConstants.Invokes, "The complete explanation.")]),
             binder);
         var checker = new RecordingClaimChecker(claims => new ClaimCheckerReply(Supported(claims), null));
 
         var result = await Service(checker).CheckAsync(validation, binder, CancellationToken.None);
 
         Assert.True(result.IsSuccess);
-        var claim = Assert.Single(checker.Claims, item => item.Type == "relationship");
+        var claim = Assert.Single(checker.Claims, item => item.Type == CheckerClaimType.Relationship);
         Assert.Contains("Explanation: The complete explanation.", claim.Text, StringComparison.Ordinal);
         Assert.Equal("From (Role)", claim.From);
         Assert.Equal("To (Role)", claim.To);
-        Assert.Equal("from", claim.Quotes[0].Role);
-        Assert.Equal("to", claim.Quotes[1].Role);
+        Assert.Equal(CheckerQuoteRole.From, claim.Quotes[0].Role);
+        Assert.Equal(CheckerQuoteRole.To, claim.Quotes[1].Role);
     }
 
     [Fact]
@@ -45,8 +47,9 @@ public sealed class ClaimCheckingServiceTests
         var binder = Binder(["n1", "n2"]);
         var validation = Validate(Draft(relationships: [Relationship("r1", "p1", "p2", ["n1", "n2"])]), binder);
         var unsupported = new RecordingClaimChecker(claims => new ClaimCheckerReply(
-            claims.Select(claim => claim.Type == "relationship" ? new ClaimVerdict(claim.ClaimId, ClaimVerdictKind.Unsupported, null, []) :
-                new ClaimVerdict(claim.ClaimId, ClaimVerdictKind.Supported, null, [])).ToArray(), null));
+            claims.Select(claim => claim.Type == CheckerClaimType.Relationship
+                ? new ClaimVerdict(claim.ClaimId, ClaimVerdictKind.Unsupported, null, [])
+                : new ClaimVerdict(claim.ClaimId, ClaimVerdictKind.Supported, null, [])).ToArray(), null));
 
         var removed = await Service(unsupported).CheckAsync(validation, binder, CancellationToken.None);
 
@@ -72,7 +75,7 @@ public sealed class ClaimCheckingServiceTests
                 claim.ClaimId,
                 ClaimVerdictKind.Supported,
                 null,
-                claim.Type == "step"
+                claim.Type == CheckerClaimType.Step
                     ? [new FocusRange("n1", 10, 12), new FocusRange("n1", 10, 12), new FocusRange("n1", 40, 42), new FocusRange("n1", 99, 100)]
                     : [])).ToArray(), null));
 
@@ -97,7 +100,7 @@ public sealed class ClaimCheckingServiceTests
                 claim.ClaimId,
                 ClaimVerdictKind.Supported,
                 null,
-                claim.Type == "step" ? [new FocusRange("n1", 10, 12), new FocusRange("n1", 40, 42)] : [])).ToArray(), null));
+                claim.Type == CheckerClaimType.Step ? [new FocusRange("n1", 10, 12), new FocusRange("n1", 40, 42)] : [])).ToArray(), null));
 
         var result = await Service(checker).CheckAsync(validation, binder, CancellationToken.None);
 
@@ -116,7 +119,7 @@ public sealed class ClaimCheckingServiceTests
                 claim.ClaimId,
                 ClaimVerdictKind.Supported,
                 null,
-                claim.Type == "step" ? [new FocusRange("n1", 20, 20)] : [])).ToArray(), null));
+                claim.Type == CheckerClaimType.Step ? [new FocusRange("n1", 20, 20)] : [])).ToArray(), null));
 
         var result = await Service(checker).CheckAsync(validation, binder, CancellationToken.None);
 
@@ -132,7 +135,7 @@ public sealed class ClaimCheckingServiceTests
         var validation = Validate(Draft(steps: [new BoundStatement("Step 1", ["n1"]), new BoundStatement("Step 2", ["n2"])]), binder);
         var checker = new RecordingClaimChecker(claims =>
         {
-            var summary = claims.Single(claim => claim.Type == "summary");
+            var summary = claims.Single(claim => claim.Type == CheckerClaimType.Summary);
             return new ClaimCheckerReply([
                 new ClaimVerdict(summary.ClaimId, ClaimVerdictKind.Supported, null, []),
                 new ClaimVerdict(summary.ClaimId, ClaimVerdictKind.Supported, null, []),
@@ -152,19 +155,20 @@ public sealed class ClaimCheckingServiceTests
     [Fact]
     public async Task CorrectedSupersedesRequiresAMatchPathAndClearsMatchEdges()
     {
-        var draft = Draft(relationships: [Relationship("r1", "p1", "p2", ["n1", "n2"], "invokes", "Original")]);
+        var draft = Draft(relationships: [Relationship("r1", "p1", "p2", ["n1", "n2"], CuratorContractConstants.Invokes, "Original")]);
         var noPathBinder = Binder(["n1", "n2"]);
         var noPathValidation = Validate(draft, noPathBinder);
-        var noPathChecker = CorrectionChecker("supersedes");
+        var noPathChecker = CorrectionChecker(CuratorContractConstants.Supersedes);
         var refused = await Service(noPathChecker).CheckAsync(noPathValidation, noPathBinder, CancellationToken.None);
         Assert.Empty(refused.Data!.Model.Tracks);
         Assert.Equal(1, refused.Data.Summary.RefusedCorrectionCount);
 
         var pathBinder = Binder(["n1", "n2"], [("e1", "n1", "n2")]);
         var pathValidation = Validate(draft, pathBinder);
-        var corrected = await Service(CorrectionChecker("supersedes")).CheckAsync(pathValidation, pathBinder, CancellationToken.None);
+        var corrected = await Service(CorrectionChecker(CuratorContractConstants.Supersedes))
+            .CheckAsync(pathValidation, pathBinder, CancellationToken.None);
         var relationship = Assert.Single(Assert.Single(corrected.Data!.Model.Tracks).Relationships);
-        Assert.Equal("supersedes", relationship.Kind);
+        Assert.Equal(CuratorContractConstants.Supersedes, relationship.Kind);
         Assert.Empty(relationship.MatchEdgeIds);
         Assert.Contains("curator's explanation described a invokes relationship", relationship.Explanation, StringComparison.Ordinal);
     }
@@ -220,13 +224,55 @@ public sealed class ClaimCheckingServiceTests
         Assert.Empty(checker.Claims);
     }
 
+    [Fact]
+    public async Task RefusedSummaryPublishesAsAbsentAndThesisFallsBackToFirstStep()
+    {
+        var binder = Binder(["n1", "n2"]);
+        var validation = Validate(Draft([Track("t1", "Summary one", ["n1"], [NamedParticipant("p1", ["n1"]), NamedParticipant("p2", ["n2"])],
+            [new BoundStatement("First", ["n2"])])]), binder);
+        var checker = new RecordingClaimChecker(claims => new ClaimCheckerReply(claims.Select(claim => new ClaimVerdict(
+            claim.ClaimId,
+            claim.Type == CheckerClaimType.Summary ? ClaimVerdictKind.Unsupported : ClaimVerdictKind.Supported,
+            null,
+            [])).ToArray(), null));
+
+        var result = await Service(checker).CheckAsync(validation, binder, CancellationToken.None);
+
+        var track = Assert.Single(result.Data!.Model.Tracks);
+        Assert.Null(track.Summary);
+        Assert.Equal("track:t1:step:0", Assert.Single(track.OrderedSteps).ClaimId);
+        Assert.Equal(["p2"], track.Participants.Select(participant => participant.Id));
+        Assert.Equal("First", result.Data.Model.Thesis!.Text);
+        Assert.Equal("thesis", result.Data.Model.Thesis.ClaimId);
+    }
+
+    [Fact]
+    public async Task MultipleHeadlinesDeriveJoinedThesisWithoutFocus()
+    {
+        var binder = Binder(["n1", "n2", "n3"]);
+        var validation = Validate(Draft([
+            Track("t1", "Summary one", ["n1"], [NamedParticipant("p1", ["n1"])], [new BoundStatement("Step one", ["n1"])]),
+            Track("t2", "Summary two", ["n2", "n3"], [NamedParticipant("p2", ["n2"])], [new BoundStatement("Step two", ["n2"])]),
+        ]), binder);
+        var checker = new RecordingClaimChecker(claims => new ClaimCheckerReply(claims.Select(claim => new ClaimVerdict(
+            claim.ClaimId, ClaimVerdictKind.Supported, null, claim.Type == CheckerClaimType.Summary ? [new FocusRange(
+                claim.Quotes[0].NodeId, 1, 1)] : [])).ToArray(), null));
+
+        var result = await Service(checker).CheckAsync(validation, binder, CancellationToken.None);
+
+        var thesis = result.Data!.Model.Thesis!;
+        Assert.Equal("Summary one Summary two", thesis.Text);
+        Assert.Equal(["n1", "n2", "n3"], thesis.EvidenceNodeIds);
+        Assert.Empty(thesis.Focus);
+    }
+
     private static ClaimCheckingService Service(RecordingClaimChecker checker) => new(checker);
 
     private static IReadOnlyList<ClaimVerdict> Supported(IReadOnlyList<CheckerClaim> claims) =>
         claims.Select(claim => new ClaimVerdict(claim.ClaimId, ClaimVerdictKind.Supported, null, [])).ToArray();
 
     private static RecordingClaimChecker CorrectionChecker(string correctedKind) => new(claims => new ClaimCheckerReply(
-        claims.Select(claim => claim.Type == "relationship"
+        claims.Select(claim => claim.Type == CheckerClaimType.Relationship
             ? new ClaimVerdict(claim.ClaimId, ClaimVerdictKind.WrongKind, correctedKind, [])
             : new ClaimVerdict(claim.ClaimId, ClaimVerdictKind.Supported, null, [])).ToArray(), null));
 
@@ -248,21 +294,33 @@ public sealed class ClaimCheckingServiceTests
             "t1",
             "Track",
             new BoundStatement("Summary", ["n1"]),
-            "ParticipantMap",
+            CuratorContractConstants.ParticipantMap,
             participants ?? [Participant("p1", ["n1"]), Participant("p2", ["n2"])],
             relationships ?? [],
             steps ?? [],
             purposes ?? [])],
         []);
 
+    private static MentalModelDraft Draft(IReadOnlyList<DraftTrack> tracks) => new(new BoundStatement("Thesis", ["n1"]), tracks, []);
+
+    private static DraftTrack Track(
+        string id,
+        string summary,
+        IReadOnlyList<string> summaryNodes,
+        IReadOnlyList<DraftParticipant> participants,
+        IReadOnlyList<BoundStatement> steps) =>
+        new(id, id, new BoundStatement(summary, summaryNodes), CuratorContractConstants.Walk, participants, [], steps, []);
+
     private static DraftParticipant Participant(string id, IReadOnlyList<string> nodes) => new(id, id == "p1" ? "From" : "To", "Role", true, nodes);
+
+    private static DraftParticipant NamedParticipant(string id, IReadOnlyList<string> nodes) => new(id, id, "Role", true, nodes);
 
     private static DraftRelationship Relationship(
         string id,
         string from,
         string to,
         IReadOnlyList<string> nodes,
-        string kind = "depends-on",
+        string kind = CuratorContractConstants.DependsOn,
         string explanation = "Explanation") => new(id, from, to, kind, explanation, nodes, []);
 
     private static BinderEvidence BinderEvidence(string nodeId, int startLine, int endLine, string text) => new(

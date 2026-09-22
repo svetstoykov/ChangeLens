@@ -11,7 +11,8 @@ internal sealed class StubAnalysisRunCoordinator(
     Func<string?, string?, string?, string?, CancellationToken, Task<Result<AnalysisStartOutcome>>>? start = null,
     Func<string?, CancellationToken, Task<Result<AnalysisRunDetail?>>>? getActive = null,
     Func<Guid, CancellationToken, Task<Result<AnalysisRunDetail>>>? pollRun = null,
-    Func<Guid, CancellationToken, Task<Result>>? cancel = null) : IAnalysisRunCoordinator
+    Func<Guid, CancellationToken, Task<Result>>? cancel = null,
+    Func<Guid, CancellationToken, Task<Result<AnalysisReadingProjection?>>>? readingProjection = null) : IAnalysisRunCoordinator
 {
     internal bool PollCalled { get; private set; }
 
@@ -34,6 +35,10 @@ internal sealed class StubAnalysisRunCoordinator(
         return pollRun?.Invoke(runId, cancellationToken)
             ?? throw new NotSupportedException("The poll operation was not configured.");
     }
+
+    public Task<Result<AnalysisReadingProjection?>> GetReadingProjectionAsync(Guid runId, CancellationToken cancellationToken) =>
+        readingProjection?.Invoke(runId, cancellationToken)
+        ?? Task.FromResult(Result.Success<AnalysisReadingProjection?>(null));
 
     public Task<Result> CancelAsync(Guid runId, CancellationToken cancellationToken) =>
         cancel?.Invoke(runId, cancellationToken)

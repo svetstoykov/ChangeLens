@@ -171,6 +171,36 @@ internal sealed class AnalysisRunEntity
     public int? ExcludedConflictedCount { get; set; }
 
     /// <summary>
+    ///     Gets or sets the number of unchanged files correspondence ranking returned, or <see langword="null" />
+    ///     before ranking finishes.
+    /// </summary>
+    public int? CorrespondenceCandidateCount { get; set; }
+
+    /// <summary>
+    ///     Gets or sets the number of evidence nodes context policy disclosed, or <see langword="null" /> before
+    ///     context policy finishes.
+    /// </summary>
+    public int? DisclosedEvidenceNodeCount { get; set; }
+
+    /// <summary>
+    ///     Gets or sets the number of draft items mechanical validation removed, or <see langword="null" /> before
+    ///     validation finishes.
+    /// </summary>
+    public int? ValidationRemovalCount { get; set; }
+
+    /// <summary>
+    ///     Gets or sets the protocol JSON of the published reading model, or <see langword="null" /> unless the run
+    ///     completed with a stored projection.
+    /// </summary>
+    public string? ReadingModelJson { get; set; }
+
+    /// <summary>
+    ///     Gets or sets the protocol JSON array of validation removals, or <see langword="null" /> unless the run
+    ///     completed with a stored projection.
+    /// </summary>
+    public string? ValidationRemovalsJson { get; set; }
+
+    /// <summary>
     ///     Gets or sets the recorded limitation count for a terminal run, or <see langword="null" /> while the run
     ///     is not yet terminal.
     /// </summary>

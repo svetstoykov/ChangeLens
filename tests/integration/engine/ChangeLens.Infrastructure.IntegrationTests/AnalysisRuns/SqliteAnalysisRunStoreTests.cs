@@ -196,10 +196,11 @@ public sealed class SqliteAnalysisRunStoreTests
         var runId = await fixture.CreateAcceptedRunAsync();
         var terminal = new AnalysisTerminalSummary(AnalysisTerminalKind.Completed, 10_000, null, null);
 
-        var firstCommit = await fixture.Store.CommitTerminalAsync(runId, terminal, TestContext.Current.CancellationToken);
+        var firstCommit = await fixture.Store.CommitTerminalAsync(runId, terminal, null, TestContext.Current.CancellationToken);
         var secondCommit = await fixture.Store.CommitTerminalAsync(
             runId,
             terminal with { Kind = AnalysisTerminalKind.Failed, FailureCode = "analysis.unexpectedFailure" },
+            null,
             TestContext.Current.CancellationToken);
 
         Assert.True(firstCommit.Data);
@@ -219,7 +220,7 @@ public sealed class SqliteAnalysisRunStoreTests
         var runId = await fixture.CreateAcceptedRunAsync();
         var terminal = new AnalysisTerminalSummary(AnalysisTerminalKind.CompletedWithLimitations, 10_000, 2, null);
 
-        var commit = await fixture.Store.CommitTerminalAsync(runId, terminal, TestContext.Current.CancellationToken);
+        var commit = await fixture.Store.CommitTerminalAsync(runId, terminal, null, TestContext.Current.CancellationToken);
         var detail = await fixture.Store.GetDetailAsync(runId, TestContext.Current.CancellationToken);
 
         Assert.True(commit.Data);

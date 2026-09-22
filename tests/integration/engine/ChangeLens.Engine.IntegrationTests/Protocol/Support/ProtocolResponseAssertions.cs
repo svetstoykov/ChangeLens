@@ -23,6 +23,8 @@ internal static class ProtocolResponseAssertions
         "terminal",
         "interruptedAt",
         "interruptionReason",
+        "readingModel",
+        "validationRemovals",
     ];
 
     /// <summary>Asserts an exact result envelope and returns its result value.</summary>
@@ -53,7 +55,7 @@ internal static class ProtocolResponseAssertions
         return root.GetProperty("errors");
     }
 
-    /// <summary>Asserts the exact gate 2.1 analysis-run summary shape.</summary>
+    /// <summary>Asserts the exact analysis-run summary shape.</summary>
     /// <param name="summary">The analysis-run summary.</param>
     internal static void AssertAnalysisRunSummary(JsonElement summary)
     {

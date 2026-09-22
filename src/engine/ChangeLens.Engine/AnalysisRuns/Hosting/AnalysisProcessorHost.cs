@@ -208,7 +208,7 @@ internal sealed class AnalysisProcessorHost(
     private async Task RecordTerminalAsync(IAnalysisRunStore store, Guid runId, AnalysisTerminalSummary terminal, string reason,
         LogLevel alreadyTerminalLevel)
     {
-        var terminalResult = await store.CommitTerminalAsync(runId, terminal, CancellationToken.None);
+        var terminalResult = await store.CommitTerminalAsync(runId, terminal, null, CancellationToken.None);
         if (terminalResult.IsFailure)
         {
             logger.LogError("The analysis processor could not record {Reason} for run {RunId} with errors {ErrorCodes}.", reason, runId,

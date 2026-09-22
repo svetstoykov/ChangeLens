@@ -119,14 +119,61 @@ public interface IAnalysisRunStore
         CancellationToken cancellationToken);
 
     /// <summary>
+    ///     Asynchronously records the number of unchanged files correspondence ranking returned, while the run is active.
+    /// </summary>
+    /// <param name="runId">The run identifier.</param>
+    /// <param name="count">The non-negative candidate count.</param>
+    /// <param name="cancellationToken">A <see cref="CancellationToken" /> to observe while waiting for the task.</param>
+    /// <returns>A task representing the asynchronous operation. A run that is no longer active is left unchanged.</returns>
+    Task<Result> RecordCorrespondenceCandidateCountAsync(Guid runId, int count, CancellationToken cancellationToken);
+
+    /// <summary>
+    ///     Asynchronously records the number of evidence nodes context policy disclosed, while the run is active.
+    /// </summary>
+    /// <param name="runId">The run identifier.</param>
+    /// <param name="count">The non-negative disclosed-node count.</param>
+    /// <param name="cancellationToken">A <see cref="CancellationToken" /> to observe while waiting for the task.</param>
+    /// <returns>A task representing the asynchronous operation. A run that is no longer active is left unchanged.</returns>
+    Task<Result> RecordDisclosedEvidenceNodeCountAsync(Guid runId, int count, CancellationToken cancellationToken);
+
+    /// <summary>
+    ///     Asynchronously records the number of draft items mechanical validation removed, while the run is active.
+    /// </summary>
+    /// <param name="runId">The run identifier.</param>
+    /// <param name="count">The non-negative removal count.</param>
+    /// <param name="cancellationToken">A <see cref="CancellationToken" /> to observe while waiting for the task.</param>
+    /// <returns>A task representing the asynchronous operation. A run that is no longer active is left unchanged.</returns>
+    Task<Result> RecordValidationRemovalCountAsync(Guid runId, int count, CancellationToken cancellationToken);
+
+    /// <summary>
     ///     Asynchronously and conditionally commits one terminal outcome. Only the first successful call for a run
     ///     commits.
     /// </summary>
     /// <param name="runId">The run identifier.</param>
     /// <param name="terminal">The strict terminal summary. Cannot be <see langword="null" />.</param>
+    /// <param name="readingProjection">
+    ///     The renderable projection stored in the same update as the terminal state, or <see langword="null" /> to store
+    ///     none.
+    /// </param>
     /// <param name="cancellationToken">A <see cref="CancellationToken" /> to observe while waiting for the task.</param>
     /// <returns>A task whose result is <see langword="true" /> when this call committed the terminal state.</returns>
-    Task<Result<bool>> CommitTerminalAsync(Guid runId, AnalysisTerminalSummary terminal, CancellationToken cancellationToken);
+    Task<Result<bool>> CommitTerminalAsync(
+        Guid runId,
+        AnalysisTerminalSummary terminal,
+        AnalysisReadingProjection? readingProjection,
+        CancellationToken cancellationToken);
+
+    /// <summary>
+    ///     Asynchronously reads the stored renderable projection of one run.
+    /// </summary>
+    /// <param name="runId">The run identifier.</param>
+    /// <param name="cancellationToken">A <see cref="CancellationToken" /> to observe while waiting for the task.</param>
+    /// <returns>
+    ///     A task whose result contains the projection when the run is <see cref="AnalysisRunState.Completed" /> or
+    ///     <see cref="AnalysisRunState.CompletedWithLimitations" /> and stores both documents; otherwise,
+    ///     <see langword="null" />. Fails with <c>analysis.unknownRun</c> when no run matches.
+    /// </returns>
+    Task<Result<AnalysisReadingProjection?>> GetReadingProjectionAsync(Guid runId, CancellationToken cancellationToken);
 
     /// <summary>
     ///     Asynchronously and conditionally commits <see cref="AnalysisRunState.Cancelled" /> for every pending run

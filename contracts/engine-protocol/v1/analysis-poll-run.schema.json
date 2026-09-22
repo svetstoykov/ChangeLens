@@ -38,7 +38,7 @@
     "runSummary": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["runId", "state", "repository", "comparison", "requestedAt", "captureStartedAt", "capturedAt", "snapshotId", "cancellationRequested", "facts", "terminal", "interruptedAt", "interruptionReason"],
+      "required": ["runId", "state", "repository", "comparison", "requestedAt", "captureStartedAt", "capturedAt", "snapshotId", "cancellationRequested", "facts", "terminal", "interruptedAt", "interruptionReason", "readingModel", "validationRemovals"],
       "properties": {
         "runId": { "$ref": "#/$defs/runId" },
         "state": { "enum": ["pendingCapture", "capturing", "discovering", "collecting", "persisting", "completed", "completedWithLimitations", "cancelled", "failed", "interrupted"] },
@@ -84,9 +84,176 @@
         },
         "terminal": { "anyOf": [{ "$ref": "#/$defs/terminal" }, { "type": "null" }] },
         "interruptedAt": { "anyOf": [{ "$ref": "#/$defs/timestamp" }, { "type": "null" }] },
-        "interruptionReason": { "enum": ["engineStopped", null] }
+        "interruptionReason": { "enum": ["engineStopped", null] },
+        "readingModel": { "anyOf": [{ "$ref": "#/$defs/readingModel" }, { "type": "null" }] },
+        "validationRemovals": {
+          "anyOf": [
+            { "type": "array", "items": { "$ref": "#/$defs/validationRemoval" } },
+            { "type": "null" }
+          ]
+        }
       }
     },
+    "readingModel": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["thesis", "areas", "citations", "evidence", "limitations", "omissionSummaries", "assurances"],
+      "properties": {
+        "thesis": { "anyOf": [{ "$ref": "#/$defs/statement" }, { "type": "null" }] },
+        "areas": { "type": "array", "maxItems": 20, "items": { "$ref": "#/$defs/area" } },
+        "citations": { "type": "array", "maxItems": 4000, "items": { "$ref": "#/$defs/citation" } },
+        "evidence": { "type": "array", "maxItems": 120, "items": { "$ref": "#/$defs/evidence" } },
+        "limitations": { "type": "array", "items": { "$ref": "#/$defs/limitation" } },
+        "omissionSummaries": { "type": "array", "items": { "$ref": "#/$defs/omissionSummary" } },
+        "assurances": { "type": "array", "items": { "$ref": "#/$defs/assurance" } }
+      }
+    },
+    "area": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "title", "summary", "shape", "participants", "relationships", "orderedSteps", "purposes"],
+      "properties": {
+        "id": { "$ref": "#/$defs/identifier" },
+        "title": { "type": "string" },
+        "summary": { "anyOf": [{ "$ref": "#/$defs/statement" }, { "type": "null" }] },
+        "shape": { "enum": ["walk", "participantMap", "purposeCards", "participantList"] },
+        "participants": { "type": "array", "items": { "$ref": "#/$defs/participant" } },
+        "relationships": { "type": "array", "items": { "$ref": "#/$defs/relationship" } },
+        "orderedSteps": { "type": "array", "items": { "$ref": "#/$defs/statement" } },
+        "purposes": { "type": "array", "items": { "$ref": "#/$defs/statement" } }
+      }
+    },
+    "statement": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["claimId", "text", "trust", "evidenceNodeIds"],
+      "properties": {
+        "claimId": { "$ref": "#/$defs/identifier" },
+        "text": { "type": "string", "maxLength": 1000 },
+        "trust": { "$ref": "#/$defs/trust" },
+        "evidenceNodeIds": { "$ref": "#/$defs/nodeIds" }
+      }
+    },
+    "participant": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "name", "role", "changed", "evidenceNodeIds"],
+      "properties": {
+        "id": { "$ref": "#/$defs/identifier" },
+        "name": { "type": "string" },
+        "role": { "type": "string" },
+        "changed": { "type": "boolean" },
+        "evidenceNodeIds": { "$ref": "#/$defs/nodeIds" }
+      }
+    },
+    "relationship": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["claimId", "id", "fromParticipantId", "toParticipantId", "kind", "explanation", "trust", "evidenceNodeIds"],
+      "properties": {
+        "claimId": { "$ref": "#/$defs/identifier" },
+        "id": { "$ref": "#/$defs/identifier" },
+        "fromParticipantId": { "$ref": "#/$defs/identifier" },
+        "toParticipantId": { "$ref": "#/$defs/identifier" },
+        "kind": { "type": "string", "minLength": 1, "pattern": "\\S" },
+        "explanation": { "type": "string", "maxLength": 1000 },
+        "trust": { "$ref": "#/$defs/trust" },
+        "evidenceNodeIds": { "$ref": "#/$defs/nodeIds" }
+      }
+    },
+    "citation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["claimId", "nodeId", "side", "path", "objectId", "startLine", "endLine", "focus", "provenance"],
+      "properties": {
+        "claimId": { "$ref": "#/$defs/identifier" },
+        "nodeId": { "$ref": "#/$defs/identifier" },
+        "side": { "$ref": "#/$defs/side" },
+        "path": { "$ref": "#/$defs/repositoryPath" },
+        "objectId": { "$ref": "#/$defs/revision" },
+        "startLine": { "$ref": "#/$defs/line" },
+        "endLine": { "$ref": "#/$defs/line" },
+        "focus": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["nodeId", "startLine", "endLine"],
+            "properties": {
+              "nodeId": { "$ref": "#/$defs/identifier" },
+              "startLine": { "$ref": "#/$defs/line" },
+              "endLine": { "$ref": "#/$defs/line" }
+            }
+          }
+        },
+        "provenance": { "$ref": "#/$defs/trust" }
+      }
+    },
+    "evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["nodeId", "path", "side", "startLine", "endLine", "isChangedFile", "isRedacted", "isTruncated", "text"],
+      "properties": {
+        "nodeId": { "$ref": "#/$defs/identifier" },
+        "path": { "$ref": "#/$defs/repositoryPath" },
+        "side": { "$ref": "#/$defs/side" },
+        "startLine": { "$ref": "#/$defs/line" },
+        "endLine": { "$ref": "#/$defs/line" },
+        "isChangedFile": { "type": "boolean" },
+        "isRedacted": { "type": "boolean" },
+        "isTruncated": { "type": "boolean" },
+        "text": { "type": "string", "maxLength": 8000 }
+      }
+    },
+    "limitation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "path", "detail"],
+      "properties": {
+        "kind": { "enum": ["fileNotRead", "fileNotQuoted", "uncommittedWorkExcluded"] },
+        "path": { "anyOf": [{ "$ref": "#/$defs/repositoryPath" }, { "type": "null" }] },
+        "detail": { "type": "string" }
+      }
+    },
+    "omissionSummary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sourceKind", "reason", "totalCount", "sampleCount", "resolvedSampleCount"],
+      "properties": {
+        "sourceKind": { "enum": ["fileNotRead", "noEvidenceSelected", "policyExcluded"] },
+        "reason": { "type": "string" },
+        "totalCount": { "$ref": "#/$defs/count" },
+        "sampleCount": { "$ref": "#/$defs/count" },
+        "resolvedSampleCount": { "$ref": "#/$defs/count" }
+      }
+    },
+    "assurance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "detail", "claimId"],
+      "properties": {
+        "kind": { "enum": ["checkerNotRun", "checkerFailed", "testsNotExecuted", "buildNotExecuted", "repositoryNotFullyRead", "claimNotCited", "duplicateClaimId"] },
+        "detail": { "type": "string" },
+        "claimId": { "anyOf": [{ "$ref": "#/$defs/identifier" }, { "type": "null" }] }
+      }
+    },
+    "validationRemoval": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["scope", "id", "reason"],
+      "properties": {
+        "scope": { "enum": ["track", "participant", "relationship", "statement"] },
+        "id": { "type": "string", "maxLength": 512 },
+        "reason": { "type": "string", "maxLength": 4096 }
+      }
+    },
+    "identifier": { "type": "string", "minLength": 1, "maxLength": 512 },
+    "nodeIds": { "type": "array", "items": { "$ref": "#/$defs/identifier" } },
+    "trust": { "enum": ["unchecked", "derived", "checked"] },
+    "side": { "enum": ["before", "after"] },
+    "repositoryPath": { "type": "string", "minLength": 1, "maxLength": 4096 },
+    "line": { "type": "integer", "minimum": 1, "maximum": 2147483647 },
+    "count": { "type": "integer", "minimum": 0, "maximum": 2147483647 },
     "terminal": {
       "oneOf": [
         { "type": "object", "additionalProperties": false, "required": ["kind", "terminalAt"], "properties": { "kind": { "const": "completed" }, "terminalAt": { "$ref": "#/$defs/timestamp" } } },

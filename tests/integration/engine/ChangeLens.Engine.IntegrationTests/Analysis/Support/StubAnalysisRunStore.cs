@@ -60,11 +60,24 @@ internal sealed class StubAnalysisRunStore(
         CancellationToken cancellationToken) =>
         throw new NotSupportedException("The capture-commit operation was not configured.");
 
+    public Task<Result> RecordCorrespondenceCandidateCountAsync(Guid runId, int count, CancellationToken cancellationToken) =>
+        throw new NotSupportedException("The count operation was not configured.");
+
+    public Task<Result> RecordDisclosedEvidenceNodeCountAsync(Guid runId, int count, CancellationToken cancellationToken) =>
+        throw new NotSupportedException("The count operation was not configured.");
+
+    public Task<Result> RecordValidationRemovalCountAsync(Guid runId, int count, CancellationToken cancellationToken) =>
+        throw new NotSupportedException("The count operation was not configured.");
+
     public Task<Result<bool>> CommitTerminalAsync(
         Guid runId,
         AnalysisTerminalSummary terminal,
+        AnalysisReadingProjection? readingProjection,
         CancellationToken cancellationToken) =>
         throw new NotSupportedException("The terminal operation was not configured.");
+
+    public Task<Result<AnalysisReadingProjection?>> GetReadingProjectionAsync(Guid runId, CancellationToken cancellationToken) =>
+        throw new NotSupportedException("The projection read was not configured.");
 
     public Task<Result<int>> FinalizeCancelledPendingRunsAsync(long atUnixMilliseconds, CancellationToken cancellationToken) =>
         throw new NotSupportedException("The pending-cancellation operation was not configured.");

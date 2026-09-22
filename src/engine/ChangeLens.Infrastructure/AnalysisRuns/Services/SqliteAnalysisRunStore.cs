@@ -1,3 +1,4 @@
+using System.Linq.Expressions;
 using ChangeLens.Core.AnalysisRuns.Constants;
 using ChangeLens.Core.AnalysisRuns.Interfaces;
 using ChangeLens.Core.AnalysisRuns.Models;
@@ -8,6 +9,7 @@ using ChangeLens.Infrastructure.LocalState.Persistence;
 using ChangeLens.Infrastructure.Snapshots.Persistence.Entities;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Query;
 using Microsoft.Extensions.Logging;
 
 namespace ChangeLens.Infrastructure.AnalysisRuns.Services;
@@ -33,6 +35,42 @@ public sealed class SqliteAnalysisRunStore(
         AnalysisRunState.Collecting,
         AnalysisRunState.Persisting,
     ];
+
+    // Detail reads leave the reading-projection text columns unselected; only GetReadingProjectionAsync reads them.
+    private static readonly Expression<Func<AnalysisRunEntity, AnalysisRunEntity>> WithoutReadingProjection = run => new AnalysisRunEntity
+    {
+        RunId = run.RunId,
+        RepositoryId = run.RepositoryId,
+        RepositoryDisplayName = run.RepositoryDisplayName,
+        CanonicalRepositoryPath = run.CanonicalRepositoryPath,
+        CanonicalRepositoryPathKey = run.CanonicalRepositoryPathKey,
+        HeadRevision = run.HeadRevision,
+        Target = run.Target,
+        TargetRevision = run.TargetRevision,
+        FreshnessToken = run.FreshnessToken,
+        ChangeContext = run.ChangeContext,
+        State = run.State,
+        RequestedAtUnixMilliseconds = run.RequestedAtUnixMilliseconds,
+        CaptureStartedAtUnixMilliseconds = run.CaptureStartedAtUnixMilliseconds,
+        CapturedAtUnixMilliseconds = run.CapturedAtUnixMilliseconds,
+        TerminalAtUnixMilliseconds = run.TerminalAtUnixMilliseconds,
+        InterruptedAtUnixMilliseconds = run.InterruptedAtUnixMilliseconds,
+        CancellationRequestedAtUnixMilliseconds = run.CancellationRequestedAtUnixMilliseconds,
+        SnapshotId = run.SnapshotId,
+        ManifestHash = run.ManifestHash,
+        CapturedChangedFileCount = run.CapturedChangedFileCount,
+        ExcludedUncommittedTotal = run.ExcludedUncommittedTotal,
+        ExcludedStagedCount = run.ExcludedStagedCount,
+        ExcludedUnstagedCount = run.ExcludedUnstagedCount,
+        ExcludedUntrackedCount = run.ExcludedUntrackedCount,
+        ExcludedConflictedCount = run.ExcludedConflictedCount,
+        CorrespondenceCandidateCount = run.CorrespondenceCandidateCount,
+        DisclosedEvidenceNodeCount = run.DisclosedEvidenceNodeCount,
+        ValidationRemovalCount = run.ValidationRemovalCount,
+        TerminalLimitationCount = run.TerminalLimitationCount,
+        TerminalFailureCode = run.TerminalFailureCode,
+        InterruptionReason = run.InterruptionReason,
+    };
 
     /// <inheritdoc />
     public async Task<Result<AnalysisStartOutcome>> CreateOrReturnActiveAsync(
@@ -103,7 +141,9 @@ public sealed class SqliteAnalysisRunStore(
     {
         var run = await context.AnalysisRuns
             .AsNoTracking()
-            .FirstOrDefaultAsync(entity => entity.RunId == runId, cancellationToken);
+            .Where(entity => entity.RunId == runId)
+            .Select(WithoutReadingProjection)
+            .FirstOrDefaultAsync(cancellationToken);
 
         return run is null
             ? OperationError.NotFound("No analysis run matches the supplied identifier.", AnalysisErrorCode.UnknownRun)
@@ -116,6 +156,7 @@ public sealed class SqliteAnalysisRunStore(
         var run = await context.AnalysisRuns
             .AsNoTracking()
             .Where(entity => entity.CanonicalRepositoryPathKey == canonicalRepositoryPathKey && ActiveStates.Contains(entity.State))
+            .Select(WithoutReadingProjection)
             .FirstOrDefaultAsync(cancellationToken);
 
         return run is null ? null : ToDetail(run);
@@ -337,7 +378,23 @@ public sealed class SqliteAnalysisRunStore(
     }
 
     /// <inheritdoc />
-    public async Task<Result<bool>> CommitTerminalAsync(Guid runId, AnalysisTerminalSummary terminal, CancellationToken cancellationToken)
+    public Task<Result> RecordCorrespondenceCandidateCountAsync(Guid runId, int count, CancellationToken cancellationToken) =>
+        this.RecordActiveCountAsync(runId, setters => setters.SetProperty(run => run.CorrespondenceCandidateCount, count), cancellationToken);
+
+    /// <inheritdoc />
+    public Task<Result> RecordDisclosedEvidenceNodeCountAsync(Guid runId, int count, CancellationToken cancellationToken) =>
+        this.RecordActiveCountAsync(runId, setters => setters.SetProperty(run => run.DisclosedEvidenceNodeCount, count), cancellationToken);
+
+    /// <inheritdoc />
+    public Task<Result> RecordValidationRemovalCountAsync(Guid runId, int count, CancellationToken cancellationToken) =>
+        this.RecordActiveCountAsync(runId, setters => setters.SetProperty(run => run.ValidationRemovalCount, count), cancellationToken);
+
+    /// <inheritdoc />
+    public async Task<Result<bool>> CommitTerminalAsync(
+        Guid runId,
+        AnalysisTerminalSummary terminal,
+        AnalysisReadingProjection? readingProjection,
+        CancellationToken cancellationToken)
     {
         var nextState = terminal.Kind switch
         {
@@ -348,6 +405,8 @@ public sealed class SqliteAnalysisRunStore(
             _ => throw new ArgumentOutOfRangeException(nameof(terminal)),
         };
 
+        var readingModelJson = readingProjection?.ReadingModelJson;
+        var validationRemovalsJson = readingProjection?.ValidationRemovalsJson;
         var affected = await context.AnalysisRuns
             .Where(run => run.RunId == runId && ActiveStates.Contains(run.State))
             .ExecuteUpdateAsync(
@@ -355,10 +414,32 @@ public sealed class SqliteAnalysisRunStore(
                     .SetProperty(run => run.State, nextState)
                     .SetProperty(run => run.TerminalAtUnixMilliseconds, terminal.TerminalAtUnixMilliseconds)
                     .SetProperty(run => run.TerminalLimitationCount, terminal.LimitationCount)
-                    .SetProperty(run => run.TerminalFailureCode, terminal.FailureCode),
+                    .SetProperty(run => run.TerminalFailureCode, terminal.FailureCode)
+                    .SetProperty(run => run.ReadingModelJson, readingModelJson)
+                    .SetProperty(run => run.ValidationRemovalsJson, validationRemovalsJson),
                 cancellationToken);
 
         return affected == 1;
+    }
+
+    /// <inheritdoc />
+    public async Task<Result<AnalysisReadingProjection?>> GetReadingProjectionAsync(Guid runId, CancellationToken cancellationToken)
+    {
+        var stored = await context.AnalysisRuns
+            .AsNoTracking()
+            .Where(run => run.RunId == runId)
+            .Select(run => new { run.State, run.ReadingModelJson, run.ValidationRemovalsJson })
+            .FirstOrDefaultAsync(cancellationToken);
+
+        if (stored is null)
+        {
+            return OperationError.NotFound("No analysis run matches the supplied identifier.", AnalysisErrorCode.UnknownRun);
+        }
+
+        var isCompleted = stored.State is AnalysisRunState.Completed or AnalysisRunState.CompletedWithLimitations;
+        return isCompleted && stored.ReadingModelJson is not null && stored.ValidationRemovalsJson is not null
+            ? new AnalysisReadingProjection(stored.ReadingModelJson, stored.ValidationRemovalsJson)
+            : (AnalysisReadingProjection?)null;
     }
 
     /// <inheritdoc />
@@ -393,6 +474,17 @@ public sealed class SqliteAnalysisRunStore(
         }
 
         return affected;
+    }
+
+    private async Task<Result> RecordActiveCountAsync(
+        Guid runId,
+        Action<UpdateSettersBuilder<AnalysisRunEntity>> setCount,
+        CancellationToken cancellationToken)
+    {
+        await context.AnalysisRuns
+            .Where(run => run.RunId == runId && ActiveStates.Contains(run.State))
+            .ExecuteUpdateAsync(setCount, cancellationToken);
+        return Result.Success();
     }
 
     private static AnalysisRunDetail ToDetail(AnalysisRunEntity run)
@@ -437,6 +529,7 @@ public sealed class SqliteAnalysisRunStore(
             new AnalysisRepositoryIdentity(run.RepositoryId, run.RepositoryDisplayName, run.CanonicalRepositoryPath,
                 run.CanonicalRepositoryPathKey, run.HeadRevision),
             new AnalysisComparisonIdentity(run.Target, run.TargetRevision, run.FreshnessToken),
+            run.ChangeContext,
             run.RequestedAtUnixMilliseconds,
             run.CaptureStartedAtUnixMilliseconds,
             run.CapturedAtUnixMilliseconds,
@@ -444,6 +537,9 @@ public sealed class SqliteAnalysisRunStore(
             run.ManifestHash,
             run.CapturedChangedFileCount,
             excludedUncommittedCounts,
+            run.CorrespondenceCandidateCount,
+            run.DisclosedEvidenceNodeCount,
+            run.ValidationRemovalCount,
             run.CancellationRequestedAtUnixMilliseconds is not null,
             terminal,
             run.InterruptedAtUnixMilliseconds,

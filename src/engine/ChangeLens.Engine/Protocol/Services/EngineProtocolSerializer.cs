@@ -124,6 +124,40 @@ internal sealed class EngineProtocolSerializer : IEngineProtocolSerializer
     ///     Creates strict JSON options for all protocol messages.
     /// </summary>
     /// <returns>Options that enforce the versioned protocol's property and enum representation.</returns>
+    /// <inheritdoc />
+    public Result<string> SerializeDocument<TDocument>(TDocument document)
+        where TDocument : class
+    {
+        ArgumentNullException.ThrowIfNull(document);
+
+        try
+        {
+            return Result.Success<string>(JsonSerializer.Serialize(document, SerializerOptions));
+        }
+        catch (Exception exception) when (exception is JsonException or NotSupportedException)
+        {
+            return SerializationFailedError;
+        }
+    }
+
+    /// <inheritdoc />
+    public Result<TDocument> DeserializeDocument<TDocument>(string json, OperationError unreadable)
+        where TDocument : class
+    {
+        ArgumentNullException.ThrowIfNull(json);
+        ArgumentNullException.ThrowIfNull(unreadable);
+
+        try
+        {
+            var document = JsonSerializer.Deserialize<TDocument>(json, SerializerOptions);
+            return document is null ? Result.Fail<TDocument>(unreadable) : Result.Success(document);
+        }
+        catch (JsonException)
+        {
+            return unreadable;
+        }
+    }
+
     private static JsonSerializerOptions CreateSerializerOptions()
     {
         var options = new JsonSerializerOptions(JsonSerializerDefaults.Web)

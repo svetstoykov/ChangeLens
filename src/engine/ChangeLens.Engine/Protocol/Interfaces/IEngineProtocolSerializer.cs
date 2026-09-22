@@ -50,4 +50,30 @@ internal interface IEngineProtocolSerializer
     ///     <paramref name="response" /> is <see langword="null" />.
     /// </exception>
     Result<int> GetSerializedUtf8ByteCount(ProtocolResponse response);
+
+    /// <summary>
+    ///     Serializes one protocol document, such as a stored reading model, with the production serialization policy.
+    /// </summary>
+    /// <typeparam name="TDocument">The protocol document type.</typeparam>
+    /// <param name="document">The document to serialize. Cannot be <see langword="null" />.</param>
+    /// <returns>The serialized document or a serialization failure.</returns>
+    /// <exception cref="ArgumentNullException">
+    ///     <paramref name="document" /> is <see langword="null" />.
+    /// </exception>
+    Result<string> SerializeDocument<TDocument>(TDocument document)
+        where TDocument : class;
+
+    /// <summary>
+    ///     Deserializes one protocol document written by <see cref="SerializeDocument{TDocument}" /> with the same strict
+    ///     policy.
+    /// </summary>
+    /// <typeparam name="TDocument">The protocol document type.</typeparam>
+    /// <param name="json">The serialized document. Cannot be <see langword="null" />.</param>
+    /// <param name="unreadable">The caller-owned error returned when the text is not a readable document.</param>
+    /// <returns>The deserialized document, or <paramref name="unreadable" />.</returns>
+    /// <exception cref="ArgumentNullException">
+    ///     <paramref name="json" /> or <paramref name="unreadable" /> is <see langword="null" />.
+    /// </exception>
+    Result<TDocument> DeserializeDocument<TDocument>(string json, OperationError unreadable)
+        where TDocument : class;
 }

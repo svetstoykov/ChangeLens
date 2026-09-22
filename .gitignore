@@ -114,7 +114,6 @@ _ReSharper*/
 
 # The entire docs/ tree is local. Nothing under it is versioned, including ai-rules.
 /docs/
-.runtime-review/
 .changelens-review/
 
 # Python tooling

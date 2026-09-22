@@ -16,6 +16,12 @@ for line in sys.stdin:
         print("not json", flush=True)
     if action == "test.uncorrelated":
         print(json.dumps({"protocolVersion": 1, "type": "result", "requestId": "other", "result": None}), flush=True)
+    if action == "test.nullId":
+        print(
+            json.dumps({"protocolVersion": 1, "type": "result", "requestId": None, "result": {"echo": "null-id"}}),
+            flush=True,
+        )
+        continue
     if action == "test.error":
         response = {
             "protocolVersion": 1,

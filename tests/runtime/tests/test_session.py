@@ -53,6 +53,18 @@ def test_uncorrelated_and_non_json_lines_are_transcribed_and_skipped(tmp_path: P
     ).items()
 
 
+def test_a_null_request_id_response_is_accepted_as_the_in_flight_answer(tmp_path: Path) -> None:
+    session = make_session(tmp_path)
+    session.start()
+    try:
+        response = session.request("test.nullId")
+    finally:
+        session.stop()
+
+    assert not response.is_error
+    assert response.result == {"echo": "null-id"}
+
+
 def test_error_responses_expose_their_codes(tmp_path: Path) -> None:
     session = make_session(tmp_path)
     session.start()

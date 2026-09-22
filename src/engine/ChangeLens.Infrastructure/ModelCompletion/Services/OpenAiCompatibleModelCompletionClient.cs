@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Globalization;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Text;
@@ -122,11 +123,17 @@ public sealed class OpenAiCompatibleModelCompletionClient : IModelCompletionClie
 
             if (!response.IsSuccessStatusCode)
             {
-                var error = CreateHttpError(response.StatusCode);
+                var error = await this.ReadHttpErrorAsync(response, requestCancellation.Token, cancellationToken);
                 return this.FinishFailure(error, startedAt, (int)response.StatusCode, ErrorOutcome(error));
             }
 
             var responseBody = await this.ReadBoundedResponseBodyAsync(response.Content, requestCancellation.Token);
+            var providerError = TryParseProviderError(responseBody, response.StatusCode);
+            if (providerError is not null)
+            {
+                return this.FinishFailure(providerError, startedAt, (int)response.StatusCode, ErrorOutcome(providerError));
+            }
+
             if (responseBody is null || !TryParseCompletion(responseBody, model, out var completion))
             {
                 return this.FinishFailure(
@@ -185,28 +192,30 @@ public sealed class OpenAiCompatibleModelCompletionClient : IModelCompletionClie
     }
 
     /// <summary>
-    ///     Asynchronously reads a successful provider body up to the configured byte budget.
+    ///     Asynchronously reads a provider body up to the configured byte budget and optional lower limit.
     /// </summary>
     /// <param name="content">The HTTP response content. Cannot be <see langword="null" />.</param>
     /// <param name="cancellationToken">The token used to cancel the read.</param>
+    /// <param name="byteLimit">An additional byte limit, or <see langword="null" /> for the configured budget.</param>
     /// <returns>
     ///     A task whose result is the UTF-8 body, or <see langword="null" /> when the body exceeds the budget.
     /// </returns>
     /// <exception cref="ArgumentNullException"><paramref name="content" /> is <see langword="null" />.</exception>
-    private async Task<string?> ReadBoundedResponseBodyAsync(HttpContent content, CancellationToken cancellationToken)
+    private async Task<string?> ReadBoundedResponseBodyAsync(HttpContent content, CancellationToken cancellationToken, int? byteLimit = null)
     {
         ArgumentNullException.ThrowIfNull(content);
 
         var maximumBytes = this._options.MaximumResponseBytes > 0
             ? this._options.MaximumResponseBytes
             : ModelCompletionTransportConstants.ResponseByteBudget(ModelCompletionTransportConstants.DefaultMaximumOutputCharacters);
+        maximumBytes = Math.Min(maximumBytes, byteLimit ?? maximumBytes);
         await using var stream = await content.ReadAsStreamAsync(cancellationToken);
         using var buffer = new MemoryStream();
         var chunk = new byte[8192];
         var total = 0;
         while (true)
         {
-            var read = await stream.ReadAsync(chunk.AsMemory(), cancellationToken);
+            var read = await stream.ReadAsync(chunk.AsMemory(0, (int)Math.Min(chunk.Length, (long)maximumBytes - total + 1)), cancellationToken);
             if (read == 0)
             {
                 break;
@@ -223,6 +232,133 @@ public sealed class OpenAiCompatibleModelCompletionClient : IModelCompletionClie
 
         return Encoding.UTF8.GetString(buffer.GetBuffer(), 0, (int)buffer.Length);
     }
+
+    // Error bodies are optional diagnostics: a failed read must not hide the known HTTP failure or caller cancellation.
+    private async Task<OperationError> ReadHttpErrorAsync(
+        HttpResponseMessage response, CancellationToken requestCancellation, CancellationToken callerCancellation)
+    {
+        try
+        {
+            var body = await this.ReadBoundedResponseBodyAsync(response.Content, requestCancellation, ProviderErrorConstants.MaximumBodyBytes);
+            return TryParseProviderError(body, response.StatusCode) ?? CreateHttpError(response.StatusCode);
+        }
+        catch (Exception exception) when (exception is HttpRequestException or IOException or OperationCanceledException)
+        {
+            callerCancellation.ThrowIfCancellationRequested();
+            return CreateHttpError(response.StatusCode);
+        }
+    }
+
+    // Only recognized fields become diagnostics. Arbitrary provider prose and metadata may echo source text or credentials.
+    private static OperationError? TryParseProviderError(string? body, HttpStatusCode httpStatus)
+    {
+        if (body is null)
+        {
+            return null;
+        }
+
+        try
+        {
+            using var document = JsonDocument.Parse(body);
+            var root = document.RootElement;
+            if (root.ValueKind != JsonValueKind.Object)
+            {
+                return null;
+            }
+
+            if (root.TryGetProperty(ProviderErrorConstants.Error, out var error) && error.ValueKind is not JsonValueKind.Null)
+            {
+                return CreateProviderError(error, httpStatus);
+            }
+
+            if (root.TryGetProperty(ProviderErrorConstants.Choices, out var choices)
+                && choices.ValueKind == JsonValueKind.Array && choices.GetArrayLength() > 0)
+            {
+                var choice = choices[0];
+                if (choice.ValueKind == JsonValueKind.Object)
+                {
+                    if (choice.TryGetProperty(ProviderErrorConstants.Error, out error) && error.ValueKind is not JsonValueKind.Null)
+                    {
+                        return CreateProviderError(error, httpStatus);
+                    }
+
+                    if (ReadString(choice, ProviderErrorConstants.FinishReason) == ProviderErrorConstants.Error)
+                    {
+                        return CreateProviderError(default, httpStatus);
+                    }
+                }
+            }
+        }
+        catch (JsonException)
+        {
+        }
+
+        return null;
+    }
+
+    private static OperationError CreateProviderError(JsonElement error, HttpStatusCode httpStatus)
+    {
+        var code = ReadString(error, ProviderErrorConstants.Code);
+        var numericCode = ReadNullableInt(error, ProviderErrorConstants.Code);
+        if (numericCode is null && int.TryParse(code, NumberStyles.None, CultureInfo.InvariantCulture, out var parsedCode))
+        {
+            numericCode = parsedCode;
+        }
+
+        numericCode = numericCode is >= 400 and <= 599 ? numericCode : null;
+        var knownCode = RecognizeProviderCode(code);
+        var errorType = error.ValueKind == JsonValueKind.Object && error.TryGetProperty(ProviderErrorConstants.Metadata, out var metadata)
+            ? RecognizeProviderCode(ReadString(metadata, ProviderErrorConstants.ErrorType))
+            : null;
+        var providerStatus = numericCode ?? StatusForProviderCode(knownCode) ?? StatusForProviderCode(errorType);
+        // A failed HTTP status remains authoritative; embedded codes classify errors inside successful HTTP envelopes.
+        var effectiveStatus = (int)httpStatus >= 400 ? httpStatus : (HttpStatusCode)(providerStatus ?? 400);
+        var mapped = CreateHttpError(effectiveStatus);
+        var detail = "The provider reported an error.";
+        var message = ReadString(error, ProviderErrorConstants.Message);
+        if (knownCode == ProviderErrorConstants.ModelNotFound
+            || message?.EndsWith(" is not a valid model ID", StringComparison.Ordinal) == true)
+        {
+            detail = "The provider rejected an invalid model ID. Check the configured model identifier.";
+        }
+        else if (message == "JSON error injected into SSE stream")
+        {
+            detail = "JSON error injected into SSE stream.";
+        }
+
+        var providerCode = numericCode?.ToString(CultureInfo.InvariantCulture) ?? knownCode ?? "unrecognized";
+        var retry = effectiveStatus is HttpStatusCode.TooManyRequests or HttpStatusCode.BadGateway
+            or HttpStatusCode.ServiceUnavailable or HttpStatusCode.GatewayTimeout
+            ? " A retry may succeed; no automatic retry was attempted."
+            : string.Empty;
+        var summary = (int)httpStatus < 400 && mapped.Code == ModelCompletionErrorCode.RequestFailed
+            ? "The model completion provider reported a failure."
+            : mapped.Message;
+        var diagnostic = $"{summary} {detail} Provider code: {providerCode}; type: {errorType ?? "unrecognized"}.{retry}";
+        return new OperationError(diagnostic, mapped.Type, mapped.Code);
+    }
+
+    private static string? ReadString(JsonElement parent, string name) =>
+        parent.ValueKind == JsonValueKind.Object && parent.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.String
+            ? value.GetString()
+            : null;
+
+    private static string? RecognizeProviderCode(string? code) => code switch
+    {
+        ProviderErrorConstants.InvalidApiKey or ProviderErrorConstants.RateLimitExceeded or ProviderErrorConstants.ProviderUnavailable
+            or ProviderErrorConstants.ModelNotFound or ProviderErrorConstants.InvalidRequestError => code,
+        _ => null,
+    };
+
+    private static int? StatusForProviderCode(string? code) => code switch
+    {
+        ProviderErrorConstants.InvalidApiKey => 401,
+        ProviderErrorConstants.RateLimitExceeded => 429,
+        ProviderErrorConstants.ProviderUnavailable => 503,
+        ProviderErrorConstants.ModelNotFound => 404,
+        ProviderErrorConstants.InvalidRequestError => 400,
+        _ => null,
+    };
 
     private static bool TryCreateEndpoint(string? baseUrl, out Uri endpoint)
     {
@@ -387,7 +523,7 @@ public sealed class OpenAiCompatibleModelCompletionClient : IModelCompletionClie
         int? statusCode,
         string outcome)
     {
-        this.LogOutcome(startedAt, outcome, error.Code, statusCode, null, null, null, null);
+        this.LogOutcome(startedAt, outcome, error.Code, statusCode, null, null, null, null, error.Message);
         return Result.Fail<ModelCompletionModel>(error);
     }
 
@@ -399,12 +535,13 @@ public sealed class OpenAiCompatibleModelCompletionClient : IModelCompletionClie
         int? inputTokens,
         int? outputTokens,
         int? cachedInputTokens,
-        int? reasoningTokens)
+        int? reasoningTokens,
+        string? failureDetail = null)
     {
         this._logger.LogInformation(
             "Model completion attempt finished with outcome {Outcome}, error code {ErrorCode}, HTTP status {StatusCode}, "
             + "elapsed {ElapsedMilliseconds:0.000} ms, input tokens {InputTokens}, output tokens {OutputTokens}, "
-            + "cached input tokens {CachedInputTokens}, reasoning tokens {ReasoningTokens}.",
+            + "cached input tokens {CachedInputTokens}, reasoning tokens {ReasoningTokens}, failure detail {FailureDetail}.",
             outcome,
             errorCode,
             statusCode,
@@ -412,7 +549,8 @@ public sealed class OpenAiCompatibleModelCompletionClient : IModelCompletionClie
             inputTokens,
             outputTokens,
             cachedInputTokens,
-            reasoningTokens);
+            reasoningTokens,
+            failureDetail);
     }
 
 }

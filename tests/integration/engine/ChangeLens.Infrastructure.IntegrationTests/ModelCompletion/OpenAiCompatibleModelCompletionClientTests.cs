@@ -318,11 +318,11 @@ public sealed class OpenAiCompatibleModelCompletionClientTests
     }
 
     /// <summary>
-    ///     Asynchronously maps HTTP failures without reading or bounding the error body.
+    ///     Asynchronously preserves HTTP status classification when the error body exceeds the read budget.
     /// </summary>
     /// <returns>A task that represents the asynchronous operation.</returns>
     [Fact]
-    public async Task CompleteJsonAsync_HttpFailureDoesNotMaterializeErrorBody()
+    public async Task CompleteJsonAsync_OversizedHttpFailurePreservesStatus()
     {
         const string providerBody = "provider body must stay out of the error";
         await using var server = await LoopbackHttpServer.StartAsync(
@@ -487,6 +487,94 @@ public sealed class OpenAiCompatibleModelCompletionClientTests
                 Assert.DoesNotContain(UserMessage, entry.Message, StringComparison.Ordinal);
                 Assert.DoesNotContain(responseSecret, entry.Message, StringComparison.Ordinal);
             });
+    }
+
+    /// <summary>Asynchronously recognizes provider errors inside both failed and successful HTTP responses.</summary>
+    /// <param name="status">The HTTP status.</param>
+    /// <param name="body">The provider envelope.</param>
+    /// <param name="code">The expected stable application code.</param>
+    /// <param name="detail">The expected safe diagnostic detail.</param>
+    /// <returns>A task that represents the asynchronous operation.</returns>
+    [Theory]
+    [InlineData(400, "{\"error\":{\"code\":400,\"message\":\"fixture-model is not a valid model ID\"}}",
+        "modelCompletion.requestFailed", "invalid model ID")]
+    [InlineData(200, "{\"error\":{\"code\":\"429\",\"message\":\"slow down\"}}",
+        "modelCompletion.rateLimited", "429")]
+    [InlineData(200, "{\"choices\":[{\"finish_reason\":\"error\",\"error\":{\"code\":502,\"message\":\"JSON error injected into SSE stream\",\"metadata\":{\"error_type\":\"provider_unavailable\"}},\"message\":{\"content\":null}}]}",
+        "modelCompletion.providerUnavailable", "JSON error injected into SSE stream")]
+    [InlineData(200, "{\"error\":{\"code\":\"invalid_api_key\"}}", "modelCompletion.unauthorized", "invalid_api_key")]
+    [InlineData(200, "{\"choices\":[{\"finish_reason\":\"error\",\"message\":{\"content\":\"partial output\"}}]}",
+        "modelCompletion.requestFailed", "reported an error")]
+    [InlineData(200, "{\"error\":{\"metadata\":{\"error_type\":\"provider_unavailable\"}}}",
+        "modelCompletion.providerUnavailable", "provider_unavailable")]
+    [InlineData(401, "{\"error\":{\"code\":502}}", "modelCompletion.unauthorized", "502")]
+    [InlineData(200, "{\"choices\":[{\"error\":{\"code\":502},\"message\":{\"content\":\"partial output\"}}]}",
+        "modelCompletion.providerUnavailable", "502")]
+    [InlineData(200, "{\"error\":{\"code\":\"rate_limit_exceeded\"}}", "modelCompletion.rateLimited", "rate_limit_exceeded")]
+    [InlineData(200, "{\"error\":{\"code\":\"model_not_found\"}}", "modelCompletion.requestFailed", "invalid model ID")]
+    public async Task CompleteJsonAsync_ProviderErrorPreservesSafeDiagnostics(int status, string body, string code, string detail)
+    {
+        await using var server = await LoopbackHttpServer.StartAsync((_, _) => Task.FromResult(new LoopbackHttpResponse(status, body)));
+        using var httpClient = new HttpClient();
+        var logger = new RecordingModelCompletionLogger<OpenAiCompatibleModelCompletionClient>();
+        var client = CreateClient(httpClient, CreateOptions(server), logger);
+
+        var result = await client.CompleteJsonAsync(CreateRequest(), CancellationToken.None);
+
+        Assert.True(result.IsFailure);
+        var error = Assert.Single(result.Errors);
+        Assert.Equal(code, error.Code);
+        Assert.Contains(detail, error.Message, StringComparison.Ordinal);
+        Assert.Contains(logger.Entries, entry => entry.Message.Contains(detail, StringComparison.Ordinal));
+        if (code is "modelCompletion.providerUnavailable" or "modelCompletion.rateLimited")
+        {
+            Assert.Contains("A retry may succeed", error.Message, StringComparison.Ordinal);
+        }
+        else
+        {
+            Assert.DoesNotContain("A retry may succeed", error.Message, StringComparison.Ordinal);
+        }
+
+        Assert.Equal(1, server.RequestCount);
+    }
+
+    /// <summary>Asynchronously withholds unrecognized provider text, codes, metadata, and echoed sensitive content.</summary>
+    /// <returns>A task that represents the asynchronous operation.</returns>
+    [Fact]
+    public async Task CompleteJsonAsync_ProviderErrorWithholdsUntrustedDetails()
+    {
+        var sensitive = $"{ApiKey} {SystemMessage} {UserMessage} /Users/private/repository arbitrary-source-fragment\r\nforged log";
+        var body = JsonSerializer.Serialize(new
+        {
+            error = new { code = sensitive, message = sensitive, metadata = new { raw = sensitive, error_type = sensitive } },
+        });
+        await using var server = await LoopbackHttpServer.StartAsync((_, _) => Task.FromResult(new LoopbackHttpResponse(400, body)));
+        using var httpClient = new HttpClient();
+        var logger = new RecordingModelCompletionLogger<OpenAiCompatibleModelCompletionClient>();
+        var client = CreateClient(httpClient, CreateOptions(server), logger);
+
+        var result = await client.CompleteJsonAsync(CreateRequest(), CancellationToken.None);
+
+        AssertFailure(result, ErrorType.ExternalDependencyFailure, "modelCompletion.requestFailed");
+        var diagnostics = string.Join("\n", logger.Entries.Select(entry => entry.Message)) + Assert.Single(result.Errors).Message;
+        foreach (var secret in new[] { ApiKey, SystemMessage, UserMessage, "/Users/private", "arbitrary-source-fragment", "forged log" })
+        {
+            Assert.DoesNotContain(secret, diagnostics, StringComparison.Ordinal);
+        }
+    }
+
+    /// <summary>Asynchronously accepts normal completions with a null error field.</summary>
+    /// <returns>A task that represents the asynchronous operation.</returns>
+    [Fact]
+    public async Task CompleteJsonAsync_NullErrorDoesNotOverrideCompletion()
+    {
+        const string body = "{\"error\":null,\"choices\":[{\"message\":{\"content\":\"{}\"}}]}";
+        await using var server = await LoopbackHttpServer.StartAsync((_, _) => Task.FromResult(SuccessResponseBody(body)));
+        using var httpClient = new HttpClient();
+
+        var result = await CreateClient(httpClient, CreateOptions(server)).CompleteJsonAsync(CreateRequest(), CancellationToken.None);
+
+        Assert.True(result.IsSuccess);
     }
 
     private static TaskCompletionSource CreateRequestReceivedSignal() =>

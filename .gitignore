@@ -7,7 +7,6 @@
 !src/desktop/ui/.env
 !src/desktop/ui/.env.development
 **/appsettings.Development.json
-!src/engine/ChangeLens.Engine/appsettings.Development.json
 **/appsettings.Local.json
 **/appsettings.*.local.json
 **/appsettings.*.Local.json
@@ -115,6 +114,7 @@ _ReSharper*/
 
 # The entire docs/ tree is local. Nothing under it is versioned, including ai-rules.
 /docs/
+.runtime-review/
 
 # Operating-system metadata
 .DS_Store

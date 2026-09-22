@@ -57,6 +57,14 @@ namespace ChangeLens.Infrastructure.LocalState.Persistence.Migrations
                         .HasColumnType("TEXT")
                         .HasColumnName("change_context");
 
+                    b.Property<int?>("CorrespondenceCandidateCount")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("correspondence_candidate_count");
+
+                    b.Property<int?>("DisclosedEvidenceNodeCount")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("disclosed_evidence_node_count");
+
                     b.Property<int?>("ExcludedConflictedCount")
                         .HasColumnType("INTEGER")
                         .HasColumnName("excluded_conflicted_count");
@@ -107,6 +115,10 @@ namespace ChangeLens.Infrastructure.LocalState.Persistence.Migrations
                         .HasColumnType("TEXT")
                         .HasColumnName("merge_base_revision");
 
+                    b.Property<string>("ReadingModelJson")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("reading_model_json");
+
                     b.Property<string>("RepositoryDisplayName")
                         .IsRequired()
                         .HasColumnType("TEXT")
@@ -156,6 +168,14 @@ namespace ChangeLens.Infrastructure.LocalState.Persistence.Migrations
                         .HasColumnType("INTEGER")
                         .HasColumnName("terminal_limitation_count");
 
+                    b.Property<int?>("ValidationRemovalCount")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("validation_removal_count");
+
+                    b.Property<string>("ValidationRemovalsJson")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("validation_removals_json");
+
                     b.HasKey("RunId");
 
                     b.HasIndex("CanonicalRepositoryPathKey")
@@ -169,9 +189,13 @@ namespace ChangeLens.Infrastructure.LocalState.Persistence.Migrations
 
                             t.HasCheckConstraint("CK_analysis_runs_capture_fields", "(captured_at_unix_ms IS NULL AND snapshot_id IS NULL AND manifest_hash IS NULL AND target_revision_at_capture IS NULL AND head_revision_at_capture IS NULL AND merge_base_revision IS NULL AND captured_changed_file_count IS NULL AND excluded_uncommitted_total IS NULL AND excluded_staged_count IS NULL AND excluded_unstaged_count IS NULL AND excluded_untracked_count IS NULL AND excluded_conflicted_count IS NULL) OR (captured_at_unix_ms IS NOT NULL AND snapshot_id IS NOT NULL AND manifest_hash IS NOT NULL AND target_revision_at_capture IS NOT NULL AND head_revision_at_capture IS NOT NULL AND merge_base_revision IS NOT NULL AND captured_changed_file_count IS NOT NULL AND excluded_uncommitted_total IS NOT NULL AND excluded_staged_count IS NOT NULL AND excluded_unstaged_count IS NOT NULL AND excluded_untracked_count IS NOT NULL AND excluded_conflicted_count IS NOT NULL)");
 
+                            t.HasCheckConstraint("CK_analysis_runs_discovery_counts", "(correspondence_candidate_count IS NULL OR correspondence_candidate_count >= 0) AND (disclosed_evidence_node_count IS NULL OR disclosed_evidence_node_count >= 0) AND (validation_removal_count IS NULL OR validation_removal_count >= 0)");
+
                             t.HasCheckConstraint("CK_analysis_runs_interruption_fields", "(state = 'interrupted' AND interrupted_at_unix_ms IS NOT NULL) OR (state <> 'interrupted' AND interrupted_at_unix_ms IS NULL)");
 
                             t.HasCheckConstraint("CK_analysis_runs_manifest_hash", "manifest_hash IS NULL OR (length(manifest_hash) = 64 AND manifest_hash NOT GLOB '*[^0-9a-f]*')");
+
+                            t.HasCheckConstraint("CK_analysis_runs_reading_projection", "(reading_model_json IS NULL AND validation_removals_json IS NULL) OR (reading_model_json IS NOT NULL AND validation_removals_json IS NOT NULL AND state IN ('completed','completedWithLimitations'))");
 
                             t.HasCheckConstraint("CK_analysis_runs_state", "state IN ('pendingCapture','capturing','discovering','collecting','persisting','completed','completedWithLimitations','cancelled','failed','interrupted')");
 

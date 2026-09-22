@@ -1,6 +1,7 @@
 use crate::analysis::models::validation::{deserialize_optional_guid, deserialize_run_id};
 use crate::analysis::models::{
     AnalysisComparison, AnalysisFact, AnalysisRepository, AnalysisRunState, AnalysisTerminal,
+    ReadingModel, ValidationRemoval,
 };
 use serde::de::Error;
 use serde::{Deserialize, Serialize};
@@ -26,6 +27,18 @@ pub struct AnalysisRunSummary {
     pub interrupted_at: Option<u64>,
     #[serde(deserialize_with = "deserialize_interruption_reason")]
     pub interruption_reason: Option<String>,
+    #[serde(deserialize_with = "deserialize_required_optional")]
+    pub reading_model: Option<ReadingModel>,
+    #[serde(deserialize_with = "deserialize_required_optional")]
+    pub validation_removals: Option<Vec<ValidationRemoval>>,
+}
+
+fn deserialize_required_optional<'de, D, T>(deserializer: D) -> Result<Option<T>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+    T: Deserialize<'de>,
+{
+    Option::<T>::deserialize(deserializer)
 }
 
 fn deserialize_bounded_facts<'de, D>(deserializer: D) -> Result<Vec<AnalysisFact>, D::Error>

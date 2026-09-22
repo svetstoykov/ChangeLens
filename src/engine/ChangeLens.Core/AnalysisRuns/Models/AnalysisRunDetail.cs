@@ -13,6 +13,9 @@ namespace ChangeLens.Core.AnalysisRuns.Models;
 /// <param name="Comparison">
 ///     The immutable accepted comparison identity. Cannot be <see langword="null" />.
 /// </param>
+/// <param name="ChangeContext">
+///     The optional untrusted developer prose supplied at acceptance, or <see langword="null" /> when none was supplied.
+/// </param>
 /// <param name="RequestedAtUnixMilliseconds">
 ///     When the pending run and repository lock committed.
 /// </param>
@@ -36,6 +39,15 @@ namespace ChangeLens.Core.AnalysisRuns.Models;
 ///     The uncommitted lineage counts excluded from the manifest, or <see langword="null" /> before capture
 ///     completes.
 /// </param>
+/// <param name="CorrespondenceCandidateCount">
+///     The number of unchanged files correspondence ranking returned, or <see langword="null" /> before ranking finishes.
+/// </param>
+/// <param name="DisclosedEvidenceNodeCount">
+///     The number of evidence nodes context policy disclosed, or <see langword="null" /> before context policy finishes.
+/// </param>
+/// <param name="ValidationRemovalCount">
+///     The number of draft items mechanical validation removed, or <see langword="null" /> before validation finishes.
+/// </param>
 /// <param name="CancellationRequested">Whether cancellation has been durably requested.</param>
 /// <param name="Terminal">
 ///     The strict terminal summary, or <see langword="null" /> for an active or
@@ -53,6 +65,7 @@ public sealed record AnalysisRunDetail(
     AnalysisRunState State,
     AnalysisRepositoryIdentity Repository,
     AnalysisComparisonIdentity Comparison,
+    string? ChangeContext,
     long RequestedAtUnixMilliseconds,
     long? CaptureStartedAtUnixMilliseconds,
     long? CapturedAtUnixMilliseconds,
@@ -60,6 +73,9 @@ public sealed record AnalysisRunDetail(
     string? ManifestHash,
     int? CapturedChangedFileCount,
     ExcludedUncommittedCounts? ExcludedUncommittedCounts,
+    int? CorrespondenceCandidateCount,
+    int? DisclosedEvidenceNodeCount,
+    int? ValidationRemovalCount,
     bool CancellationRequested,
     AnalysisTerminalSummary? Terminal,
     long? InterruptedAtUnixMilliseconds,

@@ -1,6 +1,6 @@
 use changelens_desktop_lib::analysis::{
-    AnalysisComparison, AnalysisGetActiveResult, AnalysisRepository, AnalysisRunSummary,
-    AnalysisRunState, AnalysisService, AnalysisStartResult, AnalysisState,
+    AnalysisComparison, AnalysisGetActiveResult, AnalysisRepository, AnalysisRunState,
+    AnalysisRunSummary, AnalysisService, AnalysisStartResult, AnalysisState,
 };
 use changelens_desktop_lib::configure_desktop;
 use changelens_desktop_lib::engine_protocol::{
@@ -488,5 +488,7 @@ fn summary() -> AnalysisRunSummary {
         terminal: None,
         interrupted_at: None,
         interruption_reason: None,
+        reading_model: None,
+        validation_removals: None,
     }
 }

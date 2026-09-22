@@ -77,7 +77,7 @@ internal sealed class ShallowAnalysisPipeline(
             {
                 var failed = new AnalysisTerminalSummary(AnalysisTerminalKind.Failed, this.Now(), null,
                     outcome.Code ?? AnalysisFailureCode.UnexpectedFailure);
-                await store.CommitTerminalAsync(runId, failed, CancellationToken.None);
+                await store.CommitTerminalAsync(runId, failed, null, CancellationToken.None);
                 logger.LogWarning("Analysis run {RunId} failed at step {StepId} with {FailureCode}.", runId, entry.StepId, failed.FailureCode);
                 return;
             }
@@ -124,7 +124,7 @@ internal sealed class ShallowAnalysisPipeline(
             this.Now(),
             limitationCount > 0 ? limitationCount : null,
             null);
-        var commitResult = await store.CommitTerminalAsync(runId, terminal, CancellationToken.None);
+        var commitResult = await store.CommitTerminalAsync(runId, terminal, null, CancellationToken.None);
         if (commitResult.IsFailure)
         {
             logger.LogError("Analysis run {RunId} could not commit terminal {TerminalKind} with errors {ErrorCodes}.", runId, terminal.Kind,
@@ -242,7 +242,7 @@ internal sealed class ShallowAnalysisPipeline(
     private async Task CommitCancelledAsync(Guid runId)
     {
         var terminal = new AnalysisTerminalSummary(AnalysisTerminalKind.Cancelled, this.Now(), null, null);
-        await store.CommitTerminalAsync(runId, terminal, CancellationToken.None);
+        await store.CommitTerminalAsync(runId, terminal, null, CancellationToken.None);
         logger.LogInformation("Analysis run {RunId} committed Cancelled after observing durable cancellation.", runId);
     }
 

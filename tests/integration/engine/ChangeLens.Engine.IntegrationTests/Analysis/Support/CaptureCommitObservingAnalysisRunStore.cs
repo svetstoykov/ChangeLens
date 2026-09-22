@@ -73,8 +73,28 @@ internal sealed class CaptureCommitObservingAnalysisRunStore(IAnalysisRunStore i
     }
 
     /// <inheritdoc />
-    public Task<Result<bool>> CommitTerminalAsync(Guid runId, AnalysisTerminalSummary terminal, CancellationToken cancellationToken) =>
-        inner.CommitTerminalAsync(runId, terminal, cancellationToken);
+    public Task<Result> RecordCorrespondenceCandidateCountAsync(Guid runId, int count, CancellationToken cancellationToken) =>
+        inner.RecordCorrespondenceCandidateCountAsync(runId, count, cancellationToken);
+
+    /// <inheritdoc />
+    public Task<Result> RecordDisclosedEvidenceNodeCountAsync(Guid runId, int count, CancellationToken cancellationToken) =>
+        inner.RecordDisclosedEvidenceNodeCountAsync(runId, count, cancellationToken);
+
+    /// <inheritdoc />
+    public Task<Result> RecordValidationRemovalCountAsync(Guid runId, int count, CancellationToken cancellationToken) =>
+        inner.RecordValidationRemovalCountAsync(runId, count, cancellationToken);
+
+    /// <inheritdoc />
+    public Task<Result<bool>> CommitTerminalAsync(
+        Guid runId,
+        AnalysisTerminalSummary terminal,
+        AnalysisReadingProjection? readingProjection,
+        CancellationToken cancellationToken) =>
+        inner.CommitTerminalAsync(runId, terminal, readingProjection, cancellationToken);
+
+    /// <inheritdoc />
+    public Task<Result<AnalysisReadingProjection?>> GetReadingProjectionAsync(Guid runId, CancellationToken cancellationToken) =>
+        inner.GetReadingProjectionAsync(runId, cancellationToken);
 
     /// <inheritdoc />
     public Task<Result<int>> FinalizeCancelledPendingRunsAsync(long atUnixMilliseconds, CancellationToken cancellationToken) =>

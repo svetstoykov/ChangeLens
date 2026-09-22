@@ -115,6 +115,16 @@ public sealed class ChangeLensLocalStateDbContext(
                 table.HasCheckConstraint(
                     "CK_analysis_runs_manifest_hash",
                     "manifest_hash IS NULL OR (length(manifest_hash) = 64 AND manifest_hash NOT GLOB '*[^0-9a-f]*')");
+                table.HasCheckConstraint(
+                    "CK_analysis_runs_discovery_counts",
+                    "(correspondence_candidate_count IS NULL OR correspondence_candidate_count >= 0) AND " +
+                    "(disclosed_evidence_node_count IS NULL OR disclosed_evidence_node_count >= 0) AND " +
+                    "(validation_removal_count IS NULL OR validation_removal_count >= 0)");
+                table.HasCheckConstraint(
+                    "CK_analysis_runs_reading_projection",
+                    "(reading_model_json IS NULL AND validation_removals_json IS NULL) OR " +
+                    "(reading_model_json IS NOT NULL AND validation_removals_json IS NOT NULL " +
+                    "AND state IN ('completed','completedWithLimitations'))");
             });
             entity.HasKey(run => run.RunId);
             entity.Property(run => run.RunId).HasColumnName("run_id").HasConversion<string>();
@@ -146,6 +156,11 @@ public sealed class ChangeLensLocalStateDbContext(
             entity.Property(run => run.ExcludedUnstagedCount).HasColumnName("excluded_unstaged_count");
             entity.Property(run => run.ExcludedUntrackedCount).HasColumnName("excluded_untracked_count");
             entity.Property(run => run.ExcludedConflictedCount).HasColumnName("excluded_conflicted_count");
+            entity.Property(run => run.CorrespondenceCandidateCount).HasColumnName("correspondence_candidate_count");
+            entity.Property(run => run.DisclosedEvidenceNodeCount).HasColumnName("disclosed_evidence_node_count");
+            entity.Property(run => run.ValidationRemovalCount).HasColumnName("validation_removal_count");
+            entity.Property(run => run.ReadingModelJson).HasColumnName("reading_model_json");
+            entity.Property(run => run.ValidationRemovalsJson).HasColumnName("validation_removals_json");
             entity.Property(run => run.TerminalLimitationCount).HasColumnName("terminal_limitation_count");
             entity.Property(run => run.TerminalFailureCode).HasColumnName("terminal_failure_code");
             entity.Property(run => run.InterruptionReason).HasColumnName("interruption_reason");

@@ -32,7 +32,7 @@ internal sealed class AnalysisProcessorTestPipeline(
                 timeProvider.GetUtcNow().ToUnixTimeMilliseconds(),
                 null,
                 null);
-            await store.CommitTerminalAsync(runId, terminal, CancellationToken.None);
+            await store.CommitTerminalAsync(runId, terminal, null, CancellationToken.None);
         }
     }
 }

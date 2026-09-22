@@ -95,6 +95,10 @@ internal sealed class AnalysisRunCoordinator(
         store.GetDetailAsync(runId, cancellationToken);
 
     /// <inheritdoc />
+    public Task<Result<AnalysisReadingProjection?>> GetReadingProjectionAsync(Guid runId, CancellationToken cancellationToken) =>
+        store.GetReadingProjectionAsync(runId, cancellationToken);
+
+    /// <inheritdoc />
     public async Task<Result> CancelAsync(Guid runId, CancellationToken cancellationToken)
     {
         var atUnixMilliseconds = timeProvider.GetUtcNow().ToUnixTimeMilliseconds();

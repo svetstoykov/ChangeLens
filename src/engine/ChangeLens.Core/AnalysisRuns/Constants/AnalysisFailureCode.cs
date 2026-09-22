@@ -13,4 +13,10 @@ public static class AnalysisFailureCode
 
     /// <summary>Capture could not produce a truthful manifest from bounded Git inspection.</summary>
     public const string CaptureFailed = "analysis.captureFailed";
+
+    /// <summary>The curator completion was over its output limit or was not a readable draft.</summary>
+    public const string CuratorOutputUnreadable = "analysis.curatorOutputUnreadable";
+
+    /// <summary>The mapped reading model would make the completed poll response exceed its transport budget.</summary>
+    public const string ReadingModelTooLarge = "analysis.readingModelTooLarge";
 }

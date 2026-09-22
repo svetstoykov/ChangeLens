@@ -5,4 +5,7 @@ internal static class AnalysisFactKind
 {
     internal const string ChangedFilesCaptured = "changedFilesCaptured";
     internal const string ExcludedUncommittedFiles = "excludedUncommittedFiles";
+    internal const string CorrespondenceCandidates = "correspondenceCandidates";
+    internal const string DisclosedEvidenceNodes = "disclosedEvidenceNodes";
+    internal const string ValidationRemovals = "validationRemovals";
 }

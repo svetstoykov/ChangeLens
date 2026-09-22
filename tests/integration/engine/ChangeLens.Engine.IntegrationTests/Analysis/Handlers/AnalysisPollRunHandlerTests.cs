@@ -9,8 +9,10 @@ using ChangeLens.Engine.AnalysisRuns.Handlers;
 using ChangeLens.Engine.AnalysisRuns.Models;
 using ChangeLens.Engine.IntegrationTests.Analysis.Handlers.Support;
 using ChangeLens.Engine.IntegrationTests.Protocol.Support;
+using ChangeLens.Engine.IntegrationTests.Support;
 using ChangeLens.Engine.Protocol.Constants;
 using ChangeLens.Engine.Protocol.Models;
+using ChangeLens.Engine.Protocol.Services;
 using Xunit;
 
 namespace ChangeLens.Engine.IntegrationTests.Analysis.Handlers;
@@ -113,6 +115,178 @@ public sealed class AnalysisPollRunHandlerTests
         Assert.Equal(AnalysisFactKind.ChangedFilesCaptured, result.Facts[0].Kind);
     }
 
+    /// <summary>
+    ///     Asynchronously maps a completed run's stored reading projection onto the summary.
+    /// </summary>
+    /// <returns>A task that represents the asynchronous operation.</returns>
+    [Fact]
+    public async Task ProjectedCompletedRunMapsFocusOmissionsLimitationsAndRemoval()
+    {
+        var response = await PollWithRealSerializerAsync(CreateDetail(), CreateFixtureProjection());
+
+        var summary = Assert.IsType<AnalysisRunSummaryResult>(
+            Assert.IsType<ProtocolResultResponse<AnalysisRunSummaryResult>>(response).Result);
+        var model = summary.ReadingModel!;
+        var citation = Assert.Single(model.Citations);
+        Assert.Collection(
+            citation.Focus,
+            range =>
+            {
+                Assert.Equal(12, range.StartLine);
+                Assert.Equal(12, range.EndLine);
+            },
+            range =>
+            {
+                Assert.Equal(16, range.StartLine);
+                Assert.Equal(17, range.EndLine);
+            });
+        var omission = Assert.Single(model.OmissionSummaries);
+        Assert.Equal(1, omission.TotalCount);
+        Assert.Equal(1, omission.SampleCount);
+        Assert.Equal(1, omission.ResolvedSampleCount);
+        var exclusion = Assert.Single(
+            model.Limitations,
+            limitation => limitation.Kind == ReadingModelProtocolConstants.LimitationUncommittedWorkExcluded);
+        Assert.Null(exclusion.Path);
+        var removal = Assert.Single(summary.ValidationRemovals!);
+        Assert.Equal(ReadingModelProtocolConstants.RemovalScopeStatement, removal.Scope);
+        Assert.Equal("thesis", removal.Id);
+    }
+
+    /// <summary>
+    ///     Asynchronously verifies the real serializer round-trips the mapped citation focus ranges.
+    /// </summary>
+    /// <returns>A task that represents the asynchronous operation.</returns>
+    [Fact]
+    public async Task SerializedProjectedResponseRoundTripsCitationFocusOrder()
+    {
+        var response = await PollWithRealSerializerAsync(CreateDetail(), CreateFixtureProjection());
+
+        var serialized = new EngineProtocolSerializer().SerializeResponse(response);
+
+        Assert.True(serialized.IsSuccess);
+        using var document = JsonDocument.Parse(serialized.Data!);
+        var focus = document.RootElement
+            .GetProperty("result")
+            .GetProperty("readingModel")
+            .GetProperty("citations")[0]
+            .GetProperty("focus");
+        Assert.Equal(2, focus.GetArrayLength());
+    }
+
+    /// <summary>
+    ///     Asynchronously verifies an unreadable stored reading model fails with its stable error code.
+    /// </summary>
+    /// <returns>A task that represents the asynchronous operation.</returns>
+    [Fact]
+    public async Task UnreadableReadingModelProjectionReturnsUnreadableError()
+    {
+        var detail = CreateDetail() with
+        {
+            State = AnalysisRunState.Completed,
+            Terminal = new AnalysisTerminalSummary(AnalysisTerminalKind.Completed, 1720000000500, null, null),
+        };
+
+        var response = await PollWithRealSerializerAsync(detail, new AnalysisReadingProjection("{not json", "[]"));
+
+        Assert.Equal(
+            AnalysisProtocolErrorCode.UnreadableReadingModel,
+            Assert.Single(Assert.IsType<ProtocolErrorResponse>(response).Errors).Code);
+    }
+
+    /// <summary>
+    ///     Asynchronously verifies a failed run maps captured facts without requesting a reading projection.
+    /// </summary>
+    /// <returns>A task that represents the asynchronous operation.</returns>
+    [Fact]
+    public async Task FailedRunMapsFactsWithoutRequestingReadingProjection()
+    {
+        var detail = CreateDetail() with
+        {
+            State = AnalysisRunState.Failed,
+            CapturedAtUnixMilliseconds = 1720000000200,
+            CapturedChangedFileCount = 7,
+            CorrespondenceCandidateCount = 0,
+            DisclosedEvidenceNodeCount = 3,
+            ValidationRemovalCount = null,
+            Terminal = new AnalysisTerminalSummary(
+                AnalysisTerminalKind.Failed,
+                1720000000500,
+                null,
+                "analysis.captureFailed"),
+        };
+        var projectionCalled = false;
+        var handler = new AnalysisPollRunHandler(
+            new StubAnalysisRunCoordinator(
+                pollRun: (_, _) => Task.FromResult<Result<AnalysisRunDetail>>(detail),
+                readingProjection: (_, _) =>
+                {
+                    projectionCalled = true;
+                    return Task.FromResult(Result.Success<AnalysisReadingProjection?>(CreateFixtureProjection()));
+                }),
+            new StubEngineProtocolSerializer(new AnalysisPollRunParameters { RunId = detail.RunId.ToString() }));
+
+        var response = await handler.HandleAsync(CreateRequest(), TestContext.Current.CancellationToken);
+
+        var result = Assert.IsType<AnalysisRunSummaryResult>(
+            Assert.IsType<ProtocolResultResponse<AnalysisRunSummaryResult>>(response).Result);
+        Assert.Collection(
+            result.Facts,
+            fact =>
+            {
+                Assert.Equal(AnalysisFactKind.ChangedFilesCaptured, fact.Kind);
+                Assert.Equal(7, fact.Count);
+            },
+            fact =>
+            {
+                Assert.Equal(AnalysisFactKind.CorrespondenceCandidates, fact.Kind);
+                Assert.Equal(0, fact.Count);
+            },
+            fact =>
+            {
+                Assert.Equal(AnalysisFactKind.DisclosedEvidenceNodes, fact.Kind);
+                Assert.Equal(3, fact.Count);
+            });
+        Assert.Null(result.ReadingModel);
+        Assert.Null(result.ValidationRemovals);
+        Assert.False(projectionCalled);
+    }
+
+    private static async Task<ProtocolResponse> PollWithRealSerializerAsync(
+        AnalysisRunDetail detail,
+        AnalysisReadingProjection? projection)
+    {
+        var coordinator = new StubAnalysisRunCoordinator(
+            pollRun: (_, _) => Task.FromResult<Result<AnalysisRunDetail>>(detail),
+            readingProjection: projection is null
+                ? null
+                : (_, _) => Task.FromResult(Result.Success<AnalysisReadingProjection?>(projection)));
+        var handler = new AnalysisPollRunHandler(coordinator, new EngineProtocolSerializer());
+
+        return await handler.HandleAsync(CreateDetailedRequest(detail.RunId), TestContext.Current.CancellationToken);
+    }
+
+    private static AnalysisReadingProjection CreateFixtureProjection()
+    {
+        using var fixture = JsonDocument.Parse(File.ReadAllText(Path.Combine(
+            RepositoryPaths.EngineProtocolV1,
+            "fixtures",
+            "analysis-poll-run.completed-with-reading-model.result.json")));
+        var result = fixture.RootElement.GetProperty("result");
+
+        return new AnalysisReadingProjection(
+            result.GetProperty("readingModel").GetRawText(),
+            result.GetProperty("validationRemovals").GetRawText());
+    }
+
+    private static EngineProtocolRequest CreateDetailedRequest(Guid runId) => new()
+    {
+        ProtocolVersion = EngineProtocolConstants.CurrentVersion,
+        RequestId = "analysis-poll-test",
+        Action = AnalysisActionConstants.PollRunAction,
+        Parameters = JsonSerializer.SerializeToElement(new { runId }),
+    };
+
     private static async Task<AnalysisRunSummaryResult> PollAsync(AnalysisRunDetail detail)
     {
         var handler = new AnalysisPollRunHandler(
@@ -147,8 +321,12 @@ public sealed class AnalysisPollRunHandlerTests
             "refs/heads/feature/comparison",
             "89abcdef0123456789abcdef0123456789abcdef",
             new string('0', 64)),
+            null,
         1720000000000,
         1720000000100,
+        null,
+        null,
+        null,
         null,
         null,
         null,

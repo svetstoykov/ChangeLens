@@ -103,7 +103,7 @@ while (await Console.In.ReadLineAsync() is { } requestLine)
 
     if (mode == "oversized")
     {
-        await Console.Out.WriteLineAsync(new string('a', 65_536));
+        await Console.Out.WriteLineAsync(new string('a', 2 * 1024 * 1024 + 1));
         await Console.Out.FlushAsync();
         continue;
     }
@@ -626,6 +626,8 @@ static AnalysisSummaryValue AnalysisSummary(
         Array.Empty<object>(),
         null,
         null,
+        null,
+        null,
         null);
 }
 
@@ -767,7 +769,9 @@ record AnalysisSummaryValue(
     object[] facts,
     object? terminal,
     long? interruptedAt,
-    string? interruptionReason);
+    string? interruptionReason,
+    object? readingModel,
+    object? validationRemovals);
 
 record AnalysisRepositoryValue(string repositoryId, string displayName, string canonicalPath, string head);
 

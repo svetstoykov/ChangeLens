@@ -16,6 +16,13 @@ namespace ChangeLens.Engine.AnalysisRuns.Models;
 /// <param name="Terminal">The terminal outcome, or <see langword="null" /> while the run is active.</param>
 /// <param name="InterruptedAt">The interruption timestamp, or <see langword="null" /> when the run was not interrupted.</param>
 /// <param name="InterruptionReason">The interruption reason, or <see langword="null" /> when the run was not interrupted.</param>
+/// <param name="ReadingModel">
+///     The stored published reading model of a completed run, or <see langword="null" /> when none is stored.
+/// </param>
+/// <param name="ValidationRemovals">
+///     The draft items mechanical validation removed, stored beside <paramref name="ReadingModel" />, or
+///     <see langword="null" /> when no reading model is stored.
+/// </param>
 internal sealed record AnalysisRunSummaryResult(
     string RunId,
     string State,
@@ -29,4 +36,6 @@ internal sealed record AnalysisRunSummaryResult(
     IReadOnlyList<AnalysisFactResult> Facts,
     AnalysisTerminalResult? Terminal,
     long? InterruptedAt,
-    string? InterruptionReason);
+    string? InterruptionReason,
+    ReadingModelResult? ReadingModel,
+    IReadOnlyList<ValidationRemovalResult>? ValidationRemovals);

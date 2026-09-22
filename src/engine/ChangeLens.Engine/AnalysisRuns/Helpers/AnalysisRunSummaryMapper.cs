@@ -10,10 +10,22 @@ namespace ChangeLens.Engine.AnalysisRuns.Helpers;
 /// </summary>
 internal static class AnalysisRunSummaryMapper
 {
-    /// <summary>Maps one Core detail to its protocol representation.</summary>
+    /// <summary>Maps one Core detail to its protocol representation with no reading model.</summary>
     /// <param name="detail">The analysis run detail to map. Cannot be <see langword="null" />.</param>
     /// <returns>The protocol summary, or an error when a Core value has no approved protocol representation.</returns>
-    internal static Result<Models.AnalysisRunSummaryResult> ToProtocol(AnalysisRunDetail detail)
+    internal static Result<Models.AnalysisRunSummaryResult> ToProtocol(AnalysisRunDetail detail) => ToProtocol(detail, null, null);
+
+    /// <summary>Maps one Core detail and its stored reading projection to their protocol representation.</summary>
+    /// <param name="detail">The analysis run detail to map. Cannot be <see langword="null" />.</param>
+    /// <param name="readingModel">The stored reading model, or <see langword="null" /> when none is stored.</param>
+    /// <param name="validationRemovals">
+    ///     The stored validation removals, or <see langword="null" /> when no reading model is stored.
+    /// </param>
+    /// <returns>The protocol summary, or an error when a Core value has no approved protocol representation.</returns>
+    internal static Result<Models.AnalysisRunSummaryResult> ToProtocol(
+        AnalysisRunDetail detail,
+        Models.ReadingModelResult? readingModel,
+        IReadOnlyList<Models.ValidationRemovalResult>? validationRemovals)
     {
         var stateResult = ToStateString(detail.State);
         if (stateResult.IsFailure)
@@ -49,7 +61,9 @@ internal static class AnalysisRunSummaryMapper
             BuildFacts(detail),
             terminalResult.Data,
             detail.InterruptedAtUnixMilliseconds,
-            detail.InterruptionReason);
+            detail.InterruptionReason,
+            readingModel,
+            validationRemovals);
     }
 
     private static IReadOnlyList<Models.AnalysisFactResult> BuildFacts(AnalysisRunDetail detail)
@@ -59,7 +73,7 @@ internal static class AnalysisRunSummaryMapper
             return [];
         }
 
-        var facts = new List<Models.AnalysisFactResult>(2)
+        var facts = new List<Models.AnalysisFactResult>(5)
         {
             new(AnalysisFactKind.ChangedFilesCaptured, detail.CapturedChangedFileCount.Value, null),
         };
@@ -68,6 +82,21 @@ internal static class AnalysisRunSummaryMapper
         if (counts is not null && counts.Total > 0)
         {
             facts.Add(new Models.AnalysisFactResult(AnalysisFactKind.ExcludedUncommittedFiles, counts.Total, DescribeExclusions(counts)));
+        }
+
+        if (detail.CorrespondenceCandidateCount is { } candidateCount)
+        {
+            facts.Add(new Models.AnalysisFactResult(AnalysisFactKind.CorrespondenceCandidates, candidateCount, null));
+        }
+
+        if (detail.DisclosedEvidenceNodeCount is { } disclosedCount)
+        {
+            facts.Add(new Models.AnalysisFactResult(AnalysisFactKind.DisclosedEvidenceNodes, disclosedCount, null));
+        }
+
+        if (detail.ValidationRemovalCount is { } removalCount)
+        {
+            facts.Add(new Models.AnalysisFactResult(AnalysisFactKind.ValidationRemovals, removalCount, null));
         }
 
         return facts;

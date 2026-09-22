@@ -10,4 +10,10 @@ internal static class AnalysisProtocolErrorCode
 
     /// <summary>Identifies a terminal kind that has no approved protocol representation.</summary>
     internal const string UnmappedTerminalKind = "analysis.unmappedTerminalKind";
+
+    /// <summary>Identifies a reading-model or removal value that has no approved protocol representation.</summary>
+    internal const string UnmappedReadingModel = "analysis.unmappedReadingModel";
+
+    /// <summary>Identifies a stored reading projection of a completed run that is not readable protocol JSON.</summary>
+    internal const string UnreadableReadingModel = "analysis.unreadableReadingModel";
 }

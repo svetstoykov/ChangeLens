@@ -24,9 +24,7 @@ export function useAnalysisRun(
   client: AnalysisClient,
   runId: string | null,
 ): UseAnalysisRunResult {
-  const [summary, setSummary] = useState<AnalysisRunSummary | null>(
-    null,
-  );
+  const [summary, setSummary] = useState<AnalysisRunSummary | null>(null);
   const [error, setError] = useState<ActionError | null>(null);
   const pollNowRef = useRef<(() => void) | null>(null);
 

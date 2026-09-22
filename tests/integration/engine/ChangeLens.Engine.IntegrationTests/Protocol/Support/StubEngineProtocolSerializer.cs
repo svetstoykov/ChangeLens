@@ -45,4 +45,12 @@ internal sealed class StubEngineProtocolSerializer(object deserializedParameters
     /// </exception>
     public Result<int> GetSerializedUtf8ByteCount(ProtocolResponse response) =>
         throw new NotSupportedException("The controlled protocol serializer does not measure responses.");
+
+    public Result<string> SerializeDocument<TDocument>(TDocument document)
+        where TDocument : class =>
+        throw new NotSupportedException("The controlled protocol serializer does not serialize documents.");
+
+    public Result<TDocument> DeserializeDocument<TDocument>(string json, OperationError unreadable)
+        where TDocument : class =>
+        throw new NotSupportedException("The controlled protocol serializer does not deserialize documents.");
 }

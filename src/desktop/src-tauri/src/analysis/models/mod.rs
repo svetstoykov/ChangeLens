@@ -5,12 +5,31 @@ mod analysis_get_active_parameters;
 mod analysis_get_active_result;
 mod analysis_poll_run_parameters;
 mod analysis_repository;
-mod analysis_run_summary;
 mod analysis_run_state;
+mod analysis_run_summary;
 mod analysis_start_parameters;
 mod analysis_start_result;
 mod analysis_terminal;
+mod reading_area;
+mod reading_assurance;
+mod reading_assurance_kind;
+mod reading_citation;
+mod reading_evidence;
+mod reading_focus_range;
+mod reading_limitation;
+mod reading_limitation_kind;
+mod reading_model;
+mod reading_omission_source_kind;
+mod reading_omission_summary;
+mod reading_participant;
+mod reading_relationship;
+mod reading_shape;
+mod reading_side;
+mod reading_statement;
+mod reading_trust;
 mod validation;
+mod validation_removal;
+mod validation_removal_scope;
 
 pub(crate) use analysis_cancel_parameters::AnalysisCancelParameters;
 pub use analysis_comparison::AnalysisComparison;
@@ -19,16 +38,36 @@ pub(crate) use analysis_get_active_parameters::AnalysisGetActiveParameters;
 pub use analysis_get_active_result::AnalysisGetActiveResult;
 pub(crate) use analysis_poll_run_parameters::AnalysisPollRunParameters;
 pub use analysis_repository::AnalysisRepository;
-pub use analysis_run_summary::AnalysisRunSummary;
 pub use analysis_run_state::AnalysisRunState;
+pub use analysis_run_summary::AnalysisRunSummary;
 pub(crate) use analysis_start_parameters::AnalysisStartParameters;
 pub use analysis_start_result::AnalysisStartResult;
 pub use analysis_terminal::AnalysisTerminal;
+pub use reading_area::ReadingArea;
+pub use reading_assurance::ReadingAssurance;
+pub use reading_assurance_kind::ReadingAssuranceKind;
+pub use reading_citation::ReadingCitation;
+pub use reading_evidence::ReadingEvidence;
+pub use reading_focus_range::ReadingFocusRange;
+pub use reading_limitation::ReadingLimitation;
+pub use reading_limitation_kind::ReadingLimitationKind;
+pub use reading_model::ReadingModel;
+pub use reading_omission_source_kind::ReadingOmissionSourceKind;
+pub use reading_omission_summary::ReadingOmissionSummary;
+pub use reading_participant::ReadingParticipant;
+pub use reading_relationship::ReadingRelationship;
+pub use reading_shape::ReadingShape;
+pub use reading_side::ReadingSide;
+pub use reading_statement::ReadingStatement;
+pub use reading_trust::ReadingTrust;
+pub use validation_removal::ValidationRemoval;
+pub use validation_removal_scope::ValidationRemovalScope;
 
 #[cfg(test)]
 mod tests {
     use super::{
-        AnalysisGetActiveResult, AnalysisRunSummary, AnalysisRunState, AnalysisStartResult,
+        AnalysisGetActiveResult, AnalysisRunState, AnalysisRunSummary, AnalysisStartResult,
+        ReadingLimitationKind, ValidationRemovalScope,
     };
 
     const ACCEPTED_FIXTURE: &str = include_str!(concat!(
@@ -70,6 +109,10 @@ mod tests {
     const COMPLETED_WITH_LIMITATIONS_FIXTURE: &str = include_str!(concat!(
         env!("CARGO_MANIFEST_DIR"),
         "/../../../contracts/engine-protocol/v1/fixtures/analysis-poll-run.completed-with-limitations.result.json"
+    ));
+    const COMPLETED_WITH_READING_MODEL_FIXTURE: &str = include_str!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../../contracts/engine-protocol/v1/fixtures/analysis-poll-run.completed-with-reading-model.result.json"
     ));
     const CANCELLED_FIXTURE: &str = include_str!(concat!(
         env!("CARGO_MANIFEST_DIR"),
@@ -146,6 +189,10 @@ mod tests {
             get_active_active,
             AnalysisGetActiveResult::Active { .. }
         ));
+        if let AnalysisGetActiveResult::Active { run } = &get_active_active {
+            assert!(run.reading_model.is_none());
+            assert!(run.validation_removals.is_none());
+        }
         assert_eq!(
             captured.snapshot_id.as_deref(),
             Some("7198a1b2-3c4d-4e5f-8a9b-0123456789ab")
@@ -154,6 +201,102 @@ mod tests {
         assert_eq!(captured.facts.len(), 2);
         assert_eq!(captured.facts[0].kind, "changedFilesCaptured");
         assert_eq!(captured.facts[1].count, 3);
+    }
+
+    #[test]
+    fn deserializes_completed_fixture_with_a_populated_reading_model() {
+        let summary: AnalysisRunSummary = result_from_fixture(COMPLETED_WITH_READING_MODEL_FIXTURE);
+        let reading_model = summary
+            .reading_model
+            .as_ref()
+            .expect("the fixture must carry a reading model");
+
+        let citation = reading_model
+            .citations
+            .first()
+            .expect("the reading model must carry a citation");
+        assert_eq!(citation.focus.len(), 2);
+        assert_eq!(
+            (citation.focus[0].start_line, citation.focus[0].end_line),
+            (12, 12)
+        );
+        assert_eq!(
+            (citation.focus[1].start_line, citation.focus[1].end_line),
+            (16, 17)
+        );
+
+        assert_eq!(reading_model.omission_summaries.len(), 1);
+        let omission = &reading_model.omission_summaries[0];
+        assert_eq!(
+            (
+                omission.total_count,
+                omission.sample_count,
+                omission.resolved_sample_count
+            ),
+            (1, 1, 1)
+        );
+
+        assert!(
+            reading_model
+                .limitations
+                .iter()
+                .any(|limitation| limitation.path.as_deref() == Some("assets/blob.bin"))
+        );
+        assert!(reading_model.limitations.iter().any(|limitation| {
+            limitation.kind == ReadingLimitationKind::UncommittedWorkExcluded
+                && limitation.path.is_none()
+        }));
+
+        let removals = summary
+            .validation_removals
+            .as_ref()
+            .expect("the fixture must carry validation removals");
+        assert_eq!(removals.len(), 1);
+        assert_eq!(removals[0].scope, ValidationRemovalScope::Statement);
+        assert_eq!(removals[0].id, "thesis");
+    }
+
+    #[test]
+    fn null_reading_model_fixtures_deserialize_without_a_reading_model() {
+        for fixture in [
+            PENDING_CAPTURE_FIXTURE,
+            CAPTURING_FIXTURE,
+            DISCOVERING_FIXTURE,
+            COLLECTING_FIXTURE,
+            PERSISTING_FIXTURE,
+            COMPLETED_FIXTURE,
+            COMPLETED_WITH_LIMITATIONS_FIXTURE,
+            CANCELLED_FIXTURE,
+            FAILED_FIXTURE,
+            INTERRUPTED_FIXTURE,
+            CAPTURED_FIXTURE,
+        ] {
+            let summary: AnalysisRunSummary = result_from_fixture(fixture);
+
+            assert!(summary.reading_model.is_none());
+            assert!(summary.validation_removals.is_none());
+        }
+    }
+
+    #[test]
+    fn rejects_unknown_reading_area_shape_rather_than_defaulting() {
+        let mut value = fixture_result(COMPLETED_WITH_READING_MODEL_FIXTURE);
+        value["readingModel"]["areas"][0]["shape"] = serde_json::json!("spiral");
+
+        serde_json::from_value::<AnalysisRunSummary>(value)
+            .expect_err("an unknown reading area shape must be rejected, not defaulted");
+    }
+
+    #[test]
+    fn rejects_poll_result_missing_the_required_reading_model_key() {
+        let mut value = fixture_result(COMPLETED_FIXTURE);
+        value
+            .as_object_mut()
+            .expect("the poll result must be an object")
+            .remove("readingModel");
+
+        serde_json::from_value::<AnalysisRunSummary>(value)
+            .expect_err("a missing required readingModel key must be rejected");
     }
 
     #[test]

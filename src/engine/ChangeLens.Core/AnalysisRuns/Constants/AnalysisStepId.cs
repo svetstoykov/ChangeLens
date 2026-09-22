@@ -1,17 +1,17 @@
 namespace ChangeLens.Core.AnalysisRuns.Constants;
 
 /// <summary>
-///     Provides the stable step identifiers for the gate 2.1 shallow production plan.
+///     Provides the stable step identifiers for the analysis pipeline plan.
 /// </summary>
 public static class AnalysisStepId
 {
-    /// <summary>The lifecycle step that validates the durable accepted run context.</summary>
+    /// <summary>The step that captures and commits the frozen snapshot manifest.</summary>
     public const string Capture = "analysis.lifecycle.capture";
 
-    /// <summary>The lifecycle step that validates the fixed skeleton plan.</summary>
+    /// <summary>The step that analyzes, ranks, graphs, discloses, and binds the frozen evidence.</summary>
     public const string Discover = "analysis.lifecycle.discover";
 
-    /// <summary>The lifecycle step that completes an empty evidence pass.</summary>
+    /// <summary>The step that curates, validates, and publishes one reading model.</summary>
     public const string Collect = "analysis.lifecycle.collect";
 
     /// <summary>The lifecycle step that derives the terminal summary.</summary>

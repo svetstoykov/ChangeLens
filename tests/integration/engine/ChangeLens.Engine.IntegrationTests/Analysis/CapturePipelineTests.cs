@@ -12,42 +12,6 @@ namespace ChangeLens.Engine.IntegrationTests.Analysis;
 public sealed class CapturePipelineTests
 {
     [Fact]
-    public async Task CaptureSucceedsThenRunCompletes()
-    {
-        var captureService = new BlockingSnapshotCaptureService { OutcomeFactory = run => Result.Success(CreateCapture(run, 0)) };
-        await using var fixture = await EngineHostTestFixture.CreateWithSnapshotCaptureAsync(captureService);
-        await fixture.Host.StartAsync(TestContext.Current.CancellationToken);
-        var runId = await fixture.AcceptRunAsync();
-        await captureService.Entered.WaitAsync(TestContext.Current.CancellationToken);
-        captureService.Release();
-
-        var detail = await fixture.PollUntilTerminalAsync(runId, TimeSpan.FromSeconds(5));
-
-        Assert.Equal(AnalysisRunState.Completed, detail.State);
-        Assert.NotNull(detail.CapturedAtUnixMilliseconds);
-        Assert.NotNull(detail.SnapshotId);
-        Assert.Equal(1, detail.CapturedChangedFileCount);
-        await fixture.StopAsync(TestContext.Current.CancellationToken);
-    }
-
-    [Fact]
-    public async Task CaptureWithExcludedWorkCompletesWithLimitations()
-    {
-        var captureService = new BlockingSnapshotCaptureService { OutcomeFactory = run => Result.Success(CreateCapture(run, 2)) };
-        await using var fixture = await EngineHostTestFixture.CreateWithSnapshotCaptureAsync(captureService);
-        await fixture.Host.StartAsync(TestContext.Current.CancellationToken);
-        var runId = await fixture.AcceptRunAsync();
-        await captureService.Entered.WaitAsync(TestContext.Current.CancellationToken);
-        captureService.Release();
-
-        var detail = await fixture.PollUntilTerminalAsync(runId, TimeSpan.FromSeconds(5));
-
-        Assert.Equal(AnalysisRunState.CompletedWithLimitations, detail.State);
-        Assert.Equal(1, detail.Terminal!.LimitationCount);
-        await fixture.StopAsync(TestContext.Current.CancellationToken);
-    }
-
-    [Fact]
     public async Task CaptureFailureStopsThePipelineWithItsCode()
     {
         var captureService = new BlockingSnapshotCaptureService

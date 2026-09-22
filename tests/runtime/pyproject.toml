@@ -5,6 +5,9 @@ description = "Runtime review tool that drives the ChangeLens engine over its pr
 requires-python = ">=3.12"
 dependencies = ["pyyaml>=6.0.2"]
 
+[project.scripts]
+review = "changelens_review.cli:main"
+
 [dependency-groups]
 dev = ["pytest>=8.3", "ruff>=0.6"]
 

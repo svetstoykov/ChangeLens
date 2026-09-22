@@ -67,6 +67,30 @@ public sealed class AnalysisGetActiveHandlerTests
         Assert.Equal("analysis.repositoryUnavailable", Assert.Single(Assert.IsType<ProtocolErrorResponse>(response).Errors).Code);
     }
 
+    /// <summary>
+    ///     Asynchronously verifies an in-flight active run carries no reading model or validation removals.
+    /// </summary>
+    /// <returns>A task that represents the asynchronous operation.</returns>
+    [Fact]
+    public async Task InFlightActiveRunMapsNullReadingProjection()
+    {
+        var detail = CreateDetail() with
+        {
+            State = AnalysisRunState.Collecting,
+            Terminal = null,
+        };
+        var handler = new AnalysisGetActiveHandler(
+            new StubAnalysisRunCoordinator(getActive: (_, _) => Task.FromResult<Result<AnalysisRunDetail?>>(detail)),
+            new StubEngineProtocolSerializer(new AnalysisGetActiveParameters { Path = "/repo" }));
+
+        var response = await handler.HandleAsync(CreateRequest(), TestContext.Current.CancellationToken);
+
+        var active = Assert.IsType<ActiveAnalysisGetActiveResult>(
+            Assert.IsType<ProtocolResultResponse<AnalysisGetActiveResult>>(response).Result);
+        Assert.Null(active.Run.ReadingModel);
+        Assert.Null(active.Run.ValidationRemovals);
+    }
+
     private static AnalysisRunDetail CreateDetail() => new(
         Guid.Parse("0198a1b2-3c4d-4e5f-8a9b-0123456789ab"),
         AnalysisRunState.CompletedWithLimitations,

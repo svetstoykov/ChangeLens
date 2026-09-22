@@ -1,8 +1,13 @@
 using System.Diagnostics;
 using System.Text;
 using System.Text.Json;
+using ChangeLens.Core.AnalysisRuns.Constants;
+using ChangeLens.Core.Results.Models;
+using ChangeLens.Engine.AnalysisRuns.Models;
 using ChangeLens.Engine.IntegrationTests.Protocol.Support;
 using ChangeLens.Engine.IntegrationTests.Support;
+using ChangeLens.Engine.Protocol.Helpers;
+using ChangeLens.Engine.Protocol.Services;
 using Xunit;
 
 namespace ChangeLens.Engine.IntegrationTests.Protocol;
@@ -113,6 +118,42 @@ public sealed class AnalysisCapacityProtocolTests
                 return true;
             }
         }
+    }
+
+    /// <summary>
+    ///     Verifies a maximum fact-bounded summary stays at or below the poll-summary budget with the real serializer.
+    /// </summary>
+    [Fact]
+    public void FactBoundedSummaryStaysAtOrBelowPollSummaryBudget()
+    {
+        var summary = new AnalysisRunSummaryResult(
+            "0198a1b2-3c4d-4e5f-8a9b-0123456789ab",
+            "completed",
+            new AnalysisRepositoryResult(
+                "5298a1b2-3c4d-4e5f-8a9b-0123456789ab",
+                "repo",
+                "/repo",
+                new string('0', 40)),
+            new AnalysisComparisonResult("refs/heads/main", new string('1', 40), new string('2', 64)),
+            1,
+            null,
+            null,
+            null,
+            false,
+            [.. Enumerable.Range(0, 32).Select(index => new AnalysisFactResult(new string('k', 64), index, new string('d', 512)))],
+            null,
+            null,
+            null,
+            null,
+            null);
+        var response = ProtocolResponseFactory.FromResult("capacity-summary", Result.Success(summary));
+
+        var byteCount = new EngineProtocolSerializer().GetSerializedUtf8ByteCount(response);
+
+        Assert.True(byteCount.IsSuccess);
+        Assert.True(
+            byteCount.Data <= AnalysisRunLimits.PollSummaryMaxBytes,
+            $"Expected at or below {AnalysisRunLimits.PollSummaryMaxBytes} bytes but the response was {byteCount.Data} bytes.");
     }
 
     /// <summary>Asynchronously samples the Engine working set until sampling stops or the Engine exits.</summary>

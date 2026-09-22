@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using ChangeLens.Engine.IntegrationTests.Support;
 using Json.Schema;
 using Xunit;
@@ -207,6 +208,9 @@ public sealed class EngineProtocolContractTests
     [InlineData("analysis-start.schema.json", "analysis-start.accepted.result.json")]
     [InlineData("analysis-poll-run.schema.json", "analysis-poll-run.completed.result.json")]
     [InlineData("analysis-poll-run.schema.json", "analysis-poll-run.captured.result.json")]
+    [InlineData(
+        "analysis-poll-run.schema.json",
+        "analysis-poll-run.completed-with-reading-model.result.json")]
     [InlineData("analysis-get-active.schema.json", "analysis-get-active.active.result.json")]
     [InlineData("analysis-cancel.schema.json", "analysis-cancel.result.json")]
     public void SharedFixtureMatchesSchema(string schemaFileName, string fixtureFileName)
@@ -232,6 +236,25 @@ public sealed class EngineProtocolContractTests
         var result = Schemas["analysis-poll-run.schema.json"].Evaluate(instance.RootElement);
 
         Assert.False(result.IsValid);
+    }
+
+    /// <summary>
+    ///     Verifies the poll-result schema rejects an unapproved area shape and a missing reading model.
+    /// </summary>
+    [Fact]
+    public void PollResultSchemaRejectsUnapprovedShapeAndMissingReadingModel()
+    {
+        var fixture = File.ReadAllText(FixturePath("analysis-poll-run.completed-with-reading-model.result.json"));
+        var unapprovedShape = fixture.Replace("\"shape\":\"walk\"", "\"shape\":\"spiral\"", StringComparison.Ordinal);
+        using var shapeInstance = JsonDocument.Parse(unapprovedShape);
+
+        Assert.False(Schemas["analysis-poll-run.schema.json"].Evaluate(shapeInstance.RootElement).IsValid);
+
+        var withoutReadingModel = JsonNode.Parse(fixture)!;
+        withoutReadingModel["result"]!.AsObject().Remove("readingModel");
+        using var missingInstance = JsonDocument.Parse(withoutReadingModel.ToJsonString());
+
+        Assert.False(Schemas["analysis-poll-run.schema.json"].Evaluate(missingInstance.RootElement).IsValid);
     }
 
     /// <summary>

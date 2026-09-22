@@ -9,7 +9,7 @@ pub(crate) use commands::{
 };
 pub use interfaces::AnalysisService;
 pub use models::{
-    AnalysisComparison, AnalysisGetActiveResult, AnalysisRepository, AnalysisRunSummary,
-    AnalysisRunState, AnalysisStartResult,
+    AnalysisComparison, AnalysisGetActiveResult, AnalysisRepository, AnalysisRunState,
+    AnalysisRunSummary, AnalysisStartResult,
 };
 pub use services::AnalysisState;

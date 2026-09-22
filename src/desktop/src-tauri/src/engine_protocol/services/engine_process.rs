@@ -10,7 +10,7 @@ use std::sync::mpsc::{Receiver, RecvTimeoutError, SyncSender, sync_channel};
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 
-const MAX_RESPONSE_BYTES: usize = 64 * 1024;
+const MAX_RESPONSE_BYTES: usize = 2 * 1024 * 1024;
 
 pub(crate) struct EngineProcess {
     child: Child,
@@ -263,7 +263,7 @@ fn read_bounded_line(reader: &mut impl BufRead) -> Result<Option<String>, Engine
             None,
             "engine.responseTooLarge",
             OperationErrorType::ExternalDependencyFailure,
-            "The engine response exceeds the 65536-byte limit.",
+            format!("The engine response exceeds the {MAX_RESPONSE_BYTES}-byte limit."),
         ));
     }
 
@@ -278,7 +278,7 @@ fn read_bounded_line(reader: &mut impl BufRead) -> Result<Option<String>, Engine
 
 #[cfg(test)]
 mod tests {
-    use super::{read_bounded_line, serialize_request, write_request};
+    use super::{MAX_RESPONSE_BYTES, read_bounded_line, serialize_request, write_request};
     use serde::Serialize;
     use serde::ser::Error as _;
     use std::io::{self, BufRead, Cursor, Read, Write};
@@ -324,17 +324,17 @@ mod tests {
 
     #[test]
     fn accepts_response_at_size_limit() {
-        let response = vec![b'a'; 64 * 1024];
+        let response = vec![b'a'; MAX_RESPONSE_BYTES];
         let line = read_bounded_line(&mut Cursor::new(response))
             .expect("the response at the limit must be readable")
             .expect("the response must contain one line");
 
-        assert_eq!(line.len(), 64 * 1024);
+        assert_eq!(line.len(), MAX_RESPONSE_BYTES);
     }
 
     #[test]
     fn rejects_response_over_size_limit() {
-        let response = vec![b'a'; 64 * 1024 + 1];
+        let response = vec![b'a'; MAX_RESPONSE_BYTES + 1];
         let error = read_bounded_line(&mut Cursor::new(response))
             .expect_err("the response over the limit must fail");
 

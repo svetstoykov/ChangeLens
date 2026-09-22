@@ -1,6 +1,7 @@
 """Command-line entry point: review check | run | clean."""
 
 import argparse
+import json
 import sys
 from collections.abc import Sequence
 
@@ -8,8 +9,11 @@ from changelens_review import __version__
 from changelens_review.errors import SpecError
 from changelens_review.plans.model import Plan
 from changelens_review.plans.parser import load_plan
+from changelens_review.plans.runner import run_plan
+from changelens_review.results.store import clean_runs
 
 EXIT_INVALID_PLAN = 2
+DETAIL_INDENT = " " * 9
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -19,8 +23,19 @@ def main(argv: Sequence[str] | None = None) -> int:
     commands = parser.add_subparsers(dest="command", required=True)
     check = commands.add_parser("check", help="validate a plan without running it")
     check.add_argument("plan", help="plan path or plan id in docs/evaluation/review-plans/")
+    run = commands.add_parser("run", help="validate, then run a plan against a fresh engine build")
+    run.add_argument("plan", help="plan path or plan id in docs/evaluation/review-plans/")
+    run.add_argument("--keep", action="store_true", help="keep heavy output (fixtures, databases, build)")
+    clean = commands.add_parser("clean", help="delete heavy output of stored runs")
+    clean.add_argument("--all", action="store_true", help="delete whole run folders instead")
     arguments = parser.parse_args(argv)
-    return _check(arguments.plan)
+    match arguments.command:
+        case "check":
+            return _check(arguments.plan)
+        case "run":
+            return _run(arguments.plan, arguments.keep)
+        case _:
+            return _clean(arguments.all)
 
 
 def _load(reference: str) -> Plan | None:
@@ -37,6 +52,34 @@ def _check(reference: str) -> int:
     if plan is None:
         return EXIT_INVALID_PLAN
     print(f"plan {plan.id} is valid: {len(plan.cases)} case(s)")
+    return 0
+
+
+def _run(reference: str, keep: bool) -> int:
+    plan = _load(reference)
+    if plan is None:
+        return EXIT_INVALID_PLAN
+    summary = run_plan(plan, keep=keep)
+    for case in summary.cases:
+        print(f"{case.status:<8} {case.case_id}")
+        if case.reason:
+            print(f"{DETAIL_INDENT}{case.reason}")
+        if case.interruption:
+            print(f"{DETAIL_INDENT}interrupted: {case.interruption}")
+        for result in case.expectations:
+            if not result.passed:
+                print(
+                    f"{DETAIL_INDENT}{result.name}: expected {json.dumps(result.expected)}, "
+                    f"actual {json.dumps(result.actual)}"
+                )
+    print(" ".join(f"{status}={count}" for status, count in summary.counts.items()))
+    print(f"run folder: {summary.folder}")
+    return summary.exit_code
+
+
+def _clean(remove_runs: bool) -> int:
+    for path in clean_runs(remove_runs=remove_runs):
+        print(f"removed {path}")
     return 0
 
 

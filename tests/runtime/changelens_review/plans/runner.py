@@ -8,8 +8,8 @@ from changelens_review.engine.build import EngineBuild, build_engine
 from changelens_review.engine.environment import engine_environment
 from changelens_review.engine.session import EngineSession
 from changelens_review.errors import CaseInterrupted, HarnessError, SpecError
-from changelens_review.fixtures.builder import build_fixture
-from changelens_review.fixtures.oracle import compute_oracle, snapshot_repository
+from changelens_review.fixtures.builder import BuiltFixture, build_fixture
+from changelens_review.fixtures.oracle import Oracle, compute_oracle, snapshot_repository
 from changelens_review.jsonio import write_json
 from changelens_review.jsontypes import JsonValue
 from changelens_review.paths import RUNS_ROOT
@@ -19,7 +19,7 @@ from changelens_review.plans.model import Case, Plan
 from changelens_review.plans.state_snapshot import DatabaseSnapshot, read_state
 from changelens_review.plans.steps import CaseState, StepExecutor
 from changelens_review.provider.proxy import ProviderProxy, ScriptedResponder
-from changelens_review.provider.scripts import load_script
+from changelens_review.provider.scripts import ProviderScript, load_script
 from changelens_review.results.store import CaseResult, RunStore, RunSummary
 
 ENGINE_LOG = "engine.log"
@@ -46,7 +46,12 @@ def run_plan(plan: Plan, *, keep: bool = False, runs_root: Path = RUNS_ROOT) -> 
 
 
 def run_case(case: Case, build: EngineBuild, store: RunStore) -> CaseResult:
-    """Run one case in isolation and evaluate its expectations."""
+    """Run one case in isolation and evaluate its expectations.
+
+    Everything from fixture and oracle setup onward runs inside an outer harness-fault
+    boundary: any `HarnessError` or `OSError` that escapes the proxy, the engine session, or
+    directory setup marks this one case `error` instead of aborting the whole run.
+    """
     started_at = utc_now_iso()
     if case.skip is not None:
         return CaseResult(case.id, "skipped", reason=case.skip, started_at=started_at, finished_at=started_at)
@@ -62,6 +67,29 @@ def run_case(case: Case, build: EngineBuild, store: RunStore) -> CaseResult:
             case.id, "error", reason=f"case setup failed: {error}", started_at=started_at, finished_at=utc_now_iso()
         )
     write_json(folder / "oracle.json", oracle.to_json())
+    try:
+        return _run_case_session(case, build, folder, heavy, fixture, oracle, script, started_at)
+    except (HarnessError, OSError) as error:
+        return CaseResult(
+            case.id,
+            "error",
+            reason=f"case failed unexpectedly: {error}",
+            started_at=started_at,
+            finished_at=utc_now_iso(),
+        )
+
+
+def _run_case_session(
+    case: Case,
+    build: EngineBuild,
+    folder: Path,
+    heavy: Path,
+    fixture: BuiltFixture,
+    oracle: Oracle,
+    script: ProviderScript,
+    started_at: str,
+) -> CaseResult:
+    """Start the isolated proxy and engine, execute the case's steps, and evaluate it."""
     state_directory = heavy / "state"
     log_directory = heavy / "logs"
     state_directory.mkdir(parents=True)
@@ -129,21 +157,29 @@ def run_case(case: Case, build: EngineBuild, store: RunStore) -> CaseResult:
 def _execute_steps(
     case: Case, build: EngineBuild, state: CaseState, provider_base_url: str, folder: Path, heavy: Path
 ) -> tuple[str | None, str | None]:
-    """Run the steps in an owned engine session; return (interruption, harness failure)."""
-    session = EngineSession(
-        command=["dotnet", str(build.dll_path)],
-        environment=engine_environment(
-            os.environ,
-            state_directory=heavy / "state",
-            log_directory=heavy / "logs",
-            provider_base_url=provider_base_url,
-            overrides=case.config,
-        ),
-        working_directory=build.dll_path.parent,
-        transcript_path=folder / PROTOCOL_TRANSCRIPT,
-        stderr_path=folder / ENGINE_LOG,
-        protocol_deadline=case.deadlines.protocol_seconds,
-    )
+    """Run the steps in an owned engine session; return (interruption, harness failure).
+
+    Building the isolated environment can itself fail (for example a reserved-key override
+    that slipped past plan validation); that failure is reported as a harness failure for
+    this case rather than left to escape before the session exists.
+    """
+    try:
+        session = EngineSession(
+            command=["dotnet", str(build.dll_path)],
+            environment=engine_environment(
+                os.environ,
+                state_directory=heavy / "state",
+                log_directory=heavy / "logs",
+                provider_base_url=provider_base_url,
+                overrides=case.config,
+            ),
+            working_directory=build.dll_path.parent,
+            transcript_path=folder / PROTOCOL_TRANSCRIPT,
+            stderr_path=folder / ENGINE_LOG,
+            protocol_deadline=case.deadlines.protocol_seconds,
+        )
+    except HarnessError as error:
+        return None, str(error)
     try:
         session.start()
         executor = StepExecutor(session, state, case.deadlines)

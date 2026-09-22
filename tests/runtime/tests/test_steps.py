@@ -7,9 +7,10 @@ import pytest
 from changelens_review.engine.session import EngineSession
 from changelens_review.errors import CaseInterrupted
 from changelens_review.plans.model import Deadlines, Step
-from changelens_review.plans.steps import CaseState, StepExecutor, substitute
+from changelens_review.plans.steps import CaseState, RunDeadlineExceeded, StepExecutor, substitute
 
 FAKE_ENGINE = Path(__file__).parent / "fakes" / "fake_engine.py"
+STUCK_ENGINE = Path(__file__).parent / "fakes" / "fake_engine_stuck.py"
 
 
 def run_steps(tmp_path: Path, *steps: Step) -> CaseState:
@@ -67,3 +68,24 @@ def test_protocol_errors_are_collected(tmp_path: Path) -> None:
 def test_analyze_without_a_prepared_comparison_interrupts(tmp_path: Path) -> None:
     with pytest.raises(CaseInterrupted, match="prepare step did not succeed"):
         run_steps(tmp_path, Step("analyze", "steps[0]", await_mode="terminal"))
+
+
+def test_run_deadline_exceeded_when_analysis_never_reaches_terminal(tmp_path: Path) -> None:
+    session = EngineSession(
+        command=[sys.executable, str(STUCK_ENGINE)],
+        environment=dict(os.environ),
+        working_directory=tmp_path,
+        transcript_path=tmp_path / "protocol.ndjson",
+        stderr_path=tmp_path / "engine.log",
+        protocol_deadline=2.0,
+    )
+    state = CaseState(repository=tmp_path, fixture_target="main", snapshot_before={})
+    session.start()
+    try:
+        executor = StepExecutor(session, state, Deadlines(protocol_seconds=2.0, run_seconds=0.2))
+        executor.execute(Step("prepare", "steps[0]"))
+        with pytest.raises(CaseInterrupted) as excinfo:
+            executor.execute(Step("analyze", "steps[1]", await_mode="terminal"))
+    finally:
+        session.stop()
+    assert isinstance(excinfo.value, RunDeadlineExceeded)

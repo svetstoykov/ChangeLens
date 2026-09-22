@@ -445,7 +445,7 @@ internal static class EngineHostApplicationBuilderExtensions
         builder.Services.AddScoped<ICuratorService, CuratorService>();
         builder.Services.AddScoped<IDraftValidationService, DraftValidationService>();
         builder.Services.AddScoped<ISnapshotCaptureService, GitSnapshotCaptureService>();
-        builder.Services.AddScoped<IAnalysisPipeline, ShallowAnalysisPipeline>();
+        builder.Services.AddScoped<IAnalysisPipeline, AnalysisPipeline>();
         builder.Services.AddScoped<IAnalysisRunCoordinator, AnalysisRunCoordinator>();
         builder.Services.AddScoped<IRepositoryBusyGuard, RepositoryBusyGuard>();
         builder.Services.AddHostedService<AnalysisProcessorHost>();

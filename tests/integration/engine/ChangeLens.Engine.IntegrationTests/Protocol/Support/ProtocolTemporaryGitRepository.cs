@@ -41,8 +41,56 @@ internal sealed class ProtocolTemporaryGitRepository : IDisposable
         this.RunGit(["-C", this.Path, "branch", "--force", "analysis-target", "HEAD"]);
     }
 
+    /// <summary>Commits one file at HEAD without moving the comparison target.</summary>
+    /// <param name="relativePath">The repository-relative file path.</param>
+    /// <param name="content">The file content.</param>
+    public void CommitFileAtHead(string relativePath, string content)
+    {
+        this.WriteTextFile(relativePath, content);
+        this.RunGit(["-C", this.Path, "add", "--", relativePath]);
+        this.RunGit(["-C", this.Path, "commit", "--quiet", "--no-gpg-sign", "-m", "protocol fixture"]);
+    }
+
+    /// <summary>Commits a binary file at HEAD without moving the comparison target.</summary>
+    /// <param name="relativePath">The repository-relative file path.</param>
+    /// <param name="content">The raw file bytes.</param>
+    public void CommitBinaryFileAtHead(string relativePath, byte[] content)
+    {
+        var filePath = this.Resolve(relativePath);
+        Directory.CreateDirectory(System.IO.Path.GetDirectoryName(filePath)!);
+        File.WriteAllBytes(filePath, content);
+        this.RunGit(["-C", this.Path, "add", "--", relativePath]);
+        this.RunGit(["-C", this.Path, "commit", "--quiet", "--no-gpg-sign", "-m", "protocol fixture"]);
+    }
+
+    /// <summary>Renames one tracked file and commits the rename at HEAD without moving the comparison target.</summary>
+    /// <param name="fromRelativePath">The existing repository-relative file path.</param>
+    /// <param name="toRelativePath">The new repository-relative file path.</param>
+    public void CommitRenameAtHead(string fromRelativePath, string toRelativePath)
+    {
+        this.RunGit(["-C", this.Path, "mv", "--", fromRelativePath, toRelativePath]);
+        this.RunGit(["-C", this.Path, "commit", "--quiet", "--no-gpg-sign", "-m", "protocol fixture"]);
+    }
+
+    /// <summary>Writes a text file without staging or committing it.</summary>
+    /// <param name="relativePath">The repository-relative file path.</param>
+    /// <param name="content">The file content.</param>
+    public void WriteTextFile(string relativePath, string content)
+    {
+        var filePath = this.Resolve(relativePath);
+        Directory.CreateDirectory(System.IO.Path.GetDirectoryName(filePath)!);
+        File.WriteAllText(filePath, content);
+    }
+
     /// <inheritdoc />
     public void Dispose() => this._directory.Dispose();
+
+    private string Resolve(string relativePath)
+    {
+        var filePath = System.IO.Path.GetFullPath(System.IO.Path.Combine(this.Path, relativePath));
+        Assert.StartsWith(this.Path + System.IO.Path.DirectorySeparatorChar, filePath, StringComparison.Ordinal);
+        return filePath;
+    }
 
     private void RunGit(IReadOnlyList<string> arguments)
     {

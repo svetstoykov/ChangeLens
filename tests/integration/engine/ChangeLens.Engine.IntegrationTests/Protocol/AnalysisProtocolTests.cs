@@ -10,10 +10,10 @@ namespace ChangeLens.Engine.IntegrationTests.Protocol;
 /// </summary>
 public sealed class AnalysisProtocolTests
 {
-    /// <summary>Asynchronously verifies an accepted run can be observed through terminal completion.</summary>
+    /// <summary>Asynchronously verifies an accepted run ends failed without a configured model provider.</summary>
     /// <returns>A task that represents the asynchronous operation.</returns>
     [Fact]
-    public async Task StartPollAndObserveTerminalCompletionThroughTheRealHost()
+    public async Task StartPollAndObserveTerminalFailureWithoutAConfiguredModelProvider()
     {
         using var repository = new ProtocolTemporaryGitRepository();
         repository.CommitFile("a.txt", "content");
@@ -40,8 +40,16 @@ public sealed class AnalysisProtocolTests
         using var terminal = await engine.PollUntilTerminalAsync(runId, TimeSpan.FromSeconds(10));
 
         var terminalResult = terminal.RootElement.GetProperty("result");
-        Assert.Equal("completed", terminalResult.GetProperty("state").GetString());
-        ProtocolResponseAssertions.AssertExactProperties(terminalResult.GetProperty("terminal"), "kind", "terminalAt");
+        Assert.Equal("failed", terminalResult.GetProperty("state").GetString());
+        var terminalSummary = terminalResult.GetProperty("terminal");
+        ProtocolResponseAssertions.AssertExactProperties(terminalSummary, "kind", "terminalAt", "failureCode");
+        Assert.Equal("failed", terminalSummary.GetProperty("kind").GetString());
+        Assert.Equal("modelCompletion.notConfigured", terminalSummary.GetProperty("failureCode").GetString());
+        Assert.Equal(JsonValueKind.Null, terminalResult.GetProperty("readingModel").ValueKind);
+        Assert.Equal(JsonValueKind.Null, terminalResult.GetProperty("validationRemovals").ValueKind);
+        Assert.Contains(
+            terminalResult.GetProperty("facts").EnumerateArray(),
+            fact => fact.GetProperty("kind").GetString() == "changedFilesCaptured");
     }
 
     /// <summary>Asynchronously verifies stale comparison facts are rejected without allocating a run.</summary>

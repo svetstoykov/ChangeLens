@@ -152,6 +152,15 @@ internal sealed class EngineHostTestFixture : IAsyncDisposable
     }
 
     /// <summary>
+    ///     Asynchronously creates an initialized engine host whose controlled pipeline completes successful runs.
+    /// </summary>
+    /// <returns>A task whose result contains the initialized hosting fixture.</returns>
+    internal static async Task<EngineHostTestFixture> CreateCompletingPipelineAsync()
+    {
+        return await CreateWithTemporaryDirectoryAsync((_, _, _) => Task.CompletedTask, completeSuccessfulRuns: true);
+    }
+
+    /// <summary>
     ///     Asynchronously reopens the supplied fixture's local state through a new engine host.
     /// </summary>
     /// <param name="seedFixture">The fixture that seeded durable local state. Cannot be <see langword="null" />.</param>

@@ -26,7 +26,7 @@ public sealed class AnalysisProcessorHostingTests
     [Fact]
     public async Task TakenRunReachesCompletedWithoutLimitations()
     {
-        await using var fixture = await EngineHostTestFixture.CreateAsync();
+        await using var fixture = await EngineHostTestFixture.CreateCompletingPipelineAsync();
         await fixture.Host.StartAsync(TestContext.Current.CancellationToken);
         var runId = await fixture.AcceptRunAsync();
 
@@ -40,7 +40,7 @@ public sealed class AnalysisProcessorHostingTests
     [Fact]
     public async Task LostWakeUpSignalIsRecoveredByDatabaseFallback()
     {
-        await using var fixture = await EngineHostTestFixture.CreateAsync();
+        await using var fixture = await EngineHostTestFixture.CreateCompletingPipelineAsync();
         await fixture.Host.StartAsync(TestContext.Current.CancellationToken);
         var runId = await fixture.AcceptRunWithoutSignalingAsync();
 

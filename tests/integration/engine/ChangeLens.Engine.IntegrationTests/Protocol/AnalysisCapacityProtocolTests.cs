@@ -82,11 +82,19 @@ public sealed class AnalysisCapacityProtocolTests
             Assert.True(
                 encodedByteCount <= PollSummaryBudgetBytes,
                 $"Expected the poll response to stay at or below 48 KiB but it was {encodedByteCount} bytes.");
-            Assert.Equal("completed", terminalResult.GetProperty("state").GetString());
+            Assert.Equal("failed", terminalResult.GetProperty("state").GetString());
+            var terminalSummary = terminalResult.GetProperty("terminal");
             ProtocolResponseAssertions.AssertExactProperties(
-                terminalResult.GetProperty("terminal"),
+                terminalSummary,
                 "kind",
-                "terminalAt");
+                "terminalAt",
+                "failureCode");
+            Assert.Equal("failed", terminalSummary.GetProperty("kind").GetString());
+            Assert.Equal("modelCompletion.notConfigured", terminalSummary.GetProperty("failureCode").GetString());
+            Assert.Equal(JsonValueKind.Null, terminalResult.GetProperty("readingModel").ValueKind);
+            Assert.Contains(
+                terminalResult.GetProperty("facts").EnumerateArray(),
+                fact => fact.GetProperty("kind").GetString() == "changedFilesCaptured");
             Assert.InRange(finalSampledPeakWorkingSetBytes, baselineWorkingSetBytes, MaximumEngineWorkingSetBytes);
             Assert.True(
                 workingSetGrowthBytes <= MaximumEngineWorkingSetGrowthBytes,

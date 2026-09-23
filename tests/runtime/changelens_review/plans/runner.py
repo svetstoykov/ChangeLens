@@ -1,11 +1,17 @@
 """Runs a validated plan case by case against an engine built from the working tree."""
 
 import os
+from dataclasses import dataclass
 from pathlib import Path
 
 from changelens_review.clock import utc_now_iso
 from changelens_review.engine.build import EngineBuild, build_engine
-from changelens_review.engine.environment import engine_environment
+from changelens_review.engine.environment import (
+    DEFAULT_REQUEST_TIMEOUT,
+    SCRIPTED_MODEL,
+    engine_environment,
+    timeout_setting,
+)
 from changelens_review.engine.session import EngineSession
 from changelens_review.errors import CaseInterrupted, HarnessError, SpecError
 from changelens_review.fixtures.builder import BuiltFixture, build_fixture
@@ -18,12 +24,23 @@ from changelens_review.plans.checks.registry import evaluate_expectation
 from changelens_review.plans.model import Case, Plan
 from changelens_review.plans.state_snapshot import DatabaseSnapshot, read_state
 from changelens_review.plans.steps import CaseState, StepExecutor
-from changelens_review.provider.proxy import ProviderProxy, ScriptedResponder
-from changelens_review.provider.scripts import ProviderScript, load_script
+from changelens_review.provider.live import LiveResponder, resolve_upstream
+from changelens_review.provider.proxy import ProviderProxy, Responder, ScriptedResponder, exchange_path
+from changelens_review.provider.replay import ReplayResponder, load_recording
+from changelens_review.provider.scripts import load_script
 from changelens_review.results.store import CaseResult, RunStore, RunSummary
 
 ENGINE_LOG = "engine.log"
 PROTOCOL_TRANSCRIPT = "protocol.ndjson"
+
+
+@dataclass(frozen=True)
+class ProviderSetup:
+    """How a case's proxy answers, and the model and request timeout its engine is configured with."""
+
+    responder: Responder
+    model: str
+    request_timeout: str
 
 
 def run_plan(plan: Plan, *, keep: bool = False, runs_root: Path = RUNS_ROOT) -> RunSummary:
@@ -60,15 +77,14 @@ def run_case(case: Case, build: EngineBuild, store: RunStore) -> CaseResult:
     try:
         fixture = build_fixture(case.fixture, heavy / "repo")
         oracle = compute_oracle(fixture)
-        assert case.provider.script is not None
-        script = load_script(case.provider.script)
+        provider = provider_setup(case, store.folder.parent)
     except (HarnessError, SpecError) as error:
         return CaseResult(
             case.id, "error", reason=f"case setup failed: {error}", started_at=started_at, finished_at=utc_now_iso()
         )
     write_json(folder / "oracle.json", oracle.to_json())
     try:
-        return _run_case_session(case, build, folder, heavy, fixture, oracle, script, started_at)
+        return _run_case_session(case, build, folder, heavy, fixture, oracle, provider, started_at)
     except (HarnessError, OSError) as error:
         return CaseResult(
             case.id,
@@ -79,6 +95,32 @@ def run_case(case: Case, build: EngineBuild, store: RunStore) -> CaseResult:
         )
 
 
+def provider_setup(case: Case, runs_root: Path) -> ProviderSetup:
+    """Build the case's responder: a catalog script, the real provider, or a stored run's replies.
+
+    A live provider's engine requests use the plan's model override or the configured model, and wait
+    up to the case's run deadline. A replay's engine requests the model the recorded engine requested.
+    """
+    settings = case.provider
+    match settings.mode:
+        case "live":
+            upstream = resolve_upstream(os.environ)
+            return ProviderSetup(
+                LiveResponder(upstream, case.deadlines.run_seconds),
+                settings.model or upstream.model,
+                timeout_setting(case.deadlines.run_seconds),
+            )
+        case "replay":
+            assert settings.replay_run is not None and settings.replay_case is not None
+            recording = load_recording(settings.replay_run, settings.replay_case, runs_root)
+            return ProviderSetup(ReplayResponder(recording), recording.model or SCRIPTED_MODEL, DEFAULT_REQUEST_TIMEOUT)
+        case _:
+            assert settings.script is not None
+            return ProviderSetup(
+                ScriptedResponder(load_script(settings.script)), SCRIPTED_MODEL, DEFAULT_REQUEST_TIMEOUT
+            )
+
+
 def _run_case_session(
     case: Case,
     build: EngineBuild,
@@ -86,7 +128,7 @@ def _run_case_session(
     heavy: Path,
     fixture: BuiltFixture,
     oracle: Oracle,
-    script: ProviderScript,
+    provider: ProviderSetup,
     started_at: str,
 ) -> CaseResult:
     """Start the isolated proxy and engine, execute the case's steps, and evaluate it."""
@@ -96,15 +138,15 @@ def _run_case_session(
     log_directory.mkdir(parents=True)
     state = CaseState(fixture.path, fixture.target, snapshot_repository(fixture.path))
 
-    proxy = ProviderProxy(ScriptedResponder(script))
+    proxy = ProviderProxy(provider.responder)
     proxy.start()
     try:
-        interruption, harness_failure = _execute_steps(case, build, state, proxy.base_url, folder, heavy)
+        interruption, harness_failure = _execute_steps(case, build, state, proxy, provider, folder, heavy)
     finally:
         proxy.stop()
     exchanges = proxy.exchanges
     for record in exchanges:
-        write_json(folder / "provider" / f"{record.sequence:03d}-{record.role}.json", record.to_json())
+        write_json(exchange_path(folder, record), record.to_json())
     database: DatabaseSnapshot | None = None
     try:
         database = read_state(state_directory)
@@ -112,11 +154,13 @@ def _run_case_session(
         harness_failure = harness_failure or str(error)
     if database is not None:
         write_json(folder / "state.json", database.to_json())
-    script_failures = [
-        record.detail or "provider script failed" for record in exchanges if record.outcome == "harness-error"
+    provider_failures = [
+        record.detail or f"{case.provider.mode} provider failed"
+        for record in exchanges
+        if record.outcome == "harness-error"
     ]
-    if harness_failure is None and script_failures:
-        harness_failure = "provider script failed: " + "; ".join(script_failures)
+    if harness_failure is None and provider_failures:
+        harness_failure = f"{case.provider.mode} provider failed: " + "; ".join(provider_failures)
 
     def result(status: str, **values: object) -> CaseResult:
         return CaseResult(
@@ -155,7 +199,13 @@ def _run_case_session(
 
 
 def _execute_steps(
-    case: Case, build: EngineBuild, state: CaseState, provider_base_url: str, folder: Path, heavy: Path
+    case: Case,
+    build: EngineBuild,
+    state: CaseState,
+    proxy: ProviderProxy,
+    provider: ProviderSetup,
+    folder: Path,
+    heavy: Path,
 ) -> tuple[str | None, str | None]:
     """Run the steps in an owned engine session; return (interruption, harness failure).
 
@@ -170,8 +220,10 @@ def _execute_steps(
                 os.environ,
                 state_directory=heavy / "state",
                 log_directory=heavy / "logs",
-                provider_base_url=provider_base_url,
+                provider_base_url=proxy.base_url,
                 overrides=case.config,
+                model=provider.model,
+                request_timeout=provider.request_timeout,
             ),
             working_directory=build.dll_path.parent,
             transcript_path=folder / PROTOCOL_TRANSCRIPT,

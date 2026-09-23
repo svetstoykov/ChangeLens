@@ -1,4 +1,4 @@
-"""Command-line entry point: review check | run | clean."""
+"""Command-line entry point: review check | run | compare | clean."""
 
 import argparse
 import json
@@ -10,6 +10,7 @@ from changelens_review.errors import SpecError
 from changelens_review.plans.model import Plan
 from changelens_review.plans.parser import load_plan
 from changelens_review.plans.runner import run_plan
+from changelens_review.results.compare import compare_runs, load_run
 from changelens_review.results.store import clean_runs
 
 EXIT_INVALID_PLAN = 2
@@ -26,6 +27,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     run = commands.add_parser("run", help="validate, then run a plan against a fresh engine build")
     run.add_argument("plan", help="plan path or plan id in docs/evaluation/review-plans/")
     run.add_argument("--keep", action="store_true", help="keep heavy output (fixtures, databases, build)")
+    compare = commands.add_parser("compare", help="compare two stored runs case by case")
+    compare.add_argument("first", help="run id or run folder (A)")
+    compare.add_argument("second", help="run id or run folder (B)")
     clean = commands.add_parser("clean", help="delete heavy output of stored runs")
     clean.add_argument("--all", action="store_true", help="delete whole run folders instead")
     arguments = parser.parse_args(argv)
@@ -34,6 +38,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             return _check(arguments.plan)
         case "run":
             return _run(arguments.plan, arguments.keep)
+        case "compare":
+            return _compare(arguments.first, arguments.second)
         case _:
             return _clean(arguments.all)
 
@@ -75,6 +81,18 @@ def _run(reference: str, keep: bool) -> int:
     print(" ".join(f"{status}={count}" for status, count in summary.counts.items()))
     print(f"run folder: {summary.folder}")
     return summary.exit_code
+
+
+def _compare(first: str, second: str) -> int:
+    try:
+        runs = load_run(first), load_run(second)
+    except SpecError as error:
+        for issue in error.issues:
+            print(f"error: {issue}", file=sys.stderr)
+        return EXIT_INVALID_PLAN
+    for line in compare_runs(*runs):
+        print(line)
+    return 0
 
 
 def _clean(remove_runs: bool) -> int:

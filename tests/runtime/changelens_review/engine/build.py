@@ -12,6 +12,7 @@ from changelens_review.paths import ENGINE_PROJECT, REPO_ROOT
 
 BUILD_TIMEOUT_SECONDS = 900
 ENGINE_ASSEMBLY = "ChangeLens.Engine.dll"
+LOCAL_SETTINGS_FILE = "appsettings.Development.json"
 
 
 @dataclass(frozen=True)
@@ -80,4 +81,16 @@ def build_engine(output_directory: Path, log_path: Path) -> EngineBuild:
     dll_path = output_directory / ENGINE_ASSEMBLY
     if not dll_path.is_file():
         raise HarnessError(f"engine build produced no {ENGINE_ASSEMBLY} in {output_directory}")
+    remove_local_settings(output_directory)
     return EngineBuild(dll_path, fingerprint)
+
+
+def remove_local_settings(output_directory: Path) -> None:
+    """Delete the gitignored Development settings the build copied, since they can hold the real API key.
+
+    The harness supplies every setting an engine session needs through its environment.
+    """
+    try:
+        (output_directory / LOCAL_SETTINGS_FILE).unlink(missing_ok=True)
+    except OSError as error:
+        raise HarnessError(f"could not remove {LOCAL_SETTINGS_FILE} from the engine build: {error}") from error

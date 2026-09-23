@@ -30,6 +30,7 @@ from changelens_review.plans.model import (
     ReviewScope,
     Step,
 )
+from changelens_review.provider.replay import load_recording
 from changelens_review.provider.scripts import catalog_script_ids, load_script
 from changelens_review.validation import mapping_value, reject_unknown_keys
 
@@ -40,7 +41,7 @@ DEFAULT_KEYS = {"provider", "config", "deadlines"}
 CASE_KEYS = {"id", "fixture", "provider", "config", "deadlines", "steps", "expect", "skip"}
 PROVIDER_KEYS = {"mode", "script", "model", "from", "case"}
 PROVIDER_MODES = ("scripted", "replay", "live")
-AVAILABLE_PROVIDER_MODES = ("scripted",)
+PROVIDER_MODE_KEYS = {"scripted": {"script"}, "live": {"model"}, "replay": {"from", "case"}}
 DEADLINE_KEYS = {"protocol": "protocol_seconds", "run": "run_seconds"}
 REVIEW_KEYS = {"areas", "focus"}
 ENGINE_SOURCE = "working-tree"
@@ -147,7 +148,7 @@ def _parse_case(raw: object, index: int, defaults: _Defaults, issues: list[str])
         case_id = f"case-{index}"
     fixture = _parse_case_fixture(raw.get("fixture"), f"{where}.fixture", case_id, issues)
     provider = _parse_provider(
-        {**defaults.provider, **mapping_value(raw, "provider", where, issues)}, f"{where}.provider", issues
+        _merge_provider(defaults.provider, mapping_value(raw, "provider", where, issues)), f"{where}.provider", issues
     )
     config = _parse_config(
         {**defaults.config, **mapping_value(raw, "config", where, issues)}, f"{where}.config", issues
@@ -183,17 +184,57 @@ def _parse_case_fixture(raw: object, where: str, case_id: str, issues: list[str]
         return None
 
 
+def _merge_provider(default: dict, case: dict) -> dict:
+    """A case provider that names a different mode replaces the default; otherwise it is merged over it."""
+    if "mode" in case and case["mode"] != default.get("mode"):
+        return dict(case)
+    return {**default, **case}
+
+
 def _parse_provider(merged: dict, where: str, issues: list[str]) -> ProviderSettings | None:
     reject_unknown_keys(merged, PROVIDER_KEYS, where, issues)
     mode = merged.get("mode")
     if mode not in PROVIDER_MODES:
         issues.append(f"{where}.mode: expected one of {', '.join(PROVIDER_MODES)}")
         return None
-    if mode not in AVAILABLE_PROVIDER_MODES:
-        issues.append(
-            f"{where}.mode: provider mode {mode!r} is not available yet; this version runs scripted providers"
-        )
+    allowed = PROVIDER_MODE_KEYS[mode]
+    for key in sorted(PROVIDER_KEYS - allowed - {"mode"}):
+        if key in merged:
+            issues.append(f"{where}.{key}: a {mode} provider does not take {key}")
+    match mode:
+        case "live":
+            return _parse_live_provider(merged, where, issues)
+        case "replay":
+            return _parse_replay_provider(merged, where, issues)
+        case _:
+            return _parse_scripted_provider(merged, where, issues)
+
+
+def _parse_live_provider(merged: dict, where: str, issues: list[str]) -> ProviderSettings | None:
+    model = merged.get("model")
+    if model is not None and (not isinstance(model, str) or not model):
+        issues.append(f"{where}.model: expected a model name")
         return None
+    return ProviderSettings("live", model=model)
+
+
+def _parse_replay_provider(merged: dict, where: str, issues: list[str]) -> ProviderSettings | None:
+    run_id, case_id = merged.get("from"), merged.get("case")
+    if not isinstance(run_id, str) or not run_id:
+        issues.append(f"{where}.from: a replay provider needs the id of a stored run")
+        return None
+    if not isinstance(case_id, str) or not case_id:
+        issues.append(f"{where}.case: a replay provider needs the id of a case in that run")
+        return None
+    try:
+        load_recording(run_id, case_id)
+    except SpecError as error:
+        issues.extend(f"{where}: {issue}" for issue in error.issues)
+        return None
+    return ProviderSettings("replay", replay_run=run_id, replay_case=case_id)
+
+
+def _parse_scripted_provider(merged: dict, where: str, issues: list[str]) -> ProviderSettings | None:
     script = merged.get("script")
     if not isinstance(script, str) or not script:
         issues.append(f"{where}.script: a scripted provider needs a catalog script")
@@ -206,9 +247,7 @@ def _parse_provider(merged: dict, where: str, issues: list[str]) -> ProviderSett
     except SpecError as error:
         issues.extend(f"{where}.script: {issue}" for issue in error.issues)
         return None
-    if "model" in merged:
-        issues.append(f"{where}.model: a model override applies to live providers only")
-    return ProviderSettings(mode, script)
+    return ProviderSettings("scripted", script=script)
 
 
 def _parse_config(merged: dict, where: str, issues: list[str]) -> dict[str, ConfigValue]:

@@ -2,7 +2,12 @@ from pathlib import Path
 
 import pytest
 
-from changelens_review.engine.environment import SCRIPTED_MODEL, SYNTHETIC_API_KEY, engine_environment
+from changelens_review.engine.environment import (
+    SCRIPTED_MODEL,
+    SYNTHETIC_API_KEY,
+    engine_environment,
+    timeout_setting,
+)
 from changelens_review.errors import HarnessError
 
 
@@ -41,3 +46,24 @@ def test_reserved_settings_cannot_be_overridden(tmp_path: Path) -> None:
             provider_base_url="http://127.0.0.1:9",
             overrides={"Analysis.ModelCompletion.ApiKey": "attacker-supplied-key"},
         )
+
+
+def test_model_and_request_timeout_are_passed_to_the_engine(tmp_path: Path) -> None:
+    environment = engine_environment(
+        {},
+        state_directory=tmp_path / "state",
+        log_directory=tmp_path / "logs",
+        provider_base_url="http://127.0.0.1:9",
+        overrides={},
+        model="vendor/model",
+        request_timeout=timeout_setting(299.5),
+    )
+
+    assert environment["ChangeLens__Analysis__ModelCompletion__Model"] == "vendor/model"
+    assert environment["ChangeLens__Analysis__ModelCompletion__RequestTimeout"] == "00:05:00"
+    assert environment["ChangeLens__Analysis__ModelCompletion__ApiKey"] == SYNTHETIC_API_KEY
+
+
+@pytest.mark.parametrize(("seconds", "setting"), [(10, "00:00:10"), (3_661, "01:01:01"), (90_000, "1.01:00:00")])
+def test_timeout_setting_is_a_dotnet_time_span(seconds: float, setting: str) -> None:
+    assert timeout_setting(seconds) == setting

@@ -12,11 +12,17 @@ STEP_KINDS = ("open", "prepare", "analyze", "cancel", "poll", "restart", "mutate
 
 @dataclass(frozen=True)
 class ProviderSettings:
-    """How the case's provider endpoint answers."""
+    """How the case's provider endpoint answers.
+
+    A scripted provider names a catalog script, a live provider may override the model, and a replay
+    provider names the stored run and case whose recorded replies it serves.
+    """
 
     mode: str
-    script: str | None
+    script: str | None = None
     model: str | None = None
+    replay_run: str | None = None
+    replay_case: str | None = None
 
 
 @dataclass(frozen=True)

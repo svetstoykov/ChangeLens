@@ -10,9 +10,11 @@ from changelens_review.engine.build import EngineBuild, Fingerprint
 from changelens_review.engine.session import EngineSession
 from changelens_review.errors import HarnessError
 from changelens_review.fixtures.spec import FixtureSpec, load_catalog_fixture
+from changelens_review.jsonio import write_json
 from changelens_review.plans import runner as runner_module
 from changelens_review.plans.model import Case, Deadlines, Expectation, Plan, ProviderSettings, Step
-from changelens_review.plans.runner import run_case, run_plan
+from changelens_review.plans.runner import provider_setup, run_case, run_plan
+from changelens_review.provider.live import UpstreamProvider
 from changelens_review.provider.proxy import ProviderProxy
 from changelens_review.results.store import RunStore
 
@@ -64,13 +66,15 @@ def _case(
     fixture: FixtureSpec | None = None,
     config: dict | None = None,
     expectations: tuple[Expectation, ...] = (),
+    provider: ProviderSettings | None = None,
+    run_seconds: float = 5.0,
 ) -> Case:
     return Case(
         id=case_id,
         fixture=fixture if fixture is not None else load_catalog_fixture("F01"),
-        provider=ProviderSettings("scripted", "curator-valid-f01"),
+        provider=provider or ProviderSettings("scripted", "curator-valid-f01"),
         config=config or {},
-        deadlines=Deadlines(protocol_seconds=2.0, run_seconds=5.0),
+        deadlines=Deadlines(protocol_seconds=2.0, run_seconds=run_seconds),
         steps=(
             Step("open", "steps[0]"),
             Step("prepare", "steps[1]"),
@@ -165,3 +169,56 @@ def test_failing_expectation_yields_fail_not_error(tmp_path: Path, monkeypatch: 
     assert result.reason is None
     assert result.expectations[0].name == "provider.calls"
     assert result.expectations[0].passed is False
+
+
+def test_live_provider_uses_the_model_override_and_the_run_deadline(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    upstream = UpstreamProvider("https://provider/v1", "vendor/configured", "real-key")
+    monkeypatch.setattr(runner_module, "resolve_upstream", lambda _environment: upstream)
+
+    overridden = provider_setup(
+        _case("live", provider=ProviderSettings("live", model="vendor/override"), run_seconds=300), tmp_path
+    )
+    configured = provider_setup(_case("live", provider=ProviderSettings("live")), tmp_path)
+
+    assert (overridden.model, overridden.request_timeout) == ("vendor/override", "00:05:00")
+    assert (configured.model, configured.request_timeout) == ("vendor/configured", "00:00:05")
+
+
+def test_live_provider_without_a_key_errors_the_case(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    def no_key(_environment):
+        raise HarnessError("the live provider needs ApiKey")
+
+    monkeypatch.setattr(runner_module, "resolve_upstream", no_key)
+    case = _case("live", provider=ProviderSettings("live"))
+
+    result = run_case(case, _fake_build(tmp_path), RunStore.create(_plan(case), tmp_path / "runs"))
+
+    assert result.status == "error"
+    assert "needs ApiKey" in (result.reason or "")
+
+
+@pytest.mark.parametrize(("calls", "status"), [(1, "pass"), (2, "error")])
+def test_replay_errors_the_case_when_the_engine_asks_for_more_than_was_recorded(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, calls: int, status: str
+) -> None:
+    _use_fake_engine(monkeypatch)
+    monkeypatch.setenv("FAKE_ENGINE_CURATOR_CALLS", str(calls))
+    runs = tmp_path / "runs"
+    write_json(
+        runs / "run-a" / "cases" / "live-f01" / "provider" / "001-curator.json",
+        {"sequence": 1, "role": "curator", "outcome": "live", "response_status": 200, "request": {}, "response": {}},
+    )
+    case = _case(
+        "replay",
+        provider=ProviderSettings("replay", replay_run="run-a", replay_case="live-f01"),
+        expectations=(Expectation("outcome", "completed", "expect[0]"),),
+    )
+
+    result = run_case(case, _fake_build(tmp_path), RunStore.create(_plan(case), runs))
+
+    assert result.status == status, result.reason
+    if status == "error":
+        assert "replay provider failed" in (result.reason or "")
+        assert "no recorded reply left" in (result.reason or "")

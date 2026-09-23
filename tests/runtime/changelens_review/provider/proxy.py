@@ -7,6 +7,7 @@ import threading
 import time
 from dataclasses import dataclass
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
 from typing import Protocol
 
 from changelens_review.clock import utc_now_iso
@@ -22,6 +23,7 @@ from changelens_review.provider.scripts import (
 
 COMPLETIONS_PATH = "/chat/completions"
 MAX_RECORDED_RESPONSE_CHARACTERS = 1_048_576
+EXCHANGE_FOLDER = "provider"
 
 
 @dataclass(frozen=True)
@@ -100,7 +102,7 @@ class ScriptedResponder:
         try:
             content = render_content(exchange.reply.content, request_body)
         except SelectorError as error:
-            return ProxyReply(500, _error_body(str(error)), "harness-error", str(error))
+            return ProxyReply(500, error_body(str(error)), "harness-error", str(error))
         request_model = request_body.get("model") if isinstance(request_body, dict) else None
         body = completion_body(
             exchange.reply, content, request_model if isinstance(request_model, str) else None, sequence
@@ -185,7 +187,7 @@ class _CompletionHandler(BaseHTTPRequestHandler):
             reply = proxy.responder.respond(sequence, role, request_body)
         else:
             role = "unknown"
-            reply = ProxyReply(404, _error_body(f"unknown path {self.path}"), "unexpected", f"path {self.path}")
+            reply = ProxyReply(404, error_body(f"unknown path {self.path}"), "unexpected", f"path {self.path}")
         if reply.delay_seconds:
             time.sleep(reply.delay_seconds)
         detail = reply.detail
@@ -226,7 +228,7 @@ class _CompletionHandler(BaseHTTPRequestHandler):
 
 
 def _unexpected(detail: str) -> ProxyReply:
-    return ProxyReply(500, _error_body(detail), "unexpected", detail)
+    return ProxyReply(500, error_body(detail), "unexpected", detail)
 
 
 def _fault_reply(exchange: ScriptedExchange) -> ProxyReply:
@@ -243,7 +245,13 @@ def _fault_reply(exchange: ScriptedExchange) -> ProxyReply:
     )
 
 
-def _error_body(message: str) -> bytes:
+def exchange_path(case_folder: Path, record: ExchangeRecord) -> Path:
+    """Return where a case stores one exchange record."""
+    return case_folder / EXCHANGE_FOLDER / f"{record.sequence:03d}-{record.role}.json"
+
+
+def error_body(message: str) -> bytes:
+    """Return an OpenAI-style error body."""
     return json.dumps({"error": {"message": message}}).encode()
 
 

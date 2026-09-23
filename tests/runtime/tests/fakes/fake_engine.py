@@ -1,9 +1,31 @@
 """Minimal NDJSON stand-in for the engine, used by session and step tests."""
 
+import contextlib
 import json
+import os
 import sys
+import urllib.error
+import urllib.request
 
+CURATOR_CALLS = "FAKE_ENGINE_CURATOR_CALLS"
 polls = 0
+
+
+def call_provider() -> None:
+    """Send one curator-shaped completion request to the configured provider, ignoring its answer."""
+    settings = "ChangeLens__Analysis__ModelCompletion__"
+    payload = json.dumps({"comparison": {}, "evidence": []})
+    request = urllib.request.Request(
+        os.environ[settings + "BaseUrl"] + "/chat/completions",
+        data=json.dumps(
+            {"model": os.environ[settings + "Model"], "messages": [{"role": "user", "content": payload}]}
+        ).encode(),
+        headers={"Content-Type": "application/json", "Authorization": "Bearer " + os.environ[settings + "ApiKey"]},
+    )
+    with contextlib.suppress(urllib.error.HTTPError):
+        urllib.request.urlopen(request, timeout=5).close()
+
+
 for line in sys.stdin:
     request = json.loads(line)
     action = request["action"]
@@ -32,6 +54,8 @@ for line in sys.stdin:
     elif action == "comparisons.prepare":
         response["result"] = {"freshnessToken": "f" * 64}
     elif action == "analysis.start":
+        for _ in range(int(os.environ.get(CURATOR_CALLS, "0"))):
+            call_provider()
         response["result"] = {"state": "accepted", "runId": "run-1", "requestedAt": 0}
     elif action == "analysis.pollRun":
         polls += 1

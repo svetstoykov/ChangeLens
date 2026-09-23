@@ -3,6 +3,7 @@
 import difflib
 import json
 from collections import Counter
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -17,7 +18,7 @@ INDENT = "  "
 
 @dataclass(frozen=True)
 class StoredCase:
-    """What one stored case recorded: its result, provider exchanges, and final analysis run row."""
+    """What one stored case recorded: its result, metrics, provider exchanges, and final analysis run row."""
 
     case_id: str
     status: str
@@ -25,6 +26,12 @@ class StoredCase:
     stage_timings: dict[str, JsonValue]
     exchanges: tuple[dict[str, JsonValue], ...]
     run_row: dict[str, JsonValue] | None
+    metrics: dict[str, JsonValue] | None
+
+    def metric(self, group: str, name: str) -> JsonValue:
+        """One recorded metric, such as ("provider", "total_tokens"), or None when it was not recorded."""
+        values = self.metrics.get(group) if self.metrics else None
+        return values.get(name) if isinstance(values, dict) else None
 
     def reading_model(self) -> JsonValue:
         """The published reading model, or None when the run published none."""
@@ -84,6 +91,7 @@ def compare_runs(first: StoredRun, second: StoredRun) -> list[str]:
             continue
         lines.append(f"case {case_id}: {_change(a.status, b.status)}")
         lines.extend(_indented(_expectation_lines(a, b)))
+        lines.extend(_indented(_metric_lines(a, b)))
         lines.extend(_indented(_provider_lines(a, b)))
         lines.extend(_indented(_stage_lines(a, b)))
         lines.extend(_indented(_removal_lines(a, b)))
@@ -106,6 +114,7 @@ def _load_case(folder: Path) -> StoredCase:
         result.get("stage_timings") or {},
         read_exchanges(folder),
         run_row,
+        result.get("metrics") if isinstance(result.get("metrics"), dict) else None,
     )
 
 
@@ -139,6 +148,31 @@ def _verdict(expectation: dict[str, JsonValue] | None) -> str:
     if expectation is None:
         return "absent"
     return f"{'pass' if expectation.get('passed') else 'fail'} {_compact(expectation.get('actual'))}"
+
+
+def _metric_lines(a: StoredCase, b: StoredCase) -> list[str]:
+    if a.metrics is None and b.metrics is None:
+        return ["metrics: not recorded"]
+
+    def change(group: str, name: str, render: Callable[[JsonValue], str] = str) -> str:
+        first, second = a.metric(group, name), b.metric(group, name)
+        return _change(_or_na(first, render), _or_na(second, render))
+
+    return [
+        "metrics:",
+        f"{INDENT}change: files {change('change', 'files')}, "
+        f"lines added {change('change', 'lines_added')}, lines deleted {change('change', 'lines_deleted')}",
+        f"{INDENT}tokens: total {change('provider', 'total_tokens')}, "
+        f"prompt {change('provider', 'prompt_tokens')}, completion {change('provider', 'completion_tokens')}, "
+        f"estimated calls {change('provider', 'estimated_calls')}",
+        f"{INDENT}cost: {change('provider', 'cost', _stored_cost)}, "
+        f"reported by {change('provider', 'cost_reported_calls')} of {change('provider', 'calls')} calls",
+        f"{INDENT}duration ms: total {change('duration', 'total_ms')}, analysis {change('duration', 'analysis_ms')}",
+    ]
+
+
+def _or_na(value: JsonValue, render: Callable[[JsonValue], str]) -> str:
+    return "n/a" if value is None else render(value)
 
 
 def _provider_lines(a: StoredCase, b: StoredCase) -> list[str]:
@@ -226,6 +260,10 @@ def _parsed(text: JsonValue) -> JsonValue:
         return json.loads(text)
     except json.JSONDecodeError:
         return text
+
+
+def _stored_cost(value: JsonValue) -> str:
+    return _cost(float(value)) if isinstance(value, int | float) else str(value)
 
 
 def _number(value: JsonValue) -> float:

@@ -12,6 +12,7 @@ from typing import Protocol
 
 from changelens_review.clock import utc_now_iso
 from changelens_review.jsontypes import JsonValue
+from changelens_review.provider.estimate import estimate_completion_tokens, estimate_prompt_tokens
 from changelens_review.provider.scripts import (
     ProviderScript,
     ScriptedExchange,
@@ -39,7 +40,11 @@ class ProxyReply:
 
 @dataclass(frozen=True)
 class ExchangeRecord:
-    """One recorded provider exchange. Request headers are never recorded."""
+    """One recorded provider exchange. Request headers are never recorded.
+
+    Token and cost fields hold what the provider reported, or None when it reported nothing.
+    The estimated token fields are computed from the message text of every exchange.
+    """
 
     sequence: int
     role: str
@@ -54,6 +59,8 @@ class ExchangeRecord:
     prompt_tokens: int | None
     completion_tokens: int | None
     cost: float | None
+    estimated_prompt_tokens: int | None
+    estimated_completion_tokens: int | None
 
     def to_json(self) -> dict[str, JsonValue]:
         """Return the stored form, with bodies parsed when they are JSON."""
@@ -68,6 +75,8 @@ class ExchangeRecord:
             "prompt_tokens": self.prompt_tokens,
             "completion_tokens": self.completion_tokens,
             "cost": self.cost,
+            "estimated_prompt_tokens": self.estimated_prompt_tokens,
+            "estimated_completion_tokens": self.estimated_completion_tokens,
             "response_status": self.response_status,
             "request": _parse_or_text(self.request_text),
             "response": _parse_or_text(self.response_text),
@@ -204,7 +213,8 @@ class _CompletionHandler(BaseHTTPRequestHandler):
         except OSError:
             detail = f"{detail}; client disconnected before the reply was sent" if detail else "client disconnected"
         response_text = reply.body.decode("utf-8", "replace") if reply.status is not None else None
-        model, prompt_tokens, completion_tokens, cost = _usage(response_text)
+        response_body = _parse_or_text(response_text)
+        model, prompt_tokens, completion_tokens, cost = _usage(response_body)
         proxy.record(
             ExchangeRecord(
                 sequence=sequence,
@@ -220,6 +230,8 @@ class _CompletionHandler(BaseHTTPRequestHandler):
                 prompt_tokens=prompt_tokens,
                 completion_tokens=completion_tokens,
                 cost=cost,
+                estimated_prompt_tokens=estimate_prompt_tokens(request_body),
+                estimated_completion_tokens=estimate_completion_tokens(response_body),
             )
         )
 
@@ -263,8 +275,7 @@ def _parse_or_text(text: str | None) -> JsonValue:
     return text
 
 
-def _usage(response_text: str | None) -> tuple[str | None, int | None, int | None, float | None]:
-    body = _parse_or_text(response_text)
+def _usage(body: JsonValue) -> tuple[str | None, int | None, int | None, float | None]:
     if not isinstance(body, dict):
         return None, None, None, None
     usage = body.get("usage") if isinstance(body.get("usage"), dict) else {}

@@ -56,6 +56,15 @@ class StatusCounts:
 
 
 @dataclass(frozen=True)
+class LineCounts:
+    """Added and deleted text lines between the merge base and HEAD, and how many changed files are binary."""
+
+    added: int
+    deleted: int
+    binary_files: int
+
+
+@dataclass(frozen=True)
 class Oracle:
     """Independent facts about a built fixture."""
 
@@ -65,6 +74,7 @@ class Oracle:
     target_revision: str
     merge_base: str
     changes: tuple[PathChange, ...]
+    line_counts: LineCounts
     status_entries: tuple[StatusEntry, ...]
     status_counts: StatusCounts
     head_blobs: dict[str, BlobEntry]
@@ -87,19 +97,7 @@ def compute_oracle(fixture: BuiltFixture) -> Oracle:
     head = git_text(repository, "rev-parse", "HEAD")
     target_revision = git_text(repository, "rev-parse", f"{target_ref}^{{commit}}")
     merge_base = git_text(repository, "merge-base", "HEAD", target_ref)
-    name_status = git(
-        repository,
-        "-c",
-        "diff.renames=true",
-        "diff",
-        "--no-ext-diff",
-        "--no-textconv",
-        RENAME_THRESHOLD,
-        "--name-status",
-        "-z",
-        merge_base,
-        head,
-    )
+    name_status = _diff(repository, "--name-status", merge_base, head)
     status_entries = parse_porcelain(git(repository, "status", "--porcelain=v1", "-z", "--untracked-files=all"))
     return Oracle(
         fixture_id=fixture.fixture_id,
@@ -108,6 +106,7 @@ def compute_oracle(fixture: BuiltFixture) -> Oracle:
         target_revision=target_revision,
         merge_base=merge_base,
         changes=parse_name_status(name_status),
+        line_counts=parse_numstat(_diff(repository, "--numstat", merge_base, head)),
         status_entries=status_entries,
         status_counts=count_status(status_entries),
         head_blobs=_tree(repository, head),
@@ -131,6 +130,25 @@ def parse_name_status(data: bytes) -> tuple[PathChange, ...]:
         else:
             raise HarnessError(f"unsupported name-status entry {status!r}")
     return tuple(sorted(changes, key=lambda change: change.path))
+
+
+def parse_numstat(data: bytes) -> LineCounts:
+    """Total NUL-separated `git diff --numstat -z` output; a rename's two paths follow its counts."""
+    tokens = _tokens(data)
+    added = deleted = binary_files = 0
+    index = 0
+    while index < len(tokens):
+        counts = tokens[index].split("\t")
+        if len(counts) != 3:
+            raise HarnessError(f"unsupported numstat entry {tokens[index]!r}")
+        inserted, removed, path = counts
+        if inserted == "-" or removed == "-":
+            binary_files += 1
+        else:
+            added += int(inserted)
+            deleted += int(removed)
+        index += 1 if path else 3
+    return LineCounts(added, deleted, binary_files)
 
 
 def parse_porcelain(data: bytes) -> tuple[StatusEntry, ...]:
@@ -183,6 +201,22 @@ def snapshot_repository(path: Path) -> RepoSnapshot:
 def read_blob(repository: Path, object_id: str) -> bytes:
     """Return a blob's bytes."""
     return git(repository, "cat-file", "blob", object_id)
+
+
+def _diff(repository: Path, format_option: str, merge_base: str, head: str) -> bytes:
+    return git(
+        repository,
+        "-c",
+        "diff.renames=true",
+        "diff",
+        "--no-ext-diff",
+        "--no-textconv",
+        RENAME_THRESHOLD,
+        format_option,
+        "-z",
+        merge_base,
+        head,
+    )
 
 
 def _tree(repository: Path, revision: str) -> dict[str, BlobEntry]:

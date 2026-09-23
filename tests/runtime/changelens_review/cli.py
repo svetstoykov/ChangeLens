@@ -11,6 +11,7 @@ from changelens_review.plans.model import Plan
 from changelens_review.plans.parser import load_plan
 from changelens_review.plans.runner import run_plan
 from changelens_review.results.compare import compare_runs, load_run
+from changelens_review.results.metrics import CaseMetrics, ChangeSize, ProviderUsage
 from changelens_review.results.store import clean_runs
 
 EXIT_INVALID_PLAN = 2
@@ -72,6 +73,8 @@ def _run(reference: str, keep: bool) -> int:
             print(f"{DETAIL_INDENT}{case.reason}")
         if case.interruption:
             print(f"{DETAIL_INDENT}interrupted: {case.interruption}")
+        if case.metrics is not None:
+            print(f"{DETAIL_INDENT}{_describe_metrics(case.metrics)}")
         for result in case.expectations:
             if not result.passed:
                 print(
@@ -79,8 +82,31 @@ def _run(reference: str, keep: bool) -> int:
                     f"actual {json.dumps(result.actual)}"
                 )
     print(" ".join(f"{status}={count}" for status, count in summary.counts.items()))
+    measured = [case.metrics for case in summary.cases if case.metrics is not None]
+    if measured:
+        usage = ProviderUsage()
+        for metrics in measured:
+            usage = usage.plus(metrics.provider)
+        print(f"total: {_describe_usage(usage)}")
     print(f"run folder: {summary.folder}")
     return summary.exit_code
+
+
+def _describe_metrics(metrics: CaseMetrics) -> str:
+    analysis_ms = metrics.duration.analysis_ms
+    analysis = f", analysis {analysis_ms} ms" if analysis_ms is not None else ""
+    return f"{_describe_change(metrics.change)}; {_describe_usage(metrics.provider)}{analysis}"
+
+
+def _describe_change(change: ChangeSize) -> str:
+    binary = f", {change.binary_files} binary" if change.binary_files else ""
+    return f"{change.files} files (+{change.lines_added} -{change.lines_deleted} lines{binary})"
+
+
+def _describe_usage(usage: ProviderUsage) -> str:
+    estimated = f", {usage.estimated_calls} estimated" if usage.estimated_calls else ""
+    cost = f", cost {usage.cost:.6f}" if usage.cost is not None else ""
+    return f"{usage.calls} provider calls, {usage.total_tokens} tokens{estimated}{cost}"
 
 
 def _compare(first: str, second: str) -> int:

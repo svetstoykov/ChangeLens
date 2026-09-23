@@ -21,6 +21,8 @@ def exchange(request_text: str = "{}") -> ExchangeRecord:
         prompt_tokens=None,
         completion_tokens=None,
         cost=None,
+        estimated_prompt_tokens=None,
+        estimated_completion_tokens=None,
     )
 
 

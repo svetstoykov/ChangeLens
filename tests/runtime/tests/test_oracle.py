@@ -1,11 +1,16 @@
 from pathlib import Path
 
+import pytest
+
+from changelens_review.errors import HarnessError
 from changelens_review.fixtures.builder import build_fixture
 from changelens_review.fixtures.oracle import (
+    LineCounts,
     PathChange,
     StatusCounts,
     compute_oracle,
     count_status,
+    parse_numstat,
     parse_porcelain,
     snapshot_repository,
 )
@@ -29,6 +34,7 @@ def test_f01_oracle_matches_hand_written_facts(tmp_path: Path) -> None:
     oracle = compute_oracle(built)
 
     assert oracle.changes == F01_CHANGES
+    assert oracle.line_counts == LineCounts(added=8, deleted=3, binary_files=1)
     assert oracle.target_ref == "refs/heads/main"
     assert oracle.merge_base == oracle.target_revision == git_text(built.path, "rev-parse", "main")
     assert oracle.head == git_text(built.path, "rev-parse", "feature/review")
@@ -46,6 +52,17 @@ def test_f02_oracle_counts_dirty_state_and_keeps_committed_changes(tmp_path: Pat
 
     assert oracle.changes == F01_CHANGES
     assert oracle.status_counts == StatusCounts(staged=1, unstaged=2, untracked=1, conflicted=0, distinct=3)
+
+
+def test_numstat_totals_text_lines_and_counts_binary_files_across_renames() -> None:
+    data = b"-\t-\tassets/blob.bin\x001\t0\t\x00old.ts\x00new.ts\x005\t2\tsrc/a.ts\x00"
+
+    assert parse_numstat(data) == LineCounts(added=6, deleted=2, binary_files=1)
+
+
+def test_numstat_rejects_an_entry_without_counts() -> None:
+    with pytest.raises(HarnessError, match="unsupported numstat entry"):
+        parse_numstat(b"src/a.ts\x00")
 
 
 def test_status_counting_handles_conflicts_and_staged_renames() -> None:

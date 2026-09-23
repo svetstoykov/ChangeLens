@@ -60,6 +60,9 @@ def test_scripted_reply_is_served_and_recorded(serve) -> None:
     proxy.stop()
     (record,) = proxy.exchanges
     assert (record.role, record.outcome, record.prompt_tokens, record.cost) == ("curator", "scripted", 1500, None)
+    request_characters = len(json.dumps(BINDER))
+    assert record.estimated_prompt_tokens == -(-request_characters // 4)
+    assert record.estimated_completion_tokens == -(-len(json.loads(body)["choices"][0]["message"]["content"]) // 4)
     assert "secret-token" not in json.dumps(record.to_json())
 
 

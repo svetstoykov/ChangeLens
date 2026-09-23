@@ -3,7 +3,8 @@
 import platform
 import shutil
 import subprocess
-from dataclasses import dataclass, field
+from collections.abc import Iterable
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Self
 
@@ -16,6 +17,7 @@ from changelens_review.jsontypes import JsonValue
 from changelens_review.paths import RUNS_ROOT
 from changelens_review.plans.checks.model import CheckResult
 from changelens_review.plans.model import Plan
+from changelens_review.results.metrics import CaseMetrics, ChangeSize, ProviderUsage
 
 CASE_STATUSES = ("pass", "fail", "error", "skipped")
 RUN_DOCUMENT = "run.json"
@@ -38,6 +40,7 @@ class CaseResult:
     started_at: str | None = None
     finished_at: str | None = None
     repository: dict[str, JsonValue] | None = None
+    metrics: CaseMetrics | None = None
 
     def to_json(self) -> dict[str, JsonValue]:
         """Return the stored form."""
@@ -53,6 +56,7 @@ class CaseResult:
             "started_at": self.started_at,
             "finished_at": self.finished_at,
             "repository": self.repository,
+            "metrics": self.metrics.to_json() if self.metrics is not None else None,
         }
 
 
@@ -97,6 +101,7 @@ class RunStore:
             "finished_at": None,
             "complete": False,
             "counts": {status: 0 for status in CASE_STATUSES},
+            "totals": _totals(()),
             "cases": [],
         }
         store = cls(folder, document)
@@ -134,6 +139,7 @@ class RunStore:
         if result.repository is not None:
             entry["repository"] = result.repository
         cases.append(entry)
+        self._document["totals"] = _totals(self._results)
         self._write_document()
 
     def finish(self) -> RunSummary:
@@ -151,6 +157,14 @@ class RunStore:
 
     def _write_document(self) -> None:
         write_json(self.folder / RUN_DOCUMENT, self._document)
+
+
+def _totals(results: Iterable[CaseResult]) -> dict[str, JsonValue]:
+    measured = [result.metrics for result in results if result.metrics is not None]
+    change, provider = ChangeSize(), ProviderUsage()
+    for metrics in measured:
+        change, provider = change.plus(metrics.change), provider.plus(metrics.provider)
+    return {"measured_cases": len(measured), "change": asdict(change), "provider": provider.to_json()}
 
 
 def clean_runs(runs_root: Path = RUNS_ROOT, *, remove_runs: bool) -> list[Path]:

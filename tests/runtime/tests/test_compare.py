@@ -32,6 +32,19 @@ def _store_run(runs: Path, run_id: str, status: str, cost: float, thesis: str, r
             ],
             "run_ids": ["run-1"],
             "stage_timings": {"curating": {"state": "succeeded", "milliseconds": round(cost * 10_000_000)}},
+            "metrics": {
+                "change": {"files": 7, "lines_added": 8, "lines_deleted": 3},
+                "provider": {
+                    "calls": 1,
+                    "prompt_tokens": 1000,
+                    "completion_tokens": 80,
+                    "total_tokens": 1080,
+                    "estimated_calls": 0,
+                    "cost": cost,
+                    "cost_reported_calls": 1,
+                },
+                "duration": {"total_ms": round(cost * 20_000_000), "analysis_ms": None},
+            },
         },
     )
     write_json(
@@ -72,6 +85,10 @@ def test_compare_reports_status_cost_stage_removal_and_reading_model_changes(tmp
     assert "outcome:" not in report
     assert "curator: calls 1, prompt tokens 1000, completion tokens 80, cost 0.000400 -> 0.000600" in report
     assert "curating: 4000 -> 6000" in report
+    assert "change: files 7, lines added 8, lines deleted 3" in report
+    assert "tokens: total 1080, prompt 1000, completion 80, estimated calls 0" in report
+    assert "cost: 0.000400 -> 0.000600, reported by 1 of 1 calls" in report
+    assert "duration ms: total 8000 -> 12000, analysis n/a" in report
     assert "validation removals: 0 -> 1" in report
     assert '+ {"claimId":"thesis"}' in report
     assert '-    "text": "Parser rejects empty names."' in report
@@ -89,6 +106,20 @@ def test_identical_runs_report_no_differences(tmp_path: Path) -> None:
     assert "case live-f01: pass" in report
     assert "expectations: no differences" in report
     assert "reading model: identical" in report
+
+
+def test_cases_stored_without_metrics_say_so(tmp_path: Path) -> None:
+    _store_run(tmp_path, "run-a", "pass", 0.0004, "Same.", [])
+    result_path = tmp_path / "run-a" / "cases" / "live-f01" / "result.json"
+    result = json.loads(result_path.read_text(encoding="utf-8"))
+    del result["metrics"]
+    write_json(result_path, result)
+
+    run = load_run("run-a", tmp_path)
+    report = "\n".join(compare_runs(run, run))
+
+    assert "metrics: not recorded" in report
+    assert "tokens:" not in report
 
 
 def test_unknown_run_is_reported(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:

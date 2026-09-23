@@ -227,6 +227,54 @@ def test_replay_errors_the_case_when_the_engine_asks_for_more_than_was_recorded(
         assert "no recorded reply left" in (result.reason or "")
 
 
+def test_a_run_records_case_metrics_and_run_totals(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    _use_fake_engine(monkeypatch)
+    monkeypatch.setattr(runner_module, "build_engine", lambda *_a, **_k: _fake_build(tmp_path))
+    monkeypatch.setenv("FAKE_ENGINE_CURATOR_CALLS", "1")
+    runs = tmp_path / "runs"
+    write_json(
+        runs / "run-a" / "cases" / "live-f01" / "provider" / "001-curator.json",
+        {
+            "sequence": 1,
+            "role": "curator",
+            "outcome": "live",
+            "response_status": 200,
+            "request": {},
+            "response": {"choices": [{"message": {"content": "12345678"}}], "usage": {"prompt_tokens": 10}},
+        },
+    )
+    case = _case("measured", provider=ProviderSettings("replay", replay_run="run-a", replay_case="live-f01"))
+
+    summary = run_plan(_plan(case), runs_root=runs)
+
+    assert summary.cases[0].status == "pass", summary.cases[0].reason
+    result = json.loads((summary.folder / "cases" / "measured" / "result.json").read_text(encoding="utf-8"))
+    metrics = result["metrics"]
+    assert (metrics["change"]["files"], metrics["change"]["lines_added"]) == (7, 8)
+    assert metrics["provider"] | {"latency_ms": 0} == {
+        "calls": 1,
+        "prompt_tokens": 10,
+        "completion_tokens": 2,
+        "total_tokens": 12,
+        "estimated_calls": 1,
+        "cost": None,
+        "cost_reported_calls": 0,
+        "latency_ms": 0,
+    }
+    assert metrics["duration"] == {"total_ms": None, "analysis_ms": None}
+    totals = json.loads((summary.folder / "run.json").read_text(encoding="utf-8"))["totals"]
+    assert (totals["measured_cases"], totals["change"]["files"], totals["provider"]["total_tokens"]) == (1, 7, 12)
+
+
+def test_a_case_that_fails_setup_records_no_metrics(tmp_path: Path) -> None:
+    case = _case("cloned", fixture=_clone_of_f01(tmp_path, f"file://{tmp_path / 'missing'}"))
+    store = RunStore.create(_plan(case), tmp_path / "runs")
+
+    result = run_case(case, _fake_build(tmp_path), store)
+
+    assert (result.status, result.metrics) == ("error", None)
+
+
 def _clone_of_f01(tmp_path: Path, url: str | None = None) -> CloneSpec:
     upstream = build_fixture(load_catalog_fixture("F01"), tmp_path / "upstream").path
     return CloneSpec(

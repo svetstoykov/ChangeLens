@@ -45,7 +45,17 @@ uv run --project tests/runtime review clean [--all]        # delete heavy output
 
 `<plan>` is a Markdown path or a plan id in `docs/evaluation/review-plans/`. Results are written to `.changelens-review/runs/<UTC timestamp>-<plan id>/`.
 
-`compare` matches cases by id and reports status changes, expectation differences, provider calls, tokens, cost, and latency per role, stage timings, validation removals, and a diff of the published reading models.
+`compare` matches cases by id and reports status changes, expectation differences, case metrics, provider calls, tokens, cost, and latency per role, stage timings, validation removals, and a diff of the published reading models.
+
+## Metrics
+
+Every case that gets as far as starting its engine records `metrics` in its `result.json`, and `review run` prints them under the case. Metrics are for analysis only. No check asserts on them, and they never change a case's status.
+
+- `change`: the reviewed change's size from the oracle: changed files by category, text lines added and deleted, and binary files.
+- `provider`: calls, prompt and completion tokens, their total, cost, and summed latency. Tokens are what the provider reported. When a provider leaves a count out, the tool fills it with an estimate of one token per four characters of message text and counts that call in `estimated_calls`. Cost is only what providers reported; it is `null` when no call reported one, and `cost_reported_calls` says how many did. Each exchange record also keeps its own `estimated_prompt_tokens` and `estimated_completion_tokens`, so the estimate can be checked against reported counts.
+- `duration`: milliseconds from the run's request, and from its analysis start, to its terminal state, read from the engine database. Both are `null` when the run did not finish.
+
+`run.json` keeps `totals` of the change sizes and provider usage over all measured cases.
 
 Exit codes: `0` means every case passed or was skipped, `1` means a case failed or errored, and `2` means the plan is invalid.
 

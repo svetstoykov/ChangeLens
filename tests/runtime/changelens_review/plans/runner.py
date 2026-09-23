@@ -29,6 +29,7 @@ from changelens_review.provider.live import LiveResponder, resolve_upstream
 from changelens_review.provider.proxy import ProviderProxy, Responder, ScriptedResponder, exchange_path
 from changelens_review.provider.replay import ReplayResponder, load_recording
 from changelens_review.provider.scripts import load_script
+from changelens_review.results.metrics import CaseMetrics, ChangeSize, ProviderUsage, RunDuration
 from changelens_review.results.store import CaseResult, RunStore, RunSummary
 
 ENGINE_LOG = "engine.log"
@@ -167,6 +168,11 @@ def _run_case_session(
     ]
     if harness_failure is None and provider_failures:
         harness_failure = f"{case.provider.mode} provider failed: " + "; ".join(provider_failures)
+    metrics = CaseMetrics(
+        ChangeSize.of(oracle),
+        ProviderUsage.of(exchanges),
+        RunDuration.of(database.run(state.run_id) if database is not None else None),
+    )
 
     def result(status: str, **values: object) -> CaseResult:
         return CaseResult(
@@ -176,6 +182,7 @@ def _run_case_session(
             interruption=interruption,
             step_timings=tuple(state.step_timings),
             stage_timings=_stage_timings(database, state.run_id),
+            metrics=metrics,
             started_at=started_at,
             finished_at=utc_now_iso(),
             **values,

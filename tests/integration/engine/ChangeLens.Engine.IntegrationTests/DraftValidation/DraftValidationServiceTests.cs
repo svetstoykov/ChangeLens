@@ -277,6 +277,32 @@ public sealed class DraftValidationServiceTests
         Assert.Empty(outcome.Draft.Tracks.Single().Relationships);
     }
 
+    [Fact]
+    public void UnknownDroppedIdsAreStrippedAndCountedWithoutARemoval()
+    {
+        var binder = DraftValidationFixtureBinderBuilder.Create(["n1", "n2"]);
+        var draft = Draft([Participant("caller", ["n1"])], summaryNodes: ["n1"], thesisNodes: ["n1"], droppedNodeIds: ["n2", "unknown-drop"]);
+
+        var outcome = Validate(draft, binder);
+
+        Assert.True(outcome.Draft.DroppedNodeIds.SequenceEqual(["n2"]));
+        Assert.Equal(1, outcome.InvalidReferenceCount);
+        Assert.Empty(outcome.Removals);
+    }
+
+    [Fact]
+    public void RejectedThesisIsRecordedOnceAsAStatementRemoval()
+    {
+        var binder = DraftValidationFixtureBinderBuilder.Create(["n1"]);
+        var draft = Draft([Participant("caller", ["n1"])], summaryNodes: ["n1"], thesisNodes: ["unknown"]);
+
+        var outcome = Validate(draft, binder);
+
+        var removal = Assert.Single(outcome.Removals);
+        Assert.Equal("statement", removal.Scope);
+        Assert.Equal("thesis", removal.Id);
+    }
+
     private static DraftValidationService Service() => new();
 
     private static DraftValidationOutcome Validate(MentalModelDraft draft, EvidenceBinderModel binder) =>

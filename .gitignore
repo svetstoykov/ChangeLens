@@ -114,7 +114,13 @@ _ReSharper*/
 
 # The entire docs/ tree is local. Nothing under it is versioned, including ai-rules.
 /docs/
-.runtime-review/
+.changelens-review/
+
+# Python tooling
+**/__pycache__/
+**/.venv/
+**/.pytest_cache/
+**/.ruff_cache/
 
 # Operating-system metadata
 .DS_Store

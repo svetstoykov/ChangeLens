@@ -1,0 +1,83 @@
+id: F01
+description: >-
+  Mixed committed changes on feature/review against main: the parser gains an empty-name guard, its caller
+  adapts, a byte-identical rename, a deletion, a mode-only change, a binary edit, and an added test description.
+  An unchanged file shares a rare parser identifier and a separate decoy is unrelated.
+target: main
+commits:
+  - branch: main
+    message: "fixture: base parser"
+    date: "2026-01-01T00:00:00+00:00"
+    changes:
+      - write:
+          path: src/parse-name.ts
+          text: |
+            export function parseName(value: string): string {
+              return value.trim();
+            }
+      - write:
+          path: src/label.ts
+          text: |
+            import { parseName } from './parse-name';
+
+            export function label(raw: string): string {
+              return parseName(raw);
+            }
+      - write:
+          path: src/old-format.ts
+          text: |
+            export const oldFormat = (value: string): string => value.trim();
+      - write:
+          path: src/unused.ts
+          text: |
+            export const unused = true;
+      - write:
+          path: scripts/check.sh
+          executable: true
+          text: |
+            #!/bin/sh
+            printf '%s\n' review-only
+      - write:
+          path: assets/blob.bin
+          base64: cmV2aWV3LWJpbmFyeS12MQD/AA==
+      - write:
+          path: src/stable.ts
+          text: |
+            export const stableParserName = 'parse-name';
+      - write:
+          path: src/decoy.ts
+          text: |
+            export const unrelated = 'decoy';
+  - branch: feature/review
+    message: "fixture: review parser change"
+    date: "2026-01-02T00:00:00+00:00"
+    changes:
+      - write:
+          path: src/parse-name.ts
+          text: |
+            export function parseName(value: string): string {
+              const trimmed = value.trim();
+              if (trimmed.length === 0) {
+                throw new Error('name is required');
+              }
+              return trimmed;
+            }
+      - write:
+          path: src/label.ts
+          text: |
+            import { parseName } from './parse-name';
+
+            export function label(raw: string): string {
+              const parsed = parseName(raw);
+              return parsed.toUpperCase();
+            }
+      - rename: { from: src/old-format.ts, to: src/format-name.ts }
+      - delete: { path: src/unused.ts }
+      - chmod: { path: scripts/check.sh, executable: false }
+      - write:
+          path: assets/blob.bin
+          base64: cmV2aWV3LWJpbmFyeS12MgD+AQ==
+      - write:
+          path: tests/parse-name.case.txt
+          text: |
+            empty input must be rejected

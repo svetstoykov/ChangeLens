@@ -1,0 +1,68 @@
+{
+  "id": "curator-valid-f01",
+  "description": "Valid F01 curator draft: one participant-map track in which label invokes parseName, both cited to their after-side quotes.",
+  "exchanges": [
+    {
+      "role": "curator",
+      "reply": {
+        "usage": { "prompt_tokens": 1500, "completion_tokens": 64 },
+        "content": {
+          "thesis": {
+            "text": "The parser now rejects empty names and the label caller adapts to the parsed value.",
+            "evidenceNodeIds": [
+              { "$node": { "path": "src/parse-name.ts", "side": "After" } },
+              { "$node": { "path": "src/label.ts", "side": "After" } }
+            ]
+          },
+          "tracks": [
+            {
+              "id": "committed-change",
+              "title": "Parser and label flow",
+              "summary": {
+                "text": "The parser rejects empty names while the label caller uses its validated result.",
+                "evidenceNodeIds": [
+                  { "$node": { "path": "src/parse-name.ts", "side": "After" } },
+                  { "$node": { "path": "src/label.ts", "side": "After" } }
+                ]
+              },
+              "shape": "ParticipantMap",
+              "participants": [
+                {
+                  "id": "label",
+                  "name": "label",
+                  "role": "Changed caller",
+                  "changed": true,
+                  "evidenceNodeIds": [{ "$node": { "path": "src/label.ts", "side": "After" } }]
+                },
+                {
+                  "id": "parser",
+                  "name": "parseName",
+                  "role": "Changed parser",
+                  "changed": true,
+                  "evidenceNodeIds": [{ "$node": { "path": "src/parse-name.ts", "side": "After" } }]
+                }
+              ],
+              "relationships": [
+                {
+                  "id": "label-invokes-parser",
+                  "fromParticipantId": "label",
+                  "toParticipantId": "parser",
+                  "kind": "invokes",
+                  "explanation": "The label function calls parseName before transforming the parsed value.",
+                  "evidenceNodeIds": [
+                    { "$node": { "path": "src/parse-name.ts", "side": "After" } },
+                    { "$node": { "path": "src/label.ts", "side": "After" } }
+                  ],
+                  "matchEdgeIds": []
+                }
+              ],
+              "orderedSteps": [],
+              "purposes": []
+            }
+          ],
+          "droppedNodeIds": []
+        }
+      }
+    }
+  ]
+}

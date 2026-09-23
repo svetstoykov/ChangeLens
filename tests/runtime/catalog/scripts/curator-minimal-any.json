@@ -1,0 +1,42 @@
+{
+  "id": "curator-minimal-any",
+  "description": "Minimal curator draft for any repository: one participant-map track whose thesis, summary, and single participant cite the binder's first evidence node.",
+  "exchanges": [
+    {
+      "role": "curator",
+      "reply": {
+        "usage": { "prompt_tokens": 1500, "completion_tokens": 48 },
+        "content": {
+          "thesis": {
+            "text": "The change updates the first file the evidence binder presents.",
+            "evidenceNodeIds": [{ "$node": { "index": 0 } }]
+          },
+          "tracks": [
+            {
+              "id": "committed-change",
+              "title": "Primary change",
+              "summary": {
+                "text": "The first presented file carries the change under review.",
+                "evidenceNodeIds": [{ "$node": { "index": 0 } }]
+              },
+              "shape": "ParticipantMap",
+              "participants": [
+                {
+                  "id": "primary",
+                  "name": "primary",
+                  "role": "Changed file",
+                  "changed": true,
+                  "evidenceNodeIds": [{ "$node": { "index": 0 } }]
+                }
+              ],
+              "relationships": [],
+              "orderedSteps": [],
+              "purposes": []
+            }
+          ],
+          "droppedNodeIds": []
+        }
+      }
+    }
+  ]
+}

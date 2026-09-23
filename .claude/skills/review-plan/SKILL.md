@@ -25,7 +25,8 @@ Use the declarative format accepted by the runtime tool:
 
 - Set `engine: working-tree` unless the user asks for another supported mode.
 - Declare every case's fixture, provider mode or script, steps, and
-  expectations explicitly.
+  expectations explicitly. Use a `repository` source pinned to full commit
+  SHAs instead of a fixture when the case needs a real public repository.
 - Prefer built-in expectations such as `outcome`, `captured_paths: oracle`,
   `citations: resolve`, `excluded_counts: oracle`, `no_marker_in`,
   `repo_unchanged`, `provider.calls`, and `error_code` when they express the

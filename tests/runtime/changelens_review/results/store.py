@@ -37,6 +37,7 @@ class CaseResult:
     stage_timings: dict[str, JsonValue] = field(default_factory=dict)
     started_at: str | None = None
     finished_at: str | None = None
+    repository: dict[str, JsonValue] | None = None
 
     def to_json(self) -> dict[str, JsonValue]:
         """Return the stored form."""
@@ -51,6 +52,7 @@ class CaseResult:
             "stage_timings": self.stage_timings,
             "started_at": self.started_at,
             "finished_at": self.finished_at,
+            "repository": self.repository,
         }
 
 
@@ -128,7 +130,10 @@ class RunStore:
         cases = self._document["cases"]
         assert isinstance(counts, dict) and isinstance(cases, list)
         counts[result.status] = int(counts[result.status]) + 1
-        cases.append({"id": result.case_id, "status": result.status})
+        entry: dict[str, JsonValue] = {"id": result.case_id, "status": result.status}
+        if result.repository is not None:
+            entry["repository"] = result.repository
+        cases.append(entry)
         self._write_document()
 
     def finish(self) -> RunSummary:

@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from changelens_review.engine.config_keys import ConfigValue
-from changelens_review.fixtures.spec import FixtureSpec, Operation
+from changelens_review.fixtures.spec import Operation, RepositorySource
 from changelens_review.jsontypes import JsonValue
 
 STEP_KINDS = ("open", "prepare", "analyze", "cancel", "poll", "restart", "mutate", "raw")
@@ -59,10 +59,10 @@ class Expectation:
 
 @dataclass(frozen=True)
 class Case:
-    """An isolated fixture, provider, engine session, step list, and expectation list."""
+    """An isolated repository, provider, engine session, step list, and expectation list."""
 
     id: str
-    fixture: FixtureSpec
+    source: RepositorySource
     provider: ProviderSettings
     config: dict[str, ConfigValue]
     deadlines: Deadlines

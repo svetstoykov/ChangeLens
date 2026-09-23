@@ -10,3 +10,8 @@ SCRIPT_CATALOG = TOOL_ROOT / "catalog" / "scripts"
 RUNS_ROOT = REPO_ROOT / ".changelens-review" / "runs"
 PLANS_ROOT = REPO_ROOT / "docs" / "evaluation" / "review-plans"
 ENGINE_PROJECT = REPO_ROOT / "src" / "engine" / "ChangeLens.Engine" / "ChangeLens.Engine.csproj"
+
+
+def clone_cache(runs_root: Path) -> Path:
+    """Return the clone cache that sits beside runs_root, outside every run's heavy folder."""
+    return runs_root.parent / "cache" / "repos"

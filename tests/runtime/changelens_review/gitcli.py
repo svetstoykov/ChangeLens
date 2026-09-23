@@ -37,14 +37,21 @@ def run_git(
     *arguments: str,
     pinned: bool = True,
     extra_environment: Mapping[str, str] | None = None,
+    timeout: float | None = None,
 ) -> subprocess.CompletedProcess[bytes]:
-    """Run git in repository and return the completed process without checking its exit code."""
+    """Run git in repository and return the completed process without checking its exit code.
+
+    A command still running after timeout seconds is killed and raises HarnessError.
+    """
     command = ["git", "-C", str(repository)]
     if pinned:
         command += ["-c", f"core.hooksPath={os.devnull}", "-c", "core.fsmonitor=false"]
     command += list(arguments)
     environment = pinned_environment(extra_environment) if pinned else None
-    return subprocess.run(command, capture_output=True, env=environment, check=False)
+    try:
+        return subprocess.run(command, capture_output=True, env=environment, check=False, timeout=timeout)
+    except subprocess.TimeoutExpired as error:
+        raise HarnessError(f"git {' '.join(arguments)} did not finish within {timeout:g} seconds") from error
 
 
 def git(
@@ -52,9 +59,10 @@ def git(
     *arguments: str,
     pinned: bool = True,
     extra_environment: Mapping[str, str] | None = None,
+    timeout: float | None = None,
 ) -> bytes:
-    """Run git and return stdout, raising HarnessError when the command fails."""
-    completed = run_git(repository, *arguments, pinned=pinned, extra_environment=extra_environment)
+    """Run git and return stdout, raising HarnessError when the command fails or times out."""
+    completed = run_git(repository, *arguments, pinned=pinned, extra_environment=extra_environment, timeout=timeout)
     if completed.returncode != 0:
         message = completed.stderr.decode("utf-8", "replace").strip()
         raise HarnessError(f"git {' '.join(arguments)} failed in {repository}: {message}")

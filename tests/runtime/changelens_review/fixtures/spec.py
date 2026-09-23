@@ -2,6 +2,7 @@
 
 import base64
 import binascii
+import re
 from dataclasses import dataclass
 from pathlib import PurePosixPath
 
@@ -25,6 +26,9 @@ OPERATION_KEYS = {
 FIXTURE_KEYS = {"id", "description", "base", "target", "commits", "remotes", "checkout", "uncommitted", "markers"}
 COMMIT_KEYS = {"branch", "from", "message", "date", "changes"}
 REMOTE_KEYS = {"name", "push"}
+CLONE_KEYS = {"clone", "base", "head", "changes", "uncommitted", "markers"}
+CLONE_SCHEMES = ("https://", "file://")
+COMMIT_SHA = re.compile(r"^[0-9a-f]{40}$")
 
 
 @dataclass(frozen=True)
@@ -73,6 +77,72 @@ class FixtureSpec:
     checkout: str | None
     uncommitted: tuple[Operation, ...]
     markers: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class CloneSpec:
+    """A public repository pinned to exact commits, with optional overlay and dirty operations.
+
+    The base commit becomes the comparison target. The branch under review starts at head, or at base
+    when no head is given; committed changes are applied on top of it, then uncommitted ones.
+    """
+
+    id: str
+    url: str
+    base: str
+    head: str | None
+    changes: tuple[Operation, ...]
+    uncommitted: tuple[Operation, ...]
+    markers: tuple[str, ...]
+
+    @property
+    def commits(self) -> tuple[str, ...]:
+        """Return the commits the repository must contain."""
+        return (self.base,) if self.head is None else (self.base, self.head)
+
+    def origin(self) -> dict[str, str | None]:
+        """Return the URL and commits that reproduce this repository."""
+        return {"clone": self.url, "base": self.base, "head": self.head}
+
+
+type RepositorySource = FixtureSpec | CloneSpec
+
+
+def parse_clone(raw: object, where: str, clone_id: str) -> CloneSpec:
+    """Parse a cloned-repository definition, raising SpecError with every problem found."""
+    if not isinstance(raw, dict):
+        raise SpecError([f"{where}: a repository must be a mapping"])
+    issues: list[str] = []
+    reject_unknown_keys(raw, CLONE_KEYS, where, issues)
+    url = raw.get("clone")
+    if not isinstance(url, str) or not url.startswith(CLONE_SCHEMES) or len(url) <= len("file://"):
+        issues.append(f"{where}.clone: give an https:// or file:// Git URL")
+        url = ""
+    base = _commit_sha(raw, "base", where, issues)
+    head = _commit_sha(raw, "head", where, issues) if "head" in raw else None
+    changes = tuple(
+        parsed
+        for index, item in enumerate(list_value(raw, "changes", where, issues))
+        if (parsed := parse_operation(item, f"{where}.changes[{index}]", issues, uncommitted=False)) is not None
+    )
+    uncommitted = tuple(
+        parsed
+        for index, item in enumerate(list_value(raw, "uncommitted", where, issues))
+        if (parsed := parse_operation(item, f"{where}.uncommitted[{index}]", issues, uncommitted=True)) is not None
+    )
+    if "head" not in raw and not changes and not uncommitted:
+        issues.append(f"{where}: give a head commit, changes, or uncommitted operations to review")
+    markers = string_list(raw, "markers", where, issues)
+    if issues:
+        raise SpecError(issues)
+    return CloneSpec(clone_id, url, base, head, changes, uncommitted, markers)
+
+
+def source_markers(source: RepositorySource) -> tuple[str, ...]:
+    """Return the markers a fixture chain or a cloned repository declares."""
+    if isinstance(source, CloneSpec):
+        return source.markers
+    return effective_markers(resolve_chain(source))
 
 
 def parse_fixture(raw: object, where: str, default_id: str | None = None) -> FixtureSpec:
@@ -301,6 +371,14 @@ def _relative_path(body: dict, key: str, where: str, issues: list[str]) -> str:
         if not pure.is_absolute() and ".." not in pure.parts and pure.parts[0] != ".git":
             return value
     issues.append(f"{where}.{key}: use a relative path inside the repository")
+    return ""
+
+
+def _commit_sha(raw: dict, key: str, where: str, issues: list[str]) -> str:
+    value = raw.get(key)
+    if isinstance(value, str) and COMMIT_SHA.match(value):
+        return value
+    issues.append(f"{where}.{key}: give a full 40-character lowercase commit SHA")
     return ""
 
 

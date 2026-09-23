@@ -6,15 +6,18 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from changelens_review.errors import HarnessError
+from changelens_review.fixtures.clones import DOWNLOAD_DEADLINE_SECONDS, cached_clone, pin_ref
 from changelens_review.fixtures.spec import (
+    CloneSpec,
     FixtureSpec,
     Operation,
     RemoteSpec,
+    RepositorySource,
     effective_markers,
     effective_target,
     resolve_chain,
 )
-from changelens_review.gitcli import REVIEW_EMAIL, REVIEW_NAME, git, run_git
+from changelens_review.gitcli import REVIEW_EMAIL, REVIEW_NAME, git, git_text, run_git
 
 REPOSITORY_CONFIG = {
     "user.name": REVIEW_NAME,
@@ -29,6 +32,9 @@ REPOSITORY_CONFIG = {
     "gc.auto": "0",
 }
 FIRST_COMMIT_DATE = datetime(2026, 1, 1, tzinfo=UTC)
+CLONE_TARGET_BRANCH = "base"
+CLONE_REVIEW_BRANCH = "review"
+OVERLAY_MESSAGE = "review: overlay changes"
 
 
 @dataclass(frozen=True)
@@ -39,6 +45,48 @@ class BuiltFixture:
     path: Path
     target: str
     markers: tuple[str, ...]
+
+
+def build_repository(source: RepositorySource, destination: Path, clone_cache: Path) -> BuiltFixture:
+    """Build a catalog or inline fixture, or a copy of a cached clone, at destination."""
+    if isinstance(source, CloneSpec):
+        return build_clone(source, destination, clone_cache)
+    return build_fixture(source, destination)
+
+
+def build_clone(spec: CloneSpec, destination: Path, clone_cache: Path) -> BuiltFixture:
+    """Copy the pinned commits of a cached clone into a new repository at destination.
+
+    The copy has no remotes and exactly two branches: `base` at the base commit, which is the
+    comparison target, and `review`, checked out at head (or base), carrying any overlay commit and
+    uncommitted operations.
+    """
+    cache = cached_clone(spec.url, spec.commits, clone_cache)
+    if destination.exists():
+        raise HarnessError(f"repository destination already exists: {destination}")
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    git(destination.parent, "init", "--quiet", f"--initial-branch={CLONE_REVIEW_BRANCH}", str(destination))
+    for key, value in REPOSITORY_CONFIG.items():
+        git(destination, "config", key, value)
+    git(
+        destination,
+        "fetch",
+        "--quiet",
+        "--no-tags",
+        "--update-head-ok",
+        str(cache),
+        f"{pin_ref(spec.base)}:refs/heads/{CLONE_TARGET_BRANCH}",
+        f"{pin_ref(spec.head or spec.base)}:refs/heads/{CLONE_REVIEW_BRANCH}",
+        timeout=DOWNLOAD_DEADLINE_SECONDS,
+    )
+    git(destination, "reset", "--quiet", "--hard", "HEAD")
+    if spec.changes:
+        for operation in spec.changes:
+            apply_operation(destination, operation)
+        commit_all(destination, OVERLAY_MESSAGE, git_text(destination, "show", "-s", "--format=%cI", "HEAD"))
+    for operation in spec.uncommitted:
+        apply_operation(destination, operation)
+    return BuiltFixture(spec.id, destination, CLONE_TARGET_BRANCH, spec.markers)
 
 
 def build_fixture(spec: FixtureSpec, destination: Path) -> BuiltFixture:

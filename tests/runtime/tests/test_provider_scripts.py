@@ -36,9 +36,19 @@ def request_for(payload: object) -> dict:
 def test_catalog_scripts_load() -> None:
     ids = catalog_script_ids()
 
-    assert {"curator-valid-f01", "curator-invalid-mixed"} <= set(ids)
+    assert {"curator-valid-f01", "curator-invalid-mixed", "curator-minimal-any"} <= set(ids)
     for script_id in ids:
         assert load_script(script_id).id == script_id
+
+
+def test_the_minimal_script_cites_the_first_binder_node() -> None:
+    script = load_script("curator-minimal-any")
+
+    content = json.loads(render_content(script.exchanges[0].reply.content, request_for(BINDER)))
+
+    first = BINDER["evidence"][0]["nodeId"]
+    assert content["thesis"]["evidenceNodeIds"] == [first]
+    assert content["tracks"][0]["participants"][0]["evidenceNodeIds"] == [first]
 
 
 def test_role_follows_the_request_contract() -> None:

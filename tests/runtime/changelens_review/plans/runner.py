@@ -1,7 +1,7 @@
 """Runs a validated plan case by case against an engine built from the working tree."""
 
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 
 from changelens_review.clock import utc_now_iso
@@ -14,11 +14,12 @@ from changelens_review.engine.environment import (
 )
 from changelens_review.engine.session import EngineSession
 from changelens_review.errors import CaseInterrupted, HarnessError, SpecError
-from changelens_review.fixtures.builder import BuiltFixture, build_fixture
+from changelens_review.fixtures.builder import BuiltFixture, build_repository
 from changelens_review.fixtures.oracle import Oracle, compute_oracle, snapshot_repository
+from changelens_review.fixtures.spec import CloneSpec
 from changelens_review.jsonio import write_json
 from changelens_review.jsontypes import JsonValue
-from changelens_review.paths import RUNS_ROOT
+from changelens_review.paths import RUNS_ROOT, clone_cache
 from changelens_review.plans.checks.model import CaseEvidence
 from changelens_review.plans.checks.registry import evaluate_expectation
 from changelens_review.plans.model import Case, Plan
@@ -65,20 +66,25 @@ def run_plan(plan: Plan, *, keep: bool = False, runs_root: Path = RUNS_ROOT) -> 
 def run_case(case: Case, build: EngineBuild, store: RunStore) -> CaseResult:
     """Run one case in isolation and evaluate its expectations.
 
-    Everything from fixture and oracle setup onward runs inside an outer harness-fault
+    A case on a cloned repository records the URL and commits it used in its result.
+    Everything from repository and oracle setup onward runs inside an outer harness-fault
     boundary: any `HarnessError` or `OSError` that escapes the proxy, the engine session, or
     directory setup marks this one case `error` instead of aborting the whole run.
     """
+    return _with_origin(case, _run_case(case, build, store))
+
+
+def _run_case(case: Case, build: EngineBuild, store: RunStore) -> CaseResult:
     started_at = utc_now_iso()
     if case.skip is not None:
         return CaseResult(case.id, "skipped", reason=case.skip, started_at=started_at, finished_at=started_at)
     folder = store.case_folder(case.id)
     heavy = store.heavy / "cases" / case.id
     try:
-        fixture = build_fixture(case.fixture, heavy / "repo")
+        fixture = build_repository(case.source, heavy / "repo", clone_cache(store.folder.parent))
         oracle = compute_oracle(fixture)
         provider = provider_setup(case, store.folder.parent)
-    except (HarnessError, SpecError) as error:
+    except (HarnessError, SpecError, OSError) as error:
         return CaseResult(
             case.id, "error", reason=f"case setup failed: {error}", started_at=started_at, finished_at=utc_now_iso()
         )
@@ -250,7 +256,13 @@ def _unrunnable(case: Case, reason: str) -> CaseResult:
     now = utc_now_iso()
     if case.skip is not None:
         return CaseResult(case.id, "skipped", reason=case.skip, started_at=now, finished_at=now)
-    return CaseResult(case.id, "error", reason=reason, started_at=now, finished_at=now)
+    return _with_origin(case, CaseResult(case.id, "error", reason=reason, started_at=now, finished_at=now))
+
+
+def _with_origin(case: Case, result: CaseResult) -> CaseResult:
+    if not isinstance(case.source, CloneSpec) or result.status == "skipped":
+        return result
+    return replace(result, repository=dict(case.source.origin()))
 
 
 def _stage_timings(database: DatabaseSnapshot | None, run_id: str | None) -> dict[str, JsonValue]:

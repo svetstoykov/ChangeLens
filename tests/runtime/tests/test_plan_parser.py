@@ -5,6 +5,7 @@ import pytest
 from changelens_review import paths
 from changelens_review.cli import main
 from changelens_review.errors import SpecError
+from changelens_review.fixtures.spec import CloneSpec
 from changelens_review.jsonio import write_json
 from changelens_review.paths import PLANS_ROOT
 from changelens_review.plans.parser import load_plan, resolve_plan_path
@@ -71,7 +72,7 @@ def test_valid_plan_parses(tmp_path: Path) -> None:
     assert [step.kind for step in first.steps] == ["open", "prepare", "analyze"]
     assert first.steps[2].await_mode == "terminal"
     assert [e.name for e in first.expectations] == ["outcome", "captured_paths", "provider.calls"]
-    assert second.fixture.id == "inline-inline-dirty"
+    assert second.source.id == "inline-inline-dirty"
     assert second.steps[3].parameters == {"runId": "$run_id"}
     assert plan.review is not None and plan.review.focus == "Are removal scopes mapped?"
 
@@ -156,3 +157,57 @@ def test_replay_provider_names_a_stored_case(tmp_path: Path, monkeypatch: pytest
     assert plan.cases[0].provider.replay_case == "live-f01"
     with pytest.raises(SpecError, match="has no case"):
         load_plan(str(plan_file(tmp_path, block.replace("case: live-f01", "case: other"))))
+
+
+CLONE_CASE = """
+  - id: cloned-pr
+    repository:
+      clone: https://github.com/example/project.git
+      base: 3f2a91c0000000000000000000000000000000aa
+      head: 8be07d40000000000000000000000000000000bb
+    steps:
+      - open: { repository: $fixture }
+      - prepare: { target: base }
+      - analyze: { await: terminal }
+    expect:
+      - captured_paths: oracle
+"""
+
+
+def test_a_case_can_use_a_cloned_repository(tmp_path: Path) -> None:
+    block = VALID_BLOCK.replace("\nreview:", CLONE_CASE.rstrip("\n") + "\nreview:", 1)
+
+    plan = load_plan(str(plan_file(tmp_path, block)))
+
+    source = plan.cases[2].source
+    assert isinstance(source, CloneSpec)
+    assert source.origin() == {
+        "clone": "https://github.com/example/project.git",
+        "base": "3f2a91c0000000000000000000000000000000aa",
+        "head": "8be07d40000000000000000000000000000000bb",
+    }
+    assert plan.cases[2].steps[1].target == "base"
+
+
+@pytest.mark.parametrize(
+    ("old", "new", "message"),
+    [
+        ("    repository:\n", "    fixture: F01\n    repository:\n", "give exactly one of fixture or repository"),
+        ("https://github.com/example/project.git", "ssh://github.com/example/project.git", "https:// or file://"),
+        ("8be07d40000000000000000000000000000000bb", "8be07d4", "repository.head: give a full 40-character"),
+        ("      - captured_paths: oracle\n", "      - no_marker_in: [payload]\n", "declares no markers"),
+    ],
+)
+def test_invalid_cloned_repositories_report_located_issues(tmp_path: Path, old: str, new: str, message: str) -> None:
+    block = VALID_BLOCK.replace("\nreview:", CLONE_CASE.replace(old, new, 1).rstrip("\n") + "\nreview:", 1)
+
+    with pytest.raises(SpecError) as caught:
+        load_plan(str(plan_file(tmp_path, block)))
+
+    assert any(message in issue and issue.startswith("cases[2]") for issue in caught.value.issues), caught.value.issues
+
+
+def test_a_case_without_a_repository_source_is_rejected(tmp_path: Path) -> None:
+    issues = issues_for(tmp_path, "    fixture: F01\n", "")
+
+    assert "cases[0]: give exactly one of fixture or repository" in issues

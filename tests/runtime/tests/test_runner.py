@@ -1,6 +1,7 @@
 """Tests for run_case/run_plan orchestration against a fake engine, with no real dotnet build."""
 
 import dataclasses
+import json
 import sys
 from pathlib import Path
 
@@ -9,7 +10,9 @@ import pytest
 from changelens_review.engine.build import EngineBuild, Fingerprint
 from changelens_review.engine.session import EngineSession
 from changelens_review.errors import HarnessError
-from changelens_review.fixtures.spec import FixtureSpec, load_catalog_fixture
+from changelens_review.fixtures.builder import build_fixture
+from changelens_review.fixtures.spec import CloneSpec, RepositorySource, load_catalog_fixture
+from changelens_review.gitcli import git_text
 from changelens_review.jsonio import write_json
 from changelens_review.plans import runner as runner_module
 from changelens_review.plans.model import Case, Deadlines, Expectation, Plan, ProviderSettings, Step
@@ -63,7 +66,7 @@ def _spy_on_proxy_stop(monkeypatch: pytest.MonkeyPatch) -> list[ProviderProxy]:
 def _case(
     case_id: str,
     *,
-    fixture: FixtureSpec | None = None,
+    fixture: RepositorySource | None = None,
     config: dict | None = None,
     expectations: tuple[Expectation, ...] = (),
     provider: ProviderSettings | None = None,
@@ -71,7 +74,7 @@ def _case(
 ) -> Case:
     return Case(
         id=case_id,
-        fixture=fixture if fixture is not None else load_catalog_fixture("F01"),
+        source=fixture if fixture is not None else load_catalog_fixture("F01"),
         provider=provider or ProviderSettings("scripted", "curator-valid-f01"),
         config=config or {},
         deadlines=Deadlines(protocol_seconds=2.0, run_seconds=run_seconds),
@@ -112,14 +115,14 @@ def test_fixture_build_failure_marks_only_that_case_error_and_run_continues(
 ) -> None:
     _use_fake_engine(monkeypatch)
     monkeypatch.setattr(runner_module, "build_engine", lambda *_a, **_k: _fake_build(tmp_path))
-    real_build_fixture = runner_module.build_fixture
+    real_build_repository = runner_module.build_repository
 
-    def fake_build_fixture(spec, destination):
+    def fake_build_repository(spec, destination, clone_cache):
         if spec.id == "broken":
             raise HarnessError("synthetic fixture failure")
-        return real_build_fixture(spec, destination)
+        return real_build_repository(spec, destination, clone_cache)
 
-    monkeypatch.setattr(runner_module, "build_fixture", fake_build_fixture)
+    monkeypatch.setattr(runner_module, "build_repository", fake_build_repository)
 
     broken_fixture = dataclasses.replace(load_catalog_fixture("F01"), id="broken")
     broken_case = _case("broken-case", fixture=broken_fixture)
@@ -222,3 +225,42 @@ def test_replay_errors_the_case_when_the_engine_asks_for_more_than_was_recorded(
     if status == "error":
         assert "replay provider failed" in (result.reason or "")
         assert "no recorded reply left" in (result.reason or "")
+
+
+def _clone_of_f01(tmp_path: Path, url: str | None = None) -> CloneSpec:
+    upstream = build_fixture(load_catalog_fixture("F01"), tmp_path / "upstream").path
+    return CloneSpec(
+        id="clone-case",
+        url=url or f"file://{upstream}",
+        base=git_text(upstream, "rev-parse", "main"),
+        head=git_text(upstream, "rev-parse", "feature/review"),
+        changes=(),
+        uncommitted=(),
+        markers=(),
+    )
+
+
+def test_a_cloned_case_runs_and_records_its_origin_in_run_json(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    _use_fake_engine(monkeypatch)
+    monkeypatch.setattr(runner_module, "build_engine", lambda *_a, **_k: _fake_build(tmp_path))
+    source = _clone_of_f01(tmp_path)
+    case = _case("cloned", fixture=source, expectations=(Expectation("repo_unchanged", True, "expect[0]"),))
+
+    summary = run_plan(_plan(case), runs_root=tmp_path / "review" / "runs")
+
+    assert summary.cases[0].status == "pass", summary.cases[0].reason
+    run_document = json.loads((summary.folder / "run.json").read_text(encoding="utf-8"))
+    assert run_document["cases"] == [{"id": "cloned", "status": "pass", "repository": source.origin()}]
+    assert (tmp_path / "review" / "cache" / "repos").is_dir()
+    assert not (summary.folder / "heavy").exists()
+
+
+def test_an_unreachable_clone_url_errors_the_case_with_the_url(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    missing = f"file://{tmp_path / 'missing'}"
+    case = _case("cloned", fixture=_clone_of_f01(tmp_path, missing))
+
+    result = run_case(case, _fake_build(tmp_path), RunStore.create(_plan(case), tmp_path / "runs"))
+
+    assert result.status == "error"
+    assert f"could not clone {missing}" in (result.reason or "")
+    assert result.repository == case.source.origin()

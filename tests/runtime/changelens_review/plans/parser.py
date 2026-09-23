@@ -11,11 +11,13 @@ from changelens_review.engine.config_keys import CONFIGURABLE_KEYS, RESERVED_KEY
 from changelens_review.errors import SpecError
 from changelens_review.fixtures.spec import (
     FixtureSpec,
-    effective_markers,
+    RepositorySource,
     load_catalog_fixture,
+    parse_clone,
     parse_fixture,
     parse_operation,
     resolve_chain,
+    source_markers,
 )
 from changelens_review.jsontypes import JsonValue
 from changelens_review.paths import PLANS_ROOT, REPO_ROOT
@@ -38,7 +40,7 @@ PLAN_BLOCK = re.compile(r"^```yaml review-plan[ \t]*\n(.*?)^```[ \t]*$", re.MULT
 ID_PATTERN = re.compile(r"^[a-z0-9][a-z0-9-]*$")
 TOP_LEVEL_KEYS = {"id", "engine", "defaults", "cases", "review"}
 DEFAULT_KEYS = {"provider", "config", "deadlines"}
-CASE_KEYS = {"id", "fixture", "provider", "config", "deadlines", "steps", "expect", "skip"}
+CASE_KEYS = {"id", "fixture", "repository", "provider", "config", "deadlines", "steps", "expect", "skip"}
 PROVIDER_KEYS = {"mode", "script", "model", "from", "case"}
 PROVIDER_MODES = ("scripted", "replay", "live")
 PROVIDER_MODE_KEYS = {"scripted": {"script"}, "live": {"model"}, "replay": {"from", "case"}}
@@ -146,7 +148,7 @@ def _parse_case(raw: object, index: int, defaults: _Defaults, issues: list[str])
     if not isinstance(case_id, str) or not ID_PATTERN.match(case_id):
         issues.append(f"{where}.id: use lowercase letters, digits, and hyphens")
         case_id = f"case-{index}"
-    fixture = _parse_case_fixture(raw.get("fixture"), f"{where}.fixture", case_id, issues)
+    source = _parse_case_source(raw, where, case_id, issues)
     provider = _parse_provider(
         _merge_provider(defaults.provider, mapping_value(raw, "provider", where, issues)), f"{where}.provider", issues
     )
@@ -162,10 +164,24 @@ def _parse_case(raw: object, index: int, defaults: _Defaults, issues: list[str])
     if skip is not None and (not isinstance(skip, str) or not skip):
         issues.append(f"{where}.skip: give the reason as text")
         skip = None
-    _check_expectation_prerequisites(steps, expectations, fixture, issues)
-    if fixture is None or provider is None:
+    _check_expectation_prerequisites(steps, expectations, source, issues)
+    if source is None or provider is None:
         return None
-    return Case(case_id, fixture, provider, config, deadlines, steps, expectations, skip)
+    return Case(case_id, source, provider, config, deadlines, steps, expectations, skip)
+
+
+def _parse_case_source(raw: dict, where: str, case_id: str, issues: list[str]) -> RepositorySource | None:
+    """Parse the case's repository: a catalog or inline `fixture`, or a cloned `repository`."""
+    if ("fixture" in raw) == ("repository" in raw):
+        issues.append(f"{where}: give exactly one of fixture or repository")
+        return None
+    if "repository" in raw:
+        try:
+            return parse_clone(raw["repository"], f"{where}.repository", f"clone-{case_id}")
+        except SpecError as error:
+            issues.extend(error.issues)
+            return None
+    return _parse_case_fixture(raw["fixture"], f"{where}.fixture", case_id, issues)
 
 
 def _parse_case_fixture(raw: object, where: str, case_id: str, issues: list[str]) -> FixtureSpec | None:
@@ -406,20 +422,23 @@ def _parse_expectations(raw: object, where: str, issues: list[str]) -> tuple[Exp
 
 
 def _check_expectation_prerequisites(
-    steps: tuple[Step, ...], expectations: tuple[Expectation, ...], fixture: FixtureSpec | None, issues: list[str]
+    steps: tuple[Step, ...],
+    expectations: tuple[Expectation, ...],
+    source: RepositorySource | None,
+    issues: list[str],
 ) -> None:
     analyzes = any(step.kind == "analyze" for step in steps)
     markers: tuple[str, ...] = ()
-    if fixture is not None:
+    if source is not None:
         try:
-            markers = effective_markers(resolve_chain(fixture))
+            markers = source_markers(source)
         except SpecError:
             markers = ()
     for expectation in expectations:
         if requires_analysis(expectation.name) and not analyzes:
             issues.append(f"{expectation.location}: {expectation.name} needs an analyze step in the case")
-        if expectation.name == "no_marker_in" and fixture is not None and not markers:
-            issues.append(f"{expectation.location}: the fixture declares no markers")
+        if expectation.name == "no_marker_in" and source is not None and not markers:
+            issues.append(f"{expectation.location}: the case's repository declares no markers")
 
 
 def _parse_review(raw: object, issues: list[str]) -> ReviewScope | None:

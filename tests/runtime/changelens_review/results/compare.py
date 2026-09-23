@@ -5,78 +5,22 @@ import json
 from collections import Counter
 from collections.abc import Callable
 from dataclasses import dataclass
-from pathlib import Path
+from itertools import zip_longest
 
-from changelens_review.errors import SpecError
 from changelens_review.jsontypes import JsonValue
-from changelens_review.provider.replay import read_exchanges, run_folder
-from changelens_review.results.store import CASE_RESULT, RUN_DOCUMENT
+from changelens_review.results.stored import StoredAttempt, StoredCase, StoredRun
+from changelens_review.results.verdicts import Verdict
 
-STATE_DOCUMENT = "state.json"
 INDENT = "  "
 
-
-@dataclass(frozen=True)
-class StoredCase:
-    """What one stored case recorded: its result, metrics, provider exchanges, and final analysis run row."""
-
-    case_id: str
-    status: str
-    expectations: tuple[dict[str, JsonValue], ...]
-    stage_timings: dict[str, JsonValue]
-    exchanges: tuple[dict[str, JsonValue], ...]
-    run_row: dict[str, JsonValue] | None
-    metrics: dict[str, JsonValue] | None
-
-    def metric(self, group: str, name: str) -> JsonValue:
-        """One recorded metric, such as ("provider", "total_tokens"), or None when it was not recorded."""
-        values = self.metrics.get(group) if self.metrics else None
-        return values.get(name) if isinstance(values, dict) else None
-
-    def reading_model(self) -> JsonValue:
-        """The published reading model, or None when the run published none."""
-        return _parsed(self.run_row.get("reading_model_json")) if self.run_row else None
-
-    def removals(self) -> list[JsonValue]:
-        """The validation removals of the case's run."""
-        removals = _parsed(self.run_row.get("validation_removals_json")) if self.run_row else None
-        return removals if isinstance(removals, list) else []
-
-    def removal_count(self) -> JsonValue:
-        """The validation removal count of the case's run."""
-        return self.run_row.get("validation_removal_count") if self.run_row else None
-
-
-@dataclass(frozen=True)
-class StoredRun:
-    """A stored run's identity and its cases in run order."""
-
-    run_id: str
-    plan_id: JsonValue
-    engine: JsonValue
-    cases: dict[str, StoredCase]
-
-
-def load_run(reference: str, runs_root: Path | None = None) -> StoredRun:
-    """Load a stored run by run id or folder path, raising SpecError when it cannot be read."""
-    candidate = Path(reference)
-    folder = (
-        candidate if candidate.is_dir() and (candidate / RUN_DOCUMENT).is_file() else run_folder(reference, runs_root)
-    )
-    try:
-        document = json.loads((folder / RUN_DOCUMENT).read_text(encoding="utf-8"))
-        cases = {
-            entry["id"]: _load_case(folder / "cases" / entry["id"])
-            for entry in document.get("cases", [])
-            if isinstance(entry, dict) and isinstance(entry.get("id"), str)
-        }
-    except (OSError, json.JSONDecodeError, KeyError) as error:
-        raise SpecError([f"run {folder.name} cannot be read: {error}"]) from error
-    return StoredRun(folder.name, document.get("plan_id"), document.get("engine"), cases)
+type AttemptPair = tuple[str, StoredAttempt | None, StoredAttempt | None]
 
 
 def compare_runs(first: StoredRun, second: StoredRun) -> list[str]:
-    """Return a report of what changed from the first run to the second, case by case."""
+    """Return a report of what changed from the first run to the second, case by case.
+
+    Runs of repeated cases are paired by repeat number, and their lines are labelled with it.
+    """
     lines = [
         f"A: {first.run_id} (plan {first.plan_id}, engine {_engine(first.engine)})",
         f"B: {second.run_id} (plan {second.plan_id}, engine {_engine(second.engine)})",
@@ -89,65 +33,73 @@ def compare_runs(first: StoredRun, second: StoredRun) -> list[str]:
             assert present is not None
             lines.append(f"case {case_id}: only in {'A' if a else 'B'} ({present.status})")
             continue
+        pairs = _attempt_pairs(a, b)
         lines.append(f"case {case_id}: {_change(a.status, b.status)}")
-        lines.extend(_indented(_expectation_lines(a, b)))
+        if len(pairs) > 1:
+            lines.append(f"{INDENT}repeats: {_change(len(a.attempts), len(b.attempts))}")
+        lines.extend(_indented(_expectation_lines(pairs)))
+        lines.extend(_indented(_judge_lines(a, b)))
         lines.extend(_indented(_metric_lines(a, b)))
+        lines.extend(_indented(_verdict_lines(a, b)))
         lines.extend(_indented(_provider_lines(a, b)))
-        lines.extend(_indented(_stage_lines(a, b)))
-        lines.extend(_indented(_removal_lines(a, b)))
-        lines.extend(_indented(_reading_model_lines(a, b)))
+        lines.extend(_indented(_stage_lines(pairs)))
+        for label, x, y in pairs:
+            lines.extend(_indented(_removal_lines(label, x, y)))
+            lines.extend(_indented(_reading_model_lines(label, x, y)))
     return lines
 
 
-def _load_case(folder: Path) -> StoredCase:
-    result = json.loads((folder / CASE_RESULT).read_text(encoding="utf-8"))
-    run_ids = result.get("run_ids") or []
-    run_row = None
-    state_path = folder / STATE_DOCUMENT
-    if run_ids and state_path.is_file():
-        state = json.loads(state_path.read_text(encoding="utf-8"))
-        run_row = next((row for row in state.get("analysis_runs", []) if row.get("run_id") == run_ids[-1]), None)
-    return StoredCase(
-        result["case_id"],
-        result["status"],
-        tuple(result.get("expectations") or ()),
-        result.get("stage_timings") or {},
-        read_exchanges(folder),
-        run_row,
-        result.get("metrics") if isinstance(result.get("metrics"), dict) else None,
-    )
+def _attempt_pairs(a: StoredCase, b: StoredCase) -> list[AttemptPair]:
+    if len(a.attempts) == len(b.attempts) == 1:
+        return [("", a.attempts[0], b.attempts[0])]
+    return [(f"repeat {index} ", x, y) for index, (x, y) in enumerate(zip_longest(a.attempts, b.attempts), start=1)]
 
 
-def _expectation_lines(a: StoredCase, b: StoredCase) -> list[str]:
-    first, second = _keyed_expectations(a), _keyed_expectations(b)
+def _expectation_lines(pairs: list[AttemptPair]) -> list[str]:
     lines = []
-    for key in [*first, *(key for key in second if key not in first)]:
-        x, y = first.get(key), second.get(key)
-        if (
-            x is not None
-            and y is not None
-            and x.get("passed") == y.get("passed")
-            and x.get("actual") == y.get("actual")
-        ):
-            continue
-        lines.append(f"{INDENT}{key[0]}: {_verdict(x)} -> {_verdict(y)}")
+    for label, a, b in pairs:
+        first, second = _keyed(a.expectations if a else ()), _keyed(b.expectations if b else ())
+        for key in [*first, *(key for key in second if key not in first)]:
+            x, y = first.get(key), second.get(key)
+            if (
+                x is not None
+                and y is not None
+                and x.get("passed") == y.get("passed")
+                and x.get("actual") == y.get("actual")
+            ):
+                continue
+            lines.append(f"{INDENT}{label}{key[0]}: {_expectation(x)} -> {_expectation(y)}")
     return ["expectations: no differences"] if not lines else ["expectations:", *lines]
 
 
-def _keyed_expectations(case: StoredCase) -> dict[tuple[str, int], dict[str, JsonValue]]:
+def _keyed(entries: tuple[dict[str, JsonValue], ...]) -> dict[tuple[str, int], dict[str, JsonValue]]:
     seen: Counter[str] = Counter()
     keyed = {}
-    for expectation in case.expectations:
-        name = str(expectation.get("name"))
-        keyed[(name, seen[name])] = expectation
+    for entry in entries:
+        name = str(entry.get("name"))
+        keyed[(name, seen[name])] = entry
         seen[name] += 1
     return keyed
 
 
-def _verdict(expectation: dict[str, JsonValue] | None) -> str:
+def _expectation(expectation: dict[str, JsonValue] | None) -> str:
     if expectation is None:
         return "absent"
     return f"{'pass' if expectation.get('passed') else 'fail'} {_compact(expectation.get('actual'))}"
+
+
+def _judge_lines(a: StoredCase, b: StoredCase) -> list[str]:
+    first, second = _keyed(a.judge_tally), _keyed(b.judge_tally)
+    if not first and not second:
+        return ["judge: none declared"]
+    return ["judge:"] + [
+        f"{INDENT}{key[0]}: {_change(_tally(first.get(key)), _tally(second.get(key)))}"
+        for key in [*first, *(key for key in second if key not in first)]
+    ]
+
+
+def _tally(tally: dict[str, JsonValue] | None) -> str:
+    return "absent" if tally is None else f"{tally.get('passed')} of {tally.get('scored')}"
 
 
 def _metric_lines(a: StoredCase, b: StoredCase) -> list[str]:
@@ -169,6 +121,16 @@ def _metric_lines(a: StoredCase, b: StoredCase) -> list[str]:
         f"reported by {change('provider', 'cost_reported_calls')} of {change('provider', 'calls')} calls",
         f"{INDENT}duration ms: total {change('duration', 'total_ms')}, analysis {change('duration', 'analysis_ms')}",
     ]
+
+
+def _verdict_lines(a: StoredCase, b: StoredCase) -> list[str]:
+    return [f"verdict: {_change(_verdict(a.verdict), _verdict(b.verdict))}"]
+
+
+def _verdict(verdict: Verdict | None) -> str:
+    if verdict is None:
+        return "none"
+    return f"{verdict.verdict} ({json.dumps(verdict.note, ensure_ascii=False)})" if verdict.note else verdict.verdict
 
 
 def _or_na(value: JsonValue, render: Callable[[JsonValue], str]) -> str:
@@ -204,7 +166,7 @@ class _ProviderTotals:
 
 def _provider_totals(case: StoredCase) -> dict[str, _ProviderTotals]:
     totals: dict[str, _ProviderTotals] = {}
-    for record in case.exchanges:
+    for record in case.exchanges():
         role = str(record.get("role"))
         current = totals.get(role, _ProviderTotals())
         cost = record.get("cost")
@@ -218,48 +180,40 @@ def _provider_totals(case: StoredCase) -> dict[str, _ProviderTotals]:
     return totals
 
 
-def _stage_lines(a: StoredCase, b: StoredCase) -> list[str]:
-    stages = [*a.stage_timings, *(stage for stage in b.stage_timings if stage not in a.stage_timings)]
-    if not stages:
-        return ["stages: none recorded"]
-    return ["stages (ms):"] + [
-        f"{INDENT}{stage}: {_change(_stage_ms(a, stage), _stage_ms(b, stage))}" for stage in stages
-    ]
+def _stage_lines(pairs: list[AttemptPair]) -> list[str]:
+    lines = []
+    for label, a, b in pairs:
+        first, second = (a.stage_timings if a else {}), (b.stage_timings if b else {})
+        for stage in [*first, *(stage for stage in second if stage not in first)]:
+            lines.append(f"{INDENT}{label}{stage}: {_change(_stage_ms(first, stage), _stage_ms(second, stage))}")
+    return ["stages: none recorded"] if not lines else ["stages (ms):", *lines]
 
 
-def _stage_ms(case: StoredCase, stage: str) -> JsonValue:
-    timing = case.stage_timings.get(stage)
+def _stage_ms(timings: dict[str, JsonValue], stage: str) -> JsonValue:
+    timing = timings.get(stage)
     return timing.get("milliseconds") if isinstance(timing, dict) else None
 
 
-def _removal_lines(a: StoredCase, b: StoredCase) -> list[str]:
-    lines = [f"validation removals: {_change(a.removal_count(), b.removal_count())}"]
-    first = [_compact(removal) for removal in a.removals()]
-    second = [_compact(removal) for removal in b.removals()]
+def _removal_lines(label: str, a: StoredAttempt | None, b: StoredAttempt | None) -> list[str]:
+    count = _change(a.removal_count() if a else None, b.removal_count() if b else None)
+    lines = [f"{label}validation removals: {count}"]
+    first = [_compact(removal) for removal in (a.removals() if a else [])]
+    second = [_compact(removal) for removal in (b.removals() if b else [])]
     lines.extend(f"{INDENT}- {removal}" for removal in first if removal not in second)
     lines.extend(f"{INDENT}+ {removal}" for removal in second if removal not in first)
     return lines
 
 
-def _reading_model_lines(a: StoredCase, b: StoredCase) -> list[str]:
-    first, second = a.reading_model(), b.reading_model()
+def _reading_model_lines(label: str, a: StoredAttempt | None, b: StoredAttempt | None) -> list[str]:
+    first, second = (a.reading_model() if a else None), (b.reading_model() if b else None)
     if first == second:
-        return ["reading model: " + ("none published" if first is None else "identical")]
+        return [f"{label}reading model: " + ("none published" if first is None else "identical")]
     diff = difflib.unified_diff(_pretty(first), _pretty(second), "A", "B", n=2, lineterm="")
-    return ["reading model: differs", *(INDENT + line for line in diff)]
+    return [f"{label}reading model: differs", *(INDENT + line for line in diff)]
 
 
 def _pretty(value: JsonValue) -> list[str]:
     return [] if value is None else json.dumps(value, indent=2, sort_keys=True, ensure_ascii=False).splitlines()
-
-
-def _parsed(text: JsonValue) -> JsonValue:
-    if not isinstance(text, str):
-        return None
-    try:
-        return json.loads(text)
-    except json.JSONDecodeError:
-        return text
 
 
 def _stored_cost(value: JsonValue) -> str:

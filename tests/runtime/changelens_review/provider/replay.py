@@ -10,6 +10,7 @@ from changelens_review import paths
 from changelens_review.errors import SpecError
 from changelens_review.jsontypes import JsonValue
 from changelens_review.provider.proxy import EXCHANGE_FOLDER, ProxyReply, error_body
+from changelens_review.results.store import repeat_folder
 
 RUN_ID_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
 UNREPLAYABLE_OUTCOMES = ("harness-error",)
@@ -26,10 +27,9 @@ class RecordedReply:
 
 @dataclass(frozen=True)
 class Recording:
-    """A stored case's provider replies and the model its engine requested."""
+    """A stored case's provider replies and the model its engine requested; `source` names the run and case."""
 
-    run_id: str
-    case_id: str
+    source: str
     model: str | None
     replies: tuple[RecordedReply, ...]
 
@@ -52,16 +52,22 @@ def read_exchanges(case_folder: Path) -> tuple[dict[str, JsonValue], ...]:
     return tuple(json.loads(path.read_text(encoding="utf-8")) for path in sorted(folder.glob("*.json")))
 
 
-def load_recording(run_id: str, case_id: str, runs_root: Path | None = None) -> Recording:
-    """Load the replies a stored case received, raising SpecError when there is nothing to replay."""
+def load_recording(run_id: str, case_id: str, runs_root: Path | None = None, *, repeat: int | None = None) -> Recording:
+    """Load the replies a stored case, or one repeat of it, received, raising SpecError when there is nothing to replay."""
     case_folder = run_folder(run_id, runs_root) / "cases" / case_id
     if not case_folder.is_dir():
         raise SpecError([f"run {run_id!r} has no case {case_id!r}"])
+    source = f"{run_id}/{case_id}"
+    if repeat is not None:
+        case_folder = repeat_folder(case_folder, repeat)
+        source = f"{source} repeat {repeat}"
+        if not case_folder.is_dir():
+            raise SpecError([f"case {case_id!r} of run {run_id!r} has no repeat {repeat}"])
     exchanges = read_exchanges(case_folder)
     if not exchanges:
-        raise SpecError([f"case {case_id!r} of run {run_id!r} recorded no provider exchanges"])
+        raise SpecError([f"{source} recorded no provider exchanges"])
     issues = [
-        f"exchange {record.get('sequence')} of case {case_id!r} in run {run_id!r} is a harness failure"
+        f"exchange {record.get('sequence')} of {source} is a harness failure"
         for record in exchanges
         if record.get("outcome") in UNREPLAYABLE_OUTCOMES
     ]
@@ -70,8 +76,7 @@ def load_recording(run_id: str, case_id: str, runs_root: Path | None = None) -> 
     first_request = exchanges[0].get("request")
     model = first_request.get("model") if isinstance(first_request, dict) else None
     return Recording(
-        run_id,
-        case_id,
+        source,
         model if isinstance(model, str) else None,
         tuple(_reply(record) for record in exchanges),
     )
@@ -86,7 +91,7 @@ class ReplayResponder:
         self._lock = threading.Lock()
 
     def respond(self, sequence: int, role: str, request_body: JsonValue) -> ProxyReply:
-        source = f"replay of {self._recording.run_id}/{self._recording.case_id}"
+        source = f"replay of {self._recording.source}"
         with self._lock:
             if self._next >= len(self._recording.replies):
                 return _mismatch(

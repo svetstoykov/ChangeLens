@@ -21,6 +21,7 @@ from changelens_review.fixtures.spec import (
 )
 from changelens_review.jsontypes import JsonValue
 from changelens_review.paths import PLANS_ROOT, REPO_ROOT
+from changelens_review.plans.checks.judge import validate_judge
 from changelens_review.plans.checks.registry import requires_analysis, validate_expectation
 from changelens_review.plans.model import (
     STEP_KINDS,
@@ -40,10 +41,22 @@ PLAN_BLOCK = re.compile(r"^```yaml review-plan[ \t]*\n(.*?)^```[ \t]*$", re.MULT
 ID_PATTERN = re.compile(r"^[a-z0-9][a-z0-9-]*$")
 TOP_LEVEL_KEYS = {"id", "engine", "defaults", "cases", "review"}
 DEFAULT_KEYS = {"provider", "config", "deadlines"}
-CASE_KEYS = {"id", "fixture", "repository", "provider", "config", "deadlines", "steps", "expect", "skip"}
-PROVIDER_KEYS = {"mode", "script", "model", "from", "case"}
+CASE_KEYS = {
+    "id",
+    "fixture",
+    "repository",
+    "provider",
+    "config",
+    "deadlines",
+    "steps",
+    "expect",
+    "judge",
+    "repeat",
+    "skip",
+}
+PROVIDER_KEYS = {"mode", "script", "model", "from", "case", "repeat"}
 PROVIDER_MODES = ("scripted", "replay", "live")
-PROVIDER_MODE_KEYS = {"scripted": {"script"}, "live": {"model"}, "replay": {"from", "case"}}
+PROVIDER_MODE_KEYS = {"scripted": {"script"}, "live": {"model"}, "replay": {"from", "case", "repeat"}}
 DEADLINE_KEYS = {"protocol": "protocol_seconds", "run": "run_seconds"}
 REVIEW_KEYS = {"areas", "focus"}
 ENGINE_SOURCE = "working-tree"
@@ -160,14 +173,18 @@ def _parse_case(raw: object, index: int, defaults: _Defaults, issues: list[str])
     )
     steps = _parse_steps(raw.get("steps"), f"{where}.steps", issues)
     expectations = _parse_expectations(raw.get("expect"), f"{where}.expect", issues)
+    judge = _parse_judge(raw.get("judge"), f"{where}.judge", issues)
+    repeat = _parse_repeat(raw.get("repeat", 1), f"{where}.repeat", issues)
     skip = raw.get("skip")
     if skip is not None and (not isinstance(skip, str) or not skip):
         issues.append(f"{where}.skip: give the reason as text")
         skip = None
     _check_expectation_prerequisites(steps, expectations, source, issues)
+    if judge and not any(step.kind == "analyze" for step in steps):
+        issues.append(f"{where}.judge: soft checks need an analyze step in the case")
     if source is None or provider is None:
         return None
-    return Case(case_id, source, provider, config, deadlines, steps, expectations, skip)
+    return Case(case_id, source, provider, config, deadlines, steps, expectations, skip, judge, repeat)
 
 
 def _parse_case_source(raw: dict, where: str, case_id: str, issues: list[str]) -> RepositorySource | None:
@@ -242,12 +259,16 @@ def _parse_replay_provider(merged: dict, where: str, issues: list[str]) -> Provi
     if not isinstance(case_id, str) or not case_id:
         issues.append(f"{where}.case: a replay provider needs the id of a case in that run")
         return None
+    repeat = merged.get("repeat")
+    if repeat is not None and not _is_repeat_count(repeat):
+        issues.append(f"{where}.repeat: expected the number of a repeat of that case")
+        return None
     try:
-        load_recording(run_id, case_id)
+        load_recording(run_id, case_id, repeat=repeat)
     except SpecError as error:
         issues.extend(f"{where}: {issue}" for issue in error.issues)
         return None
-    return ProviderSettings("replay", replay_run=run_id, replay_case=case_id)
+    return ProviderSettings("replay", replay_run=run_id, replay_case=case_id, replay_repeat=repeat)
 
 
 def _parse_scripted_provider(merged: dict, where: str, issues: list[str]) -> ProviderSettings | None:
@@ -419,6 +440,35 @@ def _parse_expectations(raw: object, where: str, issues: list[str]) -> tuple[Exp
             continue
         expectations.append(Expectation(str(name), expected, location))
     return tuple(expectations)
+
+
+def _parse_judge(raw: object, where: str, issues: list[str]) -> tuple[Expectation, ...]:
+    if raw is None:
+        return ()
+    if not isinstance(raw, dict) or not raw:
+        issues.append(f"{where}: expected a non-empty mapping of soft checks")
+        return ()
+    checks: list[Expectation] = []
+    for name, expected in raw.items():
+        location = f"{where}.{name}"
+        problem = validate_judge(str(name), expected)
+        if problem is not None:
+            issues.append(f"{location}: {problem}")
+        else:
+            checks.append(Expectation(str(name), expected, location))
+    return tuple(checks)
+
+
+def _parse_repeat(raw: object, where: str, issues: list[str]) -> int:
+    if not _is_repeat_count(raw):
+        issues.append(f"{where}: expected a whole number of runs, at least 1")
+        return 1
+    assert isinstance(raw, int)
+    return raw
+
+
+def _is_repeat_count(value: object) -> bool:
+    return isinstance(value, int) and not isinstance(value, bool) and value >= 1
 
 
 def _check_expectation_prerequisites(

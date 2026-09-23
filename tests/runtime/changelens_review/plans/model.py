@@ -15,7 +15,7 @@ class ProviderSettings:
     """How the case's provider endpoint answers.
 
     A scripted provider names a catalog script, a live provider may override the model, and a replay
-    provider names the stored run and case whose recorded replies it serves.
+    provider names the stored run and case, and the repeat of a repeated case, whose recorded replies it serves.
     """
 
     mode: str
@@ -23,6 +23,7 @@ class ProviderSettings:
     model: str | None = None
     replay_run: str | None = None
     replay_case: str | None = None
+    replay_repeat: int | None = None
 
 
 @dataclass(frozen=True)
@@ -59,7 +60,11 @@ class Expectation:
 
 @dataclass(frozen=True)
 class Case:
-    """An isolated repository, provider, engine session, step list, and expectation list."""
+    """An isolated repository, provider, engine session, step list, and expectation list, run `repeat` times.
+
+    `expectations` decide the status and must hold on every repeat; `judge` holds soft checks that are
+    only scored.
+    """
 
     id: str
     source: RepositorySource
@@ -69,6 +74,8 @@ class Case:
     steps: tuple[Step, ...]
     expectations: tuple[Expectation, ...]
     skip: str | None
+    judge: tuple[Expectation, ...] = ()
+    repeat: int = 1
 
 
 @dataclass(frozen=True)

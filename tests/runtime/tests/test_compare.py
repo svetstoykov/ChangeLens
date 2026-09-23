@@ -6,7 +6,8 @@ import pytest
 from changelens_review.cli import main
 from changelens_review.errors import SpecError
 from changelens_review.jsonio import write_json
-from changelens_review.results.compare import compare_runs, load_run
+from changelens_review.results.compare import compare_runs
+from changelens_review.results.stored import load_run
 
 
 def _store_run(runs: Path, run_id: str, status: str, cost: float, thesis: str, removals: list) -> None:
@@ -127,3 +128,57 @@ def test_unknown_run_is_reported(tmp_path: Path, capsys: pytest.CaptureFixture[s
         load_run("missing-run", tmp_path)
     assert main(["compare", "missing-run", "other-run"]) == 2
     assert "missing-run" in capsys.readouterr().err
+
+
+READING_MODEL = {
+    "thesis": {"text": "Labels use the parser.", "evidenceNodeIds": ["n1"]},
+    "areas": [
+        {
+            "title": "Labels",
+            "shape": "walk",
+            "summary": {"text": "The label calls parseName.", "evidenceNodeIds": ["n1", "n2"]},
+            "participants": [{"name": "label", "role": "caller", "changed": True, "evidenceNodeIds": ["n1"]}],
+            "orderedSteps": [{"text": "Parse the name.", "evidenceNodeIds": ["n2"]}],
+        }
+    ],
+    "evidence": [
+        {"nodeId": "n1", "path": "src/label.ts", "startLine": 1, "endLine": 4},
+        {"nodeId": "n2", "path": "src/parse-name.ts", "startLine": 2, "endLine": 9},
+    ],
+}
+
+
+def store_repeated_run(runs: Path, run_id: str, linked: tuple[bool, ...]) -> Path:
+    """Store a run with one repeated case whose repeats passed should_link as listed."""
+    folder = runs / run_id
+    write_json(folder / "run.json", {"run_id": run_id, "plan_id": "live", "cases": [{"id": "live", "status": "pass"}]})
+    case = folder / "cases" / "live"
+    repeats = []
+    for number, passed in enumerate(linked, start=1):
+        judge = {"name": "should_link", "expected": {}, "actual": {}, "passed": passed}
+        repeats.append({"repeat": number, "status": "pass", "expectations": [], "judge": [judge], "run_ids": ["r"]})
+        write_json(
+            case / "repeats" / str(number) / "state.json",
+            {"analysis_runs": [{"run_id": "r", "reading_model_json": json.dumps(READING_MODEL)}]},
+        )
+        write_json(case / "repeats" / str(number) / "provider" / "001-curator.json", {"role": "curator", "cost": 0.1})
+        (case / "repeats" / str(number) / "change.patch").write_text("diff --git a/src/label.ts\n", encoding="utf-8")
+    tally = {"name": "should_link", "expected": {}, "passed": sum(linked), "scored": len(linked)}
+    write_json(
+        case / "result.json",
+        {"case_id": "live", "status": "pass", "repeats": repeats, "judge_tally": [tally], "metrics": None},
+    )
+    return folder
+
+
+def test_compare_pairs_repeats_and_reports_the_soft_check_tally(tmp_path: Path) -> None:
+    store_repeated_run(tmp_path, "run-a", (True, False))
+    store_repeated_run(tmp_path, "run-b", (True, True, True))
+
+    report = "\n".join(compare_runs(load_run("run-a", tmp_path), load_run("run-b", tmp_path)))
+
+    assert "  repeats: 2 -> 3\n" in report
+    assert "  judge:\n    should_link: 1 of 2 -> 3 of 3\n" in report
+    assert "curator: calls 2 -> 3" in report
+    assert "repeat 2 reading model: identical" in report
+    assert "repeat 3 reading model: differs" in report

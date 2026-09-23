@@ -6,6 +6,7 @@ import pytest
 from changelens_review.errors import HarnessError
 from changelens_review.plans.checks.model import CheckResult
 from changelens_review.plans.parser import parse_plan
+from changelens_review.results.metrics import CaseMetrics, ChangeSize, ProviderUsage, RunDuration
 from changelens_review.results.store import CaseResult, RunStore, clean_runs
 
 BLOCK = """
@@ -71,3 +72,23 @@ def test_clean_removes_heavy_output_or_whole_runs(tmp_path: Path) -> None:
 
     clean_runs(tmp_path / "runs", remove_runs=True)
     assert not store.folder.exists()
+
+
+def test_repeats_combine_into_one_status_tally_and_metrics() -> None:
+    def repeat(number: int, status: str, linked: bool | None, total_ms: int | None) -> CaseResult:
+        judge = () if linked is None else (CheckResult("should_link", {}, {}, linked),)
+        metrics = CaseMetrics(ChangeSize(files=7), ProviderUsage(calls=2, cost=0.5), RunDuration(total_ms, None))
+        return CaseResult("c", status, judge=judge, repeat=number, metrics=metrics)
+
+    errored = CaseResult.of_repeats("c", (repeat(1, "pass", True, 10), repeat(2, "error", None, None)), "s", "f")
+    failed = CaseResult.of_repeats("c", (repeat(1, "error", None, None), repeat(2, "fail", False, 30)), "s", "f")
+
+    assert (errored.status, errored.reason) == ("error", "repeat 2: error")
+    assert (failed.status, failed.reason) == ("fail", "repeat 1: error; repeat 2: fail")
+    assert [(t.name, t.passed, t.scored) for t in errored.judge_tally()] == [("should_link", 1, 1)]
+    assert errored.metrics == CaseMetrics(
+        ChangeSize(files=7), ProviderUsage(calls=4, cost=1.0), RunDuration(total_ms=10, analysis_ms=None)
+    )
+    stored = errored.to_json()
+    assert [entry["repeat"] for entry in stored["repeats"]] == [1, 2]
+    assert "repeats" not in stored["repeats"][0]

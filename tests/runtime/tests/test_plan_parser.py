@@ -211,3 +211,67 @@ def test_a_case_without_a_repository_source_is_rejected(tmp_path: Path) -> None:
     issues = issues_for(tmp_path, "    fixture: F01\n", "")
 
     assert "cases[0]: give exactly one of fixture or repository" in issues
+
+
+def test_judge_and_repeat_are_parsed(tmp_path: Path) -> None:
+    block = VALID_BLOCK.replace(
+        "      - provider.calls: 1\n",
+        "      - provider.calls: 1\n"
+        "    repeat: 3\n"
+        "    judge:\n"
+        "      should_link: { from: src/label.ts, to: src/parse-name.ts }\n"
+        "      should_not_flag: [src/decoy.ts]\n",
+        1,
+    )
+
+    case = load_plan(str(plan_file(tmp_path, block))).cases[0]
+
+    assert case.repeat == 3
+    assert [(check.name, check.expected) for check in case.judge] == [
+        ("should_link", {"from": "src/label.ts", "to": "src/parse-name.ts"}),
+        ("should_not_flag", ["src/decoy.ts"]),
+    ]
+    assert case.judge[0].location == "cases[0].judge.should_link"
+
+
+def test_unknown_judge_keys_and_repeats_below_one_are_rejected(tmp_path: Path) -> None:
+    issues = issues_for(
+        tmp_path,
+        "      - provider.calls: 1\n",
+        "      - provider.calls: 1\n    repeat: 0\n    judge: { should_explain: [src/label.ts] }\n",
+    )
+
+    assert "cases[0].repeat: expected a whole number of runs, at least 1" in issues
+    assert any(issue.startswith("cases[0].judge.should_explain: unknown judge check") for issue in issues)
+    assert "cases[0].repeat: expected a whole number of runs, at least 1" in issues_for(
+        tmp_path, "      - provider.calls: 1\n", "      - provider.calls: 1\n    repeat: true\n"
+    )
+
+
+def test_judge_needs_an_analyze_step(tmp_path: Path) -> None:
+    issues = issues_for(
+        tmp_path,
+        "      - analyze: { await: terminal }\n    expect:\n      - outcome: completed\n"
+        "      - captured_paths: oracle\n      - provider.calls: 1\n",
+        "    expect:\n      - repo_unchanged: true\n    judge: { should_not_flag: [src/decoy.ts] }\n",
+    )
+
+    assert "cases[0].judge: soft checks need an analyze step in the case" in issues
+
+
+def test_replay_provider_names_a_repeat_of_a_stored_case(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    runs = tmp_path / "runs"
+    monkeypatch.setattr(paths, "RUNS_ROOT", runs)
+    write_json(
+        runs / "run-a" / "cases" / "live-f01" / "repeats" / "2" / "provider" / "001-curator.json",
+        {"sequence": 1, "role": "curator", "outcome": "live", "response_status": 200, "request": {}, "response": {}},
+    )
+    block = VALID_BLOCK.replace(
+        "mode: scripted, script: curator-valid-f01", "mode: replay, from: run-a, case: live-f01, repeat: 2", 1
+    )
+
+    assert load_plan(str(plan_file(tmp_path, block))).cases[0].provider.replay_repeat == 2
+    with pytest.raises(SpecError, match="has no repeat 3"):
+        load_plan(str(plan_file(tmp_path, block.replace("repeat: 2", "repeat: 3"))))
+    with pytest.raises(SpecError, match="recorded no provider exchanges"):
+        load_plan(str(plan_file(tmp_path, block.replace(", repeat: 2", ""))))

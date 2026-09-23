@@ -17,17 +17,37 @@ from changelens_review.jsontypes import JsonValue
 from changelens_review.paths import RUNS_ROOT
 from changelens_review.plans.checks.model import CheckResult
 from changelens_review.plans.model import Plan
-from changelens_review.results.metrics import CaseMetrics, ChangeSize, ProviderUsage
+from changelens_review.results.metrics import CaseMetrics, ChangeSize, ProviderUsage, RunDuration
 
 CASE_STATUSES = ("pass", "fail", "error", "skipped")
 RUN_DOCUMENT = "run.json"
 CASE_RESULT = "result.json"
 HEAVY_FOLDER = "heavy"
+REPEATS_FOLDER = "repeats"
+CHANGE_PATCH = "change.patch"
+
+
+@dataclass(frozen=True)
+class JudgeTally:
+    """How many of the runs that scored a soft check passed it."""
+
+    name: str
+    expected: JsonValue
+    passed: int
+    scored: int
+
+    def to_json(self) -> dict[str, JsonValue]:
+        """Return the stored form."""
+        return asdict(self)
 
 
 @dataclass(frozen=True)
 class CaseResult:
-    """A finished case: its status, why, and everything it measured."""
+    """A finished case, or one repeat of it: its status, why, what it scored, and everything it measured.
+
+    A repeated case keeps each repeat in `repeats`. Its status is `fail` when any repeat failed, else
+    `error` when any repeat errored, else `pass`. Its metrics total the repeats, counting the change once.
+    """
 
     case_id: str
     status: str
@@ -41,23 +61,91 @@ class CaseResult:
     finished_at: str | None = None
     repository: dict[str, JsonValue] | None = None
     metrics: CaseMetrics | None = None
+    judge: tuple[CheckResult, ...] = ()
+    repeat: int | None = None
+    repeats: tuple["CaseResult", ...] = ()
+
+    @classmethod
+    def of_repeats(cls, case_id: str, repeats: tuple["CaseResult", ...], started_at: str, finished_at: str) -> Self:
+        """Combine the numbered repeats of one case."""
+        statuses = [repeat.status for repeat in repeats]
+        status = next((status for status in ("fail", "error") if status in statuses), "pass")
+        troubled = [f"repeat {repeat.repeat}: {repeat.status}" for repeat in repeats if repeat.status != "pass"]
+        return cls(
+            case_id,
+            status,
+            reason="; ".join(troubled) or None,
+            started_at=started_at,
+            finished_at=finished_at,
+            metrics=_combined_metrics([repeat.metrics for repeat in repeats if repeat.metrics is not None]),
+            repeats=repeats,
+        )
+
+    def judge_tally(self) -> tuple[JudgeTally, ...]:
+        """Count, per soft check, the runs that passed it among those that scored it."""
+        runs = self.repeats or (self,)
+        declared = max(runs, key=lambda run: len(run.judge)).judge
+        return tuple(
+            JudgeTally(
+                check.name,
+                check.expected,
+                sum(len(run.judge) > index and run.judge[index].passed for run in runs),
+                sum(len(run.judge) > index for run in runs),
+            )
+            for index, check in enumerate(declared)
+        )
 
     def to_json(self) -> dict[str, JsonValue]:
         """Return the stored form."""
         return {
             "case_id": self.case_id,
+            **self._run_json(),
+            "repository": self.repository,
+            "judge_tally": [tally.to_json() for tally in self.judge_tally()],
+            "repeats": [repeat._run_json() for repeat in self.repeats],
+        }
+
+    def _run_json(self) -> dict[str, JsonValue]:
+        return {
+            "repeat": self.repeat,
             "status": self.status,
             "reason": self.reason,
             "interruption": self.interruption,
             "expectations": [result.to_json() for result in self.expectations],
+            "judge": [result.to_json() for result in self.judge],
             "run_ids": list(self.run_ids),
             "step_timings": list(self.step_timings),
             "stage_timings": self.stage_timings,
             "started_at": self.started_at,
             "finished_at": self.finished_at,
-            "repository": self.repository,
             "metrics": self.metrics.to_json() if self.metrics is not None else None,
         }
+
+
+def repeat_folder(case_folder: Path, repeat: int) -> Path:
+    """Return where one repeat of a repeated case keeps its light output."""
+    return case_folder / REPEATS_FOLDER / str(repeat)
+
+
+def _combined_metrics(measured: list[CaseMetrics]) -> CaseMetrics | None:
+    if not measured:
+        return None
+    provider = ProviderUsage()
+    for metrics in measured:
+        provider = provider.plus(metrics.provider)
+    return CaseMetrics(
+        measured[0].change,
+        provider,
+        RunDuration(
+            _summed([metrics.duration.total_ms for metrics in measured]),
+            _summed([metrics.duration.analysis_ms for metrics in measured]),
+        ),
+    )
+
+
+def _summed(values: list[int | None]) -> int | None:
+    present = [value for value in values if value is not None]
+    return sum(present) if present else None
 
 
 @dataclass(frozen=True)

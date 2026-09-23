@@ -32,6 +32,44 @@ A case can review a public repository instead of a fixture. It replaces `fixture
 
 The `curator-minimal-any` script cites only the binder's first node, so a scripted case can run on any repository.
 
+## Soft checks and repeats
+
+A live explanation changes from run to run, so exact expectations cannot judge it. A case can add a `judge` block of soft checks and a `repeat` count:
+
+```yaml
+  - id: live-f01-quality
+    fixture: F01
+    provider: { mode: live }
+    deadlines: { run: 300 }
+    repeat: 3
+    steps: [open, prepare, analyze]
+    expect:
+      - citations: resolve                 # hard: fails the case if any repeat breaks it
+      - repo_unchanged: true
+    judge:
+      should_link: { from: src/label.ts, to: src/parse-name.ts }
+      should_flag_related: [src/stable.ts]
+      should_not_flag: [src/decoy.ts]      # reported as, for example, "2 of 3 repeats"
+```
+
+- Status comes only from `expect`. Soft checks are scored and never change it.
+- A path is flagged when the reading model's thesis or an area references an evidence node at that path. Two paths are linked when one area references evidence at both, through its summary, steps, or participants. `should_link` takes one `{from, to}` pair or a list of them.
+- `repeat` runs the case that many times (default 1). Each repeat gets its own repository copy, proxy, engine state, and recorded exchanges under `cases/<case-id>/repeats/<n>/`. A repeated case is `fail` when any repeat failed, else `error` when any repeat errored, else `pass`.
+- `result.json` keeps each repeat's expectations and soft-check results in `repeats`, and `judge_tally` counts, per soft check, how many runs passed it out of the runs that scored it. A repeated case's `metrics` total its repeats and count the change once.
+- A replay can serve one repeat of a stored case: `{ mode: replay, from: <run id>, case: <case id>, repeat: <n> }`.
+
+Every case also stores the reviewed change as `change.patch`, so `review show` can print the published explanation next to the diff.
+
+## Verdicts
+
+After a run, record your own judgement of a case's explanation:
+
+```sh
+uv run --project tests/runtime review verdict <run> <case> good|weak|wrong [--note "why"]
+```
+
+The verdict is written to `cases/<case-id>/verdict.json` beside `result.json`, which is never rewritten. A later verdict on the same case replaces the earlier one. `review compare` shows the verdict under the case's tokens and cost.
+
 ## Commands
 
 Run from the repository root:
@@ -40,12 +78,14 @@ Run from the repository root:
 uv run --project tests/runtime review check <plan>        # validate a plan
 uv run --project tests/runtime review run <plan> [--keep]  # run it; --keep retains heavy output
 uv run --project tests/runtime review compare <run-a> <run-b>  # compare two stored runs case by case
+uv run --project tests/runtime review show <run> <case> [--repeat N]  # explanation next to the diff
+uv run --project tests/runtime review verdict <run> <case> <verdict> [--note TEXT]  # record your verdict
 uv run --project tests/runtime review clean [--all]        # delete heavy output, or whole runs
 ```
 
 `<plan>` is a Markdown path or a plan id in `docs/evaluation/review-plans/`. Results are written to `.changelens-review/runs/<UTC timestamp>-<plan id>/`.
 
-`compare` matches cases by id and reports status changes, expectation differences, case metrics, provider calls, tokens, cost, and latency per role, stage timings, validation removals, and a diff of the published reading models.
+`compare` matches cases by id and reports status changes, expectation differences, soft-check tallies, case metrics, verdicts, provider calls, tokens, cost, and latency per role, stage timings, validation removals, and a diff of the published reading models. Repeats of repeated cases are paired by number.
 
 ## Metrics
 

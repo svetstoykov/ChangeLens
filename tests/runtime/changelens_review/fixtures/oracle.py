@@ -203,6 +203,22 @@ def read_blob(repository: Path, object_id: str) -> bytes:
     return git(repository, "cat-file", "blob", object_id)
 
 
+def change_patch(repository: Path, oracle: Oracle) -> bytes:
+    """Return the reviewed change, from the merge base to HEAD, as a unified diff."""
+    return git(
+        repository,
+        "-c",
+        "diff.renames=true",
+        "diff",
+        "--no-ext-diff",
+        "--no-textconv",
+        "--no-color",
+        RENAME_THRESHOLD,
+        oracle.merge_base,
+        oracle.head,
+    )
+
+
 def _diff(repository: Path, format_option: str, merge_base: str, head: str) -> bytes:
     return git(
         repository,

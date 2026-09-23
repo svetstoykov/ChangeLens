@@ -312,3 +312,58 @@ def test_an_unreachable_clone_url_errors_the_case_with_the_url(tmp_path: Path, m
     assert result.status == "error"
     assert f"could not clone {missing}" in (result.reason or "")
     assert result.repository == case.source.origin()
+
+
+def test_a_repeated_case_runs_each_repeat_apart_and_tallies_soft_checks_without_failing(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _use_fake_engine(monkeypatch)
+    monkeypatch.setattr(runner_module, "build_engine", lambda *_a, **_k: _fake_build(tmp_path))
+    case = dataclasses.replace(
+        _case("repeated", expectations=(Expectation("outcome", "completed", "expect[0]"),)),
+        judge=(Expectation("should_flag_related", ["src/stable.ts"], "judge.should_flag_related"),),
+        repeat=3,
+    )
+
+    summary = run_plan(_plan(case), runs_root=tmp_path / "runs")
+
+    case_folder = summary.folder / "cases" / "repeated"
+    result = json.loads((case_folder / "result.json").read_text(encoding="utf-8"))
+    assert result["status"] == "pass", result["reason"]
+    assert [(repeat["repeat"], repeat["status"]) for repeat in result["repeats"]] == [
+        (1, "pass"),
+        (2, "pass"),
+        (3, "pass"),
+    ]
+    assert [len(repeat["judge"]) for repeat in result["repeats"]] == [1, 1, 1]
+    assert result["judge_tally"] == [
+        {"name": "should_flag_related", "expected": ["src/stable.ts"], "passed": 0, "scored": 3}
+    ]
+    assert result["metrics"]["change"]["files"] == 7
+    for number in (1, 2, 3):
+        repeat = case_folder / "repeats" / str(number)
+        assert (repeat / "oracle.json").is_file()
+        assert (repeat / "protocol.ndjson").is_file()
+        assert "diff --git a/src/label.ts b/src/label.ts" in (repeat / "change.patch").read_text(encoding="utf-8")
+    assert not (case_folder / "oracle.json").exists()
+
+
+def test_a_hard_check_failing_in_one_repeat_fails_the_case(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    _use_fake_engine(monkeypatch)
+    evaluations = iter((True, False, True))
+    real_evaluate = runner_module.evaluate_expectation
+
+    def evaluate_failing_second(name, expected, evidence):
+        return dataclasses.replace(real_evaluate(name, expected, evidence), passed=next(evaluations))
+
+    monkeypatch.setattr(runner_module, "evaluate_expectation", evaluate_failing_second)
+    case = dataclasses.replace(
+        _case("flaky", expectations=(Expectation("outcome", "completed", "expect[0]"),)), repeat=3
+    )
+    store = RunStore.create(_plan(case), tmp_path / "runs")
+
+    result = run_case(case, _fake_build(tmp_path), store)
+
+    assert result.status == "fail"
+    assert [repeat.status for repeat in result.repeats] == ["pass", "fail", "pass"]
+    assert result.reason == "repeat 2: fail"

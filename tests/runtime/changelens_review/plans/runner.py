@@ -15,11 +15,12 @@ from changelens_review.engine.environment import (
 from changelens_review.engine.session import EngineSession
 from changelens_review.errors import CaseInterrupted, HarnessError, SpecError
 from changelens_review.fixtures.builder import BuiltFixture, build_repository
-from changelens_review.fixtures.oracle import Oracle, compute_oracle, snapshot_repository
+from changelens_review.fixtures.oracle import Oracle, change_patch, compute_oracle, snapshot_repository
 from changelens_review.fixtures.spec import CloneSpec
 from changelens_review.jsonio import write_json
 from changelens_review.jsontypes import JsonValue
 from changelens_review.paths import RUNS_ROOT, clone_cache
+from changelens_review.plans.checks.judge import evaluate_judge
 from changelens_review.plans.checks.model import CaseEvidence
 from changelens_review.plans.checks.registry import evaluate_expectation
 from changelens_review.plans.model import Case, Plan
@@ -30,7 +31,7 @@ from changelens_review.provider.proxy import ProviderProxy, Responder, ScriptedR
 from changelens_review.provider.replay import ReplayResponder, load_recording
 from changelens_review.provider.scripts import load_script
 from changelens_review.results.metrics import CaseMetrics, ChangeSize, ProviderUsage, RunDuration
-from changelens_review.results.store import CaseResult, RunStore, RunSummary
+from changelens_review.results.store import CHANGE_PATCH, CaseResult, RunStore, RunSummary, repeat_folder
 
 ENGINE_LOG = "engine.log"
 PROTOCOL_TRANSCRIPT = "protocol.ndjson"
@@ -65,12 +66,13 @@ def run_plan(plan: Plan, *, keep: bool = False, runs_root: Path = RUNS_ROOT) -> 
 
 
 def run_case(case: Case, build: EngineBuild, store: RunStore) -> CaseResult:
-    """Run one case in isolation and evaluate its expectations.
+    """Run one case, once or once per repeat, in isolation and evaluate its expectations and soft checks.
 
+    Each repeat gets its own repository copy, proxy, engine state, and folder under the case folder.
     A case on a cloned repository records the URL and commits it used in its result.
     Everything from repository and oracle setup onward runs inside an outer harness-fault
     boundary: any `HarnessError` or `OSError` that escapes the proxy, the engine session, or
-    directory setup marks this one case `error` instead of aborting the whole run.
+    directory setup marks this one case, or this one repeat, `error` instead of aborting the whole run.
     """
     return _with_origin(case, _run_case(case, build, store))
 
@@ -81,15 +83,30 @@ def _run_case(case: Case, build: EngineBuild, store: RunStore) -> CaseResult:
         return CaseResult(case.id, "skipped", reason=case.skip, started_at=started_at, finished_at=started_at)
     folder = store.case_folder(case.id)
     heavy = store.heavy / "cases" / case.id
+    if case.repeat == 1:
+        return _run_once(case, build, store, folder, heavy)
+    repeats = tuple(
+        replace(
+            _run_once(case, build, store, repeat_folder(folder, number), repeat_folder(heavy, number)), repeat=number
+        )
+        for number in range(1, case.repeat + 1)
+    )
+    return CaseResult.of_repeats(case.id, repeats, started_at, utc_now_iso())
+
+
+def _run_once(case: Case, build: EngineBuild, store: RunStore, folder: Path, heavy: Path) -> CaseResult:
+    started_at = utc_now_iso()
     try:
         fixture = build_repository(case.source, heavy / "repo", clone_cache(store.folder.parent))
         oracle = compute_oracle(fixture)
+        patch = change_patch(fixture.path, oracle)
         provider = provider_setup(case, store.folder.parent)
     except (HarnessError, SpecError, OSError) as error:
         return CaseResult(
             case.id, "error", reason=f"case setup failed: {error}", started_at=started_at, finished_at=utc_now_iso()
         )
     write_json(folder / "oracle.json", oracle.to_json())
+    (folder / CHANGE_PATCH).write_bytes(patch)
     try:
         return _run_case_session(case, build, folder, heavy, fixture, oracle, provider, started_at)
     except (HarnessError, OSError) as error:
@@ -119,7 +136,9 @@ def provider_setup(case: Case, runs_root: Path) -> ProviderSetup:
             )
         case "replay":
             assert settings.replay_run is not None and settings.replay_case is not None
-            recording = load_recording(settings.replay_run, settings.replay_case, runs_root)
+            recording = load_recording(
+                settings.replay_run, settings.replay_case, runs_root, repeat=settings.replay_repeat
+            )
             return ProviderSetup(ReplayResponder(recording), recording.model or SCRIPTED_MODEL, DEFAULT_REQUEST_TIMEOUT)
         case _:
             assert settings.script is not None
@@ -138,7 +157,7 @@ def _run_case_session(
     provider: ProviderSetup,
     started_at: str,
 ) -> CaseResult:
-    """Start the isolated proxy and engine, execute the case's steps, and evaluate it."""
+    """Start the isolated proxy and engine, execute the case's steps, and evaluate and score it."""
     state_directory = heavy / "state"
     log_directory = heavy / "logs"
     state_directory.mkdir(parents=True)
@@ -206,9 +225,10 @@ def _run_case_session(
     )
     try:
         checks = tuple(evaluate_expectation(e.name, e.expected, evidence) for e in case.expectations)
+        judge = tuple(evaluate_judge(j.name, j.expected, evidence) for j in case.judge)
     except HarnessError as error:
         return result("error", reason=f"expectation evaluation failed: {error}")
-    return result("pass" if all(check.passed for check in checks) else "fail", expectations=checks)
+    return result("pass" if all(check.passed for check in checks) else "fail", expectations=checks, judge=judge)
 
 
 def _execute_steps(

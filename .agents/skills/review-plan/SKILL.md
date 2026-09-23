@@ -34,6 +34,11 @@ Use the declarative format accepted by the runtime tool:
   `review.focus` when code review is part of the request.
 - Keep plans deterministic by default with scripted provider replies. Use live
   provider mode only when the user explicitly wants it.
+- For a live case, keep `expect` to checks that hold whatever the model says,
+  such as `citations: resolve` and `repo_unchanged`. Put the answer-quality
+  questions under `judge` (`should_link`, `should_flag_related`,
+  `should_not_flag`) and set `repeat` above 1. Soft checks are only scored and
+  never change the case status.
 
 Run the validator from the repository root:
 

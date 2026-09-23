@@ -82,6 +82,35 @@ public sealed class AnalysisPipelineTests
         await host.StopAsync(TestContext.Current.CancellationToken);
     }
 
+    /// <summary>Asynchronously verifies a rejected thesis or an unknown dropped node id still publishes a reading model.</summary>
+    /// <param name="rejectThesis">Whether the thesis cites only an undisclosed evidence node id.</param>
+    /// <param name="dropUnknownNode">Whether the draft drops an undisclosed evidence node id.</param>
+    /// <returns>A task that represents the asynchronous operation.</returns>
+    [Theory]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    public async Task ValidationFaultsOutsideTheReadingModelStillPublishIt(bool rejectThesis, bool dropUnknownNode)
+    {
+        using var repository = CreateCommittedChangeRepository();
+        var client = new ScriptedModelCompletionClient(request => DraftForBinder(request, rejectThesis, dropUnknownNode));
+        await using var host = await AnalysisPipelineTestHost.CreateAsync(
+            services => services.Replace(ServiceDescriptor.Scoped<IModelCompletionClient>(_ => client)));
+        await host.StartAsync(TestContext.Current.CancellationToken);
+        await host.OpenRepositoryAsync(repository.Path);
+        var freshnessToken = await host.PrepareFreshnessTokenAsync(repository.Path, repository.DefaultTarget);
+        var runId = await host.StartAsync(repository.Path, repository.DefaultTarget, freshnessToken);
+
+        using var terminal = await host.PollUntilTerminalAsync(runId, TimeSpan.FromSeconds(60));
+
+        var result = terminal.RootElement.GetProperty("result");
+        Assert.NotEqual("failed", result.GetProperty("state").GetString());
+        Assert.Equal(JsonValueKind.Object, result.GetProperty("readingModel").ValueKind);
+        var removals = result.GetProperty("validationRemovals").EnumerateArray().ToArray();
+        Assert.Contains(removals, removal => removal.GetProperty("id").GetString() == "thesis");
+        Assert.DoesNotContain(removals, removal => removal.GetProperty("scope").GetString() is "thesis" or "droppedNodeIds");
+        await host.StopAsync(TestContext.Current.CancellationToken);
+    }
+
     /// <summary>Asynchronously verifies an unreadable curator draft fails the run without a reading model.</summary>
     /// <returns>A task that represents the asynchronous operation.</returns>
     [Fact]
@@ -171,19 +200,23 @@ public sealed class AnalysisPipelineTests
         Assert.True(ReadingProjectionBudget.Fits(new AnalysisReadingProjection(serialized.Data!, "[]")));
     }
 
-    private static Result<ModelCompletionModel> DraftForBinder(ModelCompletionRequest request)
+    private static Result<ModelCompletionModel> DraftForBinder(ModelCompletionRequest request) => DraftForBinder(request, false, false);
+
+    private static Result<ModelCompletionModel> DraftForBinder(ModelCompletionRequest request, bool rejectThesis, bool dropUnknownNode)
     {
         using var binder = JsonDocument.Parse(request.UserMessage);
         var evidence = binder.RootElement.GetProperty("evidence").EnumerateArray().ToArray();
         var marker = evidence.FirstOrDefault(node => Text(node).Contains("committed-marker", StringComparison.Ordinal));
         var nodeId = (marker.ValueKind == JsonValueKind.Undefined ? evidence[0] : marker).GetProperty("nodeId").GetString()!;
-        return Result.Success(Completion(DraftJson(nodeId, evidence[0].GetProperty("nodeId").GetString()!)));
+        string[] thesisNodeIds = rejectThesis ? ["missing"] : [nodeId, "missing"];
+        string[] droppedNodeIds = dropUnknownNode ? ["unknown-drop"] : [];
+        return Result.Success(Completion(DraftJson(thesisNodeIds, evidence[0].GetProperty("nodeId").GetString()!, droppedNodeIds)));
     }
 
-    private static string DraftJson(string thesisNodeId, string trackNodeId) =>
+    private static string DraftJson(string[] thesisNodeIds, string trackNodeId, string[] droppedNodeIds) =>
         JsonSerializer.Serialize(new
         {
-            thesis = new { text = "The committed change matters.", evidenceNodeIds = new[] { thesisNodeId, "missing" } },
+            thesis = new { text = "The committed change matters.", evidenceNodeIds = thesisNodeIds },
             tracks = new object[]
             {
                 new
@@ -211,7 +244,7 @@ public sealed class AnalysisPipelineTests
                     purposes = Array.Empty<object>(),
                 },
             },
-            droppedNodeIds = Array.Empty<string>(),
+            droppedNodeIds,
         });
 
     private static ModelCompletionModel Completion(string text) => new("scripted-model", text, 1.0, 1, 1, null, null);

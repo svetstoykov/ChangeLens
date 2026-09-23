@@ -184,16 +184,7 @@ public sealed class DraftValidationService : IDraftValidationService
             });
         }
 
-        if (thesis is null)
-        {
-            removals.Add(new ValidationRemoval("thesis", "thesis", "not evidence-bound"));
-        }
-
-        var dropped = this.KeepDroppedNodeIds(
-            draft.DroppedNodeIds,
-            nodeIds,
-            removals,
-            ref invalidReferenceCount);
+        var dropped = this.KeepDroppedNodeIds(draft.DroppedNodeIds, nodeIds, ref invalidReferenceCount);
         var cited = CitedNodeIds(draft);
         var undeclaredNodeCount = nodeIds.Count(nodeId => !cited.Contains(nodeId) && !dropped.Contains(nodeId));
         var validatedDraft = new MentalModelDraft(thesis ?? new BoundStatement(string.Empty, []), tracks, dropped);
@@ -315,24 +306,11 @@ public sealed class DraftValidationService : IDraftValidationService
         return known;
     }
 
-    private IReadOnlyList<string> KeepDroppedNodeIds(
-        IReadOnlyList<string> droppedNodeIds,
-        HashSet<string> nodeIds,
-        List<ValidationRemoval> removals,
-        ref int invalidReferenceCount)
+    private IReadOnlyList<string> KeepDroppedNodeIds(IReadOnlyList<string> droppedNodeIds, HashSet<string> nodeIds, ref int invalidReferenceCount)
     {
         var distinct = Distinct(droppedNodeIds);
         var known = distinct.Where(nodeIds.Contains).ToArray();
-        var unknown = distinct.Where(id => !nodeIds.Contains(id)).ToArray();
-        invalidReferenceCount += unknown.Length;
-        if (unknown.Length > 0)
-        {
-            removals.Add(new ValidationRemoval(
-                "droppedNodeIds",
-                "droppedNodeIds",
-                $"{unknown.Length} id(s) are not binder evidence nodes"));
-        }
-
+        invalidReferenceCount += distinct.Count - known.Length;
         return known;
     }
 

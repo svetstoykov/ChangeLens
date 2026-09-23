@@ -1,6 +1,50 @@
 # ChangeLens runtime review tool
 
-Runs evidence-based runtime reviews against the real ChangeLens engine. The engine is built from the working tree for every run and driven over its NDJSON protocol. Fixture repositories are built from `catalog/fixtures`. Every AI call the engine makes goes to a loopback proxy that records each exchange, and a case's `provider.mode` decides how the proxy answers:
+Runs evidence-based runtime reviews against the real ChangeLens engine.
+
+## How a run works
+
+A plan is a Markdown file with a `review-plan` YAML block that lists cases. The smoke plan in `smoke/smoke-plan.md` has one:
+
+```yaml
+cases:
+  - id: f01-lifecycle
+    fixture: F01                 # the repository to review
+    steps: [open, prepare, analyze]
+    expect:
+      - outcome: completed       # the analysis run finishes
+      - captured_paths: oracle   # the engine captures exactly the paths Git says changed
+      - citations: resolve       # every citation points at real evidence
+      - provider.calls: 1        # the engine makes one AI call
+      - repo_unchanged: true     # the engine leaves the repository untouched
+```
+
+`review check smoke` only validates the plan. `review run smoke` then:
+
+1. Builds the engine from the working tree once and records the commit and a hash of uncommitted changes.
+2. For each case, builds the repository. `catalog/fixtures/F01.yaml` becomes a small Git repository whose `feature/review` branch adds a parser guard, a rename, a deletion, a mode change, and a binary edit on top of `main`. A case can clone a public repository instead.
+3. Computes the oracle from Git: the paths that changed and how, which `captured_paths: oracle` compares against.
+4. Starts the provider proxy in the case's mode (`scripted`, `live`, or `replay`, below) and points the engine at it.
+5. Starts the engine and sends each step as a protocol request: `open` is `repositories.open`, `prepare` is `comparisons.prepare`, and `analyze` starts an analysis run and waits for its terminal state.
+6. Evaluates each expectation and gives the case a status: `pass`, `fail`, or `error` when the harness itself broke.
+
+Each run is stored in `.changelens-review/runs/<UTC timestamp>-<plan id>/`, with `run.json` for the run and one folder per case:
+
+```text
+cases/f01-lifecycle/
+  result.json       status, each expectation with its actual value, metrics
+  oracle.json       what Git says changed
+  protocol.ndjson   every request and response
+  provider/         every AI exchange, such as 001-curator.json
+  state.json        a read-only snapshot of the engine database
+  engine.log        engine stderr
+```
+
+After a run, `review show` prints a case's published explanation next to its diff, `review verdict` records your judgement of it, and `review compare` lines two runs up case by case. A tuning loop runs a plan live, changes a prompt or setting, runs it again, and compares the two runs; `replay` reruns engine-side changes against the earlier recorded answers without calling the model.
+
+## Providers
+
+The engine is built from the working tree for every run and driven over its NDJSON protocol. Fixture repositories are built from `catalog/fixtures`. Every AI call the engine makes goes to a loopback proxy that records each exchange, and a case's `provider.mode` decides how the proxy answers:
 
 - `scripted` serves a catalog script from `catalog/scripts`: `{ mode: scripted, script: <id> }`.
 - `live` forwards each request to the real provider: `{ mode: live, model: <optional override> }`. The base URL, model, and API key come from the engine's `appsettings.json`, then its gitignored `appsettings.Development.json`, then `ChangeLens__Analysis__ModelCompletion__*` environment variables. The engine still receives a synthetic key; the proxy adds the real one to outgoing requests only, so the key never reaches the run folder. The engine's request timeout follows the case's run deadline, so give live cases a long one, such as `deadlines: { run: 300 }`.

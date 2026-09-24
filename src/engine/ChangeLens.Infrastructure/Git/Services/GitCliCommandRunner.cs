@@ -449,7 +449,7 @@ public sealed class GitCliCommandRunner : IGitCommandRunner, IGitBinaryCommandRu
     }
 
     /// <summary>
-    ///     Writes the bounded standard-input payload and closes the stream so the command can finish.
+    ///     Writes the standard-input payload, if any, and closes the stream so the command can finish.
     /// </summary>
     /// <param name="process">The started process. Cannot be <see langword="null" />.</param>
     /// <param name="standardInput">The bytes to write before closing standard input.</param>
@@ -457,16 +457,14 @@ public sealed class GitCliCommandRunner : IGitCommandRunner, IGitBinaryCommandRu
     ///     A <see cref="CancellationToken" /> to observe while writing the payload.
     /// </param>
     /// <returns>A task that represents the asynchronous operation.</returns>
-    private static async Task WriteStandardInputAsync(Process process, byte[] standardInput, CancellationToken cancellationToken)
+    private static async Task WriteStandardInputAsync(Process process, ReadOnlyMemory<byte> standardInput, CancellationToken cancellationToken)
     {
-        if (standardInput.Length == 0)
-        {
-            return;
-        }
-
         try
         {
-            await process.StandardInput.BaseStream.WriteAsync(standardInput, cancellationToken);
+            if (!standardInput.IsEmpty)
+            {
+                await process.StandardInput.BaseStream.WriteAsync(standardInput, cancellationToken);
+            }
         }
         catch (Exception exception) when (exception is IOException or InvalidOperationException)
         {

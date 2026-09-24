@@ -1,3 +1,4 @@
+using System.Globalization;
 using ChangeLens.Core.AnalysisRuns.Models;
 using ChangeLens.Core.Git.Constants;
 using ChangeLens.Core.Git.Interfaces;
@@ -93,6 +94,90 @@ public sealed class FrozenGitTreeReaderIntegrationTests
             [new FrozenGitTreeFile("missing.txt", requestedObjectId, 4, "100644")], TestContext.Current.CancellationToken);
 
         AssertFailure(result, ErrorType.Validation, SnapshotErrorCode.ObjectNotCaptured);
+    }
+
+    /// <summary>
+    ///     Asynchronously returns a stale failure when a batch names a captured object that the repository no longer has.
+    /// </summary>
+    /// <returns>A task that represents the asynchronous operation.</returns>
+    [Fact]
+    public async Task ReadBlobsAsync_MissingCapturedObject_ReturnsStaleFailure()
+    {
+        using var repository = new TemporaryGitRepository();
+        var missingObjectId = new string('f', 40);
+        var snapshot = CreateSnapshot(
+            repository,
+            repository.Revision,
+            repository.Revision,
+            [new SnapshotManifestEntry("missing.txt", null, SnapshotChangeCategory.Added, "000000", "100644", new string('0', 40), missingObjectId)]);
+        var logger = new RecordingSnapshotLogger<FrozenGitTreeReader>();
+        var reader = OpenReader(repository, snapshot, logger: logger);
+
+        var result = await reader.ReadBlobsAsync(
+            [new FrozenGitTreeFile("missing.txt", missingObjectId, 4, "100644")], TestContext.Current.CancellationToken);
+
+        AssertFailure(result, ErrorType.Conflict, SnapshotErrorCode.StaleObject);
+        AssertWarning(logger, SnapshotErrorCode.StaleObject, repository.RootPath, missingObjectId);
+    }
+
+    /// <summary>
+    ///     Asynchronously reads more files than one batch holds and returns every blob in request order.
+    /// </summary>
+    /// <returns>A task that represents the asynchronous operation.</returns>
+    [Fact]
+    public async Task ReadBlobsAsync_MoreFilesThanOneBatch_ReturnsEveryBlobInRequestOrder()
+    {
+        using var repository = new TemporaryGitRepository();
+        foreach (var number in Enumerable.Range(0, 600))
+        {
+            File.WriteAllText(Path.Combine(repository.RootPath, $"file-{number:D3}.txt"), $"content {number}\n");
+        }
+
+        TemporaryGitRepository.RunGit(["-C", repository.RootPath, "add", "--all"]);
+        TemporaryGitRepository.RunGit(["-C", repository.RootPath, "commit", "--quiet", "--no-gpg-sign", "-m", "add many files"]);
+        var snapshot = CreateSnapshot(repository, repository.Revision, repository.Revision, []);
+        var reader = OpenReader(repository, snapshot);
+        var listingResult = await reader.ListTreeAsync(TestContext.Current.CancellationToken);
+        Assert.True(listingResult.IsSuccess);
+        var files = listingResult.Data!.Files.Where(file => file.Path.StartsWith("file-", StringComparison.Ordinal)).Reverse().ToArray();
+
+        var result = await reader.ReadBlobsAsync(files, TestContext.Current.CancellationToken);
+
+        Assert.True(result.IsSuccess);
+        var blobs = result.Data!;
+        Assert.Equal(600, blobs.Count);
+        foreach (var (file, blob) in files.Zip(blobs))
+        {
+            Assert.Equal(file.ObjectId, blob.ObjectId);
+            Assert.Equal([$"content {int.Parse(file.Path[5..8], CultureInfo.InvariantCulture)}"], blob.Lines);
+        }
+    }
+
+    /// <summary>
+    ///     Asynchronously reads blobs whose combined size exceeds one batch's output budget when the blob bound allows them.
+    /// </summary>
+    /// <returns>A task that represents the asynchronous operation.</returns>
+    [Fact]
+    public async Task ReadBlobsAsync_BlobsOverBatchOutputBudget_ReadsEveryBlob()
+    {
+        using var repository = new TemporaryGitRepository();
+        var line = new string('x', 63) + "\n";
+        var content = string.Concat(Enumerable.Repeat(line, 17 * 1024 * 1024 / line.Length));
+        File.WriteAllText(Path.Combine(repository.RootPath, "large-a.txt"), content);
+        File.WriteAllText(Path.Combine(repository.RootPath, "large-b.txt"), content.Replace('x', 'y'));
+        TemporaryGitRepository.RunGit(["-C", repository.RootPath, "add", "--all"]);
+        TemporaryGitRepository.RunGit(["-C", repository.RootPath, "commit", "--quiet", "--no-gpg-sign", "-m", "add large files"]);
+        var snapshot = CreateSnapshot(repository, repository.Revision, repository.Revision, []);
+        var reader = OpenReader(repository, snapshot, new FrozenGitTreeReaderOptions { MaximumBlobBytes = 64 * 1024 * 1024 });
+        var listingResult = await reader.ListTreeAsync(TestContext.Current.CancellationToken);
+        Assert.True(listingResult.IsSuccess);
+        var files = listingResult.Data!.Files.Where(file => file.Path.StartsWith("large-", StringComparison.Ordinal)).ToArray();
+
+        var result = await reader.ReadBlobsAsync(files, TestContext.Current.CancellationToken);
+
+        Assert.True(result.IsSuccess);
+        Assert.All(result.Data!, blob => Assert.Equal(FrozenGitBlobSkipReason.None, blob.SkipReason));
+        Assert.Equal(content.Length / line.Length, result.Data![0].Lines.Count);
     }
 
     /// <summary>

@@ -43,6 +43,10 @@ switch (mode)
         await WriteRawCommittedRecordsAsync();
         return 0;
 
+    case "echo-stdin":
+        await Console.OpenStandardInput().CopyToAsync(Console.OpenStandardOutput());
+        return 0;
+
     case "invalid-utf8":
         await Console.OpenStandardOutput().WriteAsync(new byte[] { 0xc3, 0x28 });
         return 0;

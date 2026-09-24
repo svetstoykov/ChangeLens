@@ -22,7 +22,7 @@ public sealed class GitCommand
     /// <param name="errorPolicy">The terminal errors selected by the calling capability. Cannot be <see langword="null" />.</param>
     /// <param name="standardInput">
     ///     The bytes written to the process standard input before it is closed, or <see langword="null" /> or empty to
-    ///     leave standard input closed.
+    ///     close standard input without writing. The bytes are copied.
     /// </param>
     /// <exception cref="ArgumentNullException">
     ///     <paramref name="arguments" /> is <see langword="null" />.
@@ -62,7 +62,7 @@ public sealed class GitCommand
         this.MaximumStandardOutputBytes = maximumStandardOutputBytes;
         this.MaximumStandardErrorBytes = maximumStandardErrorBytes;
         this.ErrorPolicy = errorPolicy;
-        this.StandardInput = standardInput is { Length: > 0 } ? standardInput : [];
+        this.StandardInput = standardInput is null ? ReadOnlyMemory<byte>.Empty : standardInput.ToArray();
     }
 
     /// <summary>
@@ -71,10 +71,10 @@ public sealed class GitCommand
     public IReadOnlyList<string> Arguments => this._arguments;
 
     /// <summary>
-    ///     Gets the bytes written to the process standard input before it is closed. Empty means standard input stays
-    ///     closed with no writes.
+    ///     Gets the bytes written to the process standard input before it is closed. Empty means standard input is closed
+    ///     without writing.
     /// </summary>
-    public byte[] StandardInput { get; }
+    public ReadOnlyMemory<byte> StandardInput { get; }
 
     /// <summary>
     ///     Gets the time allowed for the process to complete.

@@ -54,6 +54,33 @@ def test_f02_oracle_counts_dirty_state_and_keeps_committed_changes(tmp_path: Pat
     assert oracle.status_counts == StatusCounts(staged=1, unstaged=2, untracked=1, conflicted=0, distinct=3)
 
 
+def test_f12_oracle_matches_f01_with_one_unstaged_revert(tmp_path: Path) -> None:
+    built = build_fixture(load_catalog_fixture("F12"), tmp_path / "repo")
+
+    oracle = compute_oracle(built)
+
+    assert oracle.changes == F01_CHANGES
+    assert oracle.status_counts == StatusCounts(staged=0, unstaged=1, untracked=0, conflicted=0, distinct=1)
+
+
+F10_CHANGES = (
+    PathChange("modified", "src/format.ts", None),
+    PathChange("modified", "src/math.ts", None),
+    PathChange("added", "src/slug.ts", None),
+    PathChange("modified", "src/strings.ts", None),
+    PathChange("modified", "src/title.ts", None),
+)
+
+
+def test_f10_oracle_covers_only_the_cosmetic_changes(tmp_path: Path) -> None:
+    built = build_fixture(load_catalog_fixture("F10"), tmp_path / "repo")
+
+    oracle = compute_oracle(built)
+
+    assert oracle.changes == F10_CHANGES
+    assert oracle.status_counts == StatusCounts(staged=0, unstaged=0, untracked=0, conflicted=0, distinct=0)
+
+
 def test_numstat_totals_text_lines_and_counts_binary_files_across_renames() -> None:
     data = b"-\t-\tassets/blob.bin\x001\t0\t\x00old.ts\x00new.ts\x005\t2\tsrc/a.ts\x00"
 

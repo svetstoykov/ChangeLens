@@ -16,7 +16,7 @@ def commit(*changes: dict) -> dict:
 
 
 def test_catalog_fixtures_load() -> None:
-    assert {"F01", "F02"} <= set(catalog_fixture_ids())
+    assert {"F01", "F02", "F10", "F12"} <= set(catalog_fixture_ids())
 
     f01 = load_catalog_fixture("F01")
     assert f01.target == "main"

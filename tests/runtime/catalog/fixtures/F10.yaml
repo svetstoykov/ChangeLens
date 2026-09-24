@@ -1,0 +1,85 @@
+id: F10
+description: >-
+  Behavior-preserving committed changes on feature/review against main: a whitespace-only reformat of the
+  formatter, a comment-only typo fix, and a pure move of slugify into its own module whose importer follows.
+  An unchanged file sits completely outside the change.
+target: main
+commits:
+  - branch: main
+    message: "fixture: base format and string helpers"
+    date: "2026-01-01T00:00:00+00:00"
+    changes:
+      - write:
+          path: src/format.ts
+          text: |
+            export function format(value:string):string{
+                const trimmed=value.trim();
+                    return trimmed+'!';
+            }
+      - write:
+          path: src/math.ts
+          text: |
+            // retuns the value with a sign flipped
+            export function flip(value: number): number {
+              return -value;
+            }
+      - write:
+          path: src/strings.ts
+          text: |
+            export function slugify(value: string): string {
+              return value.trim().toLowerCase().replace(/\s+/g, '-');
+            }
+
+            export function capitalize(value: string): string {
+              return value.charAt(0).toUpperCase() + value.slice(1);
+            }
+      - write:
+          path: src/title.ts
+          text: |
+            import { slugify } from './strings';
+
+            export function title(value: string): string {
+              return slugify(value);
+            }
+      - write:
+          path: src/stable.ts
+          text: |
+            export const untouched = 'stable';
+  - branch: feature/review
+    message: "fixture: review cosmetic changes"
+    date: "2026-01-02T00:00:00+00:00"
+    changes:
+      - write:
+          path: src/format.ts
+          text: |
+            export function format(value: string): string {
+              const trimmed = value.trim();
+              return trimmed + '!';
+            }
+      - write:
+          path: src/math.ts
+          text: |
+            // returns the value with a sign flipped
+            export function flip(value: number): number {
+              return -value;
+            }
+      - write:
+          path: src/slug.ts
+          text: |
+            export function slugify(value: string): string {
+              return value.trim().toLowerCase().replace(/\s+/g, '-');
+            }
+      - write:
+          path: src/strings.ts
+          text: |
+            export function capitalize(value: string): string {
+              return value.charAt(0).toUpperCase() + value.slice(1);
+            }
+      - write:
+          path: src/title.ts
+          text: |
+            import { slugify } from './slug';
+
+            export function title(value: string): string {
+              return slugify(value);
+            }

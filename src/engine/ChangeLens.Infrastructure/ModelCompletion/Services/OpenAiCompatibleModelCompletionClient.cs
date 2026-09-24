@@ -108,6 +108,15 @@ public sealed class OpenAiCompatibleModelCompletionClient : IModelCompletionClie
             Content = new StringContent(serializedRequest, Encoding.UTF8, "application/json"),
         };
         httpRequest.Headers.Authorization = authorization;
+        if (IsOpenRouterEndpoint(endpoint))
+        {
+            httpRequest.Headers.TryAddWithoutValidation(
+                OpenRouterAttributionConstants.RefererHeaderName,
+                OpenRouterAttributionConstants.Referer);
+            httpRequest.Headers.TryAddWithoutValidation(
+                OpenRouterAttributionConstants.TitleHeaderName,
+                OpenRouterAttributionConstants.Title);
+        }
 
         using var timeoutCancellation = new CancellationTokenSource(this._options.RequestTimeout);
         using var requestCancellation = CancellationTokenSource.CreateLinkedTokenSource(
@@ -380,6 +389,10 @@ public sealed class OpenAiCompatibleModelCompletionClient : IModelCompletionClie
         endpoint = builder.Uri;
         return true;
     }
+
+    private static bool IsOpenRouterEndpoint(Uri endpoint) =>
+        string.Equals(endpoint.Host, OpenRouterAttributionConstants.Host, StringComparison.OrdinalIgnoreCase)
+        || endpoint.Host.EndsWith($".{OpenRouterAttributionConstants.Host}", StringComparison.OrdinalIgnoreCase);
 
     private static bool TryCreateAuthorizationHeader(string? apiKey, out AuthenticationHeaderValue authorization)
     {

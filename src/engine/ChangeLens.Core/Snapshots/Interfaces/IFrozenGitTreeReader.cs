@@ -28,6 +28,19 @@ public interface IFrozenGitTreeReader
     Task<Result<FrozenGitBlob>> ReadBlobAsync(string objectId, CancellationToken cancellationToken);
 
     /// <summary>
+    ///     Asynchronously reads captured tree blobs in bounded batches through one Git process per batch.
+    /// </summary>
+    /// <param name="files">The captured tree files to read. Cannot be <see langword="null" />.</param>
+    /// <param name="cancellationToken">A <see cref="CancellationToken" /> to observe while waiting for the task.</param>
+    /// <returns>
+    ///     A task whose result contains one read result per requested file, in request order. A skipped file carries a
+    ///     binary or size skip reason, and a missing object fails the whole batch.
+    /// </returns>
+    Task<Result<IReadOnlyList<FrozenGitBlob>>> ReadBlobsAsync(
+        IReadOnlyList<FrozenGitTreeFile> files,
+        CancellationToken cancellationToken);
+
+    /// <summary>
     ///     Asynchronously diffs the exact blob identities recorded for one manifest entry.
     /// </summary>
     /// <param name="entry">The captured manifest entry. Cannot be <see langword="null" />.</param>

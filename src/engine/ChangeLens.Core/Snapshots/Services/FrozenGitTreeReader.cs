@@ -20,6 +20,8 @@ namespace ChangeLens.Core.Snapshots.Services;
 /// </remarks>
 internal sealed class FrozenGitTreeReader : IFrozenGitTreeReader
 {
+    private const int BatchFileCount = 256;
+    private const long BatchOutputBudgetBytes = 32 * 1024 * 1024;
     private static readonly UTF8Encoding StrictUtf8 = new(false, true);
     private readonly IGitBinaryCommandRunner _commandRunner;
     private readonly AnalysisRepositoryIdentity _repository;
@@ -127,6 +129,45 @@ internal sealed class FrozenGitTreeReader : IFrozenGitTreeReader
     }
 
     /// <inheritdoc />
+    public async Task<Result<IReadOnlyList<FrozenGitBlob>>> ReadBlobsAsync(
+        IReadOnlyList<FrozenGitTreeFile> files,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(files);
+        var blobs = new FrozenGitBlob[files.Count];
+        var pendingIndexes = new List<int>(files.Count);
+        foreach (var index in Enumerable.Range(0, files.Count))
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var file = files[index];
+            if (!this.IsAllowedTreeObject(file.ObjectId))
+            {
+                return this.ObjectNotCaptured<IReadOnlyList<FrozenGitBlob>>("read-blob-batch", file.ObjectId);
+            }
+
+            if (file.SizeInBytes > this._options.MaximumBlobBytes)
+            {
+                this.LogBoundExceeded("read-blob-batch");
+                blobs[index] = new FrozenGitBlob(file.ObjectId, [], FrozenGitBlobSkipReason.TooLarge);
+                continue;
+            }
+
+            pendingIndexes.Add(index);
+        }
+
+        foreach (var batch in PlanBlobBatches(files, pendingIndexes))
+        {
+            var batchResult = await this.ReadBlobBatchAsync(files, batch, blobs, cancellationToken);
+            if (batchResult.IsFailure)
+            {
+                return batchResult;
+            }
+        }
+
+        return Result.Success<IReadOnlyList<FrozenGitBlob>>(blobs);
+    }
+
+    /// <inheritdoc />
     public async Task<Result<FrozenGitBlobDiff>> ReadBlobDiffAsync(
         SnapshotManifestEntry entry,
         CancellationToken cancellationToken)
@@ -217,7 +258,7 @@ internal sealed class FrozenGitTreeReader : IFrozenGitTreeReader
             ? int.MaxValue
             : this._options.MaximumHistoryCommits + 1;
         var commitsResult = await this.RunAsync(
-            ["rev-list", "--first-parent", $"--max-count={requestedCount}", this._snapshot.MergeBaseRevision],
+            ["rev-list", "--first-parent", "--parents", $"--max-count={requestedCount}", this._snapshot.MergeBaseRevision],
             HistoryOutputBytes(),
             cancellationToken);
         if (commitsResult.IsFailure)
@@ -235,39 +276,20 @@ internal sealed class FrozenGitTreeReader : IFrozenGitTreeReader
             return this.ReadFailed<FrozenGitHistoryScan>("rev-list", "The captured Git history was not valid UTF-8.");
         }
 
-        var commitIds = commitText.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-        var inspectedCount = Math.Min(commitIds.Length, this._options.MaximumHistoryCommits);
+        var commitLines = commitText.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        var inspectedCount = Math.Min(commitLines.Length, this._options.MaximumHistoryCommits);
         var history = new List<FrozenGitHistoricalCommit>();
         var oversized = 0;
         for (var ordinal = 0; ordinal < inspectedCount; ordinal++)
         {
-            var parentResult = await this.RunAsync(
-                ["rev-list", "--parents", "--max-count=1", commitIds[ordinal]],
-                HistoryOutputBytes(),
-                cancellationToken);
-            if (parentResult.IsFailure)
-            {
-                return Result.ErrorFromResult<FrozenGitHistoryScan>(parentResult);
-            }
-
-            if (parentResult.Data!.ExitCode != 0)
-            {
-                return this.StaleRevision<FrozenGitHistoryScan>("rev-list-parents", commitIds[ordinal]);
-            }
-
-            if (!TryDecode(parentResult.Data.StandardOutput, out var parentsText))
-            {
-                return this.ReadFailed<FrozenGitHistoryScan>("rev-list-parents", "The captured Git parent list was not valid UTF-8.");
-            }
-
-            var parentIds = parentsText.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            var parentIds = commitLines[ordinal].Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
             if (parentIds.Length < 2)
             {
                 continue;
             }
 
             var changesResult = await this.RunAsync(
-                ["diff-tree", "--no-commit-id", "--name-status", "-z", "-r", "--find-renames=50%", parentIds[1], commitIds[ordinal], "--"],
+                ["diff-tree", "--no-commit-id", "--name-status", "-z", "-r", "--find-renames=50%", parentIds[1], parentIds[0], "--"],
                 HistoryOutputBytes(),
                 cancellationToken,
                 HistoryCommandErrors());
@@ -284,7 +306,7 @@ internal sealed class FrozenGitTreeReader : IFrozenGitTreeReader
 
             if (changesResult.Data!.ExitCode != 0)
             {
-                return this.StaleRevision<FrozenGitHistoryScan>("diff-tree", commitIds[ordinal]);
+                return this.StaleRevision<FrozenGitHistoryScan>("diff-tree", parentIds[0]);
             }
 
             if (!TryDecode(changesResult.Data.StandardOutput, out var changesText)
@@ -306,7 +328,95 @@ internal sealed class FrozenGitTreeReader : IFrozenGitTreeReader
             }
         }
 
-        return Result.Success(new FrozenGitHistoryScan(history, inspectedCount, oversized, commitIds.Length > inspectedCount));
+        return Result.Success(new FrozenGitHistoryScan(history, inspectedCount, oversized, commitLines.Length > inspectedCount));
+    }
+
+    private async Task<Result<IReadOnlyList<FrozenGitBlob>>> ReadBlobBatchAsync(
+        IReadOnlyList<FrozenGitTreeFile> files,
+        IReadOnlyList<int> batch,
+        FrozenGitBlob[] blobs,
+        CancellationToken cancellationToken)
+    {
+        var request = new StringBuilder(batch.Count * 48);
+        long expectedOutputBytes = 0;
+        foreach (var index in batch)
+        {
+            request.Append(files[index].ObjectId).Append('\n');
+            expectedOutputBytes += BatchRecordBytes(files[index]);
+        }
+
+        var outputResult = await this.RunAsync(
+            ["cat-file", "--batch"], (int)Math.Min(expectedOutputBytes, int.MaxValue), cancellationToken, CommandErrors(),
+            Encoding.UTF8.GetBytes(request.ToString()));
+        if (outputResult.IsFailure)
+        {
+            return Result.ErrorFromResult<IReadOnlyList<FrozenGitBlob>>(outputResult);
+        }
+
+        if (outputResult.Data!.ExitCode != 0)
+        {
+            return this.ReadFailed<IReadOnlyList<FrozenGitBlob>>("cat-file-batch", "The captured Git batch reader failed.");
+        }
+
+        return this.ParseBlobBatch(outputResult.Data.StandardOutput, files, batch, blobs);
+    }
+
+    private Result<IReadOnlyList<FrozenGitBlob>> ParseBlobBatch(
+        byte[] output,
+        IReadOnlyList<FrozenGitTreeFile> files,
+        IReadOnlyList<int> batch,
+        FrozenGitBlob[] blobs)
+    {
+        var cursor = 0;
+        foreach (var index in batch)
+        {
+            var file = files[index];
+            if (!TryReadBatchHeader(output, ref cursor, out var header))
+            {
+                return this.ReadFailed<IReadOnlyList<FrozenGitBlob>>("cat-file-batch", "The captured Git batch header was incomplete.");
+            }
+
+            if (header.Length == 2 && header[1] == "missing" && string.Equals(header[0], file.ObjectId, StringComparison.Ordinal))
+            {
+                return this.StaleObject<IReadOnlyList<FrozenGitBlob>>("cat-file-batch", file.ObjectId);
+            }
+
+            if (header.Length != 3
+                || header[1] != "blob"
+                || !string.Equals(header[0], file.ObjectId, StringComparison.Ordinal)
+                || !long.TryParse(header[2], NumberStyles.None, CultureInfo.InvariantCulture, out var size)
+                || size != file.SizeInBytes)
+            {
+                return this.ReadFailed<IReadOnlyList<FrozenGitBlob>>(
+                    "cat-file-batch", "The captured Git batch header named an unexpected object or size.");
+            }
+
+            if (cursor + size + 1 > output.Length || output[cursor + (int)size] != '\n')
+            {
+                return this.ReadFailed<IReadOnlyList<FrozenGitBlob>>("cat-file-batch", "The captured Git batch blob was incomplete.");
+            }
+
+            blobs[index] = this.CreateBatchBlob(file.ObjectId, output[cursor..(cursor + (int)size)]);
+            cursor += (int)size + 1;
+        }
+
+        return Result.Success<IReadOnlyList<FrozenGitBlob>>(blobs);
+    }
+
+    private FrozenGitBlob CreateBatchBlob(string objectId, byte[] bytes)
+    {
+        if (IsBinary(bytes))
+        {
+            return new FrozenGitBlob(objectId, [], FrozenGitBlobSkipReason.Binary);
+        }
+
+        if (!TryDecode(bytes, out var text))
+        {
+            this.LogSkipped("cat-file-batch", FrozenGitBlobSkipReason.Binary);
+            return new FrozenGitBlob(objectId, [], FrozenGitBlobSkipReason.Binary);
+        }
+
+        return new FrozenGitBlob(objectId, SplitLines(text), FrozenGitBlobSkipReason.None);
     }
 
     private async Task<Result<FrozenGitBlob>> ReadBlobCoreAsync(string objectId, CancellationToken cancellationToken)
@@ -379,7 +489,8 @@ internal sealed class FrozenGitTreeReader : IFrozenGitTreeReader
         IReadOnlyList<string> arguments,
         int maximumStandardOutputBytes,
         CancellationToken cancellationToken,
-        GitCommandErrorPolicy? errorPolicy = null)
+        GitCommandErrorPolicy? errorPolicy = null,
+        byte[]? standardInput = null)
     {
         var result = await this._commandRunner.RunBinaryAsync(
             new GitCommand(
@@ -387,7 +498,8 @@ internal sealed class FrozenGitTreeReader : IFrozenGitTreeReader
                 this._options.CommandTimeout,
                 maximumStandardOutputBytes,
                 64 * 1024,
-                errorPolicy ?? CommandErrors()),
+                errorPolicy ?? CommandErrors(),
+                standardInput),
             cancellationToken);
         return result;
     }
@@ -598,6 +710,50 @@ internal sealed class FrozenGitTreeReader : IFrozenGitTreeReader
 
     private static bool IsBinary(byte[] bytes) =>
         bytes.Any(static value => value == 0);
+
+    private static List<List<int>> PlanBlobBatches(IReadOnlyList<FrozenGitTreeFile> files, IReadOnlyList<int> pendingIndexes)
+    {
+        var batches = new List<List<int>>();
+        var batch = new List<int>();
+        long batchBytes = 0;
+        foreach (var index in pendingIndexes)
+        {
+            var recordBytes = BatchRecordBytes(files[index]);
+            if (batch.Count > 0 && (batch.Count == BatchFileCount || batchBytes + recordBytes > BatchOutputBudgetBytes))
+            {
+                batches.Add(batch);
+                batch = [];
+                batchBytes = 0;
+            }
+
+            batch.Add(index);
+            batchBytes += recordBytes;
+        }
+
+        if (batch.Count > 0)
+        {
+            batches.Add(batch);
+        }
+
+        return batches;
+    }
+
+    private static long BatchRecordBytes(FrozenGitTreeFile file) =>
+        $"{file.ObjectId} blob {file.SizeInBytes.ToString(CultureInfo.InvariantCulture)}\n".Length + file.SizeInBytes + 1;
+
+    private static bool TryReadBatchHeader(byte[] output, ref int cursor, out string[] header)
+    {
+        header = [];
+        var lineEnd = Array.IndexOf(output, (byte)'\n', cursor);
+        if (lineEnd < 0)
+        {
+            return false;
+        }
+
+        header = Encoding.UTF8.GetString(output, cursor, lineEnd - cursor).Split(' ');
+        cursor = lineEnd + 1;
+        return true;
+    }
 
     private static bool TryDecode(byte[] bytes, out string text)
     {

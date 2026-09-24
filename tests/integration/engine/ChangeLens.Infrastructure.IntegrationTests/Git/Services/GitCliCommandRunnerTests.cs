@@ -139,6 +139,41 @@ public sealed class GitCliCommandRunnerTests
     }
 
     /// <summary>
+    ///     Asynchronously writes the command's standard-input payload and closes the stream so the process can finish.
+    /// </summary>
+    /// <returns>A task that represents the asynchronous operation.</returns>
+    [Fact]
+    public async Task RunBinaryAsync_StandardInputPayload_WritesBytesAndClosesStream()
+    {
+        byte[] payload = [0x61, 0x00, 0x62, 0x0a];
+
+        var result = await RunInFixtureModeAsync(
+            "echo-stdin",
+            runner => runner.RunBinaryAsync(CreateCommand([], standardInput: payload), CancellationToken.None));
+
+        Assert.True(result.IsSuccess);
+        var output = Assert.IsType<GitBinaryCommandOutput>(result.Data);
+        Assert.Equal(payload, output.StandardOutput);
+    }
+
+    /// <summary>
+    ///     Asynchronously closes standard input at once when the command has no payload, so a reading process sees end of
+    ///     input instead of waiting until the timeout.
+    /// </summary>
+    /// <returns>A task that represents the asynchronous operation.</returns>
+    [Fact]
+    public async Task RunBinaryAsync_NoStandardInputPayload_ClosesStreamImmediately()
+    {
+        var result = await RunInFixtureModeAsync(
+            "echo-stdin",
+            runner => runner.RunBinaryAsync(CreateCommand([], timeout: TimeSpan.FromSeconds(5)), CancellationToken.None));
+
+        Assert.True(result.IsSuccess);
+        var output = Assert.IsType<GitBinaryCommandOutput>(result.Data);
+        Assert.Empty(output.StandardOutput);
+    }
+
+    /// <summary>
     ///     Asynchronously preserves binary standard output and diagnostics for a nonzero process exit.
     /// </summary>
     /// <returns>A task that represents the asynchronous operation.</returns>
@@ -541,13 +576,15 @@ public sealed class GitCliCommandRunnerTests
         int? maximumStandardErrorBytes = null,
         OperationError? timedOutError = null,
         OperationError? outputLimitError = null,
-        OperationError? inspectionError = null) =>
+        OperationError? inspectionError = null,
+        byte[]? standardInput = null) =>
         new(
             arguments,
             timeout ?? DefaultTimeout,
             maximumStandardOutputBytes ?? MaximumStandardOutputBytes,
             maximumStandardErrorBytes ?? MaximumStandardErrorBytes,
-            CreatePolicy(timedOutError, outputLimitError, inspectionError));
+            CreatePolicy(timedOutError, outputLimitError, inspectionError),
+            standardInput);
 
     private static GitCommandErrorPolicy CreatePolicy(
         OperationError? timedOutError = null,

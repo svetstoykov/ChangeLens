@@ -90,7 +90,7 @@ public sealed class CorrespondenceRankingService(
         var indexedFiles = new List<CorrespondenceIndexedFile>(listing.Files.Count);
         var truncatedFileCount = 0;
         var eligibleFileCount = 0;
-        var tokenizer = new ChangeAnatomyTokenizer(this._anatomyOptions.MinimumKeyLength);
+        var eligibleFiles = new List<FrozenGitTreeFile>(listing.Files.Count);
         foreach (var file in listing.Files)
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -102,13 +102,19 @@ public sealed class CorrespondenceRankingService(
             }
 
             eligibleFileCount++;
-            var blobResult = await reader.ReadBlobAsync(file.ObjectId, cancellationToken);
-            if (blobResult.IsFailure)
-            {
-                return Result.ErrorFromResult<CorrespondenceRanking>(blobResult);
-            }
+            eligibleFiles.Add(file);
+        }
 
-            var blob = blobResult.Data!;
+        var blobsResult = await reader.ReadBlobsAsync(eligibleFiles, cancellationToken);
+        if (blobsResult.IsFailure)
+        {
+            return Result.ErrorFromResult<CorrespondenceRanking>(blobsResult);
+        }
+
+        var tokenizer = new ChangeAnatomyTokenizer(this._anatomyOptions.MinimumKeyLength);
+        foreach (var (file, blob) in eligibleFiles.Zip(blobsResult.Data!))
+        {
+            cancellationToken.ThrowIfCancellationRequested();
             if (!blob.HasText)
             {
                 Count(skipReasons, blob.SkipReason is FrozenGitBlobSkipReason.Binary ? "binary content" : "larger than the configured blob bound");

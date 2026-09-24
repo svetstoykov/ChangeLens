@@ -44,6 +44,58 @@ public sealed class FrozenGitTreeReaderIntegrationTests
     }
 
     /// <summary>
+    ///     Asynchronously reads tree blobs in one batch with text, binary, and oversized skips in request order.
+    /// </summary>
+    /// <returns>A task that represents the asynchronous operation.</returns>
+    [Fact]
+    public async Task ReadBlobsAsync_ReturnsTextBinaryAndOversizedSkipsInRequestOrder()
+    {
+        using var repository = new TemporaryGitRepository();
+        repository.CommitFile("text.txt", "second content\n", "add text file");
+        var binaryPath = Path.Combine(repository.RootPath, "binary.bin");
+        File.WriteAllBytes(binaryPath, [0, 1, 2, 3]);
+        repository.Stage("binary.bin");
+        TemporaryGitRepository.RunGit(["-C", repository.RootPath, "commit", "--quiet", "--no-gpg-sign", "-m", "add binary"]);
+        var head = repository.Revision;
+        var snapshot = CreateSnapshot(repository, head, head, []);
+        var reader = OpenReader(repository, snapshot);
+        var listingResult = await reader.ListTreeAsync(TestContext.Current.CancellationToken);
+        Assert.True(listingResult.IsSuccess);
+        var listing = Assert.IsType<FrozenGitTreeListing>(listingResult.Data);
+        var textFile = listing.Files.Single(file => file.Path == "text.txt");
+        var binaryFile = listing.Files.Single(file => file.Path == "binary.bin");
+        var oversizedFile = new FrozenGitTreeFile("oversized.txt", textFile.ObjectId, long.MaxValue, "100644");
+
+        var result = await reader.ReadBlobsAsync([oversizedFile, textFile, binaryFile], TestContext.Current.CancellationToken);
+
+        Assert.True(result.IsSuccess);
+        var blobs = result.Data!;
+        Assert.Equal(3, blobs.Count);
+        Assert.Equal(FrozenGitBlobSkipReason.TooLarge, blobs[0].SkipReason);
+        Assert.Equal(["second content"], blobs[1].Lines);
+        Assert.Equal(FrozenGitBlobSkipReason.Binary, blobs[2].SkipReason);
+    }
+
+    /// <summary>
+    ///     Asynchronously rejects a batch that names an object outside the captured tree or manifest.
+    /// </summary>
+    /// <returns>A task that represents the asynchronous operation.</returns>
+    [Fact]
+    public async Task ReadBlobsAsync_ObjectNotCaptured_ReturnsValidationFailure()
+    {
+        using var repository = new TemporaryGitRepository();
+        repository.CommitFile("second.txt", "second content\n", "add second file");
+        var snapshot = CreateSnapshot(repository, repository.Revision, repository.Revision, []);
+        var reader = OpenReader(repository, snapshot);
+        var requestedObjectId = new string('e', 40);
+
+        var result = await reader.ReadBlobsAsync(
+            [new FrozenGitTreeFile("missing.txt", requestedObjectId, 4, "100644")], TestContext.Current.CancellationToken);
+
+        AssertFailure(result, ErrorType.Validation, SnapshotErrorCode.ObjectNotCaptured);
+    }
+
+    /// <summary>
     ///     Asynchronously reads the exact manifest blobs and returns their changed lines after worktree edits.
     /// </summary>
     /// <returns>A task that represents the asynchronous operation.</returns>

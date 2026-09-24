@@ -20,6 +20,10 @@ public sealed class GitCommand
     /// <param name="maximumStandardOutputBytes">The positive maximum number of bytes captured from standard output.</param>
     /// <param name="maximumStandardErrorBytes">The positive maximum number of bytes captured from standard error.</param>
     /// <param name="errorPolicy">The terminal errors selected by the calling capability. Cannot be <see langword="null" />.</param>
+    /// <param name="standardInput">
+    ///     The bytes written to the process standard input before it is closed, or <see langword="null" /> or empty to
+    ///     leave standard input closed.
+    /// </param>
     /// <exception cref="ArgumentNullException">
     ///     <paramref name="arguments" /> is <see langword="null" />.
     ///     -or-
@@ -39,7 +43,8 @@ public sealed class GitCommand
         TimeSpan timeout,
         int maximumStandardOutputBytes,
         int maximumStandardErrorBytes,
-        GitCommandErrorPolicy errorPolicy)
+        GitCommandErrorPolicy errorPolicy,
+        byte[]? standardInput = null)
     {
         ArgumentNullException.ThrowIfNull(arguments);
         var copiedArguments = arguments.ToArray();
@@ -57,12 +62,19 @@ public sealed class GitCommand
         this.MaximumStandardOutputBytes = maximumStandardOutputBytes;
         this.MaximumStandardErrorBytes = maximumStandardErrorBytes;
         this.ErrorPolicy = errorPolicy;
+        this.StandardInput = standardInput is { Length: > 0 } ? standardInput : [];
     }
 
     /// <summary>
     ///     Gets the copied, read-only Git argument sequence.
     /// </summary>
     public IReadOnlyList<string> Arguments => this._arguments;
+
+    /// <summary>
+    ///     Gets the bytes written to the process standard input before it is closed. Empty means standard input stays
+    ///     closed with no writes.
+    /// </summary>
+    public byte[] StandardInput { get; }
 
     /// <summary>
     ///     Gets the time allowed for the process to complete.

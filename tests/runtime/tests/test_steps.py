@@ -65,6 +65,45 @@ def test_protocol_errors_are_collected(tmp_path: Path) -> None:
     assert state.error_responses[0]["errors"][0]["code"] == "test.failed"
 
 
+def test_step_responses_record_one_entry_per_step(tmp_path: Path) -> None:
+    state = run_steps(
+        tmp_path,
+        Step("open", "steps[0]"),
+        Step("restart", "steps[1]"),
+        Step("prepare", "steps[2]"),
+        Step("raw", "steps[3]", action="test.error"),
+    )
+
+    assert state.step_responses == [
+        {"response": None},
+        None,
+        {"response": {"freshnessToken": "f" * 64}},
+        {"errors": [{"type": "Validation", "code": "test.failed", "message": "failed"}]},
+    ]
+
+
+def test_step_responses_keep_an_entry_when_a_step_raises(tmp_path: Path) -> None:
+    session = EngineSession(
+        command=[sys.executable, str(FAKE_ENGINE)],
+        environment=dict(os.environ),
+        working_directory=tmp_path,
+        transcript_path=tmp_path / "protocol.ndjson",
+        stderr_path=tmp_path / "engine.log",
+        protocol_deadline=2.0,
+    )
+    state = CaseState(repository=tmp_path, fixture_target="main", snapshot_before={})
+    session.start()
+    try:
+        executor = StepExecutor(session, state, Deadlines(protocol_seconds=2.0, run_seconds=5.0))
+        executor.execute(Step("open", "steps[0]"))
+        with pytest.raises(CaseInterrupted):
+            executor.execute(Step("analyze", "steps[1]", await_mode="terminal"))
+    finally:
+        session.stop()
+
+    assert state.step_responses == [{"response": None}, None]
+
+
 def test_analyze_without_a_prepared_comparison_interrupts(tmp_path: Path) -> None:
     with pytest.raises(CaseInterrupted, match="prepare step did not succeed"):
         run_steps(tmp_path, Step("analyze", "steps[0]", await_mode="terminal"))

@@ -21,6 +21,7 @@ from changelens_review.fixtures.spec import (
 )
 from changelens_review.jsontypes import JsonValue
 from changelens_review.paths import PLANS_ROOT, REPO_ROOT
+from changelens_review.plans.checks.generic import step_index
 from changelens_review.plans.checks.judge import validate_judge
 from changelens_review.plans.checks.registry import requires_analysis, validate_expectation
 from changelens_review.plans.model import (
@@ -53,6 +54,7 @@ CASE_KEYS = {
     "judge",
     "repeat",
     "skip",
+    "markers",
 }
 PROVIDER_KEYS = {"mode", "script", "model", "from", "case", "repeat"}
 PROVIDER_MODES = ("scripted", "replay", "live")
@@ -175,16 +177,17 @@ def _parse_case(raw: object, index: int, defaults: _Defaults, issues: list[str])
     expectations = _parse_expectations(raw.get("expect"), f"{where}.expect", issues)
     judge = _parse_judge(raw.get("judge"), f"{where}.judge", issues)
     repeat = _parse_repeat(raw.get("repeat", 1), f"{where}.repeat", issues)
+    markers = _parse_markers(raw.get("markers"), f"{where}.markers", issues)
     skip = raw.get("skip")
     if skip is not None and (not isinstance(skip, str) or not skip):
         issues.append(f"{where}.skip: give the reason as text")
         skip = None
-    _check_expectation_prerequisites(steps, expectations, source, issues)
+    _check_expectation_prerequisites(steps, expectations, source, markers, issues)
     if judge and not any(step.kind == "analyze" for step in steps):
         issues.append(f"{where}.judge: soft checks need an analyze step in the case")
     if source is None or provider is None:
         return None
-    return Case(case_id, source, provider, config, deadlines, steps, expectations, skip, judge, repeat)
+    return Case(case_id, source, provider, config, deadlines, steps, expectations, skip, judge, repeat, markers)
 
 
 def _parse_case_source(raw: dict, where: str, case_id: str, issues: list[str]) -> RepositorySource | None:
@@ -471,24 +474,42 @@ def _is_repeat_count(value: object) -> bool:
     return isinstance(value, int) and not isinstance(value, bool) and value >= 1
 
 
+def _parse_markers(raw: object, where: str, issues: list[str]) -> tuple[str, ...]:
+    if raw is None:
+        return ()
+    if (
+        isinstance(raw, list)
+        and all(isinstance(marker, str) and marker for marker in raw)
+        and len(set(raw)) == len(raw)
+    ):
+        return tuple(raw)
+    issues.append(f"{where}: expected a list of distinct non-empty marker strings")
+    return ()
+
+
 def _check_expectation_prerequisites(
     steps: tuple[Step, ...],
     expectations: tuple[Expectation, ...],
     source: RepositorySource | None,
+    plan_markers: tuple[str, ...],
     issues: list[str],
 ) -> None:
     analyzes = any(step.kind == "analyze" for step in steps)
-    markers: tuple[str, ...] = ()
+    declared: tuple[str, ...] = ()
     if source is not None:
         try:
-            markers = source_markers(source)
+            declared = source_markers(source)
         except SpecError:
-            markers = ()
+            declared = ()
+    has_markers = bool(declared) or bool(plan_markers)
     for expectation in expectations:
+        index = step_index(expectation.name)
+        if index is not None and index >= len(steps):
+            issues.append(f"{expectation.location}: steps[{index}] is beyond the case's {len(steps)} steps")
         if requires_analysis(expectation.name) and not analyzes:
             issues.append(f"{expectation.location}: {expectation.name} needs an analyze step in the case")
-        if expectation.name == "no_marker_in" and source is not None and not markers:
-            issues.append(f"{expectation.location}: the case's repository declares no markers")
+        if expectation.name == "no_marker_in" and source is not None and not has_markers:
+            issues.append(f"{expectation.location}: neither the case nor its repository declares markers")
 
 
 def _parse_review(raw: object, issues: list[str]) -> ReviewScope | None:

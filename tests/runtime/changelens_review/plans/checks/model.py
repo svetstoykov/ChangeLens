@@ -41,6 +41,7 @@ class CaseEvidence:
     final_poll: dict[str, JsonValue] | None
     run_id: str | None
     error_responses: tuple[dict[str, JsonValue], ...]
+    step_responses: tuple[dict[str, JsonValue] | None, ...]
     exchanges: tuple[ExchangeRecord, ...]
     database: DatabaseSnapshot | None
     oracle: Oracle

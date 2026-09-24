@@ -1,15 +1,17 @@
+import json
 from pathlib import Path
 
+from changelens_review.plans.checks.generic import is_generic_name
 from changelens_review.plans.checks.model import CaseEvidence
 from changelens_review.plans.checks.registry import evaluate_expectation, validate_expectation
 from changelens_review.plans.state_snapshot import DatabaseSnapshot
 from changelens_review.provider.proxy import ExchangeRecord
 
 
-def exchange(request_text: str = "{}") -> ExchangeRecord:
+def exchange(request_text: str = "{}", role: str = "curator") -> ExchangeRecord:
     return ExchangeRecord(
         sequence=1,
-        role="curator",
+        role=role,
         started_at="t",
         latency_ms=1.0,
         request_text=request_text,
@@ -55,6 +57,7 @@ def evidence(f01, **overrides: object) -> CaseEvidence:
         "final_poll": None,
         "run_id": "run-1",
         "error_responses": (),
+        "step_responses": (),
         "exchanges": (),
         "database": None,
         "oracle": oracle,
@@ -131,6 +134,17 @@ def test_provider_calls_and_error_code(f01) -> None:
     assert not check("error_code", "comparisons.targetInvalid", evidence(f01)).passed
 
 
+def test_provider_calls_by_role(f01) -> None:
+    exchanges = (exchange(role="curator"), exchange(role="checker"), exchange(role="curator"))
+
+    assert check("provider.calls.curator", 2, evidence(f01, exchanges=exchanges)).passed
+    assert not check("provider.calls.curator", 1, evidence(f01, exchanges=exchanges)).passed
+    assert check("provider.calls.checker", 1, evidence(f01, exchanges=exchanges)).passed
+    assert not check("provider.calls.checker", 0, evidence(f01, exchanges=exchanges)).passed
+    assert check("provider.calls.curator", 0, evidence(f01)).passed
+    assert check("provider.calls.checker", 0, evidence(f01)).passed
+
+
 def test_captured_paths(f01) -> None:
     entries = oracle_entries(f01)
 
@@ -186,6 +200,42 @@ def test_no_marker_in(f01, tmp_path: Path) -> None:
     assert not check("no_marker_in", ["logs"], evidence(f01)).passed
 
 
+def test_no_marker_in_explanation(f01) -> None:
+    model = {
+        "thesis": {"text": "A clean thesis."},
+        "areas": [],
+        "evidence": [{"nodeId": "n1", "path": "src/x.ts", "text": "secret-marker only in the excerpt"}],
+    }
+    published = database(reading_model_json=json.dumps(model))
+
+    assert check("no_marker_in", ["explanation"], evidence(f01, markers=("secret-marker",), database=published)).passed
+
+    leaked = check(
+        "no_marker_in",
+        ["explanation"],
+        evidence(
+            f01,
+            markers=("secret-marker",),
+            database=database(
+                reading_model_json=json.dumps({**model, "thesis": {"text": "secret-marker in the thesis"}})
+            ),
+        ),
+    )
+    assert not leaked.passed
+    assert leaked.actual == {"explanation": ["secret-marker"]}
+
+    absent_row = check("no_marker_in", ["explanation"], evidence(f01, markers=("secret-marker",)))
+    assert not absent_row.passed
+    assert absent_row.detail == "no reading model was published"
+
+    absent_model = check(
+        "no_marker_in", ["db", "explanation"], evidence(f01, markers=("secret-marker",), database=database())
+    )
+    assert not absent_model.passed
+    assert absent_model.detail == "no reading model was published"
+    assert absent_model.actual == {"db": [], "explanation": []}
+
+
 def test_citations_resolve(f01) -> None:
     assert check("citations", "resolve", evidence(f01, final_poll=reading_model(f01))).passed
 
@@ -209,6 +259,95 @@ def test_citations_without_a_reading_model_fail(f01) -> None:
     assert not result.passed
 
 
+def test_contains(f01) -> None:
+    poll = {
+        "readingModel": {
+            "limitations": [
+                {"kind": "fileNotRead", "path": "src/flask/app.py"},
+                {"kind": "fileNotRead", "path": "src/flask/views.py"},
+            ],
+            "assurances": [{"kind": "checkerNotRun"}, {"kind": "checkerNotRun"}],
+            "claims": ["thesis", "guard"],
+        }
+    }
+    ev = evidence(f01, final_poll=poll)
+
+    one = check(
+        "contains",
+        {"in": "readingModel.limitations", "item": {"kind": "fileNotRead", "path": "src/flask/app.py"}},
+        ev,
+    )
+    assert one.passed
+    assert one.actual == 1
+
+    exact = check("contains", {"in": "readingModel.assurances", "item": {"kind": "checkerNotRun"}, "count": 2}, ev)
+    assert exact.passed
+    assert exact.actual == 2
+
+    scalar = check("contains", {"in": "readingModel.claims", "item": "thesis"}, ev)
+    assert scalar.passed
+    assert scalar.actual == 1
+
+    assert not check("contains", {"in": "readingModel.assurances", "item": {"kind": "checkerRun"}}, ev).passed
+    assert not check("contains", {"in": "readingModel.limitations", "item": {"kind": "fileRead"}}, ev).passed
+    assert not check(
+        "contains", {"in": "readingModel.assurances", "item": {"kind": "checkerNotRun"}, "count": 1}, ev
+    ).passed
+    assert check("contains", {"in": "readingModel.limitations", "item": {"kind": "fileRead"}, "count": 0}, ev).passed
+
+
+def test_lacks(f01) -> None:
+    poll = {"readingModel": {"assurances": [{"kind": "checkerNotRun"}, {"kind": "checkerNotRun"}]}}
+    ev = evidence(f01, final_poll=poll)
+
+    assert check("lacks", {"in": "readingModel.assurances", "item": {"kind": "uncommittedWorkExcluded"}}, ev).passed
+
+    present = check("lacks", {"in": "readingModel.assurances", "item": {"kind": "checkerNotRun"}}, ev)
+    assert not present.passed
+    assert present.actual == 2
+
+
+def test_contains_and_lacks_over_a_star(f01) -> None:
+    poll = {
+        "readingModel": {
+            "areas": [
+                {"relationships": [{"trust": "checked"}, {"trust": "unchecked"}]},
+                {"relationships": [{"trust": "checked"}]},
+                {"shape": "participantMap"},
+            ]
+        }
+    }
+    ev = evidence(f01, final_poll=poll)
+
+    assert check(
+        "contains", {"in": "readingModel.areas.*.relationships", "item": {"trust": "checked"}, "count": 2}, ev
+    ).passed
+    assert check("lacks", {"in": "readingModel.areas.*.relationships", "item": {"trust": "skipped"}}, ev).passed
+
+
+def test_contains_missing_and_invalid_paths(f01) -> None:
+    ev = evidence(f01, final_poll={"readingModel": {"assurances": []}})
+
+    missing = check("contains", {"in": "readingModel.omissionSummaries", "item": {"kind": "x"}}, ev)
+    assert not missing.passed
+    assert missing.detail == "readingModel.omissionSummaries does not exist"
+
+    scalar = check("lacks", {"in": "readingModel.state", "item": "completed"}, ev)
+    assert not scalar.passed
+    assert scalar.detail == "readingModel.state does not exist"
+
+    flat = evidence(f01, final_poll={"readingModel": {"state": "completed"}})
+    not_list = check("contains", {"in": "readingModel.state", "item": "completed"}, flat)
+    assert not not_list.passed
+    assert not_list.detail == "readingModel.state is not a list"
+
+    assert check("lacks", {"in": "readingModel.assurances", "item": {"kind": "x"}}, ev).passed
+
+    no_poll = check("contains", {"in": "readingModel.assurances", "item": {"kind": "x"}}, evidence(f01))
+    assert not no_poll.passed
+    assert no_poll.detail == "no analysis.pollRun result was observed"
+
+
 def test_generic_paths(f01) -> None:
     poll = {"state": "completed", "readingModel": {"areas": [{"shape": "participantMap"}]}}
 
@@ -218,6 +357,41 @@ def test_generic_paths(f01) -> None:
     assert not check("state.validation_removal_count", False, evidence(f01, database=database())).passed
 
 
+def test_generic_step_paths(f01) -> None:
+    steps = (
+        {"response": {"state": "rejectedStale", "freshnessToken": "t"}},
+        None,
+        {"errors": [{"code": "analysis.runActive"}]},
+    )
+
+    assert check("steps[0].response.state", "rejectedStale", evidence(f01, step_responses=steps)).passed
+    assert check("steps[0].response.freshnessToken", "t", evidence(f01, step_responses=steps)).passed
+    assert check("steps[2].errors.0.code", "analysis.runActive", evidence(f01, step_responses=steps)).passed
+    assert not check("steps[0].response.state", "completed", evidence(f01, step_responses=steps)).passed
+    assert not check("steps[1].response.state", "rejectedStale", evidence(f01, step_responses=steps)).passed
+    assert not check("steps[3].response.state", "rejectedStale", evidence(f01, step_responses=steps)).passed
+
+    want_response = check("steps[2].response.state", "rejectedStale", evidence(f01, step_responses=steps))
+    assert not want_response.passed
+    assert want_response.detail == "steps[2].response.state does not exist"
+
+    want_errors = check("steps[0].errors.0.code", "analysis.runActive", evidence(f01, step_responses=steps))
+    assert not want_errors.passed
+    assert want_errors.detail == "steps[0].errors.0.code does not exist"
+
+
+def test_is_generic_name() -> None:
+    assert is_generic_name("steps[0].response.state")
+    assert is_generic_name("steps[1].errors.0.code")
+    assert is_generic_name("response.readingModel.areas.0.shape")
+    assert is_generic_name("state.manifest_hash")
+    assert not is_generic_name("steps[].response.x")
+    assert not is_generic_name("steps[a].response.x")
+    assert not is_generic_name("steps[0].result.x")
+    assert not is_generic_name("steps[0].response")
+    assert not is_generic_name("steps[0].response.")
+
+
 def test_validate_expectation() -> None:
     assert validate_expectation("outcome", "completed") is None
     assert "outcome must be" in validate_expectation("outcome", "finished")
@@ -225,7 +399,29 @@ def test_validate_expectation() -> None:
     assert validate_expectation("no_marker_in", ["payload", "screen"]) is not None
     assert validate_expectation("provider.calls", -1) is not None
     assert validate_expectation("provider.calls", True) is not None
+    assert validate_expectation("provider.calls.curator", 1) is None
+    assert validate_expectation("provider.calls.checker", -1) is not None
     assert validate_expectation("repo_unchanged", False) is not None
     assert "unknown check 'verdict'" in validate_expectation("verdict", 1)
     assert validate_expectation("response.readingModel.thesis.text", "x") is None
+    assert validate_expectation("steps[3].response.state", "rejectedStale") is None
+    assert validate_expectation("steps[2].errors.0.code", "analysis.runActive") is None
+    assert validate_expectation("steps[0].response", "x") is not None
     assert validate_expectation("response.", "x") is not None
+    assert validate_expectation("contains", {"in": "readingModel.limitations", "item": {"kind": "x"}}) is None
+    assert validate_expectation("contains", {"in": "readingModel.limitations", "item": None, "count": 0}) is None
+    assert validate_expectation("lacks", {"in": "readingModel.assurances", "item": {"kind": "x"}}) is None
+    assert "contains must be" in validate_expectation("contains", {"in": "readingModel.assurances"})
+    assert "contains must be" in validate_expectation("contains", "readingModel.assurances")
+    assert "contains must be" in validate_expectation("contains", {"in": "", "item": 1})
+    assert "contains must be" in validate_expectation("contains", {"in": "readingModel..assurances", "item": 1})
+    assert "contains must be" in validate_expectation(
+        "contains", {"in": "readingModel.assurances", "item": 1, "count": -1}
+    )
+    assert "contains must be" in validate_expectation(
+        "contains", {"in": "readingModel.assurances", "item": 1, "count": True}
+    )
+    assert "contains must be" in validate_expectation(
+        "contains", {"in": "readingModel.assurances", "item": 1, "extra": 2}
+    )
+    assert "lacks must be" in validate_expectation("lacks", {"in": "readingModel.assurances", "item": 1, "count": 1})

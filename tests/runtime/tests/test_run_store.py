@@ -92,3 +92,27 @@ def test_repeats_combine_into_one_status_tally_and_metrics() -> None:
     stored = errored.to_json()
     assert [entry["repeat"] for entry in stored["repeats"]] == [1, 2]
     assert "repeats" not in stored["repeats"][0]
+
+
+def test_repeats_sum_stage_milliseconds_and_ignore_missing_stages() -> None:
+    def repeat(number: int, stages: dict[str, int | None]) -> CaseResult:
+        metrics = CaseMetrics(ChangeSize(), ProviderUsage(), RunDuration(10, 5, stages))
+        return CaseResult("c", "pass", repeat=number, metrics=metrics)
+
+    combined = CaseResult.of_repeats(
+        "c",
+        (
+            repeat(1, {"capturing": 100, "discovering": 200, "collecting": None, "sampling": None}),
+            repeat(2, {"capturing": 50, "collecting": 10}),
+        ),
+        "s",
+        "f",
+    )
+
+    assert combined.metrics is not None
+    assert combined.metrics.duration.stages == {
+        "capturing": 150,
+        "discovering": 200,
+        "collecting": 10,
+        "sampling": None,
+    }

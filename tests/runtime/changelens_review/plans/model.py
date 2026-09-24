@@ -63,7 +63,7 @@ class Case:
     """An isolated repository, provider, engine session, step list, and expectation list, run `repeat` times.
 
     `expectations` decide the status and must hold on every repeat; `judge` holds soft checks that are
-    only scored.
+    only scored. `markers` are marker strings the case declares on top of its repository's.
     """
 
     id: str
@@ -76,6 +76,7 @@ class Case:
     skip: str | None
     judge: tuple[Expectation, ...] = ()
     repeat: int = 1
+    markers: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)

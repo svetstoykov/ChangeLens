@@ -30,7 +30,7 @@ from changelens_review.provider.live import LiveResponder, resolve_upstream
 from changelens_review.provider.proxy import ProviderProxy, Responder, ScriptedResponder, exchange_path
 from changelens_review.provider.replay import ReplayResponder, load_recording
 from changelens_review.provider.scripts import load_script
-from changelens_review.results.metrics import CaseMetrics, ChangeSize, ProviderUsage, RunDuration
+from changelens_review.results.metrics import CaseMetrics, ChangeSize, ProviderUsage, RunDuration, stage_milliseconds
 from changelens_review.results.store import CHANGE_PATCH, CaseResult, RunStore, RunSummary, repeat_folder
 
 ENGINE_LOG = "engine.log"
@@ -147,6 +147,11 @@ def provider_setup(case: Case, runs_root: Path) -> ProviderSetup:
             )
 
 
+def case_markers(fixture_markers: tuple[str, ...], plan_markers: tuple[str, ...]) -> tuple[str, ...]:
+    """The fixture's markers followed by the case's markers that the fixture does not already declare."""
+    return fixture_markers + tuple(marker for marker in plan_markers if marker not in fixture_markers)
+
+
 def _run_case_session(
     case: Case,
     build: EngineBuild,
@@ -190,7 +195,10 @@ def _run_case_session(
     metrics = CaseMetrics(
         ChangeSize.of(oracle),
         ProviderUsage.of(exchanges),
-        RunDuration.of(database.run(state.run_id) if database is not None else None),
+        RunDuration.of(
+            database.run(state.run_id) if database is not None else None,
+            database.steps_for(state.run_id) if database is not None else [],
+        ),
     )
 
     def result(status: str, **values: object) -> CaseResult:
@@ -213,11 +221,12 @@ def _run_case_session(
         final_poll=state.final_poll,
         run_id=state.run_id,
         error_responses=tuple(state.error_responses),
+        step_responses=tuple(state.step_responses),
         exchanges=exchanges,
         database=database,
         oracle=oracle,
         repository=fixture.path,
-        markers=fixture.markers,
+        markers=case_markers(fixture.markers, case.markers),
         snapshot_before=state.snapshot_before,
         snapshot_after=snapshot_repository(fixture.path),
         state_directory=state_directory,
@@ -297,7 +306,6 @@ def _stage_timings(database: DatabaseSnapshot | None, run_id: str | None) -> dic
         return {}
     timings: dict[str, JsonValue] = {}
     for row in database.steps_for(run_id):
-        started, finished = row.get("started_at_unix_ms"), row.get("finished_at_unix_ms")
-        elapsed = finished - started if isinstance(started, int) and isinstance(finished, int) else None
+        elapsed = stage_milliseconds(row)
         timings[str(row.get("stage"))] = {"state": row.get("state"), "milliseconds": elapsed}
     return timings

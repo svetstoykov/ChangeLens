@@ -10,8 +10,19 @@ from changelens_review.results.compare import compare_runs
 from changelens_review.results.stored import load_run
 
 
-def _store_run(runs: Path, run_id: str, status: str, cost: float, thesis: str, removals: list) -> None:
+def _store_run(
+    runs: Path,
+    run_id: str,
+    status: str,
+    cost: float,
+    thesis: str,
+    removals: list,
+    stages: dict | None = None,
+) -> None:
     folder = runs / run_id
+    duration: dict = {"total_ms": round(cost * 20_000_000), "analysis_ms": None}
+    if stages is not None:
+        duration["stages"] = stages
     write_json(
         folder / "run.json",
         {
@@ -44,7 +55,7 @@ def _store_run(runs: Path, run_id: str, status: str, cost: float, thesis: str, r
                     "cost": cost,
                     "cost_reported_calls": 1,
                 },
-                "duration": {"total_ms": round(cost * 20_000_000), "analysis_ms": None},
+                "duration": duration,
             },
         },
     )
@@ -86,6 +97,7 @@ def test_compare_reports_status_cost_stage_removal_and_reading_model_changes(tmp
     assert "outcome:" not in report
     assert "curator: calls 1, prompt tokens 1000, completion tokens 80, cost 0.000400 -> 0.000600" in report
     assert "curating: 4000 -> 6000" in report
+    assert "stages (ms):" in report
     assert "change: files 7, lines added 8, lines deleted 3" in report
     assert "tokens: total 1080, prompt 1000, completion 80, estimated calls 0" in report
     assert "cost: 0.000400 -> 0.000600, reported by 1 of 1 calls" in report
@@ -96,6 +108,45 @@ def test_compare_reports_status_cost_stage_removal_and_reading_model_changes(tmp
     assert '+    "text": "Parser rejects blank names."' in report
     assert "case only-run-a: only in A (pass)" in report
     assert "case only-run-b: only in B (pass)" in report
+
+
+def test_compare_puts_stage_totals_on_a_single_case_duration_line(tmp_path: Path) -> None:
+    _store_run(
+        tmp_path,
+        "run-a",
+        "pass",
+        0.0004,
+        "Same.",
+        [],
+        stages={"capturing": 125, "discovering": 2084, "collecting": 46},
+    )
+    _store_run(
+        tmp_path,
+        "run-b",
+        "pass",
+        0.0006,
+        "Same.",
+        [],
+        stages={"capturing": 130, "discovering": 1900, "collecting": 46},
+    )
+
+    report = "\n".join(compare_runs(load_run("run-a", tmp_path), load_run("run-b", tmp_path)))
+
+    assert (
+        "duration ms: total 8000 -> 12000, analysis n/a, capturing 125 -> 130, discovering 2084 -> 1900, collecting 46"
+        in report
+    )
+    assert "stages (ms):" not in report
+
+
+def test_compare_keeps_the_stage_section_for_a_repeated_case(tmp_path: Path) -> None:
+    store_repeated_run(tmp_path, "run-a", (True, True))
+    store_repeated_run(tmp_path, "run-b", (True, True))
+
+    report = "\n".join(compare_runs(load_run("run-a", tmp_path), load_run("run-b", tmp_path)))
+
+    assert "stages (ms):" in report
+    assert "repeat 1 capturing: 100" in report
 
 
 def test_identical_runs_report_no_differences(tmp_path: Path) -> None:
@@ -156,7 +207,16 @@ def store_repeated_run(runs: Path, run_id: str, linked: tuple[bool, ...]) -> Pat
     repeats = []
     for number, passed in enumerate(linked, start=1):
         judge = {"name": "should_link", "expected": {}, "actual": {}, "passed": passed}
-        repeats.append({"repeat": number, "status": "pass", "expectations": [], "judge": [judge], "run_ids": ["r"]})
+        repeats.append(
+            {
+                "repeat": number,
+                "status": "pass",
+                "expectations": [],
+                "judge": [judge],
+                "run_ids": ["r"],
+                "stage_timings": {"capturing": {"state": "succeeded", "milliseconds": 100 * number}},
+            }
+        )
         write_json(
             case / "repeats" / str(number) / "state.json",
             {"analysis_runs": [{"run_id": "r", "reading_model_json": json.dumps(READING_MODEL)}]},

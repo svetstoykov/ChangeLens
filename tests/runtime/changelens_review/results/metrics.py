@@ -1,7 +1,7 @@
 """Size, provider usage, and duration of a case, measured for analytics rather than asserted on."""
 
 from collections.abc import Iterable
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from typing import Self
 
 from changelens_review.fixtures.oracle import Oracle
@@ -105,19 +105,25 @@ class ProviderUsage:
 
 @dataclass(frozen=True)
 class RunDuration:
-    """Milliseconds from request, and from analysis start, to the terminal state of the case's run."""
+    """Milliseconds from request, and from analysis start, to the terminal state of the case's run.
+
+    `stages` maps each pipeline stage to its elapsed milliseconds in step order; a stage whose
+    start or finish timestamp is missing maps to None.
+    """
 
     total_ms: int | None
     analysis_ms: int | None
+    stages: dict[str, int | None] = field(default_factory=dict)
 
     @classmethod
-    def of(cls, run_row: dict[str, JsonValue] | None) -> Self:
-        """Read the run row's timestamps; a missing or non-terminal run has no durations."""
+    def of(cls, run_row: dict[str, JsonValue] | None, step_rows: Iterable[dict[str, JsonValue]]) -> Self:
+        """Read the run row's timestamps and each step's elapsed time; a missing or non-terminal run has no durations."""
         row = run_row or {}
         terminal = row.get("terminal_at_unix_ms")
         return cls(
             _elapsed(row.get("requested_at_unix_ms"), terminal),
             _elapsed(row.get("analysis_started_at_unix_ms"), terminal),
+            {str(step.get("stage")): stage_milliseconds(step) for step in step_rows},
         )
 
 
@@ -148,3 +154,8 @@ def _elapsed(start: JsonValue, end: JsonValue) -> int | None:
     if isinstance(start, int) and isinstance(end, int):
         return end - start
     return None
+
+
+def stage_milliseconds(row: dict[str, JsonValue]) -> int | None:
+    """Return a step row's elapsed milliseconds, or None when either timestamp is missing."""
+    return _elapsed(row.get("started_at_unix_ms"), row.get("finished_at_unix_ms"))

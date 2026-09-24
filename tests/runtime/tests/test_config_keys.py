@@ -5,23 +5,30 @@ from changelens_review.engine.config_keys import CONFIGURABLE_KEYS, RESERVED_KEY
 from changelens_review.paths import REPO_ROOT
 
 SECTION = re.compile(r'SectionKey\s*=\s*"ChangeLens:([^"]+)"')
-SINGLE = re.compile(r'\w*ConfigurationKey\s*=\s*"ChangeLens:([^"]+)"')
-PROPERTY = re.compile(r"public\s+[^=;{]+?\s+(\w+)\s*\{\s*get;\s*(?:set|init);\s*\}")
+SECTION_KEY = re.compile(r'const\s+string\s+(\w+Key)\s*=\s*SectionKey\s*\+\s*":(\w+)"')
+SINGLE = re.compile(r'const\s+string\s+(\w*ConfigurationKey)\s*=\s*"ChangeLens:([^"]+)"')
 
 
 def derive_engine_keys(engine_root: Path) -> set[str]:
+    """Return every setting the engine reads through a configuration-key constant used outside its own file."""
+    sources = {
+        path: path.read_text(encoding="utf-8")
+        for path in engine_root.rglob("*.cs")
+        if not {"bin", "obj"} & set(path.parts)
+    }
     keys: set[str] = set()
-    for constants in engine_root.rglob("*Constants.cs"):
-        if {"bin", "obj"} & set(constants.parts):
+    for constants, text in sources.items():
+        if not constants.name.endswith("Constants.cs"):
             continue
-        text = constants.read_text(encoding="utf-8")
-        keys.update(match.group(1).replace(":", ".") for match in SINGLE.finditer(text))
+        declared = [(name, key.replace(":", ".")) for name, key in SINGLE.findall(text)]
         section = SECTION.search(text)
-        if section and constants.name.endswith("ConfigurationConstants.cs"):
-            prefix = constants.name.removesuffix("ConfigurationConstants.cs")
-            options = constants.parent.parent / "Models" / f"{prefix}Options.cs"
-            for match in PROPERTY.finditer(options.read_text(encoding="utf-8")):
-                keys.add(f"{section.group(1).replace(':', '.')}.{match.group(1)}")
+        if section:
+            prefix = section.group(1).replace(":", ".")
+            declared += [(name, f"{prefix}.{key}") for name, key in SECTION_KEY.findall(text)]
+        for name, key in declared:
+            reference = f"{constants.stem}.{name}"
+            if any(reference in other for path, other in sources.items() if path != constants):
+                keys.add(key)
     return keys
 
 

@@ -19,6 +19,20 @@ cases:
       - repo_unchanged: true     # the engine leaves the repository untouched
 ```
 
+Besides the built-in checks, an expectation can compare any dotted path: `response.<path>` against the final `analysis.pollRun` result, `state.<column>` against the run's database row, or `steps[N].response.<path>` / `steps[N].errors.<path>` against the response of the step at 0-based index `N` in the case's `steps` list (`steps[N].errors.<path>` reads the errors of an error response).
+
+`provider.calls.curator` and `provider.calls.checker` count only the calls of that role, so a plan can pin checker retries separately from the curator call.
+
+`contains` and `lacks` check membership in a list of the final poll result, so a plan can assert what a live run published without fixing list positions. `in` is a dotted path in which `*` spreads over every member of a list; a mapping `item` matches a member that holds each of its keys with an equal value. `contains` passes on at least one match, or on exactly `count` matches when `count` is given; `lacks` passes on none:
+
+```yaml
+- contains: { in: readingModel.limitations, item: { kind: fileNotRead, path: src/flask/app.py } }
+- contains: { in: readingModel.assurances, item: { kind: checkerNotRun }, count: 1 }
+- lacks: { in: readingModel.areas.*.relationships, item: { trust: checked } }
+```
+
+`no_marker_in` searches for markers in the provider `payload`, the engine `db`, the engine `logs`, or the published `explanation`: the reading model without its `evidence` excerpts, so a marker injected into repository source may reach the payload and the evidence but fails the check when the explanation repeats it. Markers come from the repository fixture and from the case's own `markers` list, such as a marker typed into an analyze step's `change_context`.
+
 `review check smoke` only validates the plan. `review run smoke` then:
 
 1. Builds the engine from the working tree once and records the commit and a hash of uncommitted changes.
@@ -129,7 +143,7 @@ uv run --project tests/runtime review clean [--all]        # delete heavy output
 
 `<plan>` is a Markdown path or a plan id in `docs/evaluation/review-plans/`. Results are written to `.changelens-review/runs/<UTC timestamp>-<plan id>/`.
 
-`compare` matches cases by id and reports status changes, expectation differences, soft-check tallies, case metrics, verdicts, provider calls, tokens, cost, and latency per role, stage timings, validation removals, and a diff of the published reading models. Repeats of repeated cases are paired by number.
+`compare` matches cases by id and reports status changes, expectation differences, soft-check tallies, case metrics, verdicts, provider calls, tokens, cost, and latency per role, stage timings, validation removals, and a diff of the published reading models. The duration metrics line ends with each stage's total, and a repeated case keeps a separate per-attempt `stages (ms):` section. Repeats of repeated cases are paired by number.
 
 ## Metrics
 
@@ -137,7 +151,7 @@ Every case that gets as far as starting its engine records `metrics` in its `res
 
 - `change`: the reviewed change's size from the oracle: changed files by category, text lines added and deleted, and binary files.
 - `provider`: calls, prompt and completion tokens, their total, cost, and summed latency. Tokens are what the provider reported. When a provider leaves a count out, the tool fills it with an estimate of one token per four characters of message text and counts that call in `estimated_calls`. Cost is only what providers reported; it is `null` when no call reported one, and `cost_reported_calls` says how many did. Each exchange record also keeps its own `estimated_prompt_tokens` and `estimated_completion_tokens`, so the estimate can be checked against reported counts.
-- `duration`: milliseconds from the run's request, and from its analysis start, to its terminal state, read from the engine database. Both are `null` when the run did not finish.
+- `duration`: milliseconds from the run's request, and from its analysis start, to its terminal state, read from the engine database. Both are `null` when the run did not finish. `stages` maps each pipeline stage to its elapsed milliseconds in step order, or `null` when the stage lacks a start or finish timestamp; a repeated case sums each stage over its repeats under the same missing-value rule as the totals.
 
 `run.json` keeps `totals` of the change sizes and provider usage over all measured cases.
 

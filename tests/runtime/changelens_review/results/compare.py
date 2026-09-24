@@ -42,7 +42,8 @@ def compare_runs(first: StoredRun, second: StoredRun) -> list[str]:
         lines.extend(_indented(_metric_lines(a, b)))
         lines.extend(_indented(_verdict_lines(a, b)))
         lines.extend(_indented(_provider_lines(a, b)))
-        lines.extend(_indented(_stage_lines(pairs)))
+        if len(pairs) > 1 or not _has_stages(a, b):
+            lines.extend(_indented(_stage_lines(pairs)))
         for label, x, y in pairs:
             lines.extend(_indented(_removal_lines(label, x, y)))
             lines.extend(_indented(_reading_model_lines(label, x, y)))
@@ -110,6 +111,12 @@ def _metric_lines(a: StoredCase, b: StoredCase) -> list[str]:
         first, second = a.metric(group, name), b.metric(group, name)
         return _change(_or_na(first, render), _or_na(second, render))
 
+    duration = (
+        f"{INDENT}duration ms: total {change('duration', 'total_ms')}, analysis {change('duration', 'analysis_ms')}"
+    )
+    stages = _duration_stages(a, b)
+    if stages:
+        duration += ", " + ", ".join(stages)
     return [
         "metrics:",
         f"{INDENT}change: files {change('change', 'files')}, "
@@ -119,8 +126,25 @@ def _metric_lines(a: StoredCase, b: StoredCase) -> list[str]:
         f"estimated calls {change('provider', 'estimated_calls')}",
         f"{INDENT}cost: {change('provider', 'cost', _stored_cost)}, "
         f"reported by {change('provider', 'cost_reported_calls')} of {change('provider', 'calls')} calls",
-        f"{INDENT}duration ms: total {change('duration', 'total_ms')}, analysis {change('duration', 'analysis_ms')}",
+        duration,
     ]
+
+
+def _duration_stages(a: StoredCase, b: StoredCase) -> list[str]:
+    first, second = _stages(a), _stages(b)
+    return [
+        f"{stage} {_change(_or_na(first.get(stage), str), _or_na(second.get(stage), str))}"
+        for stage in [*first, *(stage for stage in second if stage not in first)]
+    ]
+
+
+def _stages(case: StoredCase) -> dict[str, JsonValue]:
+    stages = case.metric("duration", "stages")
+    return stages if isinstance(stages, dict) else {}
+
+
+def _has_stages(a: StoredCase, b: StoredCase) -> bool:
+    return bool(_stages(a) or _stages(b))
 
 
 def _verdict_lines(a: StoredCase, b: StoredCase) -> list[str]:

@@ -16,7 +16,7 @@ from changelens_review.gitcli import git_text
 from changelens_review.jsonio import write_json
 from changelens_review.plans import runner as runner_module
 from changelens_review.plans.model import Case, Deadlines, Expectation, Plan, ProviderSettings, Step
-from changelens_review.plans.runner import provider_setup, run_case, run_plan
+from changelens_review.plans.runner import case_markers, provider_setup, run_case, run_plan
 from changelens_review.provider.live import UpstreamProvider
 from changelens_review.provider.proxy import ProviderProxy
 from changelens_review.results.store import RunStore
@@ -261,7 +261,7 @@ def test_a_run_records_case_metrics_and_run_totals(tmp_path: Path, monkeypatch: 
         "cost_reported_calls": 0,
         "latency_ms": 0,
     }
-    assert metrics["duration"] == {"total_ms": None, "analysis_ms": None}
+    assert metrics["duration"] == {"total_ms": None, "analysis_ms": None, "stages": {}}
     totals = json.loads((summary.folder / "run.json").read_text(encoding="utf-8"))["totals"]
     assert (totals["measured_cases"], totals["change"]["files"], totals["provider"]["total_tokens"]) == (1, 7, 12)
 
@@ -367,3 +367,13 @@ def test_a_hard_check_failing_in_one_repeat_fails_the_case(tmp_path: Path, monke
     assert result.status == "fail"
     assert [repeat.status for repeat in result.repeats] == ["pass", "fail", "pass"]
     assert result.reason == "repeat 2: fail"
+
+
+def test_case_markers_follow_the_fixture_and_skip_repeats() -> None:
+    assert case_markers(("fixture-a", "fixture-b"), ("context-c", "fixture-a")) == (
+        "fixture-a",
+        "fixture-b",
+        "context-c",
+    )
+    assert case_markers((), ("context-c",)) == ("context-c",)
+    assert case_markers(("fixture-a",), ()) == ("fixture-a",)

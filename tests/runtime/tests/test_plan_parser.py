@@ -85,6 +85,11 @@ def test_valid_plan_parses(tmp_path: Path) -> None:
         ("- open: { repository: $fixture }", "- launch: {}", "unknown step 'launch'"),
         ("- outcome: completed", "- verdict: completed", "unknown check 'verdict'"),
         ("- outcome: completed", "- outcome: finished", "outcome must be"),
+        (
+            "      - provider.calls: 1\n",
+            "      - provider.calls: 1\n      - steps[7].response.state: rejectedStale\n",
+            "steps[7] is beyond the case's 3 steps",
+        ),
         ("Analysis.Checker.Enabled", "Analysis.Checker.Enabeld", "unknown config key"),
         ("Analysis.Checker.Enabled: false", "Analysis.ModelCompletion.BaseUrl: x", "the harness owns this setting"),
         ("mode: scripted, script: curator-valid-f01", "mode: live, script: x", "a live provider does not take script"),
@@ -96,7 +101,7 @@ def test_valid_plan_parses(tmp_path: Path) -> None:
         ("id: inline-dirty", "id: f01-lifecycle", "duplicate case id"),
         ("src/engine/ChangeLens.Core/DraftValidation", "src/does-not-exist", "does not exist"),
         ("      - prepare: { target: main }\n", "", "analyze needs an earlier prepare step"),
-        ("markers: [marker-inline]", "markers: []", "declares no markers"),
+        ("markers: [marker-inline]", "markers: []", "neither the case nor its repository declares markers"),
         ("runId: $run_id", "runId: $unknown", "unknown variable"),
         ("engine: working-tree", "engine: pinned", "only working-tree"),
     ],
@@ -105,6 +110,19 @@ def test_invalid_plans_report_located_issues(tmp_path: Path, old: str, new: str,
     issues = issues_for(tmp_path, old, new)
 
     assert any(message in issue for issue in issues), issues
+
+
+def test_step_path_expectations_parse(tmp_path: Path) -> None:
+    block = VALID_BLOCK.replace(
+        "      - provider.calls: 1\n",
+        "      - provider.calls: 1\n      - steps[2].response.state: completed\n",
+        1,
+    )
+
+    case = load_plan(str(plan_file(tmp_path, block))).cases[0]
+
+    assert case.expectations[3].name == "steps[2].response.state"
+    assert case.expectations[3].location == "cases[0].expect[3]"
 
 
 def test_plan_needs_exactly_one_block(tmp_path: Path) -> None:
@@ -195,7 +213,11 @@ def test_a_case_can_use_a_cloned_repository(tmp_path: Path) -> None:
         ("    repository:\n", "    fixture: F01\n    repository:\n", "give exactly one of fixture or repository"),
         ("https://github.com/example/project.git", "ssh://github.com/example/project.git", "https:// or file://"),
         ("8be07d40000000000000000000000000000000bb", "8be07d4", "repository.head: give a full 40-character"),
-        ("      - captured_paths: oracle\n", "      - no_marker_in: [payload]\n", "declares no markers"),
+        (
+            "      - captured_paths: oracle\n",
+            "      - no_marker_in: [payload]\n",
+            "neither the case nor its repository declares markers",
+        ),
     ],
 )
 def test_invalid_cloned_repositories_report_located_issues(tmp_path: Path, old: str, new: str, message: str) -> None:
@@ -275,3 +297,36 @@ def test_replay_provider_names_a_repeat_of_a_stored_case(tmp_path: Path, monkeyp
         load_plan(str(plan_file(tmp_path, block.replace("repeat: 2", "repeat: 3"))))
     with pytest.raises(SpecError, match="recorded no provider exchanges"):
         load_plan(str(plan_file(tmp_path, block.replace(", repeat: 2", ""))))
+
+
+def with_case_markers(block: str, markers: str) -> str:
+    return block.replace("    fixture: F01\n    steps:", f"    fixture: F01\n    markers: {markers}\n    steps:", 1)
+
+
+def test_a_case_can_declare_markers(tmp_path: Path) -> None:
+    block = with_case_markers(VALID_BLOCK, "[CTX-MARKER-7f3a, second-marker]")
+
+    case = load_plan(str(plan_file(tmp_path, block))).cases[0]
+
+    assert case.markers == ("CTX-MARKER-7f3a", "second-marker")
+
+
+@pytest.mark.parametrize("markers", ["not-a-list", "{a: b}", "[a, '']", "[a, a]"])
+def test_invalid_case_markers_are_reported(tmp_path: Path, markers: str) -> None:
+    with pytest.raises(SpecError) as caught:
+        load_plan(str(plan_file(tmp_path, with_case_markers(VALID_BLOCK, markers))))
+
+    assert "cases[0].markers: expected a list of distinct non-empty marker strings" in caught.value.issues
+
+
+def test_no_marker_in_accepts_markers_declared_by_the_case(tmp_path: Path) -> None:
+    block = with_case_markers(VALID_BLOCK, "[CTX-MARKER-7f3a]").replace(
+        "      - provider.calls: 1\n",
+        "      - provider.calls: 1\n      - no_marker_in: [logs, explanation]\n",
+        1,
+    )
+
+    case = load_plan(str(plan_file(tmp_path, block))).cases[0]
+
+    assert case.markers == ("CTX-MARKER-7f3a",)
+    assert case.expectations[-1].name == "no_marker_in"

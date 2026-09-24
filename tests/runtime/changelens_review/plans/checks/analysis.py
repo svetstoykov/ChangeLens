@@ -57,6 +57,14 @@ def _evaluate_provider_calls(evidence: CaseEvidence, expected: JsonValue) -> Che
     return CheckOutcome(len(evidence.exchanges), len(evidence.exchanges) == expected)
 
 
+def _evaluate_provider_calls_for(role: str):
+    def evaluate(evidence: CaseEvidence, expected: JsonValue) -> CheckOutcome:
+        calls = sum(record.role == role for record in evidence.exchanges)
+        return CheckOutcome(calls, calls == expected)
+
+    return evaluate
+
+
 def _validate_error_code(expected: JsonValue) -> str | None:
     return None if isinstance(expected, str) and expected else "error_code must be a non-empty error code"
 
@@ -70,6 +78,11 @@ def _evaluate_error_code(evidence: CaseEvidence, expected: JsonValue) -> CheckOu
     return CheckOutcome(code, code == expected)
 
 
+def _provider_calls_check(role: str) -> CheckDefinition:
+    name = f"provider.calls.{role}"
+    return CheckDefinition(name, _validate_count(name), _evaluate_provider_calls_for(role), needs_analysis=False)
+
+
 OUTCOME = CheckDefinition("outcome", _validate_outcome, _evaluate_outcome, needs_analysis=True)
 REMOVALS_COUNT = CheckDefinition(
     "removals.count", _validate_count("removals.count"), _evaluate_removals, needs_analysis=True
@@ -77,4 +90,6 @@ REMOVALS_COUNT = CheckDefinition(
 PROVIDER_CALLS = CheckDefinition(
     "provider.calls", _validate_count("provider.calls"), _evaluate_provider_calls, needs_analysis=False
 )
+PROVIDER_CALLS_CURATOR = _provider_calls_check("curator")
+PROVIDER_CALLS_CHECKER = _provider_calls_check("checker")
 ERROR_CODE = CheckDefinition("error_code", _validate_error_code, _evaluate_error_code, needs_analysis=False)

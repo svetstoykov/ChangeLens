@@ -33,6 +33,7 @@ class CaseState:
     run_ids: list[str] = field(default_factory=list)
     final_poll: dict[str, JsonValue] | None = None
     error_responses: list[dict[str, JsonValue]] = field(default_factory=list)
+    step_responses: list[dict[str, JsonValue] | None] = field(default_factory=list)
     step_timings: list[dict[str, JsonValue]] = field(default_factory=list)
 
     @property
@@ -71,6 +72,7 @@ class StepExecutor:
         self._session = session
         self._state = state
         self._deadlines = deadlines
+        self._last_response: ProtocolResponse | None = None
         self._handlers: dict[str, Callable[[Step], None]] = {
             "open": self._open,
             "prepare": self._prepare,
@@ -83,17 +85,29 @@ class StepExecutor:
         }
 
     def execute(self, step: Step) -> None:
-        """Run one step and record how long it took."""
+        """Run one step and record how long it took and what its last response was."""
         started = time.monotonic()
+        self._last_response = None
         try:
             self._handlers[step.kind](step)
         finally:
+            self._state.step_responses.append(self._step_entry())
             self._state.step_timings.append(
                 {"step": step.location, "kind": step.kind, "seconds": round(time.monotonic() - started, 3)}
             )
 
+    def _step_entry(self) -> dict[str, JsonValue] | None:
+        """The response or errors of the step's last protocol response, or None when it sent none."""
+        response = self._last_response
+        if response is None:
+            return None
+        if response.is_error:
+            return {"errors": response.message.get("errors")}
+        return {"response": response.result}
+
     def _request(self, action: str, parameters: dict[str, JsonValue] | None = None) -> ProtocolResponse:
         response = self._session.request(action, parameters)
+        self._last_response = response
         if response.is_error:
             self._state.error_responses.append(response.message)
         return response

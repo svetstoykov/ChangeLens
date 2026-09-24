@@ -67,9 +67,23 @@ def test_change_size_counts_f01_paths_and_lines(tmp_path: Path) -> None:
 def test_duration_reads_terminal_run_timestamps_only() -> None:
     row = {"requested_at_unix_ms": 1_000, "analysis_started_at_unix_ms": 1_500, "terminal_at_unix_ms": 4_000}
 
-    assert RunDuration.of(row) == RunDuration(total_ms=3_000, analysis_ms=2_500)
-    assert RunDuration.of({**row, "terminal_at_unix_ms": None}) == RunDuration(None, None)
-    assert RunDuration.of(None) == RunDuration(None, None)
+    assert RunDuration.of(row, []) == RunDuration(total_ms=3_000, analysis_ms=2_500)
+    assert RunDuration.of({**row, "terminal_at_unix_ms": None}, []) == RunDuration(None, None)
+    assert RunDuration.of(None, []) == RunDuration(None, None)
+
+
+def test_duration_collects_stage_milliseconds_in_step_order() -> None:
+    row = {"requested_at_unix_ms": 1_000, "terminal_at_unix_ms": 4_000}
+    steps = [
+        {"stage": "capturing", "started_at_unix_ms": 1_000, "finished_at_unix_ms": 1_125},
+        {"stage": "discovering", "started_at_unix_ms": 1_125, "finished_at_unix_ms": 3_209},
+        {"stage": "collecting", "started_at_unix_ms": None, "finished_at_unix_ms": 3_255},
+    ]
+
+    duration = RunDuration.of(row, steps)
+
+    assert list(duration.stages) == ["capturing", "discovering", "collecting"]
+    assert duration.stages == {"capturing": 125, "discovering": 2084, "collecting": None}
 
 
 def test_run_output_describes_size_tokens_estimates_cost_and_duration() -> None:

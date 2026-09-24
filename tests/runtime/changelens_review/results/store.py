@@ -133,12 +133,17 @@ def _combined_metrics(measured: list[CaseMetrics]) -> CaseMetrics | None:
     provider = ProviderUsage()
     for metrics in measured:
         provider = provider.plus(metrics.provider)
+    stages = {
+        stage: _summed([metrics.duration.stages.get(stage) for metrics in measured])
+        for stage in dict.fromkeys(stage for metrics in measured for stage in metrics.duration.stages)
+    }
     return CaseMetrics(
         measured[0].change,
         provider,
         RunDuration(
             _summed([metrics.duration.total_ms for metrics in measured]),
             _summed([metrics.duration.analysis_ms for metrics in measured]),
+            stages,
         ),
     )
 

@@ -1,0 +1,15 @@
+id: F12
+description: >-
+  F01 whose committed empty-name guard is reverted by an unstaged edit, so the working tree says the opposite
+  of the committed change; the marker must never leave the machine.
+base: F01
+uncommitted:
+  - write:
+      path: src/parse-name.ts
+      text: |
+        export function parseName(value: string): string {
+          return value.trim();
+        }
+        // reverted-fix-marker-only
+markers:
+  - reverted-fix-marker-only

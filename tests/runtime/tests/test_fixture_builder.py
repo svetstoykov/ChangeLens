@@ -52,6 +52,17 @@ def test_f02_leaves_staged_unstaged_and_untracked_edits(tmp_path: Path) -> None:
     )
 
 
+def test_f12_reverts_the_committed_guard_in_the_worktree_only(tmp_path: Path) -> None:
+    built = build_fixture(load_catalog_fixture("F12"), tmp_path / "repo")
+
+    worktree = (built.path / "src/parse-name.ts").read_text()
+
+    assert "name is required" not in worktree
+    assert "reverted-fix-marker-only" in worktree
+    assert "name is required" in git_text(built.path, "show", "HEAD:src/parse-name.ts")
+    assert built.markers == ("reverted-fix-marker-only",)
+
+
 def test_remote_and_conflicted_merge(tmp_path: Path) -> None:
     spec = parse_fixture(
         {

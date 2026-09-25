@@ -1,12 +1,14 @@
-"""Command-line entry point: review check | run | compare | show | verdict | clean."""
+"""Command-line entry point: review check | run | compare | show | serve | verdict | clean."""
 
 import argparse
 import json
 import sys
+import webbrowser
 from collections.abc import Sequence
 
 from changelens_review import __version__
 from changelens_review.errors import SpecError
+from changelens_review.paths import RUNS_ROOT
 from changelens_review.plans.model import Plan
 from changelens_review.plans.parser import load_plan
 from changelens_review.plans.runner import run_plan
@@ -14,10 +16,13 @@ from changelens_review.results.compare import compare_runs
 from changelens_review.results.metrics import CaseMetrics, ChangeSize, ProviderUsage
 from changelens_review.results.show import show_case
 from changelens_review.results.store import CaseResult, clean_runs
-from changelens_review.results.stored import StoredCase, load_run
+from changelens_review.results.stored import StoredCase, StoredRun, load_run
 from changelens_review.results.verdicts import VERDICTS, record_verdict
+from changelens_review.web.constants import DEFAULT_PORT
+from changelens_review.web.server import create_server
 
 EXIT_INVALID_PLAN = 2
+EXIT_SERVE_FAILED = 1
 DETAIL_INDENT = " " * 9
 
 
@@ -38,6 +43,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     show.add_argument("run", help="run id or run folder")
     show.add_argument("case", help="case id")
     show.add_argument("--repeat", type=int, help="show only this repeat of a repeated case")
+    serve = commands.add_parser("serve", help="serve stored runs to a local browser")
+    serve.add_argument("run", nargs="?", help="run id or run folder to open")
+    serve.add_argument("case", nargs="?", help="case id to open")
+    serve.add_argument("--repeat", type=int, help="open this repeat of a repeated case")
+    serve.add_argument("--port", type=int, default=DEFAULT_PORT, help="port to bind on 127.0.0.1")
+    serve.add_argument("--no-open", action="store_true", help="do not open a browser")
     verdict = commands.add_parser("verdict", help="record your verdict on a stored case beside its result")
     verdict.add_argument("run", help="run id or run folder")
     verdict.add_argument("case", help="case id")
@@ -55,6 +66,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             return _compare(arguments.first, arguments.second)
         case "show":
             return _show(arguments.run, arguments.case, arguments.repeat)
+        case "serve":
+            return _serve(arguments.run, arguments.case, arguments.repeat, arguments.port, not arguments.no_open)
         case "verdict":
             return _verdict(arguments.run, arguments.case, arguments.verdict, arguments.note)
         case _:
@@ -173,6 +186,57 @@ def _show(reference: str, case_id: str, repeat: int | None) -> int:
     for line in lines:
         print(line)
     return 0
+
+
+def _serve(reference: str | None, case_id: str | None, repeat: int | None, port: int, open_browser: bool) -> int:
+    """Serve the stored runs to a browser, opening it at the requested run, case, and repeat."""
+    run = None
+    case = None
+    if reference is not None:
+        try:
+            run = load_run(reference)
+        except SpecError as error:
+            for issue in error.issues:
+                print(f"error: {issue}", file=sys.stderr)
+            return EXIT_SERVE_FAILED
+        if case_id is not None:
+            case = run.cases.get(case_id)
+            if case is None:
+                print(f"error: run {reference} has no case {case_id!r}", file=sys.stderr)
+                return EXIT_SERVE_FAILED
+            if repeat is not None and not any(attempt.repeat == repeat for attempt in case.attempts):
+                print(f"error: case {case_id!r} has no repeat {repeat}", file=sys.stderr)
+                return EXIT_SERVE_FAILED
+    url = _serve_url(run, case, repeat, port)
+    try:
+        server = create_server(RUNS_ROOT, port)
+    except OSError:
+        print(f"port {port} is in use; pass --port", file=sys.stderr)
+        return EXIT_SERVE_FAILED
+    print(f"ChangeLens review at {url}")
+    print("Ctrl-C to stop.")
+    if open_browser:
+        webbrowser.open(url)
+    try:
+        server.serve_forever()
+    except KeyboardInterrupt:
+        pass
+    finally:
+        server.shutdown()
+        server.server_close()
+    return 0
+
+
+def _serve_url(run: StoredRun | None, case: StoredCase | None, repeat: int | None, port: int) -> str:
+    """Build the hash-routed browser URL for the requested run, case, and repeat."""
+    url = f"http://127.0.0.1:{port}/#/runs"
+    if run is None:
+        return url
+    url = f"{url}/{run.run_id}"
+    if case is None:
+        return url
+    url = f"{url}/{case.case_id}"
+    return f"{url}?repeat={repeat}" if repeat is not None else url
 
 
 def _verdict(reference: str, case_id: str, verdict: str, note: str | None) -> int:

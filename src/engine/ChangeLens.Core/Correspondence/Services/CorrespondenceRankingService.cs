@@ -105,20 +105,20 @@ public sealed class CorrespondenceRankingService(
             eligibleFiles.Add(file);
         }
 
-        var blobsResult = await reader.ReadBlobsAsync(eligibleFiles, cancellationToken);
+        var tokenizer = new ChangeAnatomyTokenizer(this._anatomyOptions.MinimumKeyLength);
+        var blobsResult = await reader.ReadBlobsAsync(eligibleFiles, IndexBlob, cancellationToken);
         if (blobsResult.IsFailure)
         {
             return Result.ErrorFromResult<CorrespondenceRanking>(blobsResult);
         }
 
-        var tokenizer = new ChangeAnatomyTokenizer(this._anatomyOptions.MinimumKeyLength);
-        foreach (var (file, blob) in eligibleFiles.Zip(blobsResult.Data!))
+        void IndexBlob(FrozenGitTreeFile file, FrozenGitBlob blob)
         {
             cancellationToken.ThrowIfCancellationRequested();
             if (!blob.HasText)
             {
                 Count(skipReasons, blob.SkipReason is FrozenGitBlobSkipReason.Binary ? "binary content" : "larger than the configured blob bound");
-                continue;
+                return;
             }
 
             var collector = new CorrespondenceIndexedKeyCollector(

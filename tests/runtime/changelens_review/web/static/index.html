@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ChangeLens review</title>
+<link rel="stylesheet" href="app.css">
+<script src="app.js" defer></script>
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="#/runs">ChangeLens review</a>
+  <nav class="crumbs" aria-label="Breadcrumb">
+    <a href="#/runs">Runs</a>
+  </nav>
+  <span class="topbar-progress"></span>
+  <a class="btn" id="guide-link" href="#/info">Guide</a>
+  <button class="btn" id="refresh" type="button">Refresh</button>
+  <button class="btn" id="help-toggle" type="button" aria-expanded="false" aria-controls="help">?</button>
+</header>
+<div class="errorbar" id="errorbar" hidden>
+  <span class="errorbar-text"></span>
+  <button class="btn" id="errorbar-close" type="button">Dismiss</button>
+</div>
+<div class="help-pop" id="help" hidden>
+  <dl class="keys">
+    <dt><kbd>←</kbd> <kbd>→</kbd></dt>
+    <dd>Previous or next repeat</dd>
+    <dt><kbd>j</kbd> <kbd>k</kbd></dt>
+    <dd>Next or previous case</dd>
+    <dt><kbd>g</kbd> <kbd>w</kbd> <kbd>x</kbd></dt>
+    <dd>Pick good, weak or wrong</dd>
+    <dt><kbd>Enter</kbd></dt>
+    <dd>Save the note</dd>
+    <dt><kbd>n</kbd></dt>
+    <dd>Next unjudged case</dd>
+    <dt><kbd>Esc</kbd></dt>
+    <dd>Close the open citation</dd>
+    <dt><kbd>?</kbd></dt>
+    <dd>Show this list</dd>
+  </dl>
+</div>
+<main id="app"></main>
+</body>
+</html>

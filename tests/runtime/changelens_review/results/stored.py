@@ -19,9 +19,11 @@ class StoredAttempt:
 
     repeat: int | None
     status: str
+    interruption: str | None
     expectations: tuple[dict[str, JsonValue], ...]
     judge: tuple[dict[str, JsonValue], ...]
     stage_timings: dict[str, JsonValue]
+    metrics: dict[str, JsonValue] | None
     exchanges: tuple[dict[str, JsonValue], ...]
     run_row: dict[str, JsonValue] | None
     folder: Path
@@ -47,6 +49,7 @@ class StoredCase:
     case_id: str
     status: str
     reason: str | None
+    repository: dict[str, JsonValue] | None
     metrics: dict[str, JsonValue] | None
     judge_tally: tuple[dict[str, JsonValue], ...]
     verdict: Verdict | None
@@ -100,10 +103,12 @@ def _load_case(folder: Path) -> StoredCase:
         else (_load_attempt(result, folder),)
     )
     metrics = result.get("metrics")
+    repository = result.get("repository")
     return StoredCase(
         result["case_id"],
         result["status"],
         result.get("reason"),
+        repository if isinstance(repository, dict) else None,
         metrics if isinstance(metrics, dict) else None,
         tuple(result.get("judge_tally") or ()),
         read_verdict(folder),
@@ -121,12 +126,16 @@ def _load_attempt(result: dict[str, JsonValue], folder: Path) -> StoredAttempt:
         run_row = next((row for row in state.get("analysis_runs", []) if row.get("run_id") == run_ids[-1]), None)
     repeat = result.get("repeat")
     stage_timings = result.get("stage_timings")
+    interruption = result.get("interruption")
+    metrics = result.get("metrics")
     return StoredAttempt(
         repeat if isinstance(repeat, int) else None,
         str(result["status"]),
+        interruption if isinstance(interruption, str) else None,
         tuple(result.get("expectations") or ()),
         tuple(result.get("judge") or ()),
         stage_timings if isinstance(stage_timings, dict) else {},
+        metrics if isinstance(metrics, dict) else None,
         read_exchanges(folder),
         run_row,
         folder,

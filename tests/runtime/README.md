@@ -128,6 +128,16 @@ uv run --project tests/runtime review verdict <run> <case> good|weak|wrong [--no
 
 The verdict is written to `cases/<case-id>/verdict.json` beside `result.json`, which is never rewritten. A later verdict on the same case replaces the earlier one. `review compare` shows the verdict under the case's tokens and cost.
 
+## Review in the browser
+
+`review serve` starts a local server on `127.0.0.1` and opens its page once in your default browser. The page lists every run with its cost, tokens, verdict progress and size on disk, shows a run's cases, compares two runs, and deletes a run or its heavy output after a confirmation. Its case screen puts each repeat's explanation next to the diff: clicking a claim highlights the lines it cites, and the verdict panel records your verdict through the same `verdict.json`.
+
+```sh
+uv run --project tests/runtime review serve [<run> [<case>]] [--repeat N] [--port 8765] [--no-open]
+```
+
+The run, case and repeat only choose the screen that opens first. A busy port or an unknown run, case or repeat exits 1. The server answers only requests addressed to `127.0.0.1:<port>` or `localhost:<port>`, and writes need the `X-ChangeLens-Review: 1` header. Agents always pass `--no-open`.
+
 ## Commands
 
 Run from the repository root:
@@ -138,6 +148,7 @@ uv run --project tests/runtime review run <plan> [--keep]  # run it; --keep reta
 uv run --project tests/runtime review compare <run-a> <run-b>  # compare two stored runs case by case
 uv run --project tests/runtime review show <run> <case> [--repeat N]  # explanation next to the diff
 uv run --project tests/runtime review verdict <run> <case> <verdict> [--note TEXT]  # record your verdict
+uv run --project tests/runtime review serve [<run> [<case>]] [--repeat N] [--no-open]  # browse and judge runs in the browser
 uv run --project tests/runtime review clean [--all]        # delete heavy output, or whole runs
 ```
 

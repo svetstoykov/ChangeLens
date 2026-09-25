@@ -53,3 +53,12 @@ def read_verdict(case_folder: Path) -> Verdict | None:
         return Verdict.from_json(json.loads(path.read_text(encoding="utf-8")), path)
     except json.JSONDecodeError as error:
         raise SpecError([f"{path} cannot be read: {error}"]) from error
+
+
+def remove_verdict(case_folder: Path) -> bool:
+    """Delete the case's recorded verdict, returning whether one existed."""
+    path = case_folder / VERDICT_DOCUMENT
+    if not path.is_file():
+        return False
+    path.unlink()
+    return True

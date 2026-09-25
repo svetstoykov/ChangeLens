@@ -31,14 +31,17 @@ public interface IFrozenGitTreeReader
     ///     Asynchronously reads captured tree blobs in bounded batches through one Git process per batch.
     /// </summary>
     /// <param name="files">The captured tree files to read. Cannot be <see langword="null" />.</param>
+    /// <param name="consume">Consumes each file and blob in request order. Cannot be <see langword="null" />.</param>
     /// <param name="cancellationToken">A <see cref="CancellationToken" /> to observe while waiting for the task.</param>
-    /// <returns>
-    ///     A task whose result contains one read result per requested file, in request order. A skipped file carries a
-    ///     binary or size skip reason, and a missing object fails the whole batch.
-    /// </returns>
-    Task<Result<IReadOnlyList<FrozenGitBlob>>> ReadBlobsAsync(
-        IReadOnlyList<FrozenGitTreeFile> files,
-        CancellationToken cancellationToken);
+    /// <returns>A task that represents the asynchronous operation. The task result contains success or a read failure.</returns>
+    /// <remarks>
+    ///     All identities are validated before Git reads begin. Each batch is consumed before the next is read.
+    ///     Consumers must release blob content and discard accumulated results if a later batch fails or cancellation occurs.
+    /// </remarks>
+    /// <exception cref="ArgumentNullException">Files or the consumer are <see langword="null" />.</exception>
+    /// <exception cref="OperationCanceledException">The cancellation token is canceled.</exception>
+    Task<Result> ReadBlobsAsync(
+        IReadOnlyList<FrozenGitTreeFile> files, Action<FrozenGitTreeFile, FrozenGitBlob> consume, CancellationToken cancellationToken);
 
     /// <summary>
     ///     Asynchronously diffs the exact blob identities recorded for one manifest entry.

@@ -67,14 +67,16 @@ public sealed class FrozenGitTreeReaderIntegrationTests
         var binaryFile = listing.Files.Single(file => file.Path == "binary.bin");
         var oversizedFile = new FrozenGitTreeFile("oversized.txt", textFile.ObjectId, long.MaxValue, "100644");
 
-        var result = await reader.ReadBlobsAsync([oversizedFile, textFile, binaryFile], TestContext.Current.CancellationToken);
+        var result = await ReadAllBlobsAsync(reader, [oversizedFile, textFile, oversizedFile, binaryFile, oversizedFile], TestContext.Current.CancellationToken);
 
         Assert.True(result.IsSuccess);
         var blobs = result.Data!;
-        Assert.Equal(3, blobs.Count);
+        Assert.Equal(5, blobs.Count);
         Assert.Equal(FrozenGitBlobSkipReason.TooLarge, blobs[0].SkipReason);
         Assert.Equal(["second content"], blobs[1].Lines);
-        Assert.Equal(FrozenGitBlobSkipReason.Binary, blobs[2].SkipReason);
+        Assert.Equal(FrozenGitBlobSkipReason.TooLarge, blobs[2].SkipReason);
+        Assert.Equal(FrozenGitBlobSkipReason.Binary, blobs[3].SkipReason);
+        Assert.Equal(FrozenGitBlobSkipReason.TooLarge, blobs[4].SkipReason);
     }
 
     /// <summary>
@@ -90,7 +92,7 @@ public sealed class FrozenGitTreeReaderIntegrationTests
         var reader = OpenReader(repository, snapshot);
         var requestedObjectId = new string('e', 40);
 
-        var result = await reader.ReadBlobsAsync(
+        var result = await ReadAllBlobsAsync(reader,
             [new FrozenGitTreeFile("missing.txt", requestedObjectId, 4, "100644")], TestContext.Current.CancellationToken);
 
         AssertFailure(result, ErrorType.Validation, SnapshotErrorCode.ObjectNotCaptured);
@@ -113,7 +115,7 @@ public sealed class FrozenGitTreeReaderIntegrationTests
         var logger = new RecordingSnapshotLogger<FrozenGitTreeReader>();
         var reader = OpenReader(repository, snapshot, logger: logger);
 
-        var result = await reader.ReadBlobsAsync(
+        var result = await ReadAllBlobsAsync(reader,
             [new FrozenGitTreeFile("missing.txt", missingObjectId, 4, "100644")], TestContext.Current.CancellationToken);
 
         AssertFailure(result, ErrorType.Conflict, SnapshotErrorCode.StaleObject);
@@ -141,7 +143,7 @@ public sealed class FrozenGitTreeReaderIntegrationTests
         Assert.True(listingResult.IsSuccess);
         var files = listingResult.Data!.Files.Where(file => file.Path.StartsWith("file-", StringComparison.Ordinal)).Reverse().ToArray();
 
-        var result = await reader.ReadBlobsAsync(files, TestContext.Current.CancellationToken);
+        var result = await ReadAllBlobsAsync(reader, files, TestContext.Current.CancellationToken);
 
         Assert.True(result.IsSuccess);
         var blobs = result.Data!;
@@ -168,16 +170,18 @@ public sealed class FrozenGitTreeReaderIntegrationTests
         TemporaryGitRepository.RunGit(["-C", repository.RootPath, "add", "--all"]);
         TemporaryGitRepository.RunGit(["-C", repository.RootPath, "commit", "--quiet", "--no-gpg-sign", "-m", "add large files"]);
         var snapshot = CreateSnapshot(repository, repository.Revision, repository.Revision, []);
-        var reader = OpenReader(repository, snapshot, new FrozenGitTreeReaderOptions { MaximumBlobBytes = 64 * 1024 * 1024 });
+        var runner = new CountingGitBinaryCommandRunner();
+        var reader = OpenReader(repository, snapshot, new FrozenGitTreeReaderOptions { MaximumBlobBytes = 64 * 1024 * 1024 }, runner);
         var listingResult = await reader.ListTreeAsync(TestContext.Current.CancellationToken);
         Assert.True(listingResult.IsSuccess);
         var files = listingResult.Data!.Files.Where(file => file.Path.StartsWith("large-", StringComparison.Ordinal)).ToArray();
 
-        var result = await reader.ReadBlobsAsync(files, TestContext.Current.CancellationToken);
+        var result = await ReadAllBlobsAsync(reader, files, TestContext.Current.CancellationToken);
 
         Assert.True(result.IsSuccess);
         Assert.All(result.Data!, blob => Assert.Equal(FrozenGitBlobSkipReason.None, blob.SkipReason));
         Assert.Equal(content.Length / line.Length, result.Data![0].Lines.Count);
+        Assert.Equal(2, runner.BatchCount);
     }
 
     /// <summary>
@@ -564,6 +568,89 @@ public sealed class FrozenGitTreeReaderIntegrationTests
         Assert.Equal(1, history.OversizedCommitsSkipped);
         Assert.Empty(history.Commits);
         AssertWarning(logger, SnapshotErrorCode.ReadFailed, repository.RootPath);
+    }
+
+    /// <summary>
+    ///     Asynchronously consumes each batch before starting the next Git process and honors cancellation at the boundary.
+    /// </summary>
+    /// <param name="cancel">Whether to cancel after consuming the first batch.</param>
+    /// <returns>A task that represents the asynchronous operation.</returns>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ReadBlobsAsync_ConsumesBeforeNextProcess(bool cancel)
+    {
+        using var repository = new TemporaryGitRepository();
+        var runner = new CountingGitBinaryCommandRunner();
+        var reader = OpenReader(repository, CreateSnapshot(repository, repository.Revision, repository.Revision, []), runner: runner);
+        var listing = await reader.ListTreeAsync(TestContext.Current.CancellationToken);
+        var file = listing.Data!.Files[0];
+        var files = Enumerable.Repeat(file, 600).ToArray();
+        using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
+        var consumed = 0;
+
+        var operation = reader.ReadBlobsAsync(files, (_, blob) =>
+        {
+            Assert.Equal(consumed / 256 + 1, runner.BatchCount);
+            Assert.Equal(["initial fixture content"], blob.Lines);
+            consumed++;
+            if (cancel && consumed == 256)
+            {
+                cancellation.Cancel();
+            }
+        }, cancellation.Token);
+
+        if (cancel)
+        {
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(() => operation);
+            Assert.Equal(256, consumed);
+            Assert.Equal(1, runner.BatchCount);
+        }
+        else
+        {
+            Assert.True((await operation).IsSuccess);
+            Assert.Equal(600, consumed);
+            Assert.Equal(3, runner.BatchCount);
+        }
+    }
+
+    /// <summary>
+    ///     Asynchronously validates all identities before consuming content and preserves failures from later batches.
+    /// </summary>
+    /// <param name="captured">Whether the unavailable object is captured in the manifest.</param>
+    /// <returns>A task that represents the asynchronous operation.</returns>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ReadBlobsAsync_LaterUnavailableObject_PreservesFailure(bool captured)
+    {
+        using var repository = new TemporaryGitRepository();
+        var missingId = new string('f', 40);
+        SnapshotManifestEntry[] entries = captured
+            ? [new("missing.txt", null, SnapshotChangeCategory.Added, "000000", "100644", new string('0', 40), missingId)]
+            : [];
+        var runner = new CountingGitBinaryCommandRunner();
+        var reader = OpenReader(repository, CreateSnapshot(repository, repository.Revision, repository.Revision, entries), runner: runner);
+        var listing = await reader.ListTreeAsync(TestContext.Current.CancellationToken);
+        FrozenGitTreeFile[] files = [.. Enumerable.Repeat(listing.Data!.Files[0], 256), new("missing.txt", missingId, 4, "100644")];
+        var consumed = 0;
+
+        var result = await reader.ReadBlobsAsync(files, (_, _) => consumed++, TestContext.Current.CancellationToken);
+
+        Assert.True(result.IsFailure);
+        Assert.Equal(captured ? SnapshotErrorCode.StaleObject : SnapshotErrorCode.ObjectNotCaptured, Assert.Single(result.Errors).Code);
+        Assert.Equal(captured ? 256 : 0, consumed);
+        Assert.Equal(captured ? 2 : 0, runner.BatchCount);
+    }
+
+    private static async Task<Result<IReadOnlyList<FrozenGitBlob>>> ReadAllBlobsAsync(
+        IFrozenGitTreeReader reader, IReadOnlyList<FrozenGitTreeFile> files, CancellationToken cancellationToken)
+    {
+        var blobs = new List<FrozenGitBlob>();
+        var result = await reader.ReadBlobsAsync(files, (_, blob) => blobs.Add(blob), cancellationToken);
+        return result.IsFailure
+            ? Result.ErrorFromResult<IReadOnlyList<FrozenGitBlob>>(result)
+            : Result.Success<IReadOnlyList<FrozenGitBlob>>(blobs);
     }
 
     private static IFrozenGitTreeReader OpenReader(

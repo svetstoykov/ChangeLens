@@ -129,12 +129,11 @@ internal sealed class FrozenGitTreeReader : IFrozenGitTreeReader
     }
 
     /// <inheritdoc />
-    public async Task<Result<IReadOnlyList<FrozenGitBlob>>> ReadBlobsAsync(
-        IReadOnlyList<FrozenGitTreeFile> files,
-        CancellationToken cancellationToken)
+    public async Task<Result> ReadBlobsAsync(
+        IReadOnlyList<FrozenGitTreeFile> files, Action<FrozenGitTreeFile, FrozenGitBlob> consume, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(files);
-        var blobs = new FrozenGitBlob[files.Count];
+        ArgumentNullException.ThrowIfNull(consume);
         var pendingIndexes = new List<int>(files.Count);
         foreach (var index in Enumerable.Range(0, files.Count))
         {
@@ -142,29 +141,36 @@ internal sealed class FrozenGitTreeReader : IFrozenGitTreeReader
             var file = files[index];
             if (!this.IsAllowedTreeObject(file.ObjectId))
             {
-                return this.ObjectNotCaptured<IReadOnlyList<FrozenGitBlob>>("read-blob-batch", file.ObjectId);
+                return Result.ErrorFromResult(this.ObjectNotCaptured<FrozenGitBlob>("read-blob-batch", file.ObjectId));
             }
 
-            if (file.SizeInBytes > this._options.MaximumBlobBytes)
+            if (file.SizeInBytes <= this._options.MaximumBlobBytes)
             {
-                this.LogBoundExceeded("read-blob-batch");
-                blobs[index] = new FrozenGitBlob(file.ObjectId, [], FrozenGitBlobSkipReason.TooLarge);
-                continue;
+                pendingIndexes.Add(index);
             }
-
-            pendingIndexes.Add(index);
         }
 
+        var nextIndex = 0;
         foreach (var batch in PlanBlobBatches(files, pendingIndexes))
         {
-            var batchResult = await this.ReadBlobBatchAsync(files, batch, blobs, cancellationToken);
+            cancellationToken.ThrowIfCancellationRequested();
+            var batchResult = await this.ConsumeBlobBatchAsync(files, batch, nextIndex, consume, cancellationToken);
             if (batchResult.IsFailure)
             {
                 return batchResult;
             }
+
+            nextIndex = batch[^1] + 1;
         }
 
-        return Result.Success<IReadOnlyList<FrozenGitBlob>>(blobs);
+        for (; nextIndex < files.Count; nextIndex++)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            this.ConsumeOversizedBlob(files[nextIndex], consume);
+        }
+
+        cancellationToken.ThrowIfCancellationRequested();
+        return Result.Success();
     }
 
     /// <inheritdoc />
@@ -331,11 +337,41 @@ internal sealed class FrozenGitTreeReader : IFrozenGitTreeReader
         return Result.Success(new FrozenGitHistoryScan(history, inspectedCount, oversized, commitLines.Length > inspectedCount));
     }
 
+    private async Task<Result> ConsumeBlobBatchAsync(
+        IReadOnlyList<FrozenGitTreeFile> files, IReadOnlyList<int> batch, int nextIndex,
+        Action<FrozenGitTreeFile, FrozenGitBlob> consume, CancellationToken cancellationToken)
+    {
+        var result = await this.ReadBlobBatchAsync(files, batch, cancellationToken);
+        if (result.IsFailure)
+        {
+            return Result.ErrorFromResult(result);
+        }
+
+        for (var offset = 0; offset < batch.Count; offset++)
+        {
+            var index = batch[offset];
+            for (; nextIndex < index; nextIndex++)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                this.ConsumeOversizedBlob(files[nextIndex], consume);
+            }
+
+            cancellationToken.ThrowIfCancellationRequested();
+            consume(files[index], result.Data![offset]);
+            nextIndex = index + 1;
+        }
+
+        return Result.Success();
+    }
+
+    private void ConsumeOversizedBlob(FrozenGitTreeFile file, Action<FrozenGitTreeFile, FrozenGitBlob> consume)
+    {
+        this.LogBoundExceeded("read-blob-batch");
+        consume(file, new FrozenGitBlob(file.ObjectId, [], FrozenGitBlobSkipReason.TooLarge));
+    }
+
     private async Task<Result<IReadOnlyList<FrozenGitBlob>>> ReadBlobBatchAsync(
-        IReadOnlyList<FrozenGitTreeFile> files,
-        IReadOnlyList<int> batch,
-        FrozenGitBlob[] blobs,
-        CancellationToken cancellationToken)
+        IReadOnlyList<FrozenGitTreeFile> files, IReadOnlyList<int> batch, CancellationToken cancellationToken)
     {
         var request = new StringBuilder(batch.Count * 48);
         long expectedOutputBytes = 0;
@@ -358,16 +394,15 @@ internal sealed class FrozenGitTreeReader : IFrozenGitTreeReader
             return this.ReadFailed<IReadOnlyList<FrozenGitBlob>>("cat-file-batch", "The captured Git batch reader failed.");
         }
 
-        return this.ParseBlobBatch(outputResult.Data.StandardOutput, files, batch, blobs);
+        return this.ParseBlobBatch(outputResult.Data.StandardOutput, files, batch);
     }
 
     private Result<IReadOnlyList<FrozenGitBlob>> ParseBlobBatch(
-        byte[] output,
-        IReadOnlyList<FrozenGitTreeFile> files,
-        IReadOnlyList<int> batch,
-        FrozenGitBlob[] blobs)
+        byte[] output, IReadOnlyList<FrozenGitTreeFile> files, IReadOnlyList<int> batch)
     {
+        var blobs = new FrozenGitBlob[batch.Count];
         var cursor = 0;
+        var offset = 0;
         foreach (var index in batch)
         {
             var file = files[index];
@@ -396,7 +431,7 @@ internal sealed class FrozenGitTreeReader : IFrozenGitTreeReader
                 return this.ReadFailed<IReadOnlyList<FrozenGitBlob>>("cat-file-batch", "The captured Git batch blob was incomplete.");
             }
 
-            blobs[index] = this.CreateBatchBlob(file.ObjectId, output[cursor..(cursor + (int)size)]);
+            blobs[offset++] = this.CreateBatchBlob(file.ObjectId, output[cursor..(cursor + (int)size)]);
             cursor += (int)size + 1;
         }
 

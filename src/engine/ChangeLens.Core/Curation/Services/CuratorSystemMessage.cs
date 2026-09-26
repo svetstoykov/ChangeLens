@@ -62,6 +62,8 @@ public static class CuratorSystemMessage
         "A supersedes relationship additionally requires a matchEdges chain linking the two participants' evidence.",
         "Never invent a path, a line number, a node ID, a participant, or a causal link.",
         "Omit whatever the quotes do not show. A short supported model is the goal; a complete speculative one is a failure.",
+        "Call something added, new, introduced, or gained only when no Before quote shows it. When a Before quote shows the same declaration, "
+        + "say what changed between the Before and After quotes and cite both. This applies to the thesis too.",
         "List every binder node you deliberately did not use in droppedNodeIds.",
     ];
 

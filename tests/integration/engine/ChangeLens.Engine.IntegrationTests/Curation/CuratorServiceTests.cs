@@ -137,6 +137,7 @@ public sealed class CuratorServiceTests
         Assert.All(CuratorContractConstants.RelationshipKinds, kind => Assert.Contains(kind, prompt, StringComparison.Ordinal));
         Assert.All(CuratorContractConstants.TrackShapes, shape => Assert.Contains(shape, prompt, StringComparison.Ordinal));
         Assert.Contains("splitting-tracks test", prompt, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("only when no Before quote shows it", prompt, StringComparison.Ordinal);
         Assert.Contains("Worked chain example", prompt, StringComparison.Ordinal);
         Assert.Contains("Worked hub example", prompt, StringComparison.Ordinal);
         Assert.Contains("fromParticipantId", prompt, StringComparison.Ordinal);

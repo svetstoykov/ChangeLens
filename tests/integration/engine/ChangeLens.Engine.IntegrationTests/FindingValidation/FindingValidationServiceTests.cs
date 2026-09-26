@@ -28,6 +28,25 @@ public sealed class FindingValidationServiceTests
         Assert.Equal(0, outcome.WithheldCount);
     }
 
+    [Theory]
+    [InlineData("alpha\n", "alpha\nbeta\ngamma", 10, 10)]
+    [InlineData("alpha\r\n", "alpha\nbeta\ngamma", 10, 10)]
+    [InlineData("beta\n", "alpha\nbeta\ngamma", 11, 11)]
+    [InlineData("alpha\nbeta\n", "alpha\nbeta\ngamma", 10, 11)]
+    [InlineData("alpha\n", "alpha\n\nbeta", 10, 10)]
+    public void TrailingAnchorLineEndingsPreserveTheFindingAndExactFocusRange(
+        string anchor, string quote, int startLine, int endLine)
+    {
+        var binder = Support.FindingValidationFixtureBinderBuilder.Create(
+            Support.FindingValidationFixtureBinderBuilder.SourceEvidence("n1", quote, 10));
+
+        var outcome = Validate(binder, Finding("f1", "n1", anchor));
+
+        Assert.Equal(new FindingFocusRange(startLine, endLine), Assert.Single(outcome.Findings).FocusRange);
+        Assert.Empty(outcome.Removals);
+        Assert.Equal(0, outcome.WithheldCount);
+    }
+
     [Fact]
     public void OneUndisclosedCitationRemovesTheWholeFindingAndRemovalDoesNotCopyModelText()
     {

@@ -73,6 +73,11 @@ public static class ReviewerDraftJson
             failureReason = "The completion is not valid JSON.";
             return false;
         }
+        catch (InvalidOperationException)
+        {
+            failureReason = "The completion has an invalid JSON value.";
+            return false;
+        }
     }
 
     /// <summary>

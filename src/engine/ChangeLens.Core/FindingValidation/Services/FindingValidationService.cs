@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using ChangeLens.Core.DraftValidation.Models;
 using ChangeLens.Core.EvidenceBinder.Models;
 using ChangeLens.Core.FindingValidation.Constants;
 using ChangeLens.Core.FindingValidation.Interfaces;
@@ -41,7 +42,7 @@ public sealed class FindingValidationService : IFindingValidationService
         var started = Stopwatch.GetTimestamp();
         var evidenceById = (binder.Evidence ?? []).ToDictionary(evidence => evidence.NodeId, StringComparer.Ordinal);
         var findings = new List<ValidatedFinding>();
-        var removals = new List<FindingValidationRemoval>();
+        var removals = new List<ValidationRemoval>();
         var reservedIds = new HashSet<string>(StringComparer.Ordinal);
         var incoming = draft.Findings ?? Array.Empty<ReviewerFinding>();
 
@@ -111,26 +112,19 @@ public sealed class FindingValidationService : IFindingValidationService
                 continue;
             }
 
-            findings.Add(new ValidatedFinding(
-                validFinding,
-                new FindingFocusRange(focusStartLine, focusEndLine),
-                index));
+            findings.Add(new ValidatedFinding(validFinding, new FindingFocusRange(focusStartLine, focusEndLine), index));
         }
 
         var outcome = new FindingValidationOutcome(findings, removals);
         this._logger.LogInformation(
             "Finding validation completed with {PublishedFindings} published and {WithheldFindings} withheld from "
             + "{IncomingFindings} in {ElapsedMilliseconds:0.000} ms with removal reasons {RemovalReasons}.",
-            outcome.Findings.Count,
-            outcome.WithheldCount,
-            incoming.Count,
-            Stopwatch.GetElapsedTime(started).TotalMilliseconds,
+            outcome.Findings.Count, outcome.WithheldCount, incoming.Count, Stopwatch.GetElapsedTime(started).TotalMilliseconds,
             outcome.Removals.Select(removal => removal.Reason));
         return outcome;
     }
 
-    private static FindingValidationRemoval Removal(string id, string reason) =>
-        new(FindingValidationConstants.FindingScope, id, reason);
+    private static ValidationRemoval Removal(string id, string reason) => new(FindingValidationConstants.FindingScope, id, reason);
 
     private static bool HasValidFields(ReviewerFinding? finding, int maximumStatementCharacters) =>
         finding is not null
@@ -158,13 +152,13 @@ public sealed class FindingValidationService : IFindingValidationService
     /// <param name="anchorText">The whole source lines copied by the reviewer.</param>
     /// <returns>The occurrence count, first line offset, and number of matched lines.</returns>
     /// <remarks>
-    ///     Line endings are normalized and trailing whitespace is ignored on each line; remaining text is compared
-    ///     with <see cref="StringComparison.Ordinal" />. The offset is zero-based within the quote.
+    ///     Trailing anchor line endings are removed, line endings are normalized, and trailing whitespace is ignored on each line.
+    ///     Remaining text is compared with <see cref="StringComparison.Ordinal" />. The offset is zero-based within the quote.
     /// </remarks>
     private static (int MatchCount, int StartOffset, int LineCount) FindAnchor(BinderEvidence evidence, string anchorText)
     {
         var sourceLines = Lines(evidence.Text);
-        var anchorLines = Lines(anchorText);
+        var anchorLines = Lines(anchorText.TrimEnd('\r', '\n'));
         if (anchorLines.Length == 0 || sourceLines.Length < anchorLines.Length)
         {
             return (0, -1, anchorLines.Length);

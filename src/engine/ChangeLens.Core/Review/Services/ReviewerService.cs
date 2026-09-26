@@ -43,11 +43,7 @@ public sealed class ReviewerService : IReviewerService
 
         var systemMessage = ReviewerSystemMessage.Render(binder.Contract);
         var userMessage = EvidenceBinderJson.SerializePayload(binder);
-        var request = new ModelCompletionRequest(
-            systemMessage,
-            userMessage,
-            this._options.MaximumOutputTokens,
-            this._options.ReasoningEffort);
+        var request = new ModelCompletionRequest(systemMessage, userMessage, this._options.MaximumOutputTokens, this._options.ReasoningEffort);
         var completionResult = await this._completionClient.CompleteJsonAsync(request, cancellationToken);
         if (completionResult.IsFailure)
         {
@@ -71,15 +67,8 @@ public sealed class ReviewerService : IReviewerService
         }
 
         var diagnostics = new ReviewerDiagnostics(
-            completion.Model,
-            completion.LatencyMilliseconds,
-            inputCharacters,
-            outputCharacters,
-            completion.InputTokens,
-            completion.OutputTokens,
-            completion.CachedInputTokens,
-            completion.ReasoningTokens,
-            parseFailureReason);
+            completion.Model, completion.LatencyMilliseconds, inputCharacters, outputCharacters, completion.InputTokens, completion.OutputTokens,
+            completion.CachedInputTokens, completion.ReasoningTokens, parseFailureReason);
         this.LogOutcome(completion, diagnostics);
         return Result.Success(new ReviewerOutcome(draft, diagnostics));
     }
@@ -90,22 +79,15 @@ public sealed class ReviewerService : IReviewerService
             "Reviewer completion {Outcome} from model {Model} in {LatencyMilliseconds:0.000} ms with {InputCharacters} input characters, "
             + "{OutputCharacters} output characters, input tokens {InputTokens}, output tokens {OutputTokens}, cached input tokens "
             + "{CachedInputTokens}, and reasoning tokens {ReasoningTokens}.",
-            diagnostics.ParseFailureReason is null ? "parsed" : "parseFailed",
-            completion.Model,
-            completion.LatencyMilliseconds,
-            diagnostics.InputCharacters,
-            diagnostics.OutputCharacters,
-            completion.InputTokens,
-            completion.OutputTokens,
-            completion.CachedInputTokens,
+            diagnostics.ParseFailureReason is null ? "parsed" : "parseFailed", completion.Model, completion.LatencyMilliseconds,
+            diagnostics.InputCharacters, diagnostics.OutputCharacters, completion.InputTokens, completion.OutputTokens, completion.CachedInputTokens,
             completion.ReasoningTokens);
 
         if (diagnostics.ParseFailureReason is not null)
         {
             this._logger.LogWarning(
                 "Reviewer completion was recorded as a parse failure: {Reason}; output characters {OutputCharacters}.",
-                diagnostics.ParseFailureReason,
-                diagnostics.OutputCharacters);
+                diagnostics.ParseFailureReason, diagnostics.OutputCharacters);
         }
     }
 }

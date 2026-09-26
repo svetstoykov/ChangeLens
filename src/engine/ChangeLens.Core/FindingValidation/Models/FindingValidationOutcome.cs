@@ -1,3 +1,5 @@
+using ChangeLens.Core.DraftValidation.Models;
+
 namespace ChangeLens.Core.FindingValidation.Models;
 
 /// <summary>
@@ -7,7 +9,7 @@ namespace ChangeLens.Core.FindingValidation.Models;
 /// <param name="Removals">The ordered finding removal records.</param>
 public sealed record FindingValidationOutcome(
     IReadOnlyList<ValidatedFinding> Findings,
-    IReadOnlyList<FindingValidationRemoval> Removals)
+    IReadOnlyList<ValidationRemoval> Removals)
 {
     /// <summary>
     ///     Gets the number of findings withheld from publication.

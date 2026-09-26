@@ -54,6 +54,8 @@ public sealed class ReviewerServiceTests
     [InlineData("{\"findings\":[{\"id\":1}]}")]
     [InlineData("{\"findings\":[{\"id\":\"f1\",\"severity\":\"warning\",\"title\":\"t\",\"trigger\":\"t\",\"impact\":\"i\",\"fix\":\"f\",\"evidenceNodeIds\":[1],\"anchor\":{\"nodeId\":\"n1\",\"lines\":\"line\"}}]}")]
     [InlineData("{\"findings\":[{\"id\":\"f1\",\"severity\":\"warning\",\"title\":\"t\",\"trigger\":\"t\",\"impact\":\"i\",\"fix\":\"f\",\"evidenceNodeIds\":[\"n1\"],\"anchor\":{\"nodeId\":\"n1\",\"lines\":\"line\",\"extra\":true}}]}")]
+    [InlineData("{\"findings\":[{\"id\":\"f1\",\"severity\":\"warning\",\"title\":\"t \\ud800\",\"trigger\":\"t\",\"impact\":\"i\",\"fix\":\"f\",\"evidenceNodeIds\":[\"n1\"],\"anchor\":{\"nodeId\":\"n1\",\"lines\":\"line\"}}]}")]
+    [InlineData("{\"findings\":[{\"id\":\"f1\",\"severity\":\"warning\",\"title\":\"t\",\"trigger\":\"t\",\"impact\":\"i\",\"fix\":\"f\",\"evidenceNodeIds\":[\"\\ud800\"],\"anchor\":{\"nodeId\":\"n1\",\"lines\":\"line\"}}]}")]
     public async Task StructurallyInvalidRepliesBecomeRecordedParseFailures(string reply)
     {
         var service = Service(new FakeModelCompletionClient(Result.Success(Completion(reply))));

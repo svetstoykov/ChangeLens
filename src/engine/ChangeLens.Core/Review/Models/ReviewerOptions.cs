@@ -9,6 +9,11 @@ namespace ChangeLens.Core.Review.Models;
 public sealed class ReviewerOptions
 {
     /// <summary>
+    ///     Gets or sets a value indicating whether the pipeline runs the reviewer. The default is <see langword="true" />.
+    /// </summary>
+    public bool Enabled { get; set; } = true;
+
+    /// <summary>
     ///     Gets or sets the maximum accepted completion size in characters. The default is 176,000 characters.
     /// </summary>
     public int MaximumOutputCharacters { get; set; } = ReviewerConfigurationConstants.DefaultMaximumOutputCharacters;

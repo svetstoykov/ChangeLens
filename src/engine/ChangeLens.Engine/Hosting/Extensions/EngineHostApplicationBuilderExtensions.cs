@@ -38,6 +38,8 @@ using ChangeLens.Core.EvidenceFrontier.Constants;
 using ChangeLens.Core.EvidenceFrontier.Interfaces;
 using ChangeLens.Core.EvidenceFrontier.Models;
 using ChangeLens.Core.EvidenceFrontier.Services;
+using ChangeLens.Core.FindingValidation.Interfaces;
+using ChangeLens.Core.FindingValidation.Services;
 using ChangeLens.Core.Git.Interfaces;
 using ChangeLens.Core.Git.Services;
 using ChangeLens.Core.LocalState.Interfaces;
@@ -45,6 +47,10 @@ using ChangeLens.Core.LocalState.Services;
 using ChangeLens.Core.ModelCompletion.Models;
 using ChangeLens.Core.Publication.Interfaces;
 using ChangeLens.Core.Publication.Services;
+using ChangeLens.Core.Review.Constants;
+using ChangeLens.Core.Review.Interfaces;
+using ChangeLens.Core.Review.Models;
+using ChangeLens.Core.Review.Services;
 using ChangeLens.Core.Snapshots.Interfaces;
 using ChangeLens.Core.Snapshots.Constants;
 using ChangeLens.Core.Snapshots.Models;
@@ -333,6 +339,27 @@ internal static class EngineHostApplicationBuilderExtensions
         };
     }
 
+    /// <summary>Reads the configured reviewer switch and call limits.</summary>
+    /// <param name="configuration">The engine configuration. Cannot be <see langword="null" />.</param>
+    /// <returns>The configured reviewer options, using safe defaults for absent or malformed values.</returns>
+    private static ReviewerOptions CreateReviewerOptions(IConfiguration configuration)
+    {
+        ArgumentNullException.ThrowIfNull(configuration);
+        var defaults = new ReviewerOptions();
+        return new ReviewerOptions
+        {
+            Enabled = ReadBoolean(configuration, ReviewerConfigurationConstants.EnabledKey, defaults.Enabled),
+            MaximumOutputCharacters = ReadPositiveInt(
+                configuration, ReviewerConfigurationConstants.MaximumOutputCharactersKey, defaults.MaximumOutputCharacters),
+            MaximumOutputTokens = ReadPositiveInt(
+                configuration, ReviewerConfigurationConstants.MaximumOutputTokensKey, defaults.MaximumOutputTokens),
+            ReasoningEffort = Enum.TryParse<ModelReasoningEffort>(
+                configuration[ReviewerConfigurationConstants.ReasoningEffortKey], true, out var reasoningEffort)
+                ? reasoningEffort
+                : defaults.ReasoningEffort,
+        };
+    }
+
     /// <summary>Reads the configured OpenAI-compatible model completion provider settings.</summary>
     /// <param name="configuration">The engine configuration. Cannot be <see langword="null" />.</param>
     /// <returns>The provider settings, which may omit credentials so calls can fail at call time.</returns>
@@ -440,8 +467,10 @@ internal static class EngineHostApplicationBuilderExtensions
         builder.Services.AddScoped<IPublicationService, PublicationService>();
         var binderOptions = CreateEvidenceBinderOptions(builder.Configuration);
         var curatorOptions = CreateCuratorOptions(builder.Configuration);
+        var reviewerOptions = CreateReviewerOptions(builder.Configuration);
         builder.Services.AddSingleton(binderOptions);
         builder.Services.AddSingleton(curatorOptions);
+        builder.Services.AddSingleton(reviewerOptions);
         builder.Services.AddScoped<IEvidenceBinderService, EvidenceBinderService>();
         builder.Services.Configure<ModelCompletionOptions>(options =>
         {
@@ -450,10 +479,13 @@ internal static class EngineHostApplicationBuilderExtensions
             options.Model = configured.Model;
             options.ApiKey = configured.ApiKey;
             options.RequestTimeout = configured.RequestTimeout;
-            options.MaximumResponseBytes = ModelCompletionTransportConstants.ResponseByteBudget(curatorOptions.MaximumOutputCharacters);
+            options.MaximumResponseBytes = ModelCompletionTransportConstants.ResponseByteBudget(
+                Math.Max(curatorOptions.MaximumOutputCharacters, reviewerOptions.MaximumOutputCharacters));
         });
         builder.Services.AddModelCompletionClient();
         builder.Services.AddScoped<ICuratorService, CuratorService>();
+        builder.Services.AddScoped<IReviewerService, ReviewerService>();
+        builder.Services.AddScoped<IFindingValidationService, FindingValidationService>();
         builder.Services.AddScoped<IClaimChecker, ModelClaimChecker>();
         builder.Services.AddScoped<IDraftValidationService, DraftValidationService>();
         builder.Services.AddScoped<ISnapshotCaptureService, GitSnapshotCaptureService>();

@@ -8,7 +8,8 @@ from changelens_review.jsontypes import JsonValue
 from changelens_review.paths import SCRIPT_CATALOG
 from changelens_review.validation import reject_unknown_keys
 
-ROLES = ("curator", "checker")
+ROLES = ("curator", "reviewer", "checker")
+REVIEWER_ROLE_LINE = "You are the ChangeLens reviewer."
 SIDES = ("Before", "After")
 SCRIPT_KEYS = {"id", "description", "exchanges"}
 EXCHANGE_KEYS = {"role", "delay_seconds", "reply", "fault"}
@@ -105,7 +106,13 @@ def parse_script(raw: object, where: str) -> ProviderScript:
 
 
 def detect_role(request_body: JsonValue) -> str:
-    """Classify a completion request as curator, checker, or unknown by its payload contract."""
+    """Classify a completion request as reviewer, checker, curator, or unknown.
+
+    The reviewer sends the same binder payload as the curator, so its fixed system-message line decides first;
+    every other request is classified by its payload contract.
+    """
+    if _system_message_first_line(request_body) == REVIEWER_ROLE_LINE:
+        return "reviewer"
     payload = _last_user_payload(request_body)
     if isinstance(payload, dict):
         if "claims" in payload:
@@ -138,6 +145,15 @@ def completion_body(
     if reply.usage is not None:
         body["usage"] = reply.usage
     return body
+
+
+def _system_message_first_line(request_body: JsonValue) -> str | None:
+    if not isinstance(request_body, dict) or not isinstance(request_body.get("messages"), list):
+        return None
+    for message in request_body["messages"]:
+        if isinstance(message, dict) and message.get("role") == "system" and isinstance(message.get("content"), str):
+            return message["content"].split("\n", 1)[0].rstrip("\r")
+    return None
 
 
 def _last_user_payload(request_body: JsonValue) -> JsonValue:

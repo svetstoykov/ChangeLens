@@ -6,7 +6,8 @@ using System.Text;
 namespace ChangeLens.Infrastructure.IntegrationTests.ModelCompletion.Support;
 
 /// <summary>
-///     Serves controlled HTTP responses over a real loopback TCP socket for adapter integration tests.
+///     Serves controlled HTTP responses over a real loopback TCP socket for adapter integration tests. Connections are
+///     served concurrently, so a handler may hold one request until another arrives.
 /// </summary>
 public sealed class LoopbackHttpServer : IAsyncDisposable
 {
@@ -17,6 +18,7 @@ public sealed class LoopbackHttpServer : IAsyncDisposable
     private readonly Func<LoopbackHttpRequest, CancellationToken, Task<LoopbackHttpResponse>> _handler;
     private readonly CancellationTokenSource _shutdown = new();
     private readonly ConcurrentQueue<LoopbackHttpRequest> _requests = new();
+    private readonly ConcurrentBag<Task> _connections = new();
     private readonly Task _acceptLoop;
 
     private LoopbackHttpServer(Func<LoopbackHttpRequest, CancellationToken, Task<LoopbackHttpResponse>> handler)
@@ -64,6 +66,7 @@ public sealed class LoopbackHttpServer : IAsyncDisposable
         try
         {
             await this._acceptLoop;
+            await Task.WhenAll(this._connections);
         }
         catch (OperationCanceledException) when (this._shutdown.IsCancellationRequested)
         {
@@ -80,8 +83,8 @@ public sealed class LoopbackHttpServer : IAsyncDisposable
         {
             while (!this._shutdown.IsCancellationRequested)
             {
-                using var client = await this._listener.AcceptTcpClientAsync(this._shutdown.Token);
-                await this.HandleClientAsync(client);
+                var client = await this._listener.AcceptTcpClientAsync(this._shutdown.Token);
+                this._connections.Add(this.ServeClientAsync(client));
             }
         }
         catch (OperationCanceledException) when (this._shutdown.IsCancellationRequested)
@@ -89,6 +92,23 @@ public sealed class LoopbackHttpServer : IAsyncDisposable
         }
         catch (ObjectDisposedException) when (this._shutdown.IsCancellationRequested)
         {
+        }
+    }
+
+    private async Task ServeClientAsync(TcpClient client)
+    {
+        using (client)
+        {
+            try
+            {
+                await this.HandleClientAsync(client);
+            }
+            catch (OperationCanceledException) when (this._shutdown.IsCancellationRequested)
+            {
+            }
+            catch (ObjectDisposedException) when (this._shutdown.IsCancellationRequested)
+            {
+            }
         }
     }
 
@@ -202,7 +222,7 @@ public sealed class LoopbackHttpServer : IAsyncDisposable
         var bodyBytes = Encoding.UTF8.GetBytes(response.Body);
         var header = $"HTTP/1.1 {response.StatusCode} {StatusDescription(response.StatusCode)}\r\n"
             + $"Content-Type: {response.ContentType}\r\n"
-            + $"Content-Length: {bodyBytes.Length}\r\n"
+            + $"Content-Length: {response.DeclaredContentLength ?? bodyBytes.Length}\r\n"
             + "Connection: close\r\n\r\n";
         await stream.WriteAsync(Encoding.ASCII.GetBytes(header), cancellationToken);
         await stream.WriteAsync(bodyBytes, cancellationToken);

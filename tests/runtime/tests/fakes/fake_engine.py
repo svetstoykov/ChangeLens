@@ -8,22 +8,39 @@ import urllib.error
 import urllib.request
 
 CURATOR_CALLS = "FAKE_ENGINE_CURATOR_CALLS"
+REVIEWER_CALLS = "FAKE_ENGINE_REVIEWER_CALLS"
+REVIEWER_FIRST = "FAKE_ENGINE_REVIEWER_FIRST"
+REVIEW_ENABLED = "ChangeLens__Analysis__Review__Enabled"
+REVIEWER_ROLE_LINE = "You are the ChangeLens reviewer."
 polls = 0
 
 
-def call_provider() -> None:
-    """Send one curator-shaped completion request to the configured provider, ignoring its answer."""
+def call_provider(role: str) -> None:
+    """Send one completion request shaped like the role's to the configured provider, ignoring its answer.
+
+    The curator and the reviewer send the same binder payload; the reviewer is told apart by its system message.
+    """
     settings = "ChangeLens__Analysis__ModelCompletion__"
     payload = json.dumps({"comparison": {}, "evidence": []})
+    messages = [{"role": "user", "content": payload}]
+    if role == "reviewer":
+        messages.insert(0, {"role": "system", "content": REVIEWER_ROLE_LINE + "\nReview the change."})
     request = urllib.request.Request(
         os.environ[settings + "BaseUrl"] + "/chat/completions",
-        data=json.dumps(
-            {"model": os.environ[settings + "Model"], "messages": [{"role": "user", "content": payload}]}
-        ).encode(),
+        data=json.dumps({"model": os.environ[settings + "Model"], "messages": messages}).encode(),
         headers={"Content-Type": "application/json", "Authorization": "Bearer " + os.environ[settings + "ApiKey"]},
     )
     with contextlib.suppress(urllib.error.HTTPError):
         urllib.request.urlopen(request, timeout=5).close()
+
+
+def provider_calls() -> list[str]:
+    """Return the roles the engine calls for one run: reviewer calls are skipped when review is disabled."""
+    curator = ["curator"] * int(os.environ.get(CURATOR_CALLS, "0"))
+    reviewer = (
+        ["reviewer"] * int(os.environ.get(REVIEWER_CALLS, "0")) if os.environ.get(REVIEW_ENABLED) != "false" else []
+    )
+    return reviewer + curator if os.environ.get(REVIEWER_FIRST) == "1" else curator + reviewer
 
 
 for line in sys.stdin:
@@ -54,8 +71,8 @@ for line in sys.stdin:
     elif action == "comparisons.prepare":
         response["result"] = {"freshnessToken": "f" * 64}
     elif action == "analysis.start":
-        for _ in range(int(os.environ.get(CURATOR_CALLS, "0"))):
-            call_provider()
+        for role in provider_calls():
+            call_provider(role)
         response["result"] = {"state": "accepted", "runId": "run-1", "requestedAt": 0}
     elif action == "analysis.pollRun":
         polls += 1

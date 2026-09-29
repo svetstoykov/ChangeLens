@@ -77,6 +77,20 @@ def test_valid_plan_parses(tmp_path: Path) -> None:
     assert plan.review is not None and plan.review.focus == "Are removal scopes mapped?"
 
 
+def test_review_settings_are_configurable(tmp_path: Path) -> None:
+    review = "Analysis.Review.Enabled: false, Analysis.Review.MaximumOutputTokens: 1000"
+    block = VALID_BLOCK.replace("Analysis.Checker.Enabled: false", f"Analysis.Checker.Enabled: false, {review}", 1)
+
+    plan = load_plan(str(plan_file(tmp_path, block)))
+
+    assert plan.cases[0].config == {
+        "Analysis.Checker.Enabled": False,
+        "Analysis.Review.Enabled": False,
+        "Analysis.Review.MaximumOutputTokens": 1000,
+    }
+    assert "unknown config key" in " ".join(issues_for(tmp_path, "Analysis.Checker.Enabled", "Analysis.Review.Enabeld"))
+
+
 @pytest.mark.parametrize(
     ("old", "new", "message"),
     [

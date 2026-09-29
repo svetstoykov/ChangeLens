@@ -91,5 +91,6 @@ PROVIDER_CALLS = CheckDefinition(
     "provider.calls", _validate_count("provider.calls"), _evaluate_provider_calls, needs_analysis=False
 )
 PROVIDER_CALLS_CURATOR = _provider_calls_check("curator")
+PROVIDER_CALLS_REVIEWER = _provider_calls_check("reviewer")
 PROVIDER_CALLS_CHECKER = _provider_calls_check("checker")
 ERROR_CODE = CheckDefinition("error_code", _validate_error_code, _evaluate_error_code, needs_analysis=False)

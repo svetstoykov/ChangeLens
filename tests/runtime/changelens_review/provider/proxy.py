@@ -5,6 +5,7 @@ import json
 import socket
 import threading
 import time
+from collections import deque
 from dataclasses import dataclass
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -14,6 +15,7 @@ from changelens_review.clock import utc_now_iso
 from changelens_review.jsontypes import JsonValue
 from changelens_review.provider.estimate import estimate_completion_tokens, estimate_prompt_tokens
 from changelens_review.provider.scripts import (
+    ROLES,
     ProviderScript,
     ScriptedExchange,
     SelectorError,
@@ -90,21 +92,25 @@ class Responder(Protocol):
 
 
 class ScriptedResponder:
-    """Serves a script's exchanges in order and rejects calls the script does not expect."""
+    """Serves a script's exchanges in order within each role and rejects calls the script does not expect.
+
+    The curator and the reviewer run together, so their requests can arrive in either order: each role consumes its own
+    exchanges in script order, whatever the other role has already received.
+    """
 
     def __init__(self, script: ProviderScript) -> None:
         self._script = script
-        self._next = 0
+        self._remaining = {role: deque(e for e in script.exchanges if e.role == role) for role in ROLES}
         self._lock = threading.Lock()
 
     def respond(self, sequence: int, role: str, request_body: JsonValue) -> ProxyReply:
         with self._lock:
-            if self._next >= len(self._script.exchanges):
+            if not any(exchange.role == role for exchange in self._script.exchanges):
+                return _unexpected(f"script {self._script.id} scripts no {role} exchange, received a {role} call")
+            queue = self._remaining[role]
+            if not queue:
                 return _unexpected(f"script {self._script.id} has no exchange left for a {role} call")
-            exchange = self._script.exchanges[self._next]
-            if exchange.role != role:
-                return _unexpected(f"script {self._script.id} expected a {exchange.role} call, received {role}")
-            self._next += 1
+            exchange = queue.popleft()
         if exchange.fault is not None:
             return _fault_reply(exchange)
         assert exchange.reply is not None

@@ -3,6 +3,7 @@
 import json
 import re
 import threading
+from collections import deque
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -10,6 +11,7 @@ from changelens_review import paths
 from changelens_review.errors import SpecError
 from changelens_review.jsontypes import JsonValue
 from changelens_review.provider.proxy import EXCHANGE_FOLDER, ProxyReply, error_body
+from changelens_review.provider.scripts import ROLES
 from changelens_review.results.store import repeat_folder
 
 RUN_ID_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
@@ -83,28 +85,44 @@ def load_recording(run_id: str, case_id: str, runs_root: Path | None = None, *, 
 
 
 class ReplayResponder:
-    """Answers each request with the next recorded reply; a request the recording cannot answer is a harness error."""
+    """Answers each request with the next recorded reply of its role; a request the recording cannot answer is a harness error.
+
+    Replies are consumed in recorded order within each role, so the curator and the reviewer may arrive in either order.
+    A role the recording never answered stays unanswered: nothing is synthesized for it.
+    """
 
     def __init__(self, recording: Recording) -> None:
         self._recording = recording
-        self._next = 0
+        self._remaining = {role: deque(reply for reply in recording.replies if reply.role == role) for role in ROLES}
         self._lock = threading.Lock()
 
     def respond(self, sequence: int, role: str, request_body: JsonValue) -> ProxyReply:
         source = f"replay of {self._recording.source}"
         with self._lock:
-            if self._next >= len(self._recording.replies):
+            if not any(reply.role == role for reply in self._recording.replies):
+                return _mismatch(_unrecorded_role(source, role, sequence, len(self._recording.replies)))
+            queue = self._remaining[role]
+            if not queue:
                 return _mismatch(
                     f"{source} has no recorded reply left for {role} call {sequence}; "
-                    f"it recorded {len(self._recording.replies)}"
+                    f"it recorded {sum(reply.role == role for reply in self._recording.replies)} {role} replies"
                 )
-            reply = self._recording.replies[self._next]
-            if reply.role != role:
-                return _mismatch(f"{source} recorded a {reply.role} call at {sequence}, received {role}")
-            self._next += 1
+            reply = queue.popleft()
         if reply.status is None:
             return ProxyReply(None, b"", "replayed", "connection closed without a response")
         return ProxyReply(reply.status, reply.body, "replayed")
+
+
+def _unrecorded_role(source: str, role: str, sequence: int, recorded: int) -> str:
+    detail = (
+        f"{source} recorded no {role} reply for {role} call {sequence}; it recorded {recorded} replies of other roles"
+    )
+    if role == "reviewer":
+        detail += (
+            "; a recording made without the reviewer replays only with Analysis.Review.Enabled: false, "
+            "which verifies explanation behavior only"
+        )
+    return detail
 
 
 def _reply(record: dict[str, JsonValue]) -> RecordedReply:

@@ -5,14 +5,18 @@ using ChangeLens.Core.ChangeAnatomy.Interfaces;
 using ChangeLens.Core.ContextPolicy.Interfaces;
 using ChangeLens.Core.Correspondence.Interfaces;
 using ChangeLens.Core.Curation.Interfaces;
+using ChangeLens.Core.Curation.Models;
 using ChangeLens.Core.DraftValidation.Interfaces;
 using ChangeLens.Core.DraftValidation.Models;
 using ChangeLens.Core.EvidenceBinder.Interfaces;
 using ChangeLens.Core.EvidenceBinder.Models;
 using ChangeLens.Core.EvidenceGraph.Interfaces;
+using ChangeLens.Core.FindingValidation.Interfaces;
 using ChangeLens.Core.Publication.Interfaces;
 using ChangeLens.Core.Publication.Models;
 using ChangeLens.Core.Results.Models;
+using ChangeLens.Core.Review.Interfaces;
+using ChangeLens.Core.Review.Models;
 using ChangeLens.Core.Snapshots.Interfaces;
 using ChangeLens.Core.Snapshots.Models;
 using ChangeLens.Engine.AnalysisRuns.Helpers;
@@ -20,14 +24,17 @@ using ChangeLens.Engine.AnalysisRuns.Interfaces;
 using ChangeLens.Engine.AnalysisRuns.Models;
 using ChangeLens.Engine.Protocol.Interfaces;
 using Microsoft.Extensions.Logging;
+using EvidenceBinderModel = ChangeLens.Core.EvidenceBinder.Models.EvidenceBinder;
 
 namespace ChangeLens.Engine.AnalysisRuns.Services;
 
 /// <summary>
 ///     Implements the deterministic analysis pipeline: capture the frozen change, discover and bind its evidence, and
-///     collect one curated, validated, and published reading model.
+///     collect one curated, reviewed, validated, and published reading model.
 /// </summary>
 /// <remarks>
+///     The collect step runs the curator and the reviewer together over the same binder. A reviewer failure or a review
+///     that does not fit the response budget leaves the explanation published and ends the run completed with limitations.
 ///     The user cancellation token reaches every service call. The shutdown token is observed only between steps, so
 ///     engine shutdown leaves the active row for startup recovery to interrupt instead of reporting a user cancellation.
 /// </remarks>
@@ -41,8 +48,11 @@ internal sealed class AnalysisPipeline(
     IFrozenGitTreeReaderFactory treeReaderFactory,
     IEvidenceBinderService binderService,
     ICuratorService curatorService,
+    IReviewerService reviewerService,
     IDraftValidationService validationService,
+    IFindingValidationService findingValidationService,
     IPublicationService publicationService,
+    ReviewerOptions reviewerOptions,
     IEngineProtocolSerializer protocolSerializer,
     TimeProvider timeProvider,
     ILogger<AnalysisPipeline> logger) : IAnalysisPipeline
@@ -363,46 +373,138 @@ internal sealed class AnalysisPipeline(
     private async Task<AnalysisRunStepOutcome> ExecuteCollectAsync(Guid runId, AnalysisPipelineRun run, CancellationToken userCancellationToken)
     {
         var binder = run.Binder!;
-        var curateResult = await curatorService.CurateAsync(binder, userCancellationToken);
+        using var reviewCancellation = CancellationTokenSource.CreateLinkedTokenSource(userCancellationToken);
+        var curatorTask = Task.Run(() => curatorService.CurateAsync(binder, userCancellationToken), CancellationToken.None);
+        var reviewerTask = reviewerOptions.Enabled
+            ? Task.Run(() => reviewerService.ReviewAsync(binder, reviewCancellation.Token), CancellationToken.None)
+            : null;
+
+        Result<CuratorOutcome> curateResult;
+        try
+        {
+            curateResult = await curatorTask;
+        }
+        catch
+        {
+            this.AbandonReview(reviewerTask, reviewCancellation);
+            throw;
+        }
+
         if (curateResult.IsFailure)
         {
+            this.AbandonReview(reviewerTask, reviewCancellation);
             return Failed(AnalysisStepId.Collect, curateResult.Errors);
         }
 
         var curation = curateResult.Data!;
         if (curation.Diagnostics.ParseFailureReason is not null)
         {
+            this.AbandonReview(reviewerTask, reviewCancellation);
             return new AnalysisRunStepOutcome(AnalysisStepId.Collect, AnalysisRunStepState.Failed, AnalysisFailureCode.CuratorOutputUnreadable);
         }
 
+        var review = await this.CompleteReviewAsync(runId, reviewerTask, binder, userCancellationToken);
         var validation = validationService.Validate(curation.Draft, binder, userCancellationToken);
-        EnsureRecorded(
-            await store.RecordValidationRemovalCountAsync(runId, validation.Removals.Count, CancellationToken.None), "validation removal");
+        ValidationRemoval[] removals = [.. validation.Removals, .. review.Removals];
+        EnsureRecorded(await store.RecordValidationRemovalCountAsync(runId, removals.Length, CancellationToken.None), "validation removal");
 
-        var publicationRequest = new PublicationRequest(validation, binder, run.Graph!, run.Policy!, run.Ranking!, PublicationReview.NotRun);
+        var publicationRequest = new PublicationRequest(validation, binder, run.Graph!, run.Policy!, run.Ranking!, review.Review);
         var publicationResult = await publicationService.PublishAsync(publicationRequest, userCancellationToken);
         if (publicationResult.IsFailure)
         {
             return Failed(AnalysisStepId.Collect, publicationResult.Errors);
         }
 
-        var readingModel = publicationResult.Data!.ReadingModel;
-        var projectionResult = this.Project(readingModel, validation.Removals);
+        var publication = publicationResult.Data!;
+        var readingModel = publication.ReadingModel;
+        var projectionResult = this.Project(readingModel, removals);
         if (projectionResult.IsFailure)
         {
             return Failed(AnalysisStepId.Collect, projectionResult.Errors);
         }
 
         var projection = projectionResult.Data!;
+        var reviewUnavailable = review.Review.Status == ReadingReviewStatus.Failed;
         if (!ReadingProjectionBudget.Fits(projection))
         {
-            return new AnalysisRunStepOutcome(AnalysisStepId.Collect, AnalysisRunStepState.Failed, AnalysisFailureCode.ReadingModelTooLarge);
+            if (review.Review.Status != ReadingReviewStatus.Ran)
+            {
+                return new AnalysisRunStepOutcome(AnalysisStepId.Collect, AnalysisRunStepState.Failed, AnalysisFailureCode.ReadingModelTooLarge);
+            }
+
+            readingModel = publicationService.Rebuild(publication.Explanation, binder, run.Graph!, PublicationReview.TooLarge);
+            var fallbackResult = this.Project(readingModel, validation.Removals);
+            if (fallbackResult.IsFailure)
+            {
+                return Failed(AnalysisStepId.Collect, fallbackResult.Errors);
+            }
+
+            projection = fallbackResult.Data!;
+            if (!ReadingProjectionBudget.Fits(projection))
+            {
+                return new AnalysisRunStepOutcome(AnalysisStepId.Collect, AnalysisRunStepState.Failed, AnalysisFailureCode.ReadingModelTooLarge);
+            }
+
+            logger.LogWarning(
+                "Analysis run {RunId} dropped the review's {FindingCount} finding(s) and {RemovalCount} removal record(s) because the reading "
+                + "projection exceeded the poll response budget.", runId, review.Review.Findings.Count, review.Removals.Count);
+            reviewUnavailable = true;
         }
 
         run.Projection = projection;
-        logger.LogInformation("Analysis run {RunId} collected a reading model with {RemovalCount} removal(s) and {EvidenceCount} evidence node(s).",
-            runId, validation.Removals.Count, readingModel.Evidence.Count);
-        return new AnalysisRunStepOutcome(AnalysisStepId.Collect, AnalysisRunStepState.Succeeded, null);
+        logger.LogInformation(
+            "Analysis run {RunId} collected a reading model with {RemovalCount} removal(s), {EvidenceCount} evidence node(s), "
+            + "{FindingCount} finding(s), and review status {ReviewStatus}.", runId, removals.Length, readingModel.Evidence.Count,
+            readingModel.Findings.Count, readingModel.Review.Status);
+        return reviewUnavailable
+            ? new AnalysisRunStepOutcome(
+                AnalysisStepId.Collect,
+                AnalysisRunStepState.SucceededWithLimitations,
+                AnalysisLimitationReason.ReviewUnavailable)
+            : new AnalysisRunStepOutcome(AnalysisStepId.Collect, AnalysisRunStepState.Succeeded, null);
+    }
+
+    private async Task<ReviewContribution> CompleteReviewAsync(
+        Guid runId,
+        Task<Result<ReviewerOutcome>>? reviewerTask,
+        EvidenceBinderModel binder,
+        CancellationToken userCancellationToken)
+    {
+        if (reviewerTask is null)
+        {
+            return ReviewContribution.NotRun;
+        }
+
+        var reviewResult = await reviewerTask;
+        if (reviewResult.IsFailure)
+        {
+            logger.LogWarning("Analysis run {RunId} continues without a review after reviewer errors {ErrorCodes}.", runId,
+                reviewResult.Errors.Select(error => error.Code));
+            return ReviewContribution.Failed;
+        }
+
+        var reviewer = reviewResult.Data!;
+        if (reviewer.Diagnostics.ParseFailureReason is not null)
+        {
+            logger.LogWarning("Analysis run {RunId} continues without a review because the reviewer reply was unreadable.", runId);
+            return ReviewContribution.Failed;
+        }
+
+        var findingValidation = findingValidationService.Validate(reviewer.Draft, binder, userCancellationToken);
+        return new ReviewContribution(PublicationReview.Ran(findingValidation), findingValidation.Removals);
+    }
+
+    private void AbandonReview(Task<Result<ReviewerOutcome>>? reviewerTask, CancellationTokenSource reviewCancellation)
+    {
+        if (reviewerTask is null)
+        {
+            return;
+        }
+
+        reviewCancellation.Cancel();
+        _ = reviewerTask.ContinueWith(
+            static task => task.Exception, CancellationToken.None,
+            TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
     }
 
     private Result<AnalysisReadingProjection> Project(ReadingModel readingModel, IReadOnlyList<ValidationRemoval> removals)

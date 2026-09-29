@@ -135,13 +135,21 @@ def test_provider_calls_and_error_code(f01) -> None:
 
 
 def test_provider_calls_by_role(f01) -> None:
-    exchanges = (exchange(role="curator"), exchange(role="checker"), exchange(role="curator"))
+    exchanges = (
+        exchange(role="curator"),
+        exchange(role="reviewer"),
+        exchange(role="checker"),
+        exchange(role="curator"),
+    )
 
     assert check("provider.calls.curator", 2, evidence(f01, exchanges=exchanges)).passed
     assert not check("provider.calls.curator", 1, evidence(f01, exchanges=exchanges)).passed
+    assert check("provider.calls.reviewer", 1, evidence(f01, exchanges=exchanges)).passed
+    assert not check("provider.calls.reviewer", 2, evidence(f01, exchanges=exchanges)).passed
     assert check("provider.calls.checker", 1, evidence(f01, exchanges=exchanges)).passed
     assert not check("provider.calls.checker", 0, evidence(f01, exchanges=exchanges)).passed
     assert check("provider.calls.curator", 0, evidence(f01)).passed
+    assert check("provider.calls.reviewer", 0, evidence(f01)).passed
     assert check("provider.calls.checker", 0, evidence(f01)).passed
 
 
@@ -401,6 +409,8 @@ def test_validate_expectation() -> None:
     assert validate_expectation("provider.calls", True) is not None
     assert validate_expectation("provider.calls.curator", 1) is None
     assert validate_expectation("provider.calls.checker", -1) is not None
+    assert validate_expectation("provider.calls.reviewer", 0) is None
+    assert validate_expectation("provider.calls.reviewer", -1) is not None
     assert validate_expectation("repo_unchanged", False) is not None
     assert "unknown check 'verdict'" in validate_expectation("verdict", 1)
     assert validate_expectation("response.readingModel.thesis.text", "x") is None

@@ -7,6 +7,7 @@ from changelens_review.plans.checks.analysis import (
     PROVIDER_CALLS,
     PROVIDER_CALLS_CHECKER,
     PROVIDER_CALLS_CURATOR,
+    PROVIDER_CALLS_REVIEWER,
     REMOVALS_COUNT,
 )
 from changelens_review.plans.checks.citations import CITATIONS
@@ -27,6 +28,7 @@ BUILTIN_CHECKS: dict[str, CheckDefinition] = {
         REPO_UNCHANGED,
         PROVIDER_CALLS,
         PROVIDER_CALLS_CURATOR,
+        PROVIDER_CALLS_REVIEWER,
         PROVIDER_CALLS_CHECKER,
         ERROR_CODE,
         REMOVALS_COUNT,

@@ -1,5 +1,6 @@
 using System.Text.Json;
 using ChangeLens.Core.LocalState.Interfaces;
+using ChangeLens.Core.Review.Constants;
 using ChangeLens.Engine.Hosting.Extensions;
 using ChangeLens.Engine.Hosting.Helpers;
 using ChangeLens.Engine.IntegrationTests.Hosting.Support;
@@ -27,6 +28,12 @@ internal sealed class AnalysisPipelineTestHost : IAsyncDisposable
     private readonly TemporaryDirectory _temporaryDirectory;
     private IHost? _host;
 
+    /// <summary>
+    ///     Gets the settings that leave the reviewer off, for runs whose scripted provider answers only the curator.
+    /// </summary>
+    internal static IReadOnlyDictionary<string, string?> ReviewDisabled { get; } =
+        new Dictionary<string, string?> { [ReviewerConfigurationConstants.EnabledKey] = "false" };
+
     private AnalysisPipelineTestHost(IHost host, TemporaryDirectory temporaryDirectory)
     {
         this._host = host;
@@ -44,8 +51,14 @@ internal sealed class AnalysisPipelineTestHost : IAsyncDisposable
     /// <param name="configureServices">
     ///     The optional caller service substitution applied after production composition, or <see langword="null" />.
     /// </param>
+    /// <param name="settings">
+    ///     The optional engine configuration overrides keyed by full configuration key, or <see langword="null" /> for the
+    ///     shipped defaults.
+    /// </param>
     /// <returns>A task whose result contains the initialized host.</returns>
-    internal static async Task<AnalysisPipelineTestHost> CreateAsync(Action<IServiceCollection>? configureServices = null)
+    internal static async Task<AnalysisPipelineTestHost> CreateAsync(
+        Action<IServiceCollection>? configureServices = null,
+        IReadOnlyDictionary<string, string?>? settings = null)
     {
         var temporaryDirectory = new TemporaryDirectory();
         var localStateDirectory = Path.Combine(temporaryDirectory.DirectoryPath, "local-state");
@@ -57,6 +70,10 @@ internal sealed class AnalysisPipelineTestHost : IAsyncDisposable
             });
         builder.Configuration[LocalStateConstants.DirectoryConfigurationKey] = localStateDirectory;
         builder.Configuration[EngineLoggingConstants.FileDirectoryConfigurationKey] = Path.Combine(localStateDirectory, "logs");
+        foreach (var (key, value) in settings ?? new Dictionary<string, string?>())
+        {
+            builder.Configuration[key] = value;
+        }
 
         builder.ConfigureContainer(
             new DefaultServiceProviderFactory(new ServiceProviderOptions { ValidateOnBuild = true, ValidateScopes = true }),

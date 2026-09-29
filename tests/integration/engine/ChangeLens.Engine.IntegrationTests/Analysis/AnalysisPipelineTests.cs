@@ -30,7 +30,8 @@ public sealed class AnalysisPipelineTests
         using var repository = CreateMixedChangeRepository();
         var client = new ScriptedModelCompletionClient(DraftForBinder);
         await using var host = await AnalysisPipelineTestHost.CreateAsync(
-            services => services.Replace(ServiceDescriptor.Scoped<IModelCompletionClient>(_ => client)));
+            services => services.Replace(ServiceDescriptor.Scoped<IModelCompletionClient>(_ => client)),
+            AnalysisPipelineTestHost.ReviewDisabled);
         await host.StartAsync(TestContext.Current.CancellationToken);
         await host.OpenRepositoryAsync(repository.Path);
         var freshnessToken = await host.PrepareFreshnessTokenAsync(repository.Path, repository.DefaultTarget);
@@ -94,7 +95,8 @@ public sealed class AnalysisPipelineTests
         using var repository = CreateCommittedChangeRepository();
         var client = new ScriptedModelCompletionClient(request => DraftForBinder(request, rejectThesis, dropUnknownNode));
         await using var host = await AnalysisPipelineTestHost.CreateAsync(
-            services => services.Replace(ServiceDescriptor.Scoped<IModelCompletionClient>(_ => client)));
+            services => services.Replace(ServiceDescriptor.Scoped<IModelCompletionClient>(_ => client)),
+            AnalysisPipelineTestHost.ReviewDisabled);
         await host.StartAsync(TestContext.Current.CancellationToken);
         await host.OpenRepositoryAsync(repository.Path);
         var freshnessToken = await host.PrepareFreshnessTokenAsync(repository.Path, repository.DefaultTarget);
@@ -119,7 +121,8 @@ public sealed class AnalysisPipelineTests
         using var repository = CreateCommittedChangeRepository();
         var client = new ScriptedModelCompletionClient(_ => Result.Success(Completion("not a draft")));
         await using var host = await AnalysisPipelineTestHost.CreateAsync(
-            services => services.Replace(ServiceDescriptor.Scoped<IModelCompletionClient>(_ => client)));
+            services => services.Replace(ServiceDescriptor.Scoped<IModelCompletionClient>(_ => client)),
+            AnalysisPipelineTestHost.ReviewDisabled);
         await host.StartAsync(TestContext.Current.CancellationToken);
         await host.OpenRepositoryAsync(repository.Path);
         var freshnessToken = await host.PrepareFreshnessTokenAsync(repository.Path, repository.DefaultTarget);
@@ -146,7 +149,8 @@ public sealed class AnalysisPipelineTests
         var client = new ScriptedModelCompletionClient(_ => Result.Fail<ModelCompletionModel>(
             OperationError.ExternalDependencyFailure("provider unavailable", ModelCompletionErrorCode.ProviderUnavailable)));
         await using var host = await AnalysisPipelineTestHost.CreateAsync(
-            services => services.Replace(ServiceDescriptor.Scoped<IModelCompletionClient>(_ => client)));
+            services => services.Replace(ServiceDescriptor.Scoped<IModelCompletionClient>(_ => client)),
+            AnalysisPipelineTestHost.ReviewDisabled);
         await host.StartAsync(TestContext.Current.CancellationToken);
         await host.OpenRepositoryAsync(repository.Path);
         var freshnessToken = await host.PrepareFreshnessTokenAsync(repository.Path, repository.DefaultTarget);

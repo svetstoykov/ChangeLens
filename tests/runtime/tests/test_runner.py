@@ -227,6 +227,87 @@ def test_replay_errors_the_case_when_the_engine_asks_for_more_than_was_recorded(
         assert "no recorded reply left" in (result.reason or "")
 
 
+def _record_replies(runs: Path, roles: tuple[str, ...]) -> None:
+    for sequence, role in enumerate(roles, start=1):
+        write_json(
+            runs / "run-a" / "cases" / "live-f01" / "provider" / f"{sequence:03d}-{role}.json",
+            {
+                "sequence": sequence,
+                "role": role,
+                "outcome": "live",
+                "response_status": 200,
+                "request": {},
+                "response": {},
+            },
+        )
+
+
+def _replay_case(config: dict, *expectations: Expectation) -> Case:
+    return _case(
+        "replay",
+        config=config,
+        provider=ProviderSettings("replay", replay_run="run-a", replay_case="live-f01"),
+        expectations=expectations,
+    )
+
+
+def test_a_historical_replay_runs_with_review_explicitly_disabled(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _use_fake_engine(monkeypatch)
+    monkeypatch.setenv("FAKE_ENGINE_CURATOR_CALLS", "1")
+    monkeypatch.setenv("FAKE_ENGINE_REVIEWER_CALLS", "1")
+    runs = tmp_path / "runs"
+    _record_replies(runs, ("curator",))
+    case = _replay_case(
+        {"Analysis.Review.Enabled": False},
+        Expectation("provider.calls.curator", 1, "expect[0]"),
+        Expectation("provider.calls.reviewer", 0, "expect[1]"),
+    )
+
+    result = run_case(case, _fake_build(tmp_path), RunStore.create(_plan(case), runs))
+
+    assert result.status == "pass", result.reason
+
+
+def test_a_historical_replay_with_review_enabled_is_a_harness_error(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _use_fake_engine(monkeypatch)
+    monkeypatch.setenv("FAKE_ENGINE_CURATOR_CALLS", "1")
+    monkeypatch.setenv("FAKE_ENGINE_REVIEWER_CALLS", "1")
+    runs = tmp_path / "runs"
+    _record_replies(runs, ("curator",))
+    case = _replay_case({}, Expectation("outcome", "completed", "expect[0]"))
+
+    result = run_case(case, _fake_build(tmp_path), RunStore.create(_plan(case), runs))
+
+    assert result.status == "error"
+    assert "replay provider failed" in (result.reason or "")
+    assert "recorded no reviewer reply" in (result.reason or "")
+
+
+@pytest.mark.parametrize("reviewer_first", [False, True])
+def test_a_recording_with_reviewer_exchanges_replays_in_either_arrival_order(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, reviewer_first: bool
+) -> None:
+    _use_fake_engine(monkeypatch)
+    monkeypatch.setenv("FAKE_ENGINE_CURATOR_CALLS", "1")
+    monkeypatch.setenv("FAKE_ENGINE_REVIEWER_CALLS", "1")
+    monkeypatch.setenv("FAKE_ENGINE_REVIEWER_FIRST", "1" if reviewer_first else "0")
+    runs = tmp_path / "runs"
+    _record_replies(runs, ("curator", "reviewer"))
+    case = _replay_case(
+        {},
+        Expectation("provider.calls.curator", 1, "expect[0]"),
+        Expectation("provider.calls.reviewer", 1, "expect[1]"),
+    )
+
+    result = run_case(case, _fake_build(tmp_path), RunStore.create(_plan(case), runs))
+
+    assert result.status == "pass", result.reason
+
+
 def test_a_run_records_case_metrics_and_run_totals(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     _use_fake_engine(monkeypatch)
     monkeypatch.setattr(runner_module, "build_engine", lambda *_a, **_k: _fake_build(tmp_path))

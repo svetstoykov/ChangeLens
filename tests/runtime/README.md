@@ -21,7 +21,7 @@ cases:
 
 Besides the built-in checks, an expectation can compare any dotted path: `response.<path>` against the final `analysis.pollRun` result, `state.<column>` against the run's database row, or `steps[N].response.<path>` / `steps[N].errors.<path>` against the response of the step at 0-based index `N` in the case's `steps` list (`steps[N].errors.<path>` reads the errors of an error response).
 
-`provider.calls.curator` and `provider.calls.checker` count only the calls of that role, so a plan can pin checker retries separately from the curator call.
+`provider.calls.curator`, `provider.calls.reviewer`, and `provider.calls.checker` count only the calls of that role, so a plan can pin checker retries separately from the curator call. The reviewer's request carries the same binder payload as the curator's, so the tool tells them apart by the reviewer's fixed system-message line, `You are the ChangeLens reviewer.`
 
 `contains` and `lacks` check membership in a list of the final poll result, so a plan can assert what a live run published without fixing list positions. `in` is a dotted path in which `*` spreads over every member of a list; a mapping `item` matches a member that holds each of its keys with an equal value. `contains` passes on at least one match, or on exactly `count` matches when `count` is given; `lacks` passes on none:
 
@@ -62,7 +62,7 @@ The engine is built from the working tree for every run and driven over its NDJS
 
 - `scripted` serves a catalog script from `catalog/scripts`: `{ mode: scripted, script: <id> }`.
 - `live` forwards each request to the real provider: `{ mode: live, model: <optional override> }`. The base URL, model, and API key come from the engine's `appsettings.json`, then its gitignored `appsettings.Development.json`, then `ChangeLens__Analysis__ModelCompletion__*` environment variables. The engine still receives a synthetic key; the proxy adds the real one to outgoing requests only, so the key never reaches the run folder. The engine's request timeout follows the case's run deadline, so give live cases a long one, such as `deadlines: { run: 300 }`.
-- `replay` serves the recorded replies of a stored case, in order, with no network: `{ mode: replay, from: <run id>, case: <case id> }`. A request the recording cannot answer makes the case `error`.
+- `replay` serves the recorded replies of a stored case, in order within each role, with no network: `{ mode: replay, from: <run id>, case: <case id> }`. A request the recording cannot answer makes the case `error`. The engine runs the curator and the reviewer together, so their requests can arrive in either order; each role receives its own replies in recorded order. A recording made before the reviewer existed holds no reviewer reply and never gets one: replay it with `Analysis.Review.Enabled: false` in the plan's `config`, which verifies explanation behavior only. Replaying it with review enabled makes the case `error` when the engine asks the reviewer, so a replay never synthesizes an empty findings reply.
 
 ## Cloned repositories
 
@@ -88,7 +88,7 @@ A case can review a public repository instead of a fixture. It replaces `fixture
 
 `clone` takes an `https://` or `file://` URL. The first use downloads a full bare clone into `.changelens-review/cache/repos/`, which `clean` never removes; later runs reuse it and fetch only a commit the cache lacks, such as a pull-request head no branch contains. Each case gets its own copy with no remotes, only the `base` and `review` branches, and the same pinned Git settings as fixtures. An unreachable URL or a commit the URL does not serve makes the case `error` with a reason that names it. `run.json` and the case's `result.json` record the URL and both commits.
 
-The `curator-minimal-any` script cites only the binder's first node, so a scripted case can run on any repository.
+The `curator-minimal-any` script cites only the binder's first node, so a scripted case can run on any repository. The catalog scripts are curator-only, so a plan that uses them sets `Analysis.Review.Enabled: false`. A script that enables review lists reviewer exchanges beside the curator's; each role's exchanges are served in script order whichever request arrives first, and a call of a role the script does not list, or beyond the last exchange of its role, is rejected.
 
 ## Soft checks and repeats
 

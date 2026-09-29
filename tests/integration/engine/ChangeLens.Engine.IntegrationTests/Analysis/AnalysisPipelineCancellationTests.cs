@@ -70,7 +70,8 @@ public sealed class AnalysisPipelineCancellationTests
         using var repository = CreateCommittedChangeRepository();
         var client = new CancellationAwaitingModelCompletionClient();
         await using var host = await AnalysisPipelineTestHost.CreateAsync(
-            services => services.Replace(ServiceDescriptor.Scoped<IModelCompletionClient>(_ => client)));
+            services => services.Replace(ServiceDescriptor.Scoped<IModelCompletionClient>(_ => client)),
+            AnalysisPipelineTestHost.ReviewDisabled);
         await host.StartAsync(TestContext.Current.CancellationToken);
         await host.OpenRepositoryAsync(repository.Path);
         var freshnessToken = await host.PrepareFreshnessTokenAsync(repository.Path, repository.DefaultTarget);
@@ -147,7 +148,8 @@ public sealed class AnalysisPipelineCancellationTests
         using var repository = CreateCommittedChangeRepository();
         var client = new ScriptedModelCompletionClient(DraftForBinder);
         await using var host = await AnalysisPipelineTestHost.CreateAsync(
-            services => services.Replace(ServiceDescriptor.Scoped<IModelCompletionClient>(_ => client)));
+            services => services.Replace(ServiceDescriptor.Scoped<IModelCompletionClient>(_ => client)),
+            AnalysisPipelineTestHost.ReviewDisabled);
         await host.StartAsync(TestContext.Current.CancellationToken);
         await host.OpenRepositoryAsync(repository.Path);
         var freshnessToken = await host.PrepareFreshnessTokenAsync(repository.Path, repository.DefaultTarget);

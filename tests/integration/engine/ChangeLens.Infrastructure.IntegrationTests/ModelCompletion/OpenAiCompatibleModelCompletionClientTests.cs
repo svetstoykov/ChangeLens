@@ -225,6 +225,40 @@ public sealed class OpenAiCompatibleModelCompletionClientTests
     }
 
     /// <summary>
+    ///     Asynchronously completes two simultaneous calls on one client instance, each held by the provider until both have
+    ///     arrived, and returns each call its own reply.
+    /// </summary>
+    /// <returns>A task that represents the asynchronous operation.</returns>
+    [Fact]
+    public async Task CompleteJsonAsync_TwoConcurrentCallsOnOneClientDoNotInterfere()
+    {
+        var bothReceived = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var received = 0;
+        await using var server = await LoopbackHttpServer.StartAsync(async (request, cancellationToken) =>
+        {
+            if (Interlocked.Increment(ref received) == 2)
+            {
+                bothReceived.TrySetResult();
+            }
+
+            await bothReceived.Task.WaitAsync(TimeSpan.FromSeconds(10), cancellationToken);
+            using var body = JsonDocument.Parse(request.Body);
+            return SuccessResponse(body.RootElement.GetProperty("messages")[1].GetProperty("content").GetString()!);
+        });
+        using var httpClient = new HttpClient();
+        var client = CreateClient(httpClient, CreateOptions(server));
+
+        var first = client.CompleteJsonAsync(new ModelCompletionRequest(SystemMessage, "first payload", 128), CancellationToken.None);
+        var second = client.CompleteJsonAsync(new ModelCompletionRequest(SystemMessage, "second payload", 128), CancellationToken.None);
+        var results = await Task.WhenAll(first, second).WaitAsync(TimeSpan.FromSeconds(20), TestContext.Current.CancellationToken);
+
+        Assert.All(results, result => Assert.True(result.IsSuccess));
+        Assert.Equal("first payload", results[0].Data!.Text);
+        Assert.Equal("second payload", results[1].Data!.Text);
+        Assert.Equal(2, server.RequestCount);
+    }
+
+    /// <summary>
     ///     Asynchronously returns a timeout result when the provider exceeds the configured request deadline.
     /// </summary>
     /// <returns>A task that represents the asynchronous operation.</returns>

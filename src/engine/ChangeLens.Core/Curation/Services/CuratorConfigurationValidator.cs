@@ -9,7 +9,10 @@ namespace ChangeLens.Core.Curation.Services;
 /// </summary>
 public static class CuratorConfigurationValidator
 {
-    private const double CharactersPerToken = 3.25;
+    /// <summary>
+    ///     The characters-per-token estimate that converts a maximum output-token limit into an output reserve.
+    /// </summary>
+    internal const double CharactersPerToken = 3.25;
 
     /// <summary>
     ///     Validates output and prompt reserves before services are composed.
@@ -46,7 +49,22 @@ public static class CuratorConfigurationValidator
                 "Evidence binder curator output reserve must cover the configured maximum output-token estimate.");
         }
 
-        var configuredContract = new BinderContract(
+        var renderedPromptCharacters = CuratorSystemMessage.Render(CreateConfiguredContract(binderOptions)).Length;
+        if (renderedPromptCharacters > binderOptions.PromptReserveCharacters)
+        {
+            throw new InvalidOperationException(
+                $"Evidence binder prompt reserve of {binderOptions.PromptReserveCharacters} characters is smaller than the "
+                + $"rendered curator prompt of {renderedPromptCharacters} characters.");
+        }
+    }
+
+    /// <summary>
+    ///     Builds the binder contract the configured options produce, so prompts can be rendered before a binder exists.
+    /// </summary>
+    /// <param name="binderOptions">The configured binder budget. Cannot be <see langword="null" />.</param>
+    /// <returns>The contract with the configured curator limits.</returns>
+    internal static BinderContract CreateConfiguredContract(EvidenceBinderOptions binderOptions) =>
+        new(
             CuratorContractConstants.RelationshipKinds,
             CuratorContractConstants.TrackShapes,
             new CuratorLimits(
@@ -56,12 +74,4 @@ public static class CuratorConfigurationValidator
                 binderOptions.MaximumItemsPerTrack,
                 binderOptions.MaximumStatementCharacters,
                 CuratorContractConstants.IdFormat));
-        var renderedPromptCharacters = CuratorSystemMessage.Render(configuredContract).Length;
-        if (renderedPromptCharacters > binderOptions.PromptReserveCharacters)
-        {
-            throw new InvalidOperationException(
-                $"Evidence binder prompt reserve of {binderOptions.PromptReserveCharacters} characters is smaller than the "
-                + $"rendered curator prompt of {renderedPromptCharacters} characters.");
-        }
-    }
 }

@@ -7,6 +7,7 @@ from pathlib import Path
 from changelens_review.errors import SpecError
 from changelens_review.jsontypes import JsonValue
 from changelens_review.provider.replay import read_exchanges, run_folder
+from changelens_review.results.finding_verdicts import FindingVerdict, read_finding_verdicts
 from changelens_review.results.store import CASE_RESULT, RUN_DOCUMENT, repeat_folder
 from changelens_review.results.verdicts import Verdict, read_verdict
 
@@ -26,6 +27,7 @@ class StoredAttempt:
     metrics: dict[str, JsonValue] | None
     exchanges: tuple[dict[str, JsonValue], ...]
     run_row: dict[str, JsonValue] | None
+    finding_verdicts: dict[str, FindingVerdict]
     folder: Path
 
     def reading_model(self) -> JsonValue:
@@ -64,6 +66,19 @@ class StoredCase:
     def exchanges(self) -> tuple[dict[str, JsonValue], ...]:
         """Every recorded provider exchange of every run of the case."""
         return tuple(record for attempt in self.attempts for record in attempt.exchanges)
+
+    def attempt(self, repeat: int | None) -> StoredAttempt:
+        """Return one run of the case: the numbered repeat, or the only run of a case without repeats.
+
+        Raises SpecError when the case has no such run.
+        """
+        repeated = any(attempt.repeat is not None for attempt in self.attempts)
+        if repeat is None and repeated:
+            raise SpecError([f"case {self.case_id!r} has repeats; name one with --repeat"])
+        match = next((attempt for attempt in self.attempts if attempt.repeat == repeat), None)
+        if match is None:
+            raise SpecError([f"case {self.case_id!r} has no repeat {repeat}"])
+        return match
 
 
 @dataclass(frozen=True)
@@ -138,6 +153,7 @@ def _load_attempt(result: dict[str, JsonValue], folder: Path) -> StoredAttempt:
         metrics if isinstance(metrics, dict) else None,
         read_exchanges(folder),
         run_row,
+        read_finding_verdicts(folder),
         folder,
     )
 

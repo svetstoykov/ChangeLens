@@ -8,9 +8,11 @@ from pathlib import Path
 
 import pytest
 from test_compare import _store_run
+from test_finding_verdicts import store_reviewed_run
 
 from changelens_review.cli import main
 from changelens_review.jsonio import write_json
+from changelens_review.results.finding_verdicts import read_finding_verdicts
 from changelens_review.results.verdicts import read_verdict
 from changelens_review.web.constants import REVIEW_HEADER, REVIEW_HEADER_VALUE
 from changelens_review.web.server import create_server
@@ -129,6 +131,45 @@ def test_a_verdict_is_saved_and_an_unknown_one_is_rejected(server: tuple[Path, i
 
     assert status == 400
     assert "error" in body
+
+
+def test_a_finding_verdict_is_saved_read_back_and_removed(server: tuple[Path, int]) -> None:
+    runs, port = server
+    store_reviewed_run(runs)
+    headers = {REVIEW_HEADER: REVIEW_HEADER_VALUE}
+    route = "/api/runs/run-a/cases/live/findings/2/f1/verdict"
+
+    status, _, body = _request(port, "PUT", route, {"verdict": "weak", "describesDefect": True, "note": "n"}, headers)
+
+    assert status == 200
+    assert (body["verdict"], body["describesDefect"], body["note"]) == ("weak", True, "n")
+    _, _, case = _request(port, "GET", "/api/runs/run-a/cases/live")
+    assert case["attempts"][0]["findingVerdicts"] == {}
+    assert case["attempts"][1]["findingVerdicts"]["f1"]["verdict"] == "weak"
+    assert _request(port, "DELETE", route, headers=headers)[2] == {"removed": True}
+    assert read_finding_verdicts(runs / "run-a" / "cases" / "live" / "repeats" / "2") == {}
+
+
+def test_a_finding_verdict_is_rejected_for_an_unpublished_finding_or_a_bad_value(server: tuple[Path, int]) -> None:
+    runs, port = server
+    store_reviewed_run(runs)
+    headers = {REVIEW_HEADER: REVIEW_HEADER_VALUE}
+
+    unpublished = _request(
+        port, "PUT", "/api/runs/run-a/cases/live/findings/1/f1/verdict", {"verdict": "weak"}, headers
+    )
+    unknown = _request(port, "PUT", "/api/runs/run-a/cases/live/findings/2/f1/verdict", {"verdict": "good"}, headers)
+    malformed = _request(
+        port,
+        "PUT",
+        "/api/runs/run-a/cases/live/findings/2/f1/verdict",
+        {"verdict": "weak", "describesDefect": 1},
+        headers,
+    )
+    missing = _request(port, "PUT", "/api/runs/run-a/cases/live/findings/7/f1/verdict", {"verdict": "weak"}, headers)
+
+    assert [response[0] for response in (unpublished, unknown, malformed, missing)] == [400, 400, 400, 404]
+    assert unpublished[2] == {"error": "the run published no finding 'f1'"}
 
 
 def test_deleting_a_run_needs_the_review_header(server: tuple[Path, int]) -> None:

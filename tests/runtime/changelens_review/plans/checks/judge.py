@@ -2,6 +2,10 @@
 
 A path is flagged when the thesis or an area references an evidence node at that path. Two paths are
 linked when one area references evidence at both, through its summary, steps, or participants.
+
+A finding's anchor is its citation that carries a focus range; its other citations cite whole quotes. A
+known defect is found when a finding at or above the minimum severity has an anchor focus range on the
+defect's path and comparison side that overlaps the defect's lines. Findings scores need a review that ran.
 """
 
 from changelens_review.jsontypes import JsonValue
@@ -10,7 +14,15 @@ from changelens_review.plans.checks.model import CaseEvidence, CheckDefinition, 
 SHOULD_LINK = "should_link"
 SHOULD_FLAG_RELATED = "should_flag_related"
 SHOULD_NOT_FLAG = "should_not_flag"
+SHOULD_FIND = "should_find"
+SHOULD_NOT_WARN = "should_not_warn"
 LINK_KEYS = {"from", "to"}
+DEFECT_KEYS = {"path", "side", "lines", "severity"}
+SIDES = ("before", "after")
+SEVERITIES = ("info", "warning", "critical")
+WARNING_SEVERITIES = ("warning", "critical")
+REVIEW_RAN = "ran"
+FINDING_CLAIM_PREFIX = "finding:"
 NODE_REFERENCES = "evidenceNodeIds"
 
 
@@ -101,6 +113,124 @@ def _evaluate_link(evidence: CaseEvidence, expected: JsonValue) -> CheckOutcome:
     return CheckOutcome({"linked": linked, "unlinked": unlinked}, not unlinked)
 
 
+def _is_line(value: JsonValue) -> bool:
+    return isinstance(value, int) and not isinstance(value, bool) and value >= 1
+
+
+def _is_defect(value: JsonValue) -> bool:
+    if not isinstance(value, dict) or set(value) != DEFECT_KEYS:
+        return False
+    lines = value["lines"]
+    return (
+        _is_path(value["path"])
+        and value["side"] in SIDES
+        and value["severity"] in SEVERITIES
+        and isinstance(lines, list)
+        and len(lines) == 2
+        and all(_is_line(line) for line in lines)
+        and lines[0] <= lines[1]
+    )
+
+
+def _validate_find(expected: JsonValue) -> str | None:
+    defects = expected if isinstance(expected, list) else [expected]
+    if defects and all(_is_defect(defect) for defect in defects):
+        return None
+    return (
+        f"{SHOULD_FIND} must be {{path: <path>, side: before|after, lines: [<start>, <end>], "
+        f"severity: info|warning|critical}} with 1 <= start <= end, or a non-empty list of them"
+    )
+
+
+def _validate_not_warn(expected: JsonValue) -> str | None:
+    return None if expected is True else f"{SHOULD_NOT_WARN} must be true"
+
+
+def _review_not_run(model: dict[str, JsonValue]) -> CheckOutcome | None:
+    review = model.get("review")
+    status = review.get("status") if isinstance(review, dict) else None
+    if status == REVIEW_RAN:
+        return None
+    return CheckOutcome(None, False, f"the review did not run; its status is {status!r}")
+
+
+def _findings(model: dict[str, JsonValue]) -> list[dict[str, JsonValue]]:
+    return [finding for finding in model.get("findings") or [] if isinstance(finding, dict)]
+
+
+def _anchors(model: dict[str, JsonValue]) -> dict[str, tuple[str, str, int, int]]:
+    """Return each finding's anchor as (path, side, first focus line, last focus line), keyed by finding id."""
+    anchors: dict[str, tuple[str, str, int, int]] = {}
+    for citation in model.get("citations") or []:
+        if not isinstance(citation, dict):
+            continue
+        claim_id, focus = citation.get("claimId"), citation.get("focus")
+        if not isinstance(claim_id, str) or not claim_id.startswith(FINDING_CLAIM_PREFIX) or not focus:
+            continue
+        ranges = [item for item in focus if isinstance(item, dict)] if isinstance(focus, list) else []
+        starts = [item["startLine"] for item in ranges if isinstance(item.get("startLine"), int)]
+        ends = [item["endLine"] for item in ranges if isinstance(item.get("endLine"), int)]
+        path, side = citation.get("path"), citation.get("side")
+        if starts and ends and isinstance(path, str) and isinstance(side, str):
+            anchors[claim_id.removeprefix(FINDING_CLAIM_PREFIX)] = (path, side, min(starts), max(ends))
+    return anchors
+
+
+def _defect_lines(defect: dict[str, JsonValue]) -> tuple[int, int]:
+    lines = defect["lines"]
+    assert isinstance(lines, list) and isinstance(lines[0], int) and isinstance(lines[1], int)
+    return lines[0], lines[1]
+
+
+def _defect_label(defect: dict[str, JsonValue]) -> str:
+    start, end = _defect_lines(defect)
+    return f"{defect['path']} {defect['side']} {start}-{end}"
+
+
+def _evaluate_find(evidence: CaseEvidence, expected: JsonValue) -> CheckOutcome:
+    model = _reading_model(evidence)
+    if model is None:
+        return _without_model()
+    if (not_run := _review_not_run(model)) is not None:
+        return not_run
+    anchors = _anchors(model)
+    found: list[JsonValue] = []
+    missed: list[JsonValue] = []
+    for defect in expected if isinstance(expected, list) else [expected]:
+        assert isinstance(defect, dict)
+        start, end = _defect_lines(defect)
+        minimum = SEVERITIES.index(str(defect["severity"]))
+        nominated = [
+            finding["id"]
+            for finding in _findings(model)
+            if finding.get("severity") in SEVERITIES
+            and SEVERITIES.index(str(finding["severity"])) >= minimum
+            and (anchor := anchors.get(str(finding.get("id")))) is not None
+            and anchor[:2] == (defect["path"], defect["side"])
+            and anchor[2] <= end
+            and anchor[3] >= start
+        ]
+        if nominated:
+            found.append({"defect": _defect_label(defect), "findings": nominated})
+        else:
+            missed.append(_defect_label(defect))
+    return CheckOutcome({"found": found, "missed": missed}, not missed)
+
+
+def _evaluate_not_warn(evidence: CaseEvidence, expected: JsonValue) -> CheckOutcome:
+    model = _reading_model(evidence)
+    if model is None:
+        return _without_model()
+    if (not_run := _review_not_run(model)) is not None:
+        return not_run
+    warned: list[JsonValue] = [
+        {"id": finding.get("id"), "severity": finding.get("severity"), "title": finding.get("title")}
+        for finding in _findings(model)
+        if finding.get("severity") in WARNING_SEVERITIES
+    ]
+    return CheckOutcome({"warnings": warned}, not warned)
+
+
 JUDGE_CHECKS: dict[str, CheckDefinition] = {
     definition.name: definition
     for definition in (
@@ -109,6 +239,8 @@ JUDGE_CHECKS: dict[str, CheckDefinition] = {
             SHOULD_FLAG_RELATED, _validate_paths(SHOULD_FLAG_RELATED), _evaluate_flag_related, needs_analysis=True
         ),
         CheckDefinition(SHOULD_NOT_FLAG, _validate_paths(SHOULD_NOT_FLAG), _evaluate_not_flag, needs_analysis=True),
+        CheckDefinition(SHOULD_FIND, _validate_find, _evaluate_find, needs_analysis=True),
+        CheckDefinition(SHOULD_NOT_WARN, _validate_not_warn, _evaluate_not_warn, needs_analysis=True),
     )
 }
 

@@ -2,6 +2,7 @@
 
 from changelens_review.errors import SpecError
 from changelens_review.jsontypes import JsonValue
+from changelens_review.results.finding_verdicts import FindingVerdict
 from changelens_review.results.store import CHANGE_PATCH
 from changelens_review.results.stored import StoredAttempt, StoredCase
 
@@ -34,6 +35,7 @@ def show_case(case: StoredCase, repeat: int | None = None) -> list[str]:
         lines.append(f"== {heading} ({attempt.status}) ==")
         lines.extend(_judge_lines(attempt))
         lines.extend(_explanation_lines(attempt.reading_model()))
+        lines.extend(_findings_lines(attempt))
     lines.extend(["", "== change =="])
     lines.extend(_patch_lines(attempts))
     return lines
@@ -70,6 +72,45 @@ def _explanation_lines(model: JsonValue) -> list[str]:
         if isinstance(limitation, dict):
             lines.append(f"limitation {limitation.get('kind')}: {limitation.get('path')} ({limitation.get('detail')})")
     return lines
+
+
+def _findings_lines(attempt: StoredAttempt) -> list[str]:
+    """Return the review outcome and each published finding with its anchor lines and your verdict on it."""
+    model = attempt.reading_model()
+    review = model.get("review") if isinstance(model, dict) else None
+    if not isinstance(model, dict) or not isinstance(review, dict):
+        return []
+    recommendation = f", {review.get('recommendation')}" if review.get("recommendation") else ""
+    lines = [f"review: {review.get('status')}{recommendation}, {review.get('withheldCount')} withheld"]
+    anchors = {
+        str(citation.get("claimId")).removeprefix("finding:"): _anchor_location(citation)
+        for citation in model.get("citations") or []
+        if isinstance(citation, dict) and str(citation.get("claimId")).startswith("finding:") and citation.get("focus")
+    }
+    for finding in model.get("findings") or []:
+        if not isinstance(finding, dict):
+            continue
+        finding_id = str(finding.get("id"))
+        anchor = f" [{anchors[finding_id]}]" if finding_id in anchors else ""
+        lines.append(f"finding {finding_id} {finding.get('severity')}: {finding.get('title')}{anchor}")
+        for part in ("trigger", "impact", "fix"):
+            lines.append(f"{INDENT}{part}: {finding.get(part)}")
+        lines.append(f"{INDENT}verdict: {_finding_verdict(attempt.finding_verdicts.get(finding_id))}")
+    return lines
+
+
+def _anchor_location(citation: dict[str, JsonValue]) -> str:
+    focus = citation.get("focus")
+    focus = [item for item in focus if isinstance(item, dict)] if isinstance(focus, list) else []
+    ranges = ", ".join(f"{item.get('startLine')}-{item.get('endLine')}" for item in focus)
+    return f"{citation.get('path')} {citation.get('side')} {ranges}"
+
+
+def _finding_verdict(verdict: FindingVerdict | None) -> str:
+    if verdict is None:
+        return "none"
+    describes = {True: ", describes the defect", False: ", not the defect", None: ""}[verdict.describes_defect]
+    return f"{verdict.verdict}{describes}{f' - {verdict.note}' if verdict.note else ''}"
 
 
 def _claim(claim: JsonValue, locations: dict[JsonValue, str]) -> str:

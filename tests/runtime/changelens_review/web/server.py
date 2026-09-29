@@ -10,6 +10,7 @@ from urllib.parse import parse_qs, unquote, urlsplit
 
 from changelens_review.errors import SpecError
 from changelens_review.jsontypes import JsonValue
+from changelens_review.results.finding_verdicts import record_finding_verdict, remove_finding_verdict
 from changelens_review.results.store import HEAVY_FOLDER
 from changelens_review.results.verdicts import record_verdict, remove_verdict
 from changelens_review.web import api
@@ -107,6 +108,11 @@ class ReviewHandler(BaseHTTPRequestHandler):
                 self._record(run, case)
             case ("DELETE", ["runs", run, "cases", case, "verdict"]):
                 self._remove_verdict(run, case)
+            case ("PUT", ["runs", run, "cases", case, "findings", repeat, finding, "verdict"]):
+                self._record_finding(run, case, repeat, finding)
+            case ("DELETE", ["runs", run, "cases", case, "findings", repeat, finding, "verdict"]):
+                attempt = api.stored_attempt(self.server.runs_root, run, case, repeat)
+                self._json(200, {"removed": remove_finding_verdict(attempt.folder, finding)})
             case ("DELETE", ["runs", run, "heavy"]):
                 self._remove_heavy(run)
             case ("DELETE", ["runs", run]):
@@ -141,6 +147,28 @@ class ReviewHandler(BaseHTTPRequestHandler):
             self._error(400, "; ".join(error.issues))
             return
         self._json(200, api.verdict_document(recorded))
+
+    def _record_finding(self, run: str, case: str, repeat: str, finding: str) -> None:
+        attempt = api.stored_attempt(self.server.runs_root, run, case, repeat)
+        try:
+            payload = self._body()
+        except BadRequest as error:
+            self._error(400, str(error))
+            return
+        if not isinstance(payload, dict):
+            self._error(400, "body must be an object")
+            return
+        note, describes = payload.get("note"), payload.get("describesDefect")
+        if note is not None and not isinstance(note, str):
+            self._error(400, "note must be text")
+            return
+        if describes is not None and not isinstance(describes, bool):
+            self._error(400, "describesDefect must be true, false, or null")
+            return
+        recorded = record_finding_verdict(
+            attempt.folder, attempt.reading_model(), finding, str(payload.get("verdict")), describes, note
+        )
+        self._json(200, api.finding_verdict_document(recorded))
 
     def _remove_verdict(self, run: str, case: str) -> None:
         self._json(200, {"removed": remove_verdict(self._case_folder(run, case))})

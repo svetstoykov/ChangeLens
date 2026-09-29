@@ -8,6 +8,7 @@ from changelens_review.errors import SpecError
 from changelens_review.jsontypes import JsonValue
 from changelens_review.paths import RUNS_ROOT
 from changelens_review.results.compare import compare_runs
+from changelens_review.results.finding_verdicts import FindingVerdict
 from changelens_review.results.store import CASE_STATUSES, CHANGE_PATCH, HEAVY_FOLDER, RUN_DOCUMENT, repeat_folder
 from changelens_review.results.stored import StoredAttempt, StoredCase, StoredRun, load_run
 from changelens_review.results.verdicts import VERDICT_DOCUMENT, Verdict
@@ -83,6 +84,27 @@ def compare_lines(runs_root: Path, first: str, second: str) -> list[str]:
 def verdict_document(verdict: Verdict) -> dict[str, JsonValue]:
     """Return the shared JSON shape of a recorded verdict."""
     return {"verdict": verdict.verdict, "note": verdict.note, "recordedAt": verdict.recorded_at}
+
+
+def finding_verdict_document(verdict: FindingVerdict) -> dict[str, JsonValue]:
+    """Return the shared JSON shape of a recorded finding verdict."""
+    return {
+        "verdict": verdict.verdict,
+        "describesDefect": verdict.describes_defect,
+        "note": verdict.note,
+        "recordedAt": verdict.recorded_at,
+    }
+
+
+def stored_attempt(runs_root: Path, run_id: str, case_id: str, repeat: str) -> StoredAttempt:
+    """Return one stored run of a case, where repeat is a repeat number or "-" for a case without repeats."""
+    run_folder = resolve_run(runs_root, run_id)
+    resolve_case(run_folder, case_id)
+    case = _load(run_folder).cases.get(case_id)
+    if case is None:
+        raise NotFound(f"unknown case {case_id!r}")
+    folder = _attempt_folder(case, repeat)
+    return next(attempt for attempt in case.attempts if attempt.folder == folder)
 
 
 def resolve_run(runs_root: Path, run_id: str) -> Path:
@@ -177,6 +199,9 @@ def _attempt_detail(attempt: StoredAttempt) -> dict[str, JsonValue]:
         "readingModel": attempt.reading_model(),
         "removals": attempt.removals(),
         "removalCount": attempt.removal_count(),
+        "findingVerdicts": {
+            finding_id: finding_verdict_document(verdict) for finding_id, verdict in attempt.finding_verdicts.items()
+        },
         "files": [name for name in RAW_FILES if (attempt.folder / name).is_file()],
     }
 

@@ -1,4 +1,4 @@
-"""Command-line entry point: review check | run | compare | show | serve | verdict | clean."""
+"""Command-line entry point: review check | run | compare | show | serve | verdict | finding-verdict | clean."""
 
 import argparse
 import json
@@ -13,6 +13,7 @@ from changelens_review.plans.model import Plan
 from changelens_review.plans.parser import load_plan
 from changelens_review.plans.runner import run_plan
 from changelens_review.results.compare import compare_runs
+from changelens_review.results.finding_verdicts import FINDING_VERDICTS, record_finding_verdict
 from changelens_review.results.metrics import CaseMetrics, ChangeSize, ProviderUsage
 from changelens_review.results.show import show_case
 from changelens_review.results.store import CaseResult, clean_runs
@@ -54,6 +55,18 @@ def main(argv: Sequence[str] | None = None) -> int:
     verdict.add_argument("case", help="case id")
     verdict.add_argument("verdict", choices=VERDICTS)
     verdict.add_argument("--note", help="why, in your own words")
+    finding = commands.add_parser("finding-verdict", help="record your verdict on one finding a stored run published")
+    finding.add_argument("run", help="run id or run folder")
+    finding.add_argument("case", help="case id")
+    finding.add_argument("finding", help="finding id, as review show prints it")
+    finding.add_argument("verdict", choices=FINDING_VERDICTS)
+    finding.add_argument("--repeat", type=int, help="the repeat that published the finding, for a repeated case")
+    finding.add_argument(
+        "--describes-defect",
+        action=argparse.BooleanOptionalAction,
+        help="for a known-defect case: whether the finding describes that defect's trigger and impact",
+    )
+    finding.add_argument("--note", help="why, in your own words")
     clean = commands.add_parser("clean", help="delete heavy output of stored runs")
     clean.add_argument("--all", action="store_true", help="delete whole run folders instead")
     arguments = parser.parse_args(argv)
@@ -70,6 +83,16 @@ def main(argv: Sequence[str] | None = None) -> int:
             return _serve(arguments.run, arguments.case, arguments.repeat, arguments.port, not arguments.no_open)
         case "verdict":
             return _verdict(arguments.run, arguments.case, arguments.verdict, arguments.note)
+        case "finding-verdict":
+            return _finding_verdict(
+                arguments.run,
+                arguments.case,
+                arguments.repeat,
+                arguments.finding,
+                arguments.verdict,
+                arguments.describes_defect,
+                arguments.note,
+            )
         case _:
             return _clean(arguments.all)
 
@@ -245,6 +268,31 @@ def _verdict(reference: str, case_id: str, verdict: str, note: str | None) -> in
         return EXIT_INVALID_PLAN
     recorded = record_verdict(case.folder, verdict, note)
     print(f"recorded {recorded.verdict} for {case_id} at {recorded.recorded_at}")
+    return 0
+
+
+def _finding_verdict(
+    reference: str,
+    case_id: str,
+    repeat: int | None,
+    finding_id: str,
+    verdict: str,
+    describes_defect: bool | None,
+    note: str | None,
+) -> int:
+    case = _stored_case(reference, case_id)
+    if case is None:
+        return EXIT_INVALID_PLAN
+    try:
+        attempt = case.attempt(repeat)
+        recorded = record_finding_verdict(
+            attempt.folder, attempt.reading_model(), finding_id, verdict, describes_defect, note
+        )
+    except SpecError as error:
+        for issue in error.issues:
+            print(f"error: {issue}", file=sys.stderr)
+        return EXIT_INVALID_PLAN
+    print(f"recorded {recorded.verdict} for finding {finding_id} of {case_id} at {recorded.recorded_at}")
     return 0
 
 

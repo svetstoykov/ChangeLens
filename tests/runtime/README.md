@@ -112,6 +112,7 @@ A live explanation changes from run to run, so exact expectations cannot judge i
 
 - Status comes only from `expect`. Soft checks are scored and never change it.
 - A path is flagged when the reading model's thesis or an area references an evidence node at that path. Two paths are linked when one area references evidence at both, through its summary, steps, or participants. `should_link` takes one `{from, to}` pair or a list of them.
+- Two soft checks score findings, and both need a review that ran. `should_find: { path: src/range.ts, side: after, lines: [12, 14], severity: warning }` (or a list of them) passes when a finding at that severity or above has its anchor on the same path and side, with a focus range overlapping those inclusive lines; the result names each finding that matched. The side is required, and only the anchor counts: a supporting citation or the same lines on the other side do not. `should_not_warn: true` passes when the run published no Critical or Warning and lists any it did.
 - `repeat` runs the case that many times (default 1). Each repeat gets its own repository copy, proxy, engine state, and recorded exchanges under `cases/<case-id>/repeats/<n>/`. A repeated case is `fail` when any repeat failed, else `error` when any repeat errored, else `pass`.
 - `result.json` keeps each repeat's expectations and soft-check results in `repeats`, and `judge_tally` counts, per soft check, how many runs passed it out of the runs that scored it. A repeated case's `metrics` total its repeats and count the change once.
 - A replay can serve one repeat of a stored case: `{ mode: replay, from: <run id>, case: <case id>, repeat: <n> }`.
@@ -128,9 +129,17 @@ uv run --project tests/runtime review verdict <run> <case> good|weak|wrong [--no
 
 The verdict is written to `cases/<case-id>/verdict.json` beside `result.json`, which is never rewritten. A later verdict on the same case replaces the earlier one. `review compare` shows the verdict under the case's tokens and cost.
 
+Judge each published finding separately, per repeat, because finding ids belong to one run:
+
+```sh
+uv run --project tests/runtime review finding-verdict <run> <case> <finding> correct|weak|wrong [--repeat N] [--describes-defect | --no-describes-defect] [--note "why"]
+```
+
+`correct` is a real problem at the right severity, `weak` is true but low value or the wrong severity, and `wrong` is not a real problem. For a known-defect case, `--describes-defect` records whether the finding describes that defect's trigger and impact. The verdicts are written to `finding-verdicts.json` in the run's own folder (`cases/<case-id>/repeats/<n>/` for a repeated case), keyed by finding id; `review show` prints each finding with its anchor and verdict. The explanation verdict above is separate.
+
 ## Review in the browser
 
-`review serve` starts a local server on `127.0.0.1` and opens its page once in your default browser. The page lists every run with its cost, tokens, verdict progress and size on disk, shows a run's cases, compares two runs, and deletes a run or its heavy output after a confirmation. Its case screen puts each repeat's explanation next to the diff: clicking a claim highlights the lines it cites, and the verdict panel records your verdict through the same `verdict.json`.
+`review serve` starts a local server on `127.0.0.1` and opens its page once in your default browser. The page lists every run with its cost, tokens, verdict progress and size on disk, shows a run's cases, compares two runs, and deletes a run or its heavy output after a confirmation. Its case screen puts each repeat's explanation next to the diff: clicking a claim highlights the lines it cites, and the verdict panel records your verdict through the same `verdict.json`. When the review ran, each repeat lists its findings with a verdict row per finding, saved to the same `finding-verdicts.json`.
 
 ```sh
 uv run --project tests/runtime review serve [<run> [<case>]] [--repeat N] [--port 8765] [--no-open]
@@ -148,6 +157,7 @@ uv run --project tests/runtime review run <plan> [--keep]  # run it; --keep reta
 uv run --project tests/runtime review compare <run-a> <run-b>  # compare two stored runs case by case
 uv run --project tests/runtime review show <run> <case> [--repeat N]  # explanation next to the diff
 uv run --project tests/runtime review verdict <run> <case> <verdict> [--note TEXT]  # record your verdict
+uv run --project tests/runtime review finding-verdict <run> <case> <finding> <verdict> [--repeat N]  # judge one finding
 uv run --project tests/runtime review serve [<run> [<case>]] [--repeat N] [--no-open]  # browse and judge runs in the browser
 uv run --project tests/runtime review clean [--all]        # delete heavy output, or whole runs
 ```

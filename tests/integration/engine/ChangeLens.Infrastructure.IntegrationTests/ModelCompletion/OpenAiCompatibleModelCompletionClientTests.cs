@@ -410,6 +410,25 @@ public sealed class OpenAiCompatibleModelCompletionClientTests
     }
 
     /// <summary>
+    ///     Asynchronously maps a response closed before its declared length to provider-unavailable instead of throwing.
+    /// </summary>
+    /// <returns>A task that represents the asynchronous operation.</returns>
+    [Fact]
+    public async Task CompleteJsonAsync_TruncatedResponseBodyReturnsProviderUnavailable()
+    {
+        var body = SuccessResponse("{\"ok\":true}").Body;
+        await using var server = await LoopbackHttpServer.StartAsync(
+            (_, _) => Task.FromResult(new LoopbackHttpResponse(200, body, DeclaredContentLength: body.Length + 100)));
+        using var httpClient = new HttpClient();
+        var client = CreateClient(httpClient, CreateOptions(server));
+
+        var result = await client.CompleteJsonAsync(CreateRequest(), CancellationToken.None);
+
+        AssertFailure(result, ErrorType.ExternalDependencyFailure, "modelCompletion.providerUnavailable");
+        Assert.Equal(1, server.RequestCount);
+    }
+
+    /// <summary>
     ///     Asynchronously reports missing provider configuration at call time without requiring an HTTP request.
     /// </summary>
     /// <returns>A task that represents the asynchronous operation.</returns>

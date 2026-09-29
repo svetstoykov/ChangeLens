@@ -188,7 +188,7 @@ public sealed class OpenAiCompatibleModelCompletionClient : IModelCompletionClie
                 null,
                 "timeout");
         }
-        catch (HttpRequestException)
+        catch (Exception exception) when (exception is HttpRequestException or IOException)
         {
             return this.FinishFailure(
                 OperationError.ExternalDependencyFailure(

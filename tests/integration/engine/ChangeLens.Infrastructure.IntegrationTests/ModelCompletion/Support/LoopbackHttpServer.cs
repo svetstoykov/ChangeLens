@@ -222,7 +222,7 @@ public sealed class LoopbackHttpServer : IAsyncDisposable
         var bodyBytes = Encoding.UTF8.GetBytes(response.Body);
         var header = $"HTTP/1.1 {response.StatusCode} {StatusDescription(response.StatusCode)}\r\n"
             + $"Content-Type: {response.ContentType}\r\n"
-            + $"Content-Length: {bodyBytes.Length}\r\n"
+            + $"Content-Length: {response.DeclaredContentLength ?? bodyBytes.Length}\r\n"
             + "Connection: close\r\n\r\n";
         await stream.WriteAsync(Encoding.ASCII.GetBytes(header), cancellationToken);
         await stream.WriteAsync(bodyBytes, cancellationToken);

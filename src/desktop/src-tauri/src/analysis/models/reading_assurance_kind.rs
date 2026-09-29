@@ -11,4 +11,7 @@ pub enum ReadingAssuranceKind {
     RepositoryNotFullyRead,
     ClaimNotCited,
     DuplicateClaimId,
+    ReviewNotRun,
+    ReviewFailed,
+    ReviewTooLarge,
 }

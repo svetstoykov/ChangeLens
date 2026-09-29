@@ -11,6 +11,21 @@ public static class FindingValidationConstants
     public const string FindingScope = "finding";
 
     /// <summary>
+    ///     Gets the reviewer wire value for the Critical severity.
+    /// </summary>
+    public const string CriticalSeverity = "critical";
+
+    /// <summary>
+    ///     Gets the reviewer wire value for the Warning severity.
+    /// </summary>
+    public const string WarningSeverity = "warning";
+
+    /// <summary>
+    ///     Gets the reviewer wire value for the Info severity.
+    /// </summary>
+    public const string InfoSeverity = "info";
+
+    /// <summary>
     ///     Gets the reason for findings beyond the incoming-position limit.
     /// </summary>
     public const string OverCapReason = "overCap";

@@ -280,7 +280,7 @@ public sealed class ModelClaimCheckerTests
     {
         var nodeIds = binder.Evidence.Select(evidence => evidence.NodeId).ToArray();
         return new PublicationRequest(validation, binder, PublicationTestFixtures.Graph(nodeIds), PublicationTestFixtures.Policy(),
-            PublicationTestFixtures.Ranking());
+            PublicationTestFixtures.Ranking(), PublicationReview.NotRun);
     }
 
     private static DraftValidationOutcome Validation(MentalModelDraft draft) => new(draft, [], 0, 0, 0, 0);

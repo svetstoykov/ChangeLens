@@ -7,8 +7,10 @@ using ChangeLens.Core.EvidenceBinder.Constants;
 using ChangeLens.Core.EvidenceFrontier.Constants;
 using ChangeLens.Core.EvidenceFrontier.Models;
 using ChangeLens.Core.EvidenceFrontier.Services;
+using ChangeLens.Core.FindingValidation.Models;
 using ChangeLens.Core.Publication.Models;
 using ChangeLens.Core.Publication.Services;
+using ChangeLens.Core.Review.Models;
 using ChangeLens.Engine.IntegrationTests.ClaimChecking.Support;
 using ChangeLens.Engine.IntegrationTests.DraftValidation.Support;
 using ChangeLens.Engine.IntegrationTests.Publication.Support;
@@ -33,7 +35,8 @@ public sealed class PublicationServiceTests
         var binder = PublicationTestFixtures.Binder("n1");
         var request = new PublicationRequest(
             PublicationTestFixtures.Validation("n1"), binder, PublicationTestFixtures.Graph("n1"),
-            PublicationTestFixtures.Policy(), PublicationTestFixtures.Ranking());
+            PublicationTestFixtures.Policy(), PublicationTestFixtures.Ranking(),
+            PublicationReview.NotRun);
 
         var result = await service.PublishAsync(request, TestContext.Current.CancellationToken);
 
@@ -57,7 +60,8 @@ public sealed class PublicationServiceTests
         var binder = PublicationTestFixtures.Binder("n1");
         var request = new PublicationRequest(
             PublicationTestFixtures.Validation("n1"), binder, PublicationTestFixtures.Graph("n1"),
-            PublicationTestFixtures.Policy(), PublicationTestFixtures.Ranking());
+            PublicationTestFixtures.Policy(), PublicationTestFixtures.Ranking(),
+            PublicationReview.NotRun);
 
         var result = await service.PublishAsync(request, TestContext.Current.CancellationToken);
 
@@ -85,7 +89,8 @@ public sealed class PublicationServiceTests
         var binder = PublicationTestFixtures.Binder("n1");
         var request = new PublicationRequest(
             PublicationTestFixtures.Validation("n1"), binder, PublicationTestFixtures.Graph("n1"),
-            PublicationTestFixtures.Policy(), PublicationTestFixtures.Ranking());
+            PublicationTestFixtures.Policy(), PublicationTestFixtures.Ranking(),
+            PublicationReview.NotRun);
 
         var result = await service.PublishAsync(request, TestContext.Current.CancellationToken);
 
@@ -93,6 +98,45 @@ public sealed class PublicationServiceTests
         Assert.Equal(CitationProvenance.Unchecked, Assert.Single(result.Data!.ReadingModel.Citations).Provenance);
         Assert.Contains(result.Data.EvidenceFrontier.Entries,
             entry => entry.NodeId == "n1" && entry.OmissionKind == FrontierOmissionKind.BoundNotUsed);
+    }
+
+    /// <summary>
+    ///     Verifies the published explanation rebuilds a reading model without checking again, dropping the whole review contribution.
+    /// </summary>
+    [Fact]
+    public async Task RebuildFromThePublishedExplanationDoesNotCheckAgainAndDropsTheReview()
+    {
+        var checkedModel = new ChangeLens.Core.MentalModels.Models.MentalModel(null, [
+            new ChangeLens.Core.MentalModels.Models.MentalModelTrack(
+                "track", "Track", new ChangeLens.Core.MentalModels.Models.MentalModelStatement("track:summary", "Summary", ["n1"], []),
+                CuratorContractConstants.Walk, [], [], [], []),
+        ]);
+        var checking = new RecordingClaimCheckingService(new ClaimCheckingOutcome(checkedModel, PublicationTestFixtures.Summary()));
+        var service = new PublicationService(checking, new RecordingFrontierService(), new ClaimCheckingOptions { Enabled = true },
+            NullLogger<PublicationService>.Instance, new RecordingClaimChecker());
+        var binder = PublicationTestFixtures.Binder("n1", "n2");
+        var graph = PublicationTestFixtures.Graph("n1", "n2");
+        var finding = new ReviewerFinding("f1", "warning", "Title", "Trigger", "Impact", "Fix", ["n2"], new ReviewerAnchor("n2", "quote"));
+        var review = PublicationReview.Ran(new FindingValidationOutcome([new ValidatedFinding(finding, new FindingFocusRange(1, 1), 0)], []));
+        var request = new PublicationRequest(
+            PublicationTestFixtures.Validation("n1"), binder, graph, PublicationTestFixtures.Policy(), PublicationTestFixtures.Ranking(), review);
+
+        var published = await service.PublishAsync(request, TestContext.Current.CancellationToken);
+        var rebuilt = service.Rebuild(published.Data!.Explanation, binder, graph, PublicationReview.TooLarge);
+
+        var original = published.Data.ReadingModel;
+        Assert.Equal(1, checking.CallCount);
+        Assert.Contains(original.Evidence, evidence => evidence.NodeId == "n2");
+        Assert.Single(original.Findings);
+        Assert.Empty(rebuilt.Findings);
+        Assert.Equal(new ReadingReview(ReadingReviewStatus.TooLarge, null, 0), rebuilt.Review);
+        Assert.Equal(["n1"], rebuilt.Evidence.Select(evidence => evidence.NodeId));
+        Assert.DoesNotContain(rebuilt.Citations, citation => citation.ClaimId.StartsWith("finding:", StringComparison.Ordinal));
+        Assert.Equal(original.Citations.Where(citation => !citation.ClaimId.StartsWith("finding:", StringComparison.Ordinal)),
+            rebuilt.Citations);
+        Assert.Contains(rebuilt.Assurances, assurance => assurance.Kind == ReadingAssuranceKind.ReviewTooLarge);
+        Assert.Equal(original.Assurances.Count(assurance => assurance.Kind != ReadingAssuranceKind.ReviewTooLarge),
+            rebuilt.Assurances.Count - 1);
     }
 
     /// <summary>Verifies duplicate claim citations withheld by publication do not count as checked frontier usage.</summary>
@@ -119,7 +163,8 @@ public sealed class PublicationServiceTests
         var binder = PublicationTestFixtures.Binder("n1", "n2");
         var request = new PublicationRequest(
             PublicationTestFixtures.Validation("n1"), binder, PublicationTestFixtures.Graph("n1", "n2"),
-            PublicationTestFixtures.Policy(), PublicationTestFixtures.Ranking());
+            PublicationTestFixtures.Policy(), PublicationTestFixtures.Ranking(),
+            PublicationReview.NotRun);
 
         var result = await service.PublishAsync(request, TestContext.Current.CancellationToken);
 
@@ -153,7 +198,7 @@ public sealed class PublicationServiceTests
 
         var result = await service.PublishAsync(
             new PublicationRequest(validation, binder, PublicationTestFixtures.Graph("n1", "n2", "n3"), PublicationTestFixtures.Policy(),
-                PublicationTestFixtures.Ranking()),
+                PublicationTestFixtures.Ranking(), PublicationReview.NotRun),
             TestContext.Current.CancellationToken);
 
         Assert.True(result.IsSuccess);

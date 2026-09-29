@@ -193,7 +193,8 @@ public sealed class AnalysisPipelineTests
 
         var evidence = new ReadingEvidenceResult(
             "n1", "a.txt", "after", 1, 1, true, false, false, new string('x', 8_000));
-        var model = new ReadingModelResult(null, [], [], [evidence], [], [], []);
+        var model = new ReadingModelResult(
+            null, [], [], [evidence], [], [], [], [], new ReadingReviewResult("notRun", null, 0));
         var serialized = new EngineProtocolSerializer().SerializeDocument(model);
         Assert.True(serialized.IsSuccess);
         Assert.True(serialized.Data!.Length > 8_000);

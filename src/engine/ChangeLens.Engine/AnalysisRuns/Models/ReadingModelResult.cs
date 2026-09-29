@@ -10,6 +10,8 @@ namespace ChangeLens.Engine.AnalysisRuns.Models;
 /// <param name="Limitations">The publication limitations.</param>
 /// <param name="OmissionSummaries">The totals of evidence publication did not quote.</param>
 /// <param name="Assurances">The statements about what publication did not run or verify.</param>
+/// <param name="Findings">The published findings, most severe first.</param>
+/// <param name="Review">The review outcome.</param>
 internal sealed record ReadingModelResult(
     ReadingStatementResult? Thesis,
     IReadOnlyList<ReadingAreaResult> Areas,
@@ -17,4 +19,6 @@ internal sealed record ReadingModelResult(
     IReadOnlyList<ReadingEvidenceResult> Evidence,
     IReadOnlyList<ReadingLimitationResult> Limitations,
     IReadOnlyList<ReadingOmissionSummaryResult> OmissionSummaries,
-    IReadOnlyList<ReadingAssuranceResult> Assurances);
+    IReadOnlyList<ReadingAssuranceResult> Assurances,
+    IReadOnlyList<ReadingFindingResult> Findings,
+    ReadingReviewResult Review);

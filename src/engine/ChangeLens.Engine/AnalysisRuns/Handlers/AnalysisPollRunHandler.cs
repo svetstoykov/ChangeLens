@@ -63,7 +63,7 @@ internal sealed class AnalysisPollRunHandler(IAnalysisRunCoordinator coordinator
             if (projectionResult.Data is { } projection)
             {
                 var readingModelResult = protocolSerializer.DeserializeDocument<ReadingModelResult>(
-                    projection.ReadingModelJson, UnreadableReadingModel);
+                    StoredReadingModelUpgrader.Upgrade(projection.ReadingModelJson), UnreadableReadingModel);
                 if (readingModelResult.IsFailure)
                 {
                     return ProtocolResponseFactory.CreateError(request.RequestId, readingModelResult.Errors);

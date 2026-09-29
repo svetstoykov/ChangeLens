@@ -11,6 +11,8 @@ namespace ChangeLens.Core.Publication.Models;
 /// <param name="Limitations">The exact navigable limitations.</param>
 /// <param name="OmissionSummaries">The full-count omission summaries.</param>
 /// <param name="Assurances">The publication assurances.</param>
+/// <param name="Findings">The published findings, most severe first.</param>
+/// <param name="Review">The published review outcome.</param>
 public sealed record ReadingModel(
     BinderComparison Comparison,
     ReadingStatement? Thesis,
@@ -19,4 +21,6 @@ public sealed record ReadingModel(
     IReadOnlyList<ReadingEvidence> Evidence,
     IReadOnlyList<ReadingLimitation> Limitations,
     IReadOnlyList<ReadingOmissionSummary> OmissionSummaries,
-    IReadOnlyList<ReadingAssurance> Assurances);
+    IReadOnlyList<ReadingAssurance> Assurances,
+    IReadOnlyList<ReadingFinding> Findings,
+    ReadingReview Review);

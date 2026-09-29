@@ -18,12 +18,12 @@ using EvidenceGraphModel = ChangeLens.Core.EvidenceGraph.Models.EvidenceGraph;
 
 namespace ChangeLens.Engine.IntegrationTests.Publication;
 
-/// <summary>Verifies the six-input reading-model boundary and duplicate citation suppression.</summary>
+/// <summary>Verifies the seven-input reading-model boundary and duplicate citation suppression.</summary>
 public sealed class ReadingModelBuilderTests
 {
-    /// <summary>Verifies a held quote becomes evidence and citation data through the six-input builder.</summary>
+    /// <summary>Verifies a held quote becomes evidence and citation data through the seven-input builder.</summary>
     [Fact]
-    public void BuildsFromTheSixPublicationInputs()
+    public void BuildsFromTheSevenPublicationInputs()
     {
         var binder = FixtureBinder("n1");
         var graph = FixtureGraph("n1");
@@ -39,12 +39,21 @@ public sealed class ReadingModelBuilderTests
         IReadOnlyList<Citation> citations =
         [new Citation("summary", "n1", ChangeAnatomySide.After, "src/n1.cs", "blob", 1, 1, [], CitationProvenance.Unchecked)];
 
-        var reading = ReadingModelBuilder.Build(binder.Comparison, model, citations, binder, graph, new CheckerFacts(false, false));
+        var reading = ReadingModelBuilder.Build(binder.Comparison, model, citations, binder, graph, new CheckerFacts(false, false), PublicationReview.NotRun);
 
         Assert.Single(reading.Areas);
         Assert.Single(reading.Citations);
         Assert.Single(reading.Evidence);
         Assert.Equal("quote for n1", reading.Evidence[0].Text);
+    }
+
+    /// <summary>Verifies the builder accepts exactly its seven named inputs and nothing else.</summary>
+    [Fact]
+    public void BuilderAcceptsExactlyTheSevenNamedInputs()
+    {
+        var parameters = typeof(ReadingModelBuilder).GetMethod(nameof(ReadingModelBuilder.Build))!.GetParameters();
+
+        Assert.Equal(["comparison", "model", "citations", "binder", "graph", "facts", "review"], parameters.Select(parameter => parameter.Name));
     }
 
     /// <summary>Verifies duplicate claim ids withhold citations for every claimant.</summary>
@@ -64,7 +73,7 @@ public sealed class ReadingModelBuilderTests
             new Citation("duplicate", "n2", ChangeAnatomySide.After, "src/n2.cs", "blob-2", 1, 1, [], CitationProvenance.Unchecked),
         };
 
-        var reading = ReadingModelBuilder.Build(binder.Comparison, model, citations, binder, graph, new CheckerFacts(false, false));
+        var reading = ReadingModelBuilder.Build(binder.Comparison, model, citations, binder, graph, new CheckerFacts(false, false), PublicationReview.NotRun);
 
         Assert.Empty(reading.Citations);
         Assert.Empty(reading.Evidence);
@@ -109,7 +118,7 @@ public sealed class ReadingModelBuilderTests
             [])]);
 
         var citations = CitationBuilder.Build(model, binder, graph, new CheckerFacts(true, false));
-        var reading = ReadingModelBuilder.Build(binder.Comparison, model, citations, binder, graph, new CheckerFacts(true, false));
+        var reading = ReadingModelBuilder.Build(binder.Comparison, model, citations, binder, graph, new CheckerFacts(true, false), PublicationReview.NotRun);
 
         var citation = Assert.Single(reading.Citations);
         Assert.Equal([first, second], citation.Focus);
@@ -138,7 +147,7 @@ public sealed class ReadingModelBuilderTests
             [],
             binder,
             graph,
-            new CheckerFacts(false, false));
+            new CheckerFacts(false, false), PublicationReview.NotRun);
 
         var summary = Assert.Single(reading.OmissionSummaries);
         Assert.Equal(250, summary.TotalCount);
@@ -160,7 +169,7 @@ public sealed class ReadingModelBuilderTests
         var graph = FixtureGraph("n1", "n2");
         graph = graph with { Nodes = [graph.Nodes[0], graph.Nodes[1] with { Path = graph.Nodes[0].Path }] };
 
-        var reading = ReadingModelBuilder.Build(binder.Comparison, MentalModel.Empty, [], binder, graph, new CheckerFacts(false, false));
+        var reading = ReadingModelBuilder.Build(binder.Comparison, MentalModel.Empty, [], binder, graph, new CheckerFacts(false, false), PublicationReview.NotRun);
 
         var summary = Assert.Single(reading.OmissionSummaries);
         Assert.Equal(2, summary.TotalCount);
@@ -244,7 +253,7 @@ public sealed class ReadingModelBuilderTests
             [],
             binder,
             FixtureGraph(),
-            new CheckerFacts(false, false));
+            new CheckerFacts(false, false), PublicationReview.NotRun);
 
         var summary = Assert.Single(reading.OmissionSummaries);
         Assert.Equal(250, summary.TotalCount);

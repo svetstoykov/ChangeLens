@@ -38,7 +38,10 @@ internal static class ReadingModelProtocolMapper
             [.. model.OmissionSummaries.Select(summary => new ReadingOmissionSummaryResult(
                 summary.SourceKind, summary.Reason, summary.TotalCount, summary.SampleCount, summary.ResolvedSampleCount))],
             [.. model.Assurances.Select(assurance =>
-                new ReadingAssuranceResult(ToAssuranceKind(assurance.Kind)!, assurance.Detail, assurance.ClaimId))]);
+                new ReadingAssuranceResult(ToAssuranceKind(assurance.Kind)!, assurance.Detail, assurance.ClaimId))],
+            [.. model.Findings.Select(ToFinding)],
+            new ReadingReviewResult(
+                ToReviewStatus(model.Review.Status)!, ToRecommendation(model.Review.Recommendation), model.Review.WithheldCount));
     }
 
     /// <summary>Maps validation removals to their protocol representation, preserving order.</summary>
@@ -73,6 +76,9 @@ internal static class ReadingModelProtocolMapper
             relationship.Explanation, ToTrust(relationship.Trust)!, relationship.EvidenceNodeIds))],
         [.. area.OrderedSteps.Select(ToStatement)],
         [.. area.Purposes.Select(ToStatement)]);
+
+    private static ReadingFindingResult ToFinding(ReadingFinding finding) =>
+        new(finding.Id, ToSeverity(finding.Severity)!, finding.Title, finding.Trigger, finding.Impact, finding.Fix, finding.AreaId);
 
     private static ReadingStatementResult ToStatement(ReadingStatement statement) =>
         new(statement.ClaimId, statement.Text, ToTrust(statement.Trust)!, statement.EvidenceNodeIds);
@@ -114,8 +120,42 @@ internal static class ReadingModelProtocolMapper
             && model.Evidence.All(evidence => ToSide(evidence.Side) is not null)
             && model.Limitations.All(limitation => ToLimitationKind(limitation.Kind) is not null)
             && model.OmissionSummaries.All(summary => ReadingModelProtocolConstants.OmissionSourceKinds.Contains(summary.SourceKind))
-            && model.Assurances.All(assurance => ToAssuranceKind(assurance.Kind) is not null);
+            && model.Assurances.All(assurance => ToAssuranceKind(assurance.Kind) is not null)
+            && model.Findings.All(finding => ToSeverity(finding.Severity) is not null)
+            && ToReviewStatus(model.Review.Status) is not null
+            && IsRecommendationConsistent(model.Review);
     }
+
+    private static bool IsRecommendationConsistent(ReadingReview review) =>
+        review.Status == ReadingReviewStatus.Ran
+            ? review.Recommendation is not null && ToRecommendation(review.Recommendation) is not null
+            : review.Recommendation is null;
+
+    private static string? ToSeverity(ReadingFindingSeverity severity) => severity switch
+    {
+        ReadingFindingSeverity.Critical => ReadingModelProtocolConstants.SeverityCritical,
+        ReadingFindingSeverity.Warning => ReadingModelProtocolConstants.SeverityWarning,
+        ReadingFindingSeverity.Info => ReadingModelProtocolConstants.SeverityInfo,
+        _ => null,
+    };
+
+    private static string? ToReviewStatus(ReadingReviewStatus status) => status switch
+    {
+        ReadingReviewStatus.Ran => ReadingModelProtocolConstants.ReviewStatusRan,
+        ReadingReviewStatus.NotRun => ReadingModelProtocolConstants.ReviewStatusNotRun,
+        ReadingReviewStatus.Failed => ReadingModelProtocolConstants.ReviewStatusFailed,
+        ReadingReviewStatus.TooLarge => ReadingModelProtocolConstants.ReviewStatusTooLarge,
+        _ => null,
+    };
+
+    private static string? ToRecommendation(ReadingReviewRecommendation? recommendation) => recommendation switch
+    {
+        ReadingReviewRecommendation.DefectsToFix => ReadingModelProtocolConstants.RecommendationDefectsToFix,
+        ReadingReviewRecommendation.IssuesWorthAddressing => ReadingModelProtocolConstants.RecommendationIssuesWorthAddressing,
+        ReadingReviewRecommendation.NoDefectsFound => ReadingModelProtocolConstants.RecommendationNoDefectsFound,
+        ReadingReviewRecommendation.NoDefectsConfirmed => ReadingModelProtocolConstants.RecommendationNoDefectsConfirmed,
+        _ => null,
+    };
 
     private static string? ToShape(ReadingShape shape) => shape switch
     {
@@ -166,6 +206,9 @@ internal static class ReadingModelProtocolMapper
         ReadingAssuranceKind.RepositoryNotFullyRead => ReadingModelProtocolConstants.AssuranceRepositoryNotFullyRead,
         ReadingAssuranceKind.ClaimNotCited => ReadingModelProtocolConstants.AssuranceClaimNotCited,
         ReadingAssuranceKind.DuplicateClaimId => ReadingModelProtocolConstants.AssuranceDuplicateClaimId,
+        ReadingAssuranceKind.ReviewNotRun => ReadingModelProtocolConstants.AssuranceReviewNotRun,
+        ReadingAssuranceKind.ReviewFailed => ReadingModelProtocolConstants.AssuranceReviewFailed,
+        ReadingAssuranceKind.ReviewTooLarge => ReadingModelProtocolConstants.AssuranceReviewTooLarge,
         _ => null,
     };
 }

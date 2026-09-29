@@ -68,6 +68,80 @@ public sealed class ReadingModelProtocolMapperTests
         Assert.Equal(AnalysisProtocolErrorCode.UnmappedReadingModel, Assert.Single(result.Errors).Code);
     }
 
+    /// <summary>
+    ///     Verifies findings and the review map to their wire vocabulary and preserve order.
+    /// </summary>
+    [Fact]
+    public void ToProtocolMapsFindingsAndReview()
+    {
+        var model = CreateReadingModel() with
+        {
+            Findings =
+            [
+                new ReadingFinding("f1", ReadingFindingSeverity.Critical, "Title", "Trigger", "Impact", "Fix", "parse"),
+                new ReadingFinding("f2", ReadingFindingSeverity.Info, "Other", "Trigger", "Impact", "Fix", null),
+            ],
+            Review = new ReadingReview(ReadingReviewStatus.Ran, ReadingReviewRecommendation.DefectsToFix, 3),
+        };
+
+        var result = ReadingModelProtocolMapper.ToProtocol(model);
+
+        Assert.True(result.IsSuccess);
+        Assert.Collection(
+            result.Data!.Findings,
+            finding =>
+            {
+                Assert.Equal(ReadingModelProtocolConstants.SeverityCritical, finding.Severity);
+                Assert.Equal("parse", finding.AreaId);
+            },
+            finding =>
+            {
+                Assert.Equal(ReadingModelProtocolConstants.SeverityInfo, finding.Severity);
+                Assert.Null(finding.AreaId);
+            });
+        Assert.Equal(ReadingModelProtocolConstants.ReviewStatusRan, result.Data.Review.Status);
+        Assert.Equal(ReadingModelProtocolConstants.RecommendationDefectsToFix, result.Data.Review.Recommendation);
+        Assert.Equal(3, result.Data.Review.WithheldCount);
+    }
+
+    /// <summary>
+    ///     Verifies the new assurance kinds and the finding removal scope map to their wire values.
+    /// </summary>
+    [Fact]
+    public void ToProtocolMapsReviewAssurancesAndFindingRemovalScope()
+    {
+        var model = CreateReadingModel() with
+        {
+            Assurances =
+            [
+                new ReadingAssurance(ReadingAssuranceKind.ReviewNotRun, "a"),
+                new ReadingAssurance(ReadingAssuranceKind.ReviewFailed, "b"),
+                new ReadingAssurance(ReadingAssuranceKind.ReviewTooLarge, "c"),
+            ],
+        };
+
+        var mapped = ReadingModelProtocolMapper.ToProtocol(model);
+        var removals = ReadingModelProtocolMapper.ToProtocol(new List<ValidationRemoval> { new("finding", "f1", "overCap") });
+
+        Assert.Equal(["reviewNotRun", "reviewFailed", "reviewTooLarge"], mapped.Data!.Assurances.Select(assurance => assurance.Kind));
+        Assert.Equal("finding", Assert.Single(removals.Data!).Scope);
+    }
+
+    /// <summary>
+    ///     Verifies a review whose recommendation contradicts its status fails the whole mapping.
+    /// </summary>
+    [Theory]
+    [InlineData(ReadingReviewStatus.Ran, null)]
+    [InlineData(ReadingReviewStatus.Failed, ReadingReviewRecommendation.NoDefectsFound)]
+    public void ToProtocolRejectsAnInconsistentReview(ReadingReviewStatus status, ReadingReviewRecommendation? recommendation)
+    {
+        var model = CreateReadingModel() with { Review = new ReadingReview(status, recommendation, 0) };
+
+        var result = ReadingModelProtocolMapper.ToProtocol(model);
+
+        Assert.Equal(AnalysisProtocolErrorCode.UnmappedReadingModel, Assert.Single(result.Errors).Code);
+    }
+
     private static ReadingModel CreateReadingModel() => new(
         new BinderComparison(
             Guid.Parse("0198a1b2-3c4d-4e5f-8a9b-0123456789ab"),
@@ -109,5 +183,7 @@ public sealed class ReadingModelProtocolMapperTests
             new ReadingLimitation(ReadingLimitationKind.UncommittedWorkExcluded, null, "excluded"),
         ],
         [new ReadingOmissionSummary("fileNotRead", "binary content", 1, 1, 1)],
-        [new ReadingAssurance(ReadingAssuranceKind.CheckerNotRun, "Claim checking was not run.")]);
+        [new ReadingAssurance(ReadingAssuranceKind.CheckerNotRun, "Claim checking was not run.")],
+        [],
+        new ReadingReview(ReadingReviewStatus.NotRun, null, 0));
 }

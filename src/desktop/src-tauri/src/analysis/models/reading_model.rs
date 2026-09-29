@@ -1,6 +1,7 @@
+use super::validation::deserialize_findings;
 use crate::analysis::models::{
-    ReadingArea, ReadingAssurance, ReadingCitation, ReadingEvidence, ReadingLimitation,
-    ReadingOmissionSummary, ReadingStatement,
+    ReadingArea, ReadingAssurance, ReadingCitation, ReadingEvidence, ReadingFinding,
+    ReadingLimitation, ReadingOmissionSummary, ReadingReview, ReadingStatement,
 };
 use serde::{Deserialize, Serialize};
 
@@ -15,4 +16,7 @@ pub struct ReadingModel {
     pub limitations: Vec<ReadingLimitation>,
     pub omission_summaries: Vec<ReadingOmissionSummary>,
     pub assurances: Vec<ReadingAssurance>,
+    #[serde(deserialize_with = "deserialize_findings")]
+    pub findings: Vec<ReadingFinding>,
+    pub review: ReadingReview,
 }

@@ -8,4 +8,5 @@ pub enum ValidationRemovalScope {
     Participant,
     Relationship,
     Statement,
+    Finding,
 }

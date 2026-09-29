@@ -17,7 +17,7 @@ public sealed class FindingValidationService : IFindingValidationService
 {
     private static readonly HashSet<string> AllowedSeverities = new(StringComparer.Ordinal)
     {
-        "critical", "warning", "info",
+        FindingValidationConstants.CriticalSeverity, FindingValidationConstants.WarningSeverity, FindingValidationConstants.InfoSeverity,
     };
 
     private readonly ILogger<FindingValidationService> _logger;

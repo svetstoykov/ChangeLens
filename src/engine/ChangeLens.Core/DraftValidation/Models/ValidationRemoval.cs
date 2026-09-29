@@ -1,7 +1,7 @@
 namespace ChangeLens.Core.DraftValidation.Models;
 
 /// <summary>
-///     Represents one curator draft item removed during mechanical validation.
+///     Represents one draft item removed during mechanical validation.
 /// </summary>
 /// <param name="Scope">The kind of item that was removed.</param>
 /// <param name="Id">The item identifier or validation location.</param>

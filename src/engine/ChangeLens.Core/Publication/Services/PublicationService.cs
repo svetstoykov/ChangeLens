@@ -8,6 +8,8 @@ using ChangeLens.Core.Publication.Interfaces;
 using ChangeLens.Core.Publication.Models;
 using ChangeLens.Core.Results.Models;
 using Microsoft.Extensions.Logging;
+using EvidenceBinderModel = ChangeLens.Core.EvidenceBinder.Models.EvidenceBinder;
+using EvidenceGraphModel = ChangeLens.Core.EvidenceGraph.Models.EvidenceGraph;
 
 namespace ChangeLens.Core.Publication.Services;
 
@@ -70,8 +72,9 @@ public sealed class PublicationService : IPublicationService
         var repaired = ShapeRepairer.Repair(model);
         var facts = new CheckerFacts(shouldCheck, checkerFailed);
         var citations = CitationBuilder.Build(repaired.Model, request.Binder, request.Graph, facts);
+        var explanation = new PublishedExplanation(repaired.Model, citations, facts);
         var readingModel = ReadingModelBuilder.Build(request.Binder.Comparison, repaired.Model, citations, request.Binder,
-            request.Graph, facts);
+            request.Graph, facts, request.Review);
         var usedNodeIds = shouldCheck
             ? readingModel.Citations.Where(citation => citation.Provenance != CitationProvenance.Unchecked)
                 .Select(citation => citation.NodeId)
@@ -79,7 +82,7 @@ public sealed class PublicationService : IPublicationService
             : null;
         var frontier = this._evidenceFrontierService.Build(request.Ranking, request.Graph, request.Policy, request.Binder,
             usedNodeIds, cancellationToken);
-        var outcome = new PublicationOutcome(readingModel, frontier, repaired.Repairs, checkingSummary);
+        var outcome = new PublicationOutcome(readingModel, frontier, repaired.Repairs, explanation, checkingSummary);
         this._logger.LogInformation(
             "Published reading model for run {RunId}: {TrackCount} tracks, {CitationCount} citations, " +
             "{RepairCount} shape repairs, checker ran {CheckerRan}, frontier {FrontierReturned}/{FrontierTotal}.",
@@ -91,5 +94,17 @@ public sealed class PublicationService : IPublicationService
             frontier.Diagnostics.EntryCount,
             frontier.Diagnostics.TotalEntryCount);
         return Result.Success(outcome);
+    }
+
+    /// <inheritdoc />
+    public ReadingModel Rebuild(PublishedExplanation explanation, EvidenceBinderModel binder, EvidenceGraphModel graph,
+        PublicationReview review)
+    {
+        ArgumentNullException.ThrowIfNull(explanation);
+        ArgumentNullException.ThrowIfNull(binder);
+        ArgumentNullException.ThrowIfNull(graph);
+        ArgumentNullException.ThrowIfNull(review);
+        return ReadingModelBuilder.Build(binder.Comparison, explanation.Model, explanation.Citations, binder, graph, explanation.Facts,
+            review);
     }
 }

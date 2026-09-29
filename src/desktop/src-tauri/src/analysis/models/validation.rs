@@ -1,5 +1,23 @@
+use crate::analysis::models::ReadingFinding;
 use serde::Deserialize;
 use serde::de::Error;
+
+const MAX_FINDINGS: usize = 10;
+
+pub(super) fn deserialize_findings<'de, D>(deserializer: D) -> Result<Vec<ReadingFinding>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let findings = Vec::<ReadingFinding>::deserialize(deserializer)?;
+
+    if findings.len() > MAX_FINDINGS {
+        return Err(D::Error::custom(
+            "a reading model carries at most 10 findings",
+        ));
+    }
+
+    Ok(findings)
+}
 
 pub(super) fn deserialize_non_blank<'de, D>(deserializer: D) -> Result<String, D::Error>
 where

@@ -211,6 +211,21 @@ public sealed class EngineProtocolContractTests
     [InlineData(
         "analysis-poll-run.schema.json",
         "analysis-poll-run.completed-with-reading-model.result.json")]
+    [InlineData(
+        "analysis-poll-run.schema.json",
+        "analysis-poll-run.completed-with-findings.result.json")]
+    [InlineData(
+        "analysis-poll-run.schema.json",
+        "analysis-poll-run.review-clean.result.json")]
+    [InlineData(
+        "analysis-poll-run.schema.json",
+        "analysis-poll-run.review-no-defects-confirmed.result.json")]
+    [InlineData(
+        "analysis-poll-run.schema.json",
+        "analysis-poll-run.review-failed.result.json")]
+    [InlineData(
+        "analysis-poll-run.schema.json",
+        "analysis-poll-run.review-too-large.result.json")]
     [InlineData("analysis-get-active.schema.json", "analysis-get-active.active.result.json")]
     [InlineData("analysis-cancel.schema.json", "analysis-cancel.result.json")]
     public void SharedFixtureMatchesSchema(string schemaFileName, string fixtureFileName)
@@ -255,6 +270,37 @@ public sealed class EngineProtocolContractTests
         using var missingInstance = JsonDocument.Parse(withoutReadingModel.ToJsonString());
 
         Assert.False(Schemas["analysis-poll-run.schema.json"].Evaluate(missingInstance.RootElement).IsValid);
+    }
+
+    /// <summary>
+    ///     Verifies the poll-result schema rejects a reading model missing findings or review, an unapproved severity,
+    ///     more than ten findings, and a review whose recommendation or withheld count contradicts its status.
+    /// </summary>
+    [Fact]
+    public void PollResultSchemaRejectsMalformedFindingsAndReview()
+    {
+        var fixture = File.ReadAllText(FixturePath("analysis-poll-run.completed-with-findings.result.json"));
+        Action<JsonObject>[] mutations =
+        [
+            readingModel => readingModel.Remove("findings"),
+            readingModel => readingModel.Remove("review"),
+            readingModel => readingModel["findings"]![0]!["severity"] = "question",
+            readingModel => readingModel["findings"]![0]!["areaId"] = "",
+            readingModel => readingModel["findings"] = new JsonArray(Enumerable.Range(0, 11)
+                .Select(_ => readingModel["findings"]![0]!.DeepClone()).ToArray()),
+            readingModel => readingModel["review"]!["recommendation"] = null,
+            readingModel => readingModel["review"] = JsonNode.Parse("""{"status":"failed","recommendation":"noDefectsFound","withheldCount":0}"""),
+            readingModel => readingModel["review"] = JsonNode.Parse("""{"status":"tooLarge","recommendation":null,"withheldCount":1}"""),
+        ];
+
+        foreach (var mutation in mutations)
+        {
+            var document = JsonNode.Parse(fixture)!;
+            mutation(document["result"]!["readingModel"]!.AsObject());
+            using var instance = JsonDocument.Parse(document.ToJsonString());
+
+            Assert.False(Schemas["analysis-poll-run.schema.json"].Evaluate(instance.RootElement).IsValid);
+        }
     }
 
     /// <summary>

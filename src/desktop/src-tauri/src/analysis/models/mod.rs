@@ -15,6 +15,8 @@ mod reading_assurance;
 mod reading_assurance_kind;
 mod reading_citation;
 mod reading_evidence;
+mod reading_finding;
+mod reading_finding_severity;
 mod reading_focus_range;
 mod reading_limitation;
 mod reading_limitation_kind;
@@ -23,6 +25,9 @@ mod reading_omission_source_kind;
 mod reading_omission_summary;
 mod reading_participant;
 mod reading_relationship;
+mod reading_review;
+mod reading_review_recommendation;
+mod reading_review_status;
 mod reading_shape;
 mod reading_side;
 mod reading_statement;
@@ -48,6 +53,8 @@ pub use reading_assurance::ReadingAssurance;
 pub use reading_assurance_kind::ReadingAssuranceKind;
 pub use reading_citation::ReadingCitation;
 pub use reading_evidence::ReadingEvidence;
+pub use reading_finding::ReadingFinding;
+pub use reading_finding_severity::ReadingFindingSeverity;
 pub use reading_focus_range::ReadingFocusRange;
 pub use reading_limitation::ReadingLimitation;
 pub use reading_limitation_kind::ReadingLimitationKind;
@@ -56,6 +63,9 @@ pub use reading_omission_source_kind::ReadingOmissionSourceKind;
 pub use reading_omission_summary::ReadingOmissionSummary;
 pub use reading_participant::ReadingParticipant;
 pub use reading_relationship::ReadingRelationship;
+pub use reading_review::ReadingReview;
+pub use reading_review_recommendation::ReadingReviewRecommendation;
+pub use reading_review_status::ReadingReviewStatus;
 pub use reading_shape::ReadingShape;
 pub use reading_side::ReadingSide;
 pub use reading_statement::ReadingStatement;
@@ -67,7 +77,8 @@ pub use validation_removal_scope::ValidationRemovalScope;
 mod tests {
     use super::{
         AnalysisGetActiveResult, AnalysisRunState, AnalysisRunSummary, AnalysisStartResult,
-        ReadingLimitationKind, ValidationRemovalScope,
+        ReadingAssuranceKind, ReadingFindingSeverity, ReadingLimitationKind, ReadingModel,
+        ReadingReviewRecommendation, ReadingReviewStatus, ValidationRemovalScope,
     };
 
     const ACCEPTED_FIXTURE: &str = include_str!(concat!(
@@ -113,6 +124,26 @@ mod tests {
     const COMPLETED_WITH_READING_MODEL_FIXTURE: &str = include_str!(concat!(
         env!("CARGO_MANIFEST_DIR"),
         "/../../../contracts/engine-protocol/v1/fixtures/analysis-poll-run.completed-with-reading-model.result.json"
+    ));
+    const COMPLETED_WITH_FINDINGS_FIXTURE: &str = include_str!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../../contracts/engine-protocol/v1/fixtures/analysis-poll-run.completed-with-findings.result.json"
+    ));
+    const REVIEW_CLEAN_FIXTURE: &str = include_str!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../../contracts/engine-protocol/v1/fixtures/analysis-poll-run.review-clean.result.json"
+    ));
+    const REVIEW_NO_DEFECTS_CONFIRMED_FIXTURE: &str = include_str!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../../contracts/engine-protocol/v1/fixtures/analysis-poll-run.review-no-defects-confirmed.result.json"
+    ));
+    const REVIEW_FAILED_FIXTURE: &str = include_str!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../../contracts/engine-protocol/v1/fixtures/analysis-poll-run.review-failed.result.json"
+    ));
+    const REVIEW_TOO_LARGE_FIXTURE: &str = include_str!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../../contracts/engine-protocol/v1/fixtures/analysis-poll-run.review-too-large.result.json"
     ));
     const CANCELLED_FIXTURE: &str = include_str!(concat!(
         env!("CARGO_MANIFEST_DIR"),
@@ -257,6 +288,148 @@ mod tests {
     }
 
     #[test]
+    fn deserializes_the_completed_fixture_with_findings_and_a_nonzero_withheld_count() {
+        let reading_model = reading_model_from_fixture(COMPLETED_WITH_FINDINGS_FIXTURE);
+
+        assert_eq!(reading_model.findings.len(), 2);
+        assert_eq!(reading_model.findings[0].id, "f1");
+        assert_eq!(
+            reading_model.findings[0].severity,
+            ReadingFindingSeverity::Warning
+        );
+        assert_eq!(reading_model.findings[0].area_id.as_deref(), Some("parse"));
+        assert_eq!(
+            reading_model.findings[1].severity,
+            ReadingFindingSeverity::Info
+        );
+        assert!(reading_model.findings[1].area_id.is_none());
+        assert_eq!(reading_model.review.status, ReadingReviewStatus::Ran);
+        assert_eq!(
+            reading_model.review.recommendation,
+            Some(ReadingReviewRecommendation::IssuesWorthAddressing)
+        );
+        assert_eq!(reading_model.review.withheld_count, 2);
+        assert!(
+            reading_model
+                .citations
+                .iter()
+                .any(|citation| citation.claim_id == "finding:f1")
+        );
+    }
+
+    #[test]
+    fn deserializes_the_clean_and_no_defects_confirmed_fixtures() {
+        let clean = reading_model_from_fixture(REVIEW_CLEAN_FIXTURE);
+        let confirmed = reading_model_from_fixture(REVIEW_NO_DEFECTS_CONFIRMED_FIXTURE);
+
+        assert!(clean.findings.is_empty());
+        assert_eq!(
+            clean.review.recommendation,
+            Some(ReadingReviewRecommendation::NoDefectsFound)
+        );
+        assert_eq!(clean.review.withheld_count, 0);
+        assert!(confirmed.findings.is_empty());
+        assert_eq!(
+            confirmed.review.recommendation,
+            Some(ReadingReviewRecommendation::NoDefectsConfirmed)
+        );
+        assert_eq!(confirmed.review.withheld_count, 2);
+    }
+
+    #[test]
+    fn deserializes_the_failed_and_too_large_review_fixtures_without_a_recommendation() {
+        let failed = reading_model_from_fixture(REVIEW_FAILED_FIXTURE);
+        let too_large = reading_model_from_fixture(REVIEW_TOO_LARGE_FIXTURE);
+
+        assert_eq!(failed.review.status, ReadingReviewStatus::Failed);
+        assert_eq!(too_large.review.status, ReadingReviewStatus::TooLarge);
+        for model in [&failed, &too_large] {
+            assert!(model.findings.is_empty());
+            assert!(model.review.recommendation.is_none());
+            assert_eq!(model.review.withheld_count, 0);
+        }
+        assert!(
+            failed
+                .assurances
+                .iter()
+                .any(|assurance| assurance.kind == ReadingAssuranceKind::ReviewFailed)
+        );
+        assert!(
+            too_large
+                .assurances
+                .iter()
+                .any(|assurance| assurance.kind == ReadingAssuranceKind::ReviewTooLarge)
+        );
+    }
+
+    #[test]
+    fn the_populated_reading_model_fixture_carries_a_review_that_was_not_run() {
+        let reading_model = reading_model_from_fixture(COMPLETED_WITH_READING_MODEL_FIXTURE);
+
+        assert!(reading_model.findings.is_empty());
+        assert_eq!(reading_model.review.status, ReadingReviewStatus::NotRun);
+        assert!(
+            reading_model
+                .assurances
+                .iter()
+                .any(|assurance| assurance.kind == ReadingAssuranceKind::ReviewNotRun)
+        );
+    }
+
+    #[test]
+    fn deserializes_the_finding_removal_scope() {
+        let value: ValidationRemovalScope = serde_json::from_str("\"finding\"")
+            .expect("the finding removal scope must deserialize");
+
+        assert_eq!(value, ValidationRemovalScope::Finding);
+    }
+
+    #[test]
+    fn rejects_a_reading_model_missing_findings_or_review() {
+        for missing in ["findings", "review"] {
+            let mut value = fixture_result(COMPLETED_WITH_FINDINGS_FIXTURE);
+            value["readingModel"]
+                .as_object_mut()
+                .expect("the reading model must be an object")
+                .remove(missing);
+
+            serde_json::from_value::<AnalysisRunSummary>(value)
+                .expect_err("a reading model missing findings or review must be rejected");
+        }
+    }
+
+    #[test]
+    fn rejects_malformed_findings_and_reviews() {
+        let mutations: [fn(&mut serde_json::Value); 6] = [
+            |model| model["findings"][0]["severity"] = serde_json::json!("question"),
+            |model| model["findings"][0]["extra"] = serde_json::json!(true),
+            |model| {
+                let finding = model["findings"][0].clone();
+                model["findings"] = serde_json::Value::Array(vec![finding; 11]);
+            },
+            |model| model["review"]["recommendation"] = serde_json::Value::Null,
+            |model| {
+                model["review"] = serde_json::json!({
+                    "status": "failed", "recommendation": "noDefectsFound", "withheldCount": 0
+                });
+            },
+            |model| {
+                model["review"] = serde_json::json!({
+                    "status": "tooLarge", "recommendation": null, "withheldCount": 1
+                });
+            },
+        ];
+
+        for mutate in mutations {
+            let mut value = fixture_result(COMPLETED_WITH_FINDINGS_FIXTURE);
+            mutate(&mut value["readingModel"]);
+
+            serde_json::from_value::<AnalysisRunSummary>(value)
+                .expect_err("a malformed finding or review must be rejected");
+        }
+    }
+
+    #[test]
     fn null_reading_model_fixtures_deserialize_without_a_reading_model() {
         for fixture in [
             PENDING_CAPTURE_FIXTURE,
@@ -333,6 +506,14 @@ mod tests {
 
         serde_json::from_value::<AnalysisRunSummary>(fixture_result(&malformed))
             .expect_err("a malformed snapshot id must be rejected");
+    }
+
+    fn reading_model_from_fixture(fixture: &str) -> ReadingModel {
+        let summary: AnalysisRunSummary = result_from_fixture(fixture);
+
+        summary
+            .reading_model
+            .expect("the fixture must carry a reading model")
     }
 
     fn result_from_fixture<T: serde::de::DeserializeOwned>(fixture: &str) -> T {

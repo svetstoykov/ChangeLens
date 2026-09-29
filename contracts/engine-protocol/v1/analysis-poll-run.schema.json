@@ -97,7 +97,7 @@
     "readingModel": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["thesis", "areas", "citations", "evidence", "limitations", "omissionSummaries", "assurances"],
+      "required": ["thesis", "areas", "citations", "evidence", "limitations", "omissionSummaries", "assurances", "findings", "review"],
       "properties": {
         "thesis": { "anyOf": [{ "$ref": "#/$defs/statement" }, { "type": "null" }] },
         "areas": { "type": "array", "maxItems": 20, "items": { "$ref": "#/$defs/area" } },
@@ -105,8 +105,48 @@
         "evidence": { "type": "array", "maxItems": 120, "items": { "$ref": "#/$defs/evidence" } },
         "limitations": { "type": "array", "items": { "$ref": "#/$defs/limitation" } },
         "omissionSummaries": { "type": "array", "items": { "$ref": "#/$defs/omissionSummary" } },
-        "assurances": { "type": "array", "items": { "$ref": "#/$defs/assurance" } }
+        "assurances": { "type": "array", "items": { "$ref": "#/$defs/assurance" } },
+        "findings": { "type": "array", "maxItems": 10, "items": { "$ref": "#/$defs/finding" } },
+        "review": { "$ref": "#/$defs/review" }
       }
+    },
+    "finding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "severity", "title", "trigger", "impact", "fix", "areaId"],
+      "properties": {
+        "id": { "$ref": "#/$defs/identifier" },
+        "severity": { "enum": ["critical", "warning", "info"] },
+        "title": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "trigger": { "type": "string", "minLength": 1, "maxLength": 1000 },
+        "impact": { "type": "string", "minLength": 1, "maxLength": 1000 },
+        "fix": { "type": "string", "minLength": 1, "maxLength": 1000 },
+        "areaId": { "anyOf": [{ "$ref": "#/$defs/identifier" }, { "type": "null" }] }
+      }
+    },
+    "review": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["status", "recommendation", "withheldCount"],
+          "properties": {
+            "status": { "const": "ran" },
+            "recommendation": { "enum": ["defectsToFix", "issuesWorthAddressing", "noDefectsFound", "noDefectsConfirmed"] },
+            "withheldCount": { "$ref": "#/$defs/count" }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["status", "recommendation", "withheldCount"],
+          "properties": {
+            "status": { "enum": ["notRun", "failed", "tooLarge"] },
+            "recommendation": { "type": "null" },
+            "withheldCount": { "const": 0 }
+          }
+        }
+      ]
     },
     "area": {
       "type": "object",
@@ -232,7 +272,7 @@
       "additionalProperties": false,
       "required": ["kind", "detail", "claimId"],
       "properties": {
-        "kind": { "enum": ["checkerNotRun", "checkerFailed", "testsNotExecuted", "buildNotExecuted", "repositoryNotFullyRead", "claimNotCited", "duplicateClaimId"] },
+        "kind": { "enum": ["checkerNotRun", "checkerFailed", "testsNotExecuted", "buildNotExecuted", "repositoryNotFullyRead", "claimNotCited", "duplicateClaimId", "reviewNotRun", "reviewFailed", "reviewTooLarge"] },
         "detail": { "type": "string" },
         "claimId": { "anyOf": [{ "$ref": "#/$defs/identifier" }, { "type": "null" }] }
       }
@@ -242,7 +282,7 @@
       "additionalProperties": false,
       "required": ["scope", "id", "reason"],
       "properties": {
-        "scope": { "enum": ["track", "participant", "relationship", "statement"] },
+        "scope": { "enum": ["track", "participant", "relationship", "statement", "finding"] },
         "id": { "type": "string", "maxLength": 512 },
         "reason": { "type": "string", "maxLength": 4096 }
       }

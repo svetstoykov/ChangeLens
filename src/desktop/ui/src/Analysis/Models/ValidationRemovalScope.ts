@@ -1,2 +1,2 @@
 export type ValidationRemovalScope =
-  "track" | "participant" | "relationship" | "statement";
+  "track" | "participant" | "relationship" | "statement" | "finding";

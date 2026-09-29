@@ -46,5 +46,7 @@ function describeScope(scope: ValidationRemovalScope): string {
       return "Relationship";
     case "statement":
       return "Statement";
+    case "finding":
+      return "Finding";
   }
 }

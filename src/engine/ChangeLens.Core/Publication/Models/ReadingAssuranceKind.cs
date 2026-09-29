@@ -23,4 +23,13 @@ public enum ReadingAssuranceKind
 
     /// <summary>More than one published claimant used the same claim identifier.</summary>
     DuplicateClaimId,
+
+    /// <summary>The review was not run.</summary>
+    ReviewNotRun,
+
+    /// <summary>The review failed.</summary>
+    ReviewFailed,
+
+    /// <summary>The review's contribution did not fit the response budget.</summary>
+    ReviewTooLarge,
 }

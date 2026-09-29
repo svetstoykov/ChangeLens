@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using ChangeLens.Core.AnalysisRuns.Constants;
 using ChangeLens.Core.AnalysisRuns.Models;
 using ChangeLens.Core.Repositories.Models;
@@ -252,6 +253,92 @@ public sealed class AnalysisPollRunHandlerTests
         Assert.False(projectionCalled);
     }
 
+    /// <summary>
+    ///     Asynchronously verifies each review fixture reads back with its findings, status, recommendation, and withheld count.
+    /// </summary>
+    /// <param name="fixtureName">The shared fixture file name.</param>
+    /// <param name="findingCount">The expected number of findings.</param>
+    /// <param name="status">The expected review status wire value.</param>
+    /// <param name="recommendation">The expected recommendation wire value, or <see langword="null" />.</param>
+    /// <param name="withheldCount">The expected withheld count.</param>
+    /// <returns>A task that represents the asynchronous operation.</returns>
+    [Theory]
+    [InlineData("analysis-poll-run.completed-with-findings.result.json", 2, "ran", "issuesWorthAddressing", 2)]
+    [InlineData("analysis-poll-run.review-clean.result.json", 0, "ran", "noDefectsFound", 0)]
+    [InlineData("analysis-poll-run.review-no-defects-confirmed.result.json", 0, "ran", "noDefectsConfirmed", 2)]
+    [InlineData("analysis-poll-run.review-failed.result.json", 0, "failed", null, 0)]
+    [InlineData("analysis-poll-run.review-too-large.result.json", 0, "tooLarge", null, 0)]
+    public async Task ReviewFixturesReadBackWithTheirFindingsAndReview(
+        string fixtureName, int findingCount, string status, string? recommendation, int withheldCount)
+    {
+        var response = await PollWithRealSerializerAsync(CreateDetail(), CreateFixtureProjection(fixtureName));
+
+        var model = Assert.IsType<ProtocolResultResponse<AnalysisRunSummaryResult>>(response).Result.ReadingModel!;
+        Assert.Equal(findingCount, model.Findings.Count);
+        Assert.Equal(new ReadingReviewResult(status, recommendation, withheldCount), model.Review);
+    }
+
+    /// <summary>
+    ///     Asynchronously verifies a stored pre-Phase-3 reading model that has neither findings nor review polls as not run.
+    /// </summary>
+    /// <returns>A task that represents the asynchronous operation.</returns>
+    [Fact]
+    public async Task StoredReadingModelWithoutFindingsOrReviewPollsAsNotRunWithNoFindings()
+    {
+        var response = await PollWithRealSerializerAsync(CreateDetail(), WithoutProperties("findings", "review"));
+
+        var model = Assert.IsType<ProtocolResultResponse<AnalysisRunSummaryResult>>(response).Result.ReadingModel!;
+        Assert.Empty(model.Findings);
+        Assert.Equal(new ReadingReviewResult(ReadingModelProtocolConstants.ReviewStatusNotRun, null, 0), model.Review);
+        Assert.Single(model.Citations);
+    }
+
+    /// <summary>
+    ///     Asynchronously verifies a stored reading model missing only one of findings or review is rejected.
+    /// </summary>
+    /// <param name="missing">The property to remove.</param>
+    /// <returns>A task that represents the asynchronous operation.</returns>
+    [Theory]
+    [InlineData("review")]
+    [InlineData("findings")]
+    public async Task StoredReadingModelMissingOnlyOneOfFindingsOrReviewIsUnreadable(string missing)
+    {
+        var response = await PollWithRealSerializerAsync(CreateDetail(), WithoutProperties(missing));
+
+        Assert.Equal(
+            AnalysisProtocolErrorCode.UnreadableReadingModel,
+            Assert.Single(Assert.IsType<ProtocolErrorResponse>(response).Errors).Code);
+    }
+
+    /// <summary>
+    ///     Asynchronously verifies a stored reading model that repeats a property fails with its stable error code.
+    /// </summary>
+    /// <returns>A task that represents the asynchronous operation.</returns>
+    [Fact]
+    public async Task StoredReadingModelWithDuplicateThesisPropertyIsUnreadable()
+    {
+        var projection = WithoutProperties("findings", "review");
+        var duplicated = projection with { ReadingModelJson = projection.ReadingModelJson.Insert(1, "\"thesis\":null,") };
+
+        var response = await PollWithRealSerializerAsync(CreateDetail(), duplicated);
+
+        Assert.Equal(
+            AnalysisProtocolErrorCode.UnreadableReadingModel,
+            Assert.Single(Assert.IsType<ProtocolErrorResponse>(response).Errors).Code);
+    }
+
+    private static AnalysisReadingProjection WithoutProperties(params string[] properties)
+    {
+        var projection = CreateFixtureProjection();
+        var model = JsonNode.Parse(projection.ReadingModelJson)!.AsObject();
+        foreach (var property in properties)
+        {
+            model.Remove(property);
+        }
+
+        return projection with { ReadingModelJson = model.ToJsonString() };
+    }
+
     private static async Task<ProtocolResponse> PollWithRealSerializerAsync(
         AnalysisRunDetail detail,
         AnalysisReadingProjection? projection)
@@ -266,12 +353,10 @@ public sealed class AnalysisPollRunHandlerTests
         return await handler.HandleAsync(CreateDetailedRequest(detail.RunId), TestContext.Current.CancellationToken);
     }
 
-    private static AnalysisReadingProjection CreateFixtureProjection()
+    private static AnalysisReadingProjection CreateFixtureProjection(
+        string fixtureName = "analysis-poll-run.completed-with-reading-model.result.json")
     {
-        using var fixture = JsonDocument.Parse(File.ReadAllText(Path.Combine(
-            RepositoryPaths.EngineProtocolV1,
-            "fixtures",
-            "analysis-poll-run.completed-with-reading-model.result.json")));
+        using var fixture = JsonDocument.Parse(File.ReadAllText(Path.Combine(RepositoryPaths.EngineProtocolV1, "fixtures", fixtureName)));
         var result = fixture.RootElement.GetProperty("result");
 
         return new AnalysisReadingProjection(

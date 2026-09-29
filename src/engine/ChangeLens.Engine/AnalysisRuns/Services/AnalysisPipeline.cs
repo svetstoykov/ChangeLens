@@ -379,7 +379,7 @@ internal sealed class AnalysisPipeline(
         EnsureRecorded(
             await store.RecordValidationRemovalCountAsync(runId, validation.Removals.Count, CancellationToken.None), "validation removal");
 
-        var publicationRequest = new PublicationRequest(validation, binder, run.Graph!, run.Policy!, run.Ranking!);
+        var publicationRequest = new PublicationRequest(validation, binder, run.Graph!, run.Policy!, run.Ranking!, PublicationReview.NotRun);
         var publicationResult = await publicationService.PublishAsync(publicationRequest, userCancellationToken);
         if (publicationResult.IsFailure)
         {

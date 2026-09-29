@@ -15,7 +15,12 @@ internal sealed class RecordingClaimCheckingService(ClaimCheckingOutcome outcome
     /// <summary>
     ///     Gets a value indicating whether <see cref="CheckAsync" /> was called.
     /// </summary>
-    internal bool Called { get; private set; }
+    internal bool Called => this.CallCount > 0;
+
+    /// <summary>
+    ///     Gets the number of times <see cref="CheckAsync" /> was called.
+    /// </summary>
+    internal int CallCount { get; private set; }
 
     /// <inheritdoc />
     public Task<Result<ClaimCheckingOutcome>> CheckAsync(
@@ -23,7 +28,7 @@ internal sealed class RecordingClaimCheckingService(ClaimCheckingOutcome outcome
         EvidenceBinderModel binder,
         CancellationToken cancellationToken)
     {
-        this.Called = true;
+        this.CallCount++;
         return Task.FromResult(Result.Success(outcome));
     }
 }

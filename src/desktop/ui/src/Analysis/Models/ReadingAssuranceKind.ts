@@ -5,4 +5,7 @@ export type ReadingAssuranceKind =
   | "buildNotExecuted"
   | "repositoryNotFullyRead"
   | "claimNotCited"
-  | "duplicateClaimId";
+  | "duplicateClaimId"
+  | "reviewNotRun"
+  | "reviewFailed"
+  | "reviewTooLarge";

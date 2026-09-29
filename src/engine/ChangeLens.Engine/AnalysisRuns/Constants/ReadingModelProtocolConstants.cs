@@ -27,6 +27,24 @@ internal static class ReadingModelProtocolConstants
     internal const string AssuranceClaimNotCited = "claimNotCited";
     internal const string AssuranceDuplicateClaimId = "duplicateClaimId";
 
+    internal const string AssuranceReviewNotRun = "reviewNotRun";
+    internal const string AssuranceReviewFailed = "reviewFailed";
+    internal const string AssuranceReviewTooLarge = "reviewTooLarge";
+
+    internal const string SeverityCritical = "critical";
+    internal const string SeverityWarning = "warning";
+    internal const string SeverityInfo = "info";
+
+    internal const string ReviewStatusRan = "ran";
+    internal const string ReviewStatusNotRun = "notRun";
+    internal const string ReviewStatusFailed = "failed";
+    internal const string ReviewStatusTooLarge = "tooLarge";
+
+    internal const string RecommendationDefectsToFix = "defectsToFix";
+    internal const string RecommendationIssuesWorthAddressing = "issuesWorthAddressing";
+    internal const string RecommendationNoDefectsFound = "noDefectsFound";
+    internal const string RecommendationNoDefectsConfirmed = "noDefectsConfirmed";
+
     internal const string OmissionFileNotRead = "fileNotRead";
     internal const string OmissionNoEvidenceSelected = "noEvidenceSelected";
     internal const string OmissionPolicyExcluded = "policyExcluded";
@@ -35,6 +53,7 @@ internal static class ReadingModelProtocolConstants
     internal const string RemovalScopeParticipant = "participant";
     internal const string RemovalScopeRelationship = "relationship";
     internal const string RemovalScopeStatement = "statement";
+    internal const string RemovalScopeFinding = "finding";
 
     /// <summary>The omission source kinds the protocol accepts.</summary>
     internal static readonly IReadOnlySet<string> OmissionSourceKinds =
@@ -42,5 +61,6 @@ internal static class ReadingModelProtocolConstants
 
     /// <summary>The validation removal scopes the protocol accepts.</summary>
     internal static readonly IReadOnlySet<string> RemovalScopes = new HashSet<string>(
-        [RemovalScopeTrack, RemovalScopeParticipant, RemovalScopeRelationship, RemovalScopeStatement], StringComparer.Ordinal);
+        [RemovalScopeTrack, RemovalScopeParticipant, RemovalScopeRelationship, RemovalScopeStatement, RemovalScopeFinding],
+        StringComparer.Ordinal);
 }

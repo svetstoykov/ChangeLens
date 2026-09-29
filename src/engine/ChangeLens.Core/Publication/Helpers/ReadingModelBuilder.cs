@@ -10,16 +10,17 @@ using EvidenceGraphModel = ChangeLens.Core.EvidenceGraph.Models.EvidenceGraph;
 
 namespace ChangeLens.Core.Publication.Helpers;
 
-/// <summary>Builds the transferable reading model from exactly six publication inputs.</summary>
+/// <summary>Builds the transferable reading model from exactly seven publication inputs.</summary>
 public static class ReadingModelBuilder
 {
-    /// <summary>Builds a reading model from comparison, model, citations, binder, graph, and checker facts.</summary>
+    /// <summary>Builds a reading model from comparison, model, citations, binder, graph, checker facts, and the review result.</summary>
     /// <param name="comparison">The comparison identity.</param>
     /// <param name="model">The published mental model.</param>
     /// <param name="citations">The claim-addressed citations.</param>
     /// <param name="binder">The evidence binder.</param>
     /// <param name="graph">The complete evidence graph.</param>
     /// <param name="facts">The explicit checker facts.</param>
+    /// <param name="review">The review result whose findings are attached, ordered, and cited.</param>
     /// <returns>The reading model.</returns>
     public static ReadingModel Build(
         BinderComparison comparison,
@@ -27,7 +28,8 @@ public static class ReadingModelBuilder
         IReadOnlyList<Citation> citations,
         EvidenceBinderModel binder,
         EvidenceGraphModel graph,
-        CheckerFacts facts)
+        CheckerFacts facts,
+        PublicationReview review)
     {
         ArgumentNullException.ThrowIfNull(comparison);
         ArgumentNullException.ThrowIfNull(model);
@@ -35,6 +37,7 @@ public static class ReadingModelBuilder
         ArgumentNullException.ThrowIfNull(binder);
         ArgumentNullException.ThrowIfNull(graph);
         ArgumentNullException.ThrowIfNull(facts);
+        ArgumentNullException.ThrowIfNull(review);
 
         var claimIds = Claimants(model).ToArray();
         var duplicateIds = claimIds
@@ -50,11 +53,14 @@ public static class ReadingModelBuilder
             .ToDictionary(group => group.Key, group => (IReadOnlyList<Citation>)group.ToArray(), StringComparer.Ordinal);
         var areas = model.Tracks.Select(track => ToArea(track, citationsByClaim)).ToArray();
         var thesis = model.Thesis is { } statement ? ToStatement(statement, citationsByClaim) : null;
-        var evidence = BuildEvidence(publishedCitations, binder);
+        var published = FindingPublisher.Publish(review, areas, citationsByClaim, binder, graph);
+        var allCitations = publishedCitations.Concat(published.Citations).ToArray();
+        var evidence = BuildEvidence(allCitations, binder);
         var omissionSummaries = BuildOmissionSummaries(binder, graph);
         var limitations = BuildLimitations(binder, graph);
-        var assurances = BuildAssurances(model, binder, facts, claimIds, citationsByClaim, duplicateIds);
-        return new ReadingModel(comparison, thesis, areas, publishedCitations, evidence, limitations, omissionSummaries, assurances);
+        var assurances = BuildAssurances(model, binder, facts, review.Status, claimIds, citationsByClaim, duplicateIds);
+        return new ReadingModel(comparison, thesis, areas, allCitations, evidence, limitations, omissionSummaries, assurances,
+            published.Findings, published.Review);
     }
 
     private static ReadingArea ToArea(MentalModelTrack track, IReadOnlyDictionary<string, IReadOnlyList<Citation>> citations)
@@ -210,6 +216,7 @@ public static class ReadingModelBuilder
         MentalModel model,
         EvidenceBinderModel binder,
         CheckerFacts facts,
+        ReadingReviewStatus reviewStatus,
         IReadOnlyList<string> claimIds,
         IReadOnlyDictionary<string, IReadOnlyList<Citation>> citations,
         IReadOnlySet<string> duplicateIds)
@@ -235,6 +242,19 @@ public static class ReadingModelBuilder
         {
             assurances.Add(new ReadingAssurance(ReadingAssuranceKind.RepositoryNotFullyRead,
                 "The repository evidence was bounded or at least one changed file has no evidence."));
+        }
+
+        switch (reviewStatus)
+        {
+            case ReadingReviewStatus.NotRun:
+                assurances.Add(new ReadingAssurance(ReadingAssuranceKind.ReviewNotRun, "The review for findings was not run."));
+                break;
+            case ReadingReviewStatus.Failed:
+                assurances.Add(new ReadingAssurance(ReadingAssuranceKind.ReviewFailed, "The review failed or returned an unreadable reply."));
+                break;
+            case ReadingReviewStatus.TooLarge:
+                assurances.Add(new ReadingAssurance(ReadingAssuranceKind.ReviewTooLarge, "The review's findings did not fit the response budget."));
+                break;
         }
 
         foreach (var claimId in claimIds.Distinct(StringComparer.Ordinal))

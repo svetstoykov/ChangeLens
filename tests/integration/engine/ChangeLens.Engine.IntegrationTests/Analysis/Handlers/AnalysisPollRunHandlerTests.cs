@@ -310,6 +310,23 @@ public sealed class AnalysisPollRunHandlerTests
             Assert.Single(Assert.IsType<ProtocolErrorResponse>(response).Errors).Code);
     }
 
+    /// <summary>
+    ///     Asynchronously verifies a stored reading model that repeats a property fails with its stable error code.
+    /// </summary>
+    /// <returns>A task that represents the asynchronous operation.</returns>
+    [Fact]
+    public async Task StoredReadingModelWithDuplicateThesisPropertyIsUnreadable()
+    {
+        var projection = WithoutProperties("findings", "review");
+        var duplicated = projection with { ReadingModelJson = projection.ReadingModelJson.Insert(1, "\"thesis\":null,") };
+
+        var response = await PollWithRealSerializerAsync(CreateDetail(), duplicated);
+
+        Assert.Equal(
+            AnalysisProtocolErrorCode.UnreadableReadingModel,
+            Assert.Single(Assert.IsType<ProtocolErrorResponse>(response).Errors).Code);
+    }
+
     private static AnalysisReadingProjection WithoutProperties(params string[] properties)
     {
         var projection = CreateFixtureProjection();

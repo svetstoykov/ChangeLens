@@ -9,7 +9,8 @@ namespace ChangeLens.Engine.AnalysisRuns.Helpers;
 /// </summary>
 /// <remarks>
 ///     Only a document that lacks both <c>findings</c> and <c>review</c> is upgraded, to no findings and a review that
-///     was not run. A document that carries exactly one of them is returned unchanged so strict parsing rejects it.
+///     was not run. A document that carries exactly one of them, or that is not a readable JSON object, is returned
+///     unchanged so strict parsing rejects it.
 /// </remarks>
 internal static class StoredReadingModelUpgrader
 {
@@ -23,17 +24,17 @@ internal static class StoredReadingModelUpgrader
     {
         ArgumentNullException.ThrowIfNull(json);
 
-        JsonNode? node;
+        JsonObject document;
         try
         {
-            node = JsonNode.Parse(json);
-        }
-        catch (JsonException)
-        {
-            return json;
-        }
+            if (JsonNode.Parse(json) is not JsonObject parsed || parsed.ContainsKey(FindingsProperty) || parsed.ContainsKey(ReviewProperty))
+            {
+                return json;
+            }
 
-        if (node is not JsonObject document || document.ContainsKey(FindingsProperty) || document.ContainsKey(ReviewProperty))
+            document = parsed;
+        }
+        catch (Exception exception) when (exception is JsonException or ArgumentException)
         {
             return json;
         }

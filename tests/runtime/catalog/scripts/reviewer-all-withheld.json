@@ -1,0 +1,85 @@
+{
+  "id": "reviewer-all-withheld",
+  "description": "Valid F13 curator draft, then a reviewer reply whose two findings both fail validation: f1 cites an undisclosed node id and f2 anchors on a closing brace that occurs twice in its quote. No finding publishes, two are withheld, and the recommendation is noDefectsConfirmed, never a clean review.",
+  "exchanges": [
+    {
+      "role": "curator",
+      "reply": {
+        "usage": { "prompt_tokens": 1500, "completion_tokens": 64 },
+        "content": {
+          "thesis": {
+            "text": "Selection labels reuse the range formatter, and a plural helper is added.",
+            "evidenceNodeIds": [
+              { "$node": { "path": "src/page-label.ts", "side": "After" } },
+              { "$node": { "path": "src/strings.ts", "side": "After" } }
+            ]
+          },
+          "tracks": [
+            {
+              "id": "committed-change",
+              "title": "Labels",
+              "summary": {
+                "text": "selectionLabel formats the selected bounds through formatRange.",
+                "evidenceNodeIds": [{ "$node": { "path": "src/page-label.ts", "side": "After" } }]
+              },
+              "shape": "ParticipantMap",
+              "participants": [
+                {
+                  "id": "selection-label",
+                  "name": "selectionLabel",
+                  "role": "New label function",
+                  "changed": true,
+                  "evidenceNodeIds": [{ "$node": { "path": "src/page-label.ts", "side": "After" } }]
+                },
+                {
+                  "id": "pluralize",
+                  "name": "pluralize",
+                  "role": "New string helper",
+                  "changed": true,
+                  "evidenceNodeIds": [{ "$node": { "path": "src/strings.ts", "side": "After" } }]
+                }
+              ],
+              "relationships": [],
+              "orderedSteps": [],
+              "purposes": []
+            }
+          ],
+          "droppedNodeIds": []
+        }
+      }
+    },
+    {
+      "role": "reviewer",
+      "reply": {
+        "usage": { "prompt_tokens": 1500, "completion_tokens": 120 },
+        "content": {
+          "findings": [
+            {
+              "id": "f1",
+              "severity": "warning",
+              "title": "Cites evidence the binder never disclosed",
+              "trigger": "t",
+              "impact": "i",
+              "fix": "x",
+              "evidenceNodeIds": [{ "$node": { "path": "src/page-label.ts", "side": "After" } }, "n999"],
+              "anchor": {
+                "nodeId": { "$node": { "path": "src/page-label.ts", "side": "After" } },
+                "lines": "  return `Selected ${formatRange(high, low)}`;"
+              }
+            },
+            {
+              "id": "f2",
+              "severity": "warning",
+              "title": "Anchors on text that occurs twice",
+              "trigger": "t",
+              "impact": "i",
+              "fix": "x",
+              "evidenceNodeIds": [{ "$node": { "path": "src/page-label.ts", "side": "After" } }],
+              "anchor": { "nodeId": { "$node": { "path": "src/page-label.ts", "side": "After" } }, "lines": "}" }
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

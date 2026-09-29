@@ -23,7 +23,20 @@ OPERATION_KEYS = {
     "symlink": {"path", "target"},
     "merge": {"branch"},
 }
-FIXTURE_KEYS = {"id", "description", "base", "target", "commits", "remotes", "checkout", "uncommitted", "markers"}
+FIXTURE_KEYS = {
+    "id",
+    "description",
+    "base",
+    "target",
+    "commits",
+    "remotes",
+    "checkout",
+    "uncommitted",
+    "markers",
+    "defect",
+}
+DEFECT_KEYS = {"path", "side", "lines"}
+DEFECT_SIDES = ("before", "after")
 COMMIT_KEYS = {"branch", "from", "message", "date", "changes"}
 REMOTE_KEYS = {"name", "push"}
 CLONE_KEYS = {"clone", "base", "head", "changes", "uncommitted", "markers"}
@@ -65,6 +78,16 @@ class RemoteSpec:
 
 
 @dataclass(frozen=True)
+class KnownDefect:
+    """Where a fixture's deliberate defect sits: a path, a comparison side, and inclusive one-based lines."""
+
+    path: str
+    side: str
+    start_line: int
+    end_line: int
+
+
+@dataclass(frozen=True)
 class FixtureSpec:
     """A declarative repository, optionally layered on a catalog base fixture."""
 
@@ -77,6 +100,7 @@ class FixtureSpec:
     checkout: str | None
     uncommitted: tuple[Operation, ...]
     markers: tuple[str, ...]
+    defect: KnownDefect | None = None
 
 
 @dataclass(frozen=True)
@@ -326,7 +350,31 @@ def _parse_fixture(raw: object, where: str, default_id: str | None, issues: list
         checkout=optional_string(raw, "checkout", where, issues),
         uncommitted=uncommitted,
         markers=string_list(raw, "markers", where, issues),
+        defect=_parse_defect(raw.get("defect"), f"{where}.defect", issues) if "defect" in raw else None,
     )
+
+
+def _parse_defect(raw: object, where: str, issues: list[str]) -> KnownDefect | None:
+    if not isinstance(raw, dict):
+        issues.append(f"{where}: a defect must be a mapping of path, side, and lines")
+        return None
+    reject_unknown_keys(raw, DEFECT_KEYS, where, issues)
+    path = _relative_path(raw, "path", where, issues)
+    side, lines = raw.get("side"), raw.get("lines")
+    if side not in DEFECT_SIDES:
+        issues.append(f"{where}.side: expected before or after")
+    valid_lines = (
+        isinstance(lines, list)
+        and len(lines) == 2
+        and all(isinstance(line, int) and not isinstance(line, bool) and line >= 1 for line in lines)
+        and lines[0] <= lines[1]
+    )
+    if not valid_lines:
+        issues.append(f"{where}.lines: expected [start, end] with 1 <= start <= end")
+    if not path or side not in DEFECT_SIDES or not valid_lines:
+        return None
+    assert isinstance(lines, list)
+    return KnownDefect(path, str(side), lines[0], lines[1])
 
 
 def _parse_commit(raw: object, where: str, issues: list[str]) -> CommitSpec | None:

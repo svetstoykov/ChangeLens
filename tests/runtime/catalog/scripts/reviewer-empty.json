@@ -1,0 +1,59 @@
+{
+  "id": "reviewer-empty",
+  "description": "Valid F13 curator draft, then an explicit empty reviewer reply {\"findings\": []}: the review runs clean and the recommendation is noDefectsFound.",
+  "exchanges": [
+    {
+      "role": "curator",
+      "reply": {
+        "usage": { "prompt_tokens": 1500, "completion_tokens": 64 },
+        "content": {
+          "thesis": {
+            "text": "Selection labels reuse the range formatter, and a plural helper is added.",
+            "evidenceNodeIds": [
+              { "$node": { "path": "src/page-label.ts", "side": "After" } },
+              { "$node": { "path": "src/strings.ts", "side": "After" } }
+            ]
+          },
+          "tracks": [
+            {
+              "id": "committed-change",
+              "title": "Labels",
+              "summary": {
+                "text": "selectionLabel formats the selected bounds through formatRange.",
+                "evidenceNodeIds": [{ "$node": { "path": "src/page-label.ts", "side": "After" } }]
+              },
+              "shape": "ParticipantMap",
+              "participants": [
+                {
+                  "id": "selection-label",
+                  "name": "selectionLabel",
+                  "role": "New label function",
+                  "changed": true,
+                  "evidenceNodeIds": [{ "$node": { "path": "src/page-label.ts", "side": "After" } }]
+                },
+                {
+                  "id": "pluralize",
+                  "name": "pluralize",
+                  "role": "New string helper",
+                  "changed": true,
+                  "evidenceNodeIds": [{ "$node": { "path": "src/strings.ts", "side": "After" } }]
+                }
+              ],
+              "relationships": [],
+              "orderedSteps": [],
+              "purposes": []
+            }
+          ],
+          "droppedNodeIds": []
+        }
+      }
+    },
+    {
+      "role": "reviewer",
+      "reply": {
+        "usage": { "prompt_tokens": 1500, "completion_tokens": 8 },
+        "content": { "findings": [] }
+      }
+    }
+  ]
+}

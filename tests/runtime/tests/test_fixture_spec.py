@@ -2,6 +2,7 @@ import pytest
 
 from changelens_review.errors import SpecError
 from changelens_review.fixtures.spec import (
+    KnownDefect,
     catalog_fixture_ids,
     effective_markers,
     effective_target,
@@ -31,6 +32,17 @@ def test_catalog_fixtures_load() -> None:
         "write",
     ]
     assert f01.commits[0].operations[5].content == b"review-binary-v1\x00\xff\x00"
+
+
+def test_seeded_defect_fixtures_record_their_defect() -> None:
+    defects = {fixture_id: load_catalog_fixture(fixture_id).defect for fixture_id in ("F13", "F14", "F15")}
+
+    assert defects == {
+        "F13": KnownDefect("src/page-label.ts", "after", 10, 10),
+        "F14": KnownDefect("pager/pages.py", "after", 7, 7),
+        "F15": KnownDefect("users/greeting.go", "after", 6, 6),
+    }
+    assert load_catalog_fixture("F01").defect is None
 
 
 def test_derived_fixture_resolves_through_its_base() -> None:
@@ -68,6 +80,19 @@ def test_derived_fixture_resolves_through_its_base() -> None:
             "not valid base64",
         ),
         ({"id": "X", "target": "main", "commits": [{"message": "m"}]}, "a commit needs a branch"),
+        (
+            {"id": "X", "target": "main", "commits": [commit()], "defect": {"path": "a", "lines": [1, 1]}},
+            "defect.side: expected before or after",
+        ),
+        (
+            {
+                "id": "X",
+                "target": "main",
+                "commits": [commit()],
+                "defect": {"path": "a", "side": "after", "lines": [3, 2]},
+            },
+            "defect.lines: expected [start, end]",
+        ),
     ],
 )
 def test_invalid_fixture_specs_are_rejected(raw: dict, message: str) -> None:

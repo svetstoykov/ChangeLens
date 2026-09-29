@@ -1,0 +1,65 @@
+id: F14
+description: >-
+  Seeded defect, off-by-one (Python): feature/review adds page_slice, whose slice end adds one past the page size,
+  so every full page returns the first item of the next page as well. Its new caller in the command-line module
+  is correct; an unchanged file is an unrelated decoy.
+target: main
+defect: { path: pager/pages.py, side: after, lines: [7, 7] }
+commits:
+  - branch: main
+    message: "fixture: base pager"
+    date: "2026-01-01T00:00:00+00:00"
+    changes:
+      - write:
+          path: pyproject.toml
+          text: |
+            [project]
+            name = "f14-pager"
+            version = "1.0.0"
+            requires-python = ">=3.12"
+      - write:
+          path: pager/__init__.py
+          text: ""
+      - write:
+          path: pager/pages.py
+          text: |
+            def page_count(total: int, size: int) -> int:
+                return (total + size - 1) // size
+      - write:
+          path: pager/cli.py
+          text: |
+            from pager.pages import page_count
+
+
+            def summary(items: list[str]) -> str:
+                return f"{len(items)} items on {page_count(len(items), 10)} pages"
+      - write:
+          path: pager/decoy.py
+          text: |
+            UNRELATED = "decoy"
+  - branch: feature/review
+    message: "fixture: page slices"
+    date: "2026-01-02T00:00:00+00:00"
+    changes:
+      - write:
+          path: pager/pages.py
+          text: |
+            def page_count(total: int, size: int) -> int:
+                return (total + size - 1) // size
+
+
+            def page_slice(items: list[str], page: int, size: int) -> list[str]:
+                start = page * size
+                return items[start : start + size + 1]
+      - write:
+          path: pager/cli.py
+          text: |
+            from pager.pages import page_count, page_slice
+
+
+            def summary(items: list[str]) -> str:
+                return f"{len(items)} items on {page_count(len(items), 10)} pages"
+
+
+            def show(items: list[str], page: int) -> list[str]:
+                return page_slice(items, page, 10)

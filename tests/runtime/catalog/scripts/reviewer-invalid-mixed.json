@@ -1,0 +1,205 @@
+{
+  "id": "reviewer-invalid-mixed",
+  "description": "Valid F13 curator draft, then a reviewer reply with 11 findings. f1 and f5-f10 are valid; f2 cites an undisclosed node id, f3 anchors on the rename manifest fact (binder index 0), f4 anchors on a closing brace that occurs twice in its quote, and f11 is beyond the 10-finding cap. Seven findings publish and four are withheld: undisclosedEvidence, anchorMismatch, anchorAmbiguous, overCap.",
+  "exchanges": [
+    {
+      "role": "curator",
+      "reply": {
+        "usage": { "prompt_tokens": 1500, "completion_tokens": 64 },
+        "content": {
+          "thesis": {
+            "text": "Selection labels reuse the range formatter, and a plural helper is added.",
+            "evidenceNodeIds": [
+              { "$node": { "path": "src/page-label.ts", "side": "After" } },
+              { "$node": { "path": "src/strings.ts", "side": "After" } }
+            ]
+          },
+          "tracks": [
+            {
+              "id": "committed-change",
+              "title": "Labels",
+              "summary": {
+                "text": "selectionLabel formats the selected bounds through formatRange.",
+                "evidenceNodeIds": [{ "$node": { "path": "src/page-label.ts", "side": "After" } }]
+              },
+              "shape": "ParticipantMap",
+              "participants": [
+                {
+                  "id": "selection-label",
+                  "name": "selectionLabel",
+                  "role": "New label function",
+                  "changed": true,
+                  "evidenceNodeIds": [{ "$node": { "path": "src/page-label.ts", "side": "After" } }]
+                },
+                {
+                  "id": "pluralize",
+                  "name": "pluralize",
+                  "role": "New string helper",
+                  "changed": true,
+                  "evidenceNodeIds": [{ "$node": { "path": "src/strings.ts", "side": "After" } }]
+                }
+              ],
+              "relationships": [],
+              "orderedSteps": [],
+              "purposes": []
+            }
+          ],
+          "droppedNodeIds": []
+        }
+      }
+    },
+    {
+      "role": "reviewer",
+      "reply": {
+        "usage": { "prompt_tokens": 1500, "completion_tokens": 640 },
+        "content": {
+          "findings": [
+            {
+              "id": "f1",
+              "severity": "warning",
+              "title": "selectionLabel passes the range bounds in reverse order",
+              "trigger": "selectionLabel is called with two different positions.",
+              "impact": "formatRange throws a RangeError for every multi-item selection.",
+              "fix": "Call formatRange(low, high).",
+              "evidenceNodeIds": [
+                { "$node": { "path": "src/page-label.ts", "side": "After" } },
+                { "$node": { "path": "src/range.ts", "side": "After" } }
+              ],
+              "anchor": {
+                "nodeId": { "$node": { "path": "src/page-label.ts", "side": "After" } },
+                "lines": "  return `Selected ${formatRange(high, low)}`;"
+              }
+            },
+            {
+              "id": "f2",
+              "severity": "warning",
+              "title": "Cites evidence the binder never disclosed",
+              "trigger": "t",
+              "impact": "i",
+              "fix": "x",
+              "evidenceNodeIds": [{ "$node": { "path": "src/page-label.ts", "side": "After" } }, "n999"],
+              "anchor": {
+                "nodeId": { "$node": { "path": "src/page-label.ts", "side": "After" } },
+                "lines": "  const low = Math.min(anchor, focus);"
+              }
+            },
+            {
+              "id": "f3",
+              "severity": "warning",
+              "title": "Anchors on the rename manifest fact",
+              "trigger": "t",
+              "impact": "i",
+              "fix": "x",
+              "evidenceNodeIds": [{ "$node": { "index": 0 } }, { "$node": { "path": "src/page-label.ts", "side": "After" } }],
+              "anchor": {
+                "nodeId": { "$node": { "index": 0 } },
+                "lines": "manifest fact (Renamed) — path: docs/range-notes.md → docs/ranges.md"
+              }
+            },
+            {
+              "id": "f4",
+              "severity": "warning",
+              "title": "Anchors on text that occurs twice",
+              "trigger": "t",
+              "impact": "i",
+              "fix": "x",
+              "evidenceNodeIds": [{ "$node": { "path": "src/page-label.ts", "side": "After" } }],
+              "anchor": { "nodeId": { "$node": { "path": "src/page-label.ts", "side": "After" } }, "lines": "}" }
+            },
+            {
+              "id": "f5",
+              "severity": "info",
+              "title": "low is computed with Math.min",
+              "trigger": "t",
+              "impact": "i",
+              "fix": "x",
+              "evidenceNodeIds": [{ "$node": { "path": "src/page-label.ts", "side": "After" } }],
+              "anchor": {
+                "nodeId": { "$node": { "path": "src/page-label.ts", "side": "After" } },
+                "lines": "  const low = Math.min(anchor, focus);"
+              }
+            },
+            {
+              "id": "f6",
+              "severity": "info",
+              "title": "high is computed with Math.max",
+              "trigger": "t",
+              "impact": "i",
+              "fix": "x",
+              "evidenceNodeIds": [{ "$node": { "path": "src/page-label.ts", "side": "After" } }],
+              "anchor": {
+                "nodeId": { "$node": { "path": "src/page-label.ts", "side": "After" } },
+                "lines": "  const high = Math.max(anchor, focus);"
+              }
+            },
+            {
+              "id": "f7",
+              "severity": "info",
+              "title": "selectionLabel is exported",
+              "trigger": "t",
+              "impact": "i",
+              "fix": "x",
+              "evidenceNodeIds": [{ "$node": { "path": "src/page-label.ts", "side": "After" } }],
+              "anchor": {
+                "nodeId": { "$node": { "path": "src/page-label.ts", "side": "After" } },
+                "lines": "export function selectionLabel(anchor: number, focus: number): string {"
+              }
+            },
+            {
+              "id": "f8",
+              "severity": "info",
+              "title": "pageLabel is unchanged",
+              "trigger": "t",
+              "impact": "i",
+              "fix": "x",
+              "evidenceNodeIds": [{ "$node": { "path": "src/page-label.ts", "side": "After" } }],
+              "anchor": {
+                "nodeId": { "$node": { "path": "src/page-label.ts", "side": "After" } },
+                "lines": "export function pageLabel(first: number, count: number): string {"
+              }
+            },
+            {
+              "id": "f9",
+              "severity": "info",
+              "title": "pluralize is exported",
+              "trigger": "t",
+              "impact": "i",
+              "fix": "x",
+              "evidenceNodeIds": [{ "$node": { "path": "src/strings.ts", "side": "After" } }],
+              "anchor": {
+                "nodeId": { "$node": { "path": "src/strings.ts", "side": "After" } },
+                "lines": "export function pluralize(word: string, count: number): string {"
+              }
+            },
+            {
+              "id": "f10",
+              "severity": "info",
+              "title": "pluralize only appends an s",
+              "trigger": "t",
+              "impact": "i",
+              "fix": "x",
+              "evidenceNodeIds": [{ "$node": { "path": "src/strings.ts", "side": "After" } }],
+              "anchor": {
+                "nodeId": { "$node": { "path": "src/strings.ts", "side": "After" } },
+                "lines": "  return count === 1 ? word : `${word}s`;"
+              }
+            },
+            {
+              "id": "f11",
+              "severity": "info",
+              "title": "capitalize is unchanged",
+              "trigger": "t",
+              "impact": "i",
+              "fix": "x",
+              "evidenceNodeIds": [{ "$node": { "path": "src/strings.ts", "side": "After" } }],
+              "anchor": {
+                "nodeId": { "$node": { "path": "src/strings.ts", "side": "After" } },
+                "lines": "export function capitalize(word: string): string {"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

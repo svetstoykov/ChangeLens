@@ -1,0 +1,91 @@
+{
+  "id": "reviewer-valid-f13",
+  "description": "Valid F13 curator draft, then a reviewer reply with two valid findings: a Warning anchored exactly on the swapped formatRange call (src/page-label.ts after line 10) citing formatRange's guard, and an Info anchored on pluralize. Both publish and the recommendation is issuesWorthAddressing.",
+  "exchanges": [
+    {
+      "role": "curator",
+      "reply": {
+        "usage": { "prompt_tokens": 1500, "completion_tokens": 64 },
+        "content": {
+          "thesis": {
+            "text": "Selection labels reuse the range formatter, and a plural helper is added.",
+            "evidenceNodeIds": [
+              { "$node": { "path": "src/page-label.ts", "side": "After" } },
+              { "$node": { "path": "src/strings.ts", "side": "After" } }
+            ]
+          },
+          "tracks": [
+            {
+              "id": "committed-change",
+              "title": "Labels",
+              "summary": {
+                "text": "selectionLabel formats the selected bounds through formatRange.",
+                "evidenceNodeIds": [{ "$node": { "path": "src/page-label.ts", "side": "After" } }]
+              },
+              "shape": "ParticipantMap",
+              "participants": [
+                {
+                  "id": "selection-label",
+                  "name": "selectionLabel",
+                  "role": "New label function",
+                  "changed": true,
+                  "evidenceNodeIds": [{ "$node": { "path": "src/page-label.ts", "side": "After" } }]
+                },
+                {
+                  "id": "pluralize",
+                  "name": "pluralize",
+                  "role": "New string helper",
+                  "changed": true,
+                  "evidenceNodeIds": [{ "$node": { "path": "src/strings.ts", "side": "After" } }]
+                }
+              ],
+              "relationships": [],
+              "orderedSteps": [],
+              "purposes": []
+            }
+          ],
+          "droppedNodeIds": []
+        }
+      }
+    },
+    {
+      "role": "reviewer",
+      "reply": {
+        "usage": { "prompt_tokens": 1500, "completion_tokens": 160 },
+        "content": {
+          "findings": [
+            {
+              "id": "f1",
+              "severity": "warning",
+              "title": "selectionLabel passes the range bounds in reverse order",
+              "trigger": "selectionLabel is called with two different positions, so high is greater than low.",
+              "impact": "formatRange receives end before start and throws a RangeError for every multi-item selection.",
+              "fix": "Call formatRange(low, high).",
+              "evidenceNodeIds": [
+                { "$node": { "path": "src/page-label.ts", "side": "After" } },
+                { "$node": { "path": "src/range.ts", "side": "After" } }
+              ],
+              "anchor": {
+                "nodeId": { "$node": { "path": "src/page-label.ts", "side": "After" } },
+                "lines": "  return `Selected ${formatRange(high, low)}`;"
+              }
+            },
+            {
+              "id": "f2",
+              "severity": "info",
+              "title": "pluralize only appends an s",
+              "trigger": "pluralize is called with a word that has an irregular plural.",
+              "impact": "The label shows a misspelled plural.",
+              "fix": "Accept an explicit plural form.",
+              "evidenceNodeIds": [{ "$node": { "path": "src/strings.ts", "side": "After" } }],
+              "anchor": {
+                "nodeId": { "$node": { "path": "src/strings.ts", "side": "After" } },
+                "lines": "  return count === 1 ? word : `${word}s`;"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

@@ -2,6 +2,7 @@ import type { ReadingLimitationKind } from "../Models/ReadingLimitationKind";
 import type { ReadingModel } from "../Models/ReadingModel";
 import { ReadingAreaSection } from "./ReadingAreaSection";
 import { ReadingClaimQuotes } from "./ReadingClaimQuotes";
+import { ReadingFindingsSection } from "./ReadingFindingsSection";
 
 export interface ReadingModelPanelProps {
   readonly model: ReadingModel;
@@ -24,6 +25,7 @@ export function ReadingModelPanel({ model }: ReadingModelPanelProps) {
           />
         </div>
       ) : null}
+      <ReadingFindingsSection model={model} />
       {model.areas.map((area) => (
         <ReadingAreaSection
           key={area.id}

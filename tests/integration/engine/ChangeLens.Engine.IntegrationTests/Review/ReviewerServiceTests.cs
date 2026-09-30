@@ -179,6 +179,10 @@ public sealed class ReviewerServiceTests
         Assert.Contains("Cite only evidence node ids", prompt, StringComparison.Ordinal);
         Assert.Contains("never a manifest fact", prompt, StringComparison.Ordinal);
         Assert.Contains("Worked example", prompt, StringComparison.Ordinal);
+        Assert.Contains("Never reconstruct unquoted project or third-party source from memory", prompt, StringComparison.Ordinal);
+        Assert.Contains("well-known behavior of the language and its standard library", prompt, StringComparison.Ordinal);
+        Assert.Contains("line numbers are independent", prompt, StringComparison.Ordinal);
+        Assert.Contains("write the JSON reply immediately", prompt, StringComparison.Ordinal);
         Assert.True(prompt.Length <= binderOptions.PromptReserveCharacters);
         Assert.True(reviewerOptions.MaximumOutputCharacters <= binderOptions.CuratorOutputCharacters);
         Assert.True(outputTokenReserve <= binderOptions.CuratorOutputCharacters);

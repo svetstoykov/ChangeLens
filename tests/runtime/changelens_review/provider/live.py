@@ -77,20 +77,21 @@ class LiveResponder:
             },
             method="POST",
         )
+        deadline = time.monotonic() + self._timeout_seconds
+        detail = f"the provider did not finish within {self._timeout_seconds:g} s; the proxy stopped waiting"
+        missed_deadline = ProxyReply(None, b"", DEADLINE_OUTCOME, detail)
         try:
-            deadline = time.monotonic() + self._timeout_seconds
             with urllib.request.urlopen(request, timeout=self._timeout_seconds) as response:
                 body = self._read_until(response, deadline)
-                if body is None:
-                    detail = (
-                        f"the provider did not finish within {self._timeout_seconds:g} s; the proxy stopped waiting"
-                    )
-                    return ProxyReply(None, b"", DEADLINE_OUTCOME, detail)
-                return ProxyReply(response.status, self._redact_bytes(body), "live")
+                return (
+                    missed_deadline if body is None else ProxyReply(response.status, self._redact_bytes(body), "live")
+                )
         except urllib.error.HTTPError as error:
             body = self._redact_bytes(error.read())
             return ProxyReply(error.code, body, "live", f"provider status {error.code}")
         except (urllib.error.URLError, OSError) as error:
+            if time.monotonic() >= deadline:
+                return missed_deadline
             detail = self._redact(f"the live provider could not be reached: {error}")
             return ProxyReply(502, error_body(detail), "harness-error", detail)
 

@@ -38,6 +38,9 @@ class _UpstreamHandler(BaseHTTPRequestHandler):
         body = json.dumps(UPSTREAM_REPLY if self.server.status == 200 else {"error": {"message": "busy"}}).encode()
         self.send_response(self.server.status)
         self.send_header("Content-Type", "application/json")
+        if self.server.padding_seconds < 0:
+            time.sleep(1.0)
+            return
         if self.server.padding_seconds:
             self.end_headers()
             finish = time.monotonic() + self.server.padding_seconds
@@ -114,6 +117,18 @@ def test_provider_padding_past_the_deadline_ends_the_wait(upstream: _Upstream) -
         proxy.stop()
 
     assert time.monotonic() - started < 2.5
+    assert proxy.exchanges[0].outcome == "deadline"
+
+
+def test_provider_silent_past_the_deadline_is_a_deadline_not_a_harness_error(upstream: _Upstream) -> None:
+    upstream.padding_seconds = -1.0
+    proxy = _live_proxy(f"http://127.0.0.1:{upstream.server_address[1]}", timeout_seconds=0.5)
+    try:
+        with pytest.raises(OSError):
+            post(proxy.base_url, completion_request(BINDER))
+    finally:
+        proxy.stop()
+
     assert proxy.exchanges[0].outcome == "deadline"
 
 

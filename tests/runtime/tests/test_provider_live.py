@@ -1,5 +1,6 @@
 import json
 import threading
+import time
 from collections.abc import Iterator
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -25,6 +26,7 @@ class _Upstream(ThreadingHTTPServer):
     seen_authorization: list[str]
     seen_bodies: list[dict]
     status: int
+    padding_seconds: float
 
 
 class _UpstreamHandler(BaseHTTPRequestHandler):
@@ -36,6 +38,15 @@ class _UpstreamHandler(BaseHTTPRequestHandler):
         body = json.dumps(UPSTREAM_REPLY if self.server.status == 200 else {"error": {"message": "busy"}}).encode()
         self.send_response(self.server.status)
         self.send_header("Content-Type", "application/json")
+        if self.server.padding_seconds:
+            self.end_headers()
+            finish = time.monotonic() + self.server.padding_seconds
+            while time.monotonic() < finish:
+                self.wfile.write(b"\n")
+                self.wfile.flush()
+                time.sleep(0.05)
+            self.wfile.write(body)
+            return
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
         self.wfile.write(body)
@@ -47,7 +58,7 @@ class _UpstreamHandler(BaseHTTPRequestHandler):
 @pytest.fixture
 def upstream() -> Iterator[_Upstream]:
     server = _Upstream(("127.0.0.1", 0), _UpstreamHandler)
-    server.seen_authorization, server.seen_bodies, server.status = [], [], 200
+    server.seen_authorization, server.seen_bodies, server.status, server.padding_seconds = [], [], 200, 0.0
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
     yield server
@@ -55,8 +66,8 @@ def upstream() -> Iterator[_Upstream]:
     server.server_close()
 
 
-def _live_proxy(base_url: str) -> ProviderProxy:
-    proxy = ProviderProxy(LiveResponder(UpstreamProvider(base_url, "vendor/model", REAL_KEY), timeout_seconds=5))
+def _live_proxy(base_url: str, timeout_seconds: float = 5) -> ProviderProxy:
+    proxy = ProviderProxy(LiveResponder(UpstreamProvider(base_url, "vendor/model", REAL_KEY), timeout_seconds))
     proxy.start()
     return proxy
 
@@ -90,6 +101,20 @@ def test_provider_error_status_is_forwarded_as_a_product_observation(upstream: _
 
     assert status == 429
     assert proxy.exchanges[0].outcome == "live"
+
+
+def test_provider_padding_past_the_deadline_ends_the_wait(upstream: _Upstream) -> None:
+    upstream.padding_seconds = 3.0
+    proxy = _live_proxy(f"http://127.0.0.1:{upstream.server_address[1]}", timeout_seconds=0.5)
+    started = time.monotonic()
+    try:
+        with pytest.raises(OSError):
+            post(proxy.base_url, completion_request(BINDER))
+    finally:
+        proxy.stop()
+
+    assert time.monotonic() - started < 2.5
+    assert proxy.exchanges[0].outcome == "deadline"
 
 
 def test_unreachable_provider_is_a_harness_error() -> None:

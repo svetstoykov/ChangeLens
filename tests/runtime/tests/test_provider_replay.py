@@ -73,10 +73,11 @@ def test_request_of_another_role_is_a_harness_error(tmp_path: Path) -> None:
     assert proxy.exchanges[0].outcome == "harness-error"
 
 
-def test_recording_with_a_harness_failure_cannot_be_replayed(tmp_path: Path) -> None:
-    _record(tmp_path, 1, "curator", outcome="harness-error")
+@pytest.mark.parametrize("outcome", ["harness-error", "deadline"])
+def test_recording_with_a_harness_failure_or_deadline_cannot_be_replayed(tmp_path: Path, outcome: str) -> None:
+    _record(tmp_path, 1, "curator", outcome=outcome)
 
-    with pytest.raises(SpecError, match="harness failure"):
+    with pytest.raises(SpecError, match=f"cannot be replayed: its outcome is {outcome}"):
         load_recording("run-a", "live-f01", tmp_path)
 
 

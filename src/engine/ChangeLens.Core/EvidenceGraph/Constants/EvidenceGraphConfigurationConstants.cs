@@ -16,6 +16,16 @@ public static class EvidenceGraphConfigurationConstants
     public const string MaximumQuoteWindowNodesKey = SectionKey + ":MaximumQuoteWindowNodes";
 
     /// <summary>
+    ///     The configuration key for the quote windows one changed file takes in the first round of changed-file selection.
+    /// </summary>
+    public const string MaximumNodesPerChangedFileKey = SectionKey + ":MaximumNodesPerChangedFile";
+
+    /// <summary>
+    ///     The configuration key for the longest changed side, in lines, that is quoted whole.
+    /// </summary>
+    public const string MaximumWholeChangedFileLinesKey = SectionKey + ":MaximumWholeChangedFileLines";
+
+    /// <summary>
     ///     The configuration key for the maximum kept match edges.
     /// </summary>
     public const string MaximumEdgesKey = SectionKey + ":MaximumEdges";

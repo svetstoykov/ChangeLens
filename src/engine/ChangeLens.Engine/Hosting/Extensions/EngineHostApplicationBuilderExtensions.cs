@@ -243,6 +243,10 @@ internal static class EngineHostApplicationBuilderExtensions
             MaximumQuoteWindowNodes = ReadPositiveInt(
                 configuration, EvidenceGraphConfigurationConstants.MaximumQuoteWindowNodesKey, defaults.MaximumQuoteWindowNodes),
             MaximumEdges = ReadPositiveInt(configuration, EvidenceGraphConfigurationConstants.MaximumEdgesKey, defaults.MaximumEdges),
+            MaximumNodesPerChangedFile = ReadPositiveInt(
+                configuration, EvidenceGraphConfigurationConstants.MaximumNodesPerChangedFileKey, defaults.MaximumNodesPerChangedFile),
+            MaximumWholeChangedFileLines = ReadNonNegativeInt(
+                configuration, EvidenceGraphConfigurationConstants.MaximumWholeChangedFileLinesKey, defaults.MaximumWholeChangedFileLines),
         };
     }
 

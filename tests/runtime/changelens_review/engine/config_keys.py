@@ -14,7 +14,12 @@ _SECTIONS: dict[str, tuple[str, ...]] = {
         "MaximumHistoryPathsPerCommit",
         "CommandTimeout",
     ),
-    "Analysis.EvidenceGraph": ("MaximumQuoteWindowNodes", "MaximumEdges"),
+    "Analysis.EvidenceGraph": (
+        "MaximumQuoteWindowNodes",
+        "MaximumEdges",
+        "MaximumNodesPerChangedFile",
+        "MaximumWholeChangedFileLines",
+    ),
     "Analysis.Frontier": ("MaximumEntries",),
     "Analysis.EvidenceBinder": (
         "ContextWindowTokens",

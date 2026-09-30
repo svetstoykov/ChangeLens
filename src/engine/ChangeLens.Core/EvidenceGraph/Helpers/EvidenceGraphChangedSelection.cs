@@ -27,6 +27,17 @@ internal sealed class EvidenceGraphChangedSelection
     internal int SelectedCount => this._selected.Count;
 
     /// <summary>
+    ///     Lets every file contribute its remaining windows in later passes, beyond its per-file maximum.
+    /// </summary>
+    internal void LiftFileCaps()
+    {
+        foreach (var queue in this._queues)
+        {
+            queue.LiftCap();
+        }
+    }
+
+    /// <summary>
     ///     Takes one more window per file per pass until the selection reaches the limit or a full pass takes nothing.
     /// </summary>
     /// <param name="limit">The maximum total windows to select across all files.</param>

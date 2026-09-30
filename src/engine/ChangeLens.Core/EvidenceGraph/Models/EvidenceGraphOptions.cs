@@ -5,7 +5,7 @@ namespace ChangeLens.Core.EvidenceGraph.Models;
 /// </summary>
 /// <remarks>
 ///     The defaults are the values the analysis prototype measured. Every numeric value must be positive, except
-///     <see cref="HunkContextLines" /> and <see cref="MergeGapLines" />, which may be zero, and
+///     <see cref="HunkContextLines" />, <see cref="MergeGapLines" />, and <see cref="MaximumWholeChangedFileLines" />, which may be zero, and
 ///     <see cref="ChangedNodeShare" />, which must be between zero and one.
 /// </remarks>
 public sealed class EvidenceGraphOptions
@@ -42,9 +42,16 @@ public sealed class EvidenceGraphOptions
     public int MergeGapLines { get; set; } = 2;
 
     /// <summary>
-    ///     Gets or sets the maximum quote windows selected for one changed file. The default is four nodes.
+    ///     Gets or sets the quote windows one changed file may take in the first, fair round of changed-file selection. Changed
+    ///     budget that round leaves unused goes to the remaining changed windows before any candidate. The default is four nodes.
     /// </summary>
     public int MaximumNodesPerChangedFile { get; set; } = 4;
+
+    /// <summary>
+    ///     Gets or sets the longest changed side, in lines, that is quoted whole instead of as hunk windows; zero quotes every
+    ///     changed side as hunk windows. The default is 240 lines, four nodes of the default quoted-line limit.
+    /// </summary>
+    public int MaximumWholeChangedFileLines { get; set; } = 240;
 
     /// <summary>
     ///     Gets or sets the maximum quote windows selected for one candidate. The default is three nodes.

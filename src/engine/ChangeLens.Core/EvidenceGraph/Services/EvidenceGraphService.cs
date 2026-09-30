@@ -237,6 +237,13 @@ public sealed class EvidenceGraphService(
         EvidenceGraphChangedFile file, string quotePath, ChangeAnatomySide side, string objectId,
         IReadOnlyList<string> blobLines, IReadOnlyList<FrozenGitDiffLine> changedLines)
     {
+        if (blobLines.Count <= this._options.MaximumWholeChangedFileLines)
+        {
+            file.Windows.Add(new EvidenceGraphWindow(
+                quotePath, file.Path, side, objectId, 1, blobLines.Count, [EvidenceNodeOrigin.ChangedHunk], changedLines.Count, false));
+            return;
+        }
+
         var numbers = changedLines.Select(line => line.LineNumber).OrderBy(number => number).ToArray();
         var runStart = -1;
         var runEnd = -1;
@@ -541,6 +548,8 @@ public sealed class EvidenceGraphService(
             .Select(file => new EvidenceGraphChangedWindowQueue(Interleave(file.Windows), this._options.MaximumNodesPerChangedFile))
             .ToArray();
         var changedSelection = new EvidenceGraphChangedSelection(queues);
+        changedSelection.Run(changedBudget);
+        changedSelection.LiftFileCaps();
         changedSelection.Run(changedBudget);
         var changedLeftover = changedBudget - changedSelection.SelectedCount;
         var regularLimit = candidateBudget + changedLeftover;
@@ -1053,6 +1062,7 @@ public sealed class EvidenceGraphService(
             || options.MaximumEdges <= 0
             || options.MaximumEdgesPerNodePair <= 0
             || options.HunkContextLines < 0
+            || options.MaximumWholeChangedFileLines < 0
             || options.MergeGapLines < 0
             || options.ChangedNodeShare < 0
             || options.ChangedNodeShare > 1)

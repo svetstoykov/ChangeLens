@@ -100,7 +100,8 @@ public sealed class OpenAiCompatibleModelCompletionClient : IModelCompletionClie
                 request.MaximumOutputTokens,
                 new OpenAiCompatibleResponseFormat("json_object"),
                 request.ReasoningEffort is null ? 0 : null,
-                request.ReasoningEffort?.ToString().ToLowerInvariant()),
+                request.ReasoningEffort?.ToString().ToLowerInvariant(),
+                this.CreateProviderPreferences()),
             RequestSerializerOptions);
 
         using var httpRequest = new HttpRequestMessage(HttpMethod.Post, endpoint)
@@ -530,6 +531,15 @@ public sealed class OpenAiCompatibleModelCompletionClient : IModelCompletionClie
         }
 
         return ReadNullableInt(child, propertyName);
+    }
+
+    // Unknown orderings and blank names are dropped, so a misconfigured value leaves OpenRouter's default routing in place.
+    private OpenRouterProviderPreferences? CreateProviderPreferences()
+    {
+        var sort = this._options.OpenRouterSort?.Trim().ToLowerInvariant();
+        sort = OpenRouterRoutingConstants.Sorts.Contains(sort) ? sort : null;
+        string[] ignore = [.. this._options.OpenRouterIgnore.Select(name => name.Trim()).Where(name => name.Length > 0)];
+        return sort is null && ignore.Length == 0 ? null : new OpenRouterProviderPreferences(sort, ignore.Length == 0 ? null : ignore);
     }
 
     private Result<ModelCompletionModel> FinishFailure(

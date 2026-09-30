@@ -11,4 +11,5 @@ internal sealed record OpenAiCompatibleChatCompletionRequest(
     [property: JsonPropertyName("max_completion_tokens")] int MaximumOutputTokens,
     [property: JsonPropertyName("response_format")] OpenAiCompatibleResponseFormat ResponseFormat,
     [property: JsonPropertyName("temperature")] double? Temperature,
-    [property: JsonPropertyName("reasoning_effort")] string? ReasoningEffort);
+    [property: JsonPropertyName("reasoning_effort")] string? ReasoningEffort,
+    [property: JsonPropertyName("provider")] OpenRouterProviderPreferences? Provider);

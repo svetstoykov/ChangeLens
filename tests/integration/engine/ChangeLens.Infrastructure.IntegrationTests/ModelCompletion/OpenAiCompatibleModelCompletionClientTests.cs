@@ -72,6 +72,39 @@ public sealed class OpenAiCompatibleModelCompletionClientTests
     }
 
     /// <summary>
+    ///     Asynchronously sends configured OpenRouter routing preferences, dropping unknown values, and omits them when none are set.
+    /// </summary>
+    /// <returns>A task that represents the asynchronous operation.</returns>
+    [Fact]
+    public async Task CompleteJsonAsync_OpenRouterRoutingIsSentOnlyWhenConfigured()
+    {
+        using var handler = new CapturingHttpMessageHandler();
+        async Task SendAsync(string? sort, IReadOnlyList<string> ignore)
+        {
+            using var httpClient = new HttpClient(handler, disposeHandler: false);
+            var options = new ModelCompletionOptions
+            {
+                BaseUrl = "https://provider.example/v1", Model = "fixture-model", ApiKey = ApiKey, OpenRouterSort = sort, OpenRouterIgnore = ignore,
+            };
+            await CreateClient(httpClient, options).CompleteJsonAsync(CreateRequest(), CancellationToken.None);
+        }
+
+        await SendAsync("Throughput", [" OpenInference ", ""]);
+        await SendAsync("fastest", ["OpenInference"]);
+        await SendAsync(null, []);
+
+        Assert.Equal(3, handler.Requests.Count);
+        using var sorted = JsonDocument.Parse(handler.Requests[0].Body);
+        var provider = sorted.RootElement.GetProperty("provider");
+        Assert.Equal("throughput", provider.GetProperty("sort").GetString());
+        Assert.Equal(["OpenInference"], provider.GetProperty("ignore").EnumerateArray().Select(name => name.GetString()));
+        using var unknownSort = JsonDocument.Parse(handler.Requests[1].Body);
+        Assert.False(unknownSort.RootElement.GetProperty("provider").TryGetProperty("sort", out _));
+        using var unset = JsonDocument.Parse(handler.Requests[2].Body);
+        Assert.False(unset.RootElement.TryGetProperty("provider", out _));
+    }
+
+    /// <summary>
     ///     Asynchronously sends temperature 0 and omits reasoning effort when the call is not a reasoning request.
     /// </summary>
     /// <returns>A task that represents the asynchronous operation.</returns>

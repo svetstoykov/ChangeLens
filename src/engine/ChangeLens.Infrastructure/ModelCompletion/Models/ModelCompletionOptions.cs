@@ -28,6 +28,17 @@ public sealed class ModelCompletionOptions
     public TimeSpan RequestTimeout { get; set; } = TimeSpan.FromMinutes(2);
 
     /// <summary>
+    ///     Gets or sets the OpenRouter upstream ordering (<c>price</c>, <c>throughput</c>, or <c>latency</c>), or
+    ///     <see langword="null" /> for OpenRouter's default. Set it only when the provider is OpenRouter, directly or through a proxy.
+    /// </summary>
+    public string? OpenRouterSort { get; set; }
+
+    /// <summary>
+    ///     Gets or sets the OpenRouter upstream names never to route to. Set them only when the provider is OpenRouter.
+    /// </summary>
+    public IReadOnlyList<string> OpenRouterIgnore { get; set; } = [];
+
+    /// <summary>
     ///     Gets or sets the maximum number of bytes read from a successful provider response body.
     /// </summary>
     /// <remarks>

@@ -42,7 +42,7 @@ _SECTIONS: dict[str, tuple[str, ...]] = {
         "MaximumReasonsPerCandidate",
         "IncludeCoChange",
     ),
-    "Analysis.ModelCompletion": ("RequestTimeout",),
+    "Analysis.ModelCompletion": ("RequestTimeout", "OpenRouterSort", "OpenRouterIgnore"),
 }
 
 RESERVED_KEYS = frozenset(

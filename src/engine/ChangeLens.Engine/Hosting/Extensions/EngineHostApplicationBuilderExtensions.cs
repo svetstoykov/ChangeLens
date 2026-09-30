@@ -378,6 +378,8 @@ internal static class EngineHostApplicationBuilderExtensions
             ApiKey = configuration[ModelCompletionConfigurationConstants.ApiKeyKey],
             RequestTimeout = ReadPositiveTimeSpan(
                 configuration, ModelCompletionConfigurationConstants.RequestTimeoutKey, defaults.RequestTimeout),
+            OpenRouterSort = configuration[ModelCompletionConfigurationConstants.OpenRouterSortKey],
+            OpenRouterIgnore = configuration[ModelCompletionConfigurationConstants.OpenRouterIgnoreKey]?.Split(',') ?? [],
         };
     }
 
@@ -483,6 +485,8 @@ internal static class EngineHostApplicationBuilderExtensions
             options.Model = configured.Model;
             options.ApiKey = configured.ApiKey;
             options.RequestTimeout = configured.RequestTimeout;
+            options.OpenRouterSort = configured.OpenRouterSort;
+            options.OpenRouterIgnore = configured.OpenRouterIgnore;
             options.MaximumResponseBytes = ModelCompletionTransportConstants.ResponseByteBudget(
                 Math.Max(curatorOptions.MaximumOutputCharacters, reviewerOptions.MaximumOutputCharacters));
         });

@@ -2,6 +2,7 @@
 
 from changelens_review.errors import SpecError
 from changelens_review.jsontypes import JsonValue
+from changelens_review.results.calls import attempt_call_lines
 from changelens_review.results.finding_verdicts import FindingVerdict
 from changelens_review.results.store import CHANGE_PATCH
 from changelens_review.results.stored import StoredAttempt, StoredCase
@@ -34,6 +35,7 @@ def show_case(case: StoredCase, repeat: int | None = None) -> list[str]:
         heading = f"repeat {attempt.repeat}" if attempt.repeat is not None else "explanation"
         lines.append(f"== {heading} ({attempt.status}) ==")
         lines.extend(_judge_lines(attempt))
+        lines.extend(attempt_call_lines(attempt))
         lines.extend(_explanation_lines(attempt.reading_model()))
         lines.extend(_findings_lines(attempt))
     lines.extend(["", "== change =="])

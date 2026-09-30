@@ -1,4 +1,4 @@
-"""Command-line entry point: review check | run | compare | show | serve | verdict | finding-verdict | clean."""
+"""Command-line entry point: review check | run | compare | show | calls | serve | verdict | finding-verdict | clean."""
 
 import argparse
 import json
@@ -12,6 +12,7 @@ from changelens_review.paths import RUNS_ROOT
 from changelens_review.plans.model import Plan
 from changelens_review.plans.parser import load_plan
 from changelens_review.plans.runner import run_plan
+from changelens_review.results.calls import call_lines
 from changelens_review.results.compare import compare_runs
 from changelens_review.results.finding_verdicts import FINDING_VERDICTS, record_finding_verdict
 from changelens_review.results.metrics import CaseMetrics, ChangeSize, ProviderUsage
@@ -44,6 +45,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     show.add_argument("run", help="run id or run folder")
     show.add_argument("case", help="case id")
     show.add_argument("--repeat", type=int, help="show only this repeat of a repeated case")
+    calls = commands.add_parser("calls", help="print every provider call of a stored run, with totals per role")
+    calls.add_argument("run", help="run id or run folder")
+    calls.add_argument("case", nargs="?", help="only this case")
     serve = commands.add_parser("serve", help="serve stored runs to a local browser")
     serve.add_argument("run", nargs="?", help="run id or run folder to open")
     serve.add_argument("case", nargs="?", help="case id to open")
@@ -79,6 +83,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             return _compare(arguments.first, arguments.second)
         case "show":
             return _show(arguments.run, arguments.case, arguments.repeat)
+        case "calls":
+            return _calls(arguments.run, arguments.case)
         case "serve":
             return _serve(arguments.run, arguments.case, arguments.repeat, arguments.port, not arguments.no_open)
         case "verdict":
@@ -207,6 +213,21 @@ def _show(reference: str, case_id: str, repeat: int | None) -> int:
             print(f"error: {issue}", file=sys.stderr)
         return EXIT_INVALID_PLAN
     for line in lines:
+        print(line)
+    return 0
+
+
+def _calls(reference: str, case_id: str | None) -> int:
+    try:
+        run = load_run(reference)
+    except SpecError as error:
+        for issue in error.issues:
+            print(f"error: {issue}", file=sys.stderr)
+        return EXIT_INVALID_PLAN
+    if case_id is not None and case_id not in run.cases:
+        print(f"error: run {reference} has no case {case_id!r}", file=sys.stderr)
+        return EXIT_INVALID_PLAN
+    for line in call_lines(run, case_id):
         print(line)
     return 0
 

@@ -5,11 +5,16 @@ linked when one area references evidence at both, through its summary, steps, or
 
 A finding's anchor is its citation that carries a focus range; its other citations cite whole quotes. A
 known defect is found when a finding at or above the minimum severity has an anchor focus range on the
-defect's path and comparison side that overlaps the defect's lines. Findings scores need a review that ran.
+defect's path and comparison side that overlaps the defect's lines. Findings scores need a review that ran. A
+missed defect names why: its lines were not in the recorded reviewer request's evidence, a finding anchored there
+at a lower severity, or no finding anchored there.
 """
+
+import json
 
 from changelens_review.jsontypes import JsonValue
 from changelens_review.plans.checks.model import CaseEvidence, CheckDefinition, CheckOutcome, CheckResult
+from changelens_review.provider.scripts import request_evidence
 
 SHOULD_LINK = "should_link"
 SHOULD_FLAG_RELATED = "should_flag_related"
@@ -18,6 +23,10 @@ SHOULD_FIND = "should_find"
 SHOULD_NOT_WARN = "should_not_warn"
 LINK_KEYS = {"from", "to"}
 DEFECT_KEYS = {"path", "side", "lines", "severity"}
+ANY_OF = "any"
+REVIEWER_ROLE = "reviewer"
+MISS_NOT_DISCLOSED = "not in the reviewer's evidence"
+MISS_NOT_ANCHORED = "no finding anchored on these lines"
 SIDES = ("before", "after")
 SEVERITIES = ("info", "warning", "critical")
 WARNING_SEVERITIES = ("warning", "critical")
@@ -132,13 +141,22 @@ def _is_defect(value: JsonValue) -> bool:
     )
 
 
+def _find_defects(expected: JsonValue) -> tuple[list[JsonValue], bool]:
+    """Return the listed defects and whether finding any one of them is enough."""
+    if isinstance(expected, dict) and set(expected) == {ANY_OF}:
+        alternatives = expected[ANY_OF]
+        return (alternatives if isinstance(alternatives, list) else [alternatives]), True
+    return (expected if isinstance(expected, list) else [expected]), False
+
+
 def _validate_find(expected: JsonValue) -> str | None:
-    defects = expected if isinstance(expected, list) else [expected]
+    defects, _ = _find_defects(expected)
     if defects and all(_is_defect(defect) for defect in defects):
         return None
     return (
         f"{SHOULD_FIND} must be {{path: <path>, side: before|after, lines: [<start>, <end>], "
-        f"severity: info|warning|critical}} with 1 <= start <= end, or a non-empty list of them"
+        f"severity: info|warning|critical}} with 1 <= start <= end, a non-empty list of them (all must be found), "
+        f"or {{{ANY_OF}: [<defect>, ...]}} (any one must be found)"
     )
 
 
@@ -187,6 +205,48 @@ def _defect_label(defect: dict[str, JsonValue]) -> str:
     return f"{defect['path']} {defect['side']} {start}-{end}"
 
 
+def _reviewer_evidence(evidence: CaseEvidence) -> list[dict[str, JsonValue]] | None:
+    """Return the evidence nodes of every recorded reviewer request, or None when no reviewer request was recorded."""
+    requests = [exchange.request_text for exchange in evidence.exchanges if exchange.role == REVIEWER_ROLE]
+    if not requests:
+        return None
+    nodes: list[dict[str, JsonValue]] = []
+    for text in requests:
+        try:
+            body = json.loads(text)
+        except json.JSONDecodeError:
+            continue
+        nodes.extend(node for node in request_evidence(body) if isinstance(node, dict))
+    return nodes
+
+
+def _discloses(nodes: list[dict[str, JsonValue]], defect: dict[str, JsonValue]) -> bool:
+    start, end = _defect_lines(defect)
+    return any(
+        node.get("path") == defect["path"]
+        and str(node.get("side")).lower() == defect["side"]
+        and isinstance(first := node.get("startLine"), int)
+        and isinstance(last := node.get("endLine"), int)
+        and first <= end
+        and last >= start
+        for node in nodes
+    )
+
+
+def _miss(
+    defect: dict[str, JsonValue], below: list[JsonValue], disclosed: list[dict[str, JsonValue]] | None
+) -> dict[str, JsonValue]:
+    """Describe why no finding matched the defect: never shown to the reviewer, found too mildly, or not anchored."""
+    miss: dict[str, JsonValue] = {"defect": _defect_label(defect)}
+    if below:
+        miss.update({"reason": f"anchored below {defect['severity']}", "findings": below})
+    elif disclosed is not None and not _discloses(disclosed, defect):
+        miss["reason"] = MISS_NOT_DISCLOSED
+    else:
+        miss["reason"] = MISS_NOT_ANCHORED
+    return miss
+
+
 def _evaluate_find(evidence: CaseEvidence, expected: JsonValue) -> CheckOutcome:
     model = _reading_model(evidence)
     if model is None:
@@ -194,27 +254,29 @@ def _evaluate_find(evidence: CaseEvidence, expected: JsonValue) -> CheckOutcome:
     if (not_run := _review_not_run(model)) is not None:
         return not_run
     anchors = _anchors(model)
+    disclosed = _reviewer_evidence(evidence)
+    defects, any_of = _find_defects(expected)
     found: list[JsonValue] = []
     missed: list[JsonValue] = []
-    for defect in expected if isinstance(expected, list) else [expected]:
+    for defect in defects:
         assert isinstance(defect, dict)
         start, end = _defect_lines(defect)
         minimum = SEVERITIES.index(str(defect["severity"]))
-        nominated = [
-            finding["id"]
+        overlapping = [
+            finding
             for finding in _findings(model)
             if finding.get("severity") in SEVERITIES
-            and SEVERITIES.index(str(finding["severity"])) >= minimum
             and (anchor := anchors.get(str(finding.get("id")))) is not None
             and anchor[:2] == (defect["path"], defect["side"])
             and anchor[2] <= end
             and anchor[3] >= start
         ]
+        nominated = [f["id"] for f in overlapping if SEVERITIES.index(str(f["severity"])) >= minimum]
         if nominated:
             found.append({"defect": _defect_label(defect), "findings": nominated})
         else:
-            missed.append(_defect_label(defect))
-    return CheckOutcome({"found": found, "missed": missed}, not missed)
+            missed.append(_miss(defect, [f["id"] for f in overlapping], disclosed))
+    return CheckOutcome({"found": found, "missed": missed}, bool(found) if any_of else not missed)
 
 
 def _evaluate_not_warn(evidence: CaseEvidence, expected: JsonValue) -> CheckOutcome:

@@ -1339,10 +1339,12 @@
       return "Leaves " + [].concat(e == null ? [] : e).join(", ") + " out";
     },
     should_find: function (e) {
-      return "Finds " + [].concat(e == null ? [] : e).map(function (d) {
+      var anyOf = e != null && !Array.isArray(e) && Array.isArray(e.any);
+      var defects = [].concat(anyOf ? e.any : (e == null ? [] : e));
+      return (anyOf ? "Finds any of " : "Finds ") + defects.map(function (d) {
         var lines = (d && d.lines) || [];
         return (d && d.path) + " " + (d && d.side) + " " + lines.join("–") + " at " + (d && d.severity) + " or above";
-      }).join("; ");
+      }).join(anyOf ? " or " : "; ");
     },
     should_not_warn: function () {
       return "Publishes no Critical or Warning";

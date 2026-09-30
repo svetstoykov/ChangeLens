@@ -1,4 +1,6 @@
-from test_checks import evidence
+import json
+
+from test_checks import evidence, exchange
 
 from changelens_review.plans.checks.judge import evaluate_judge, validate_judge
 
@@ -118,11 +120,14 @@ def test_should_find_matches_an_anchor_overlapping_the_defect_on_its_side(f01) -
     assert result.actual == {"found": [{"defect": f"{PARSER} after 3-4", "findings": ["f2"]}], "missed": []}
 
 
+NOT_ANCHORED = {"defect": f"{PARSER} after 3-4", "reason": "no finding anchored on these lines"}
+
+
 def test_should_find_ignores_the_other_side_at_the_same_path_and_lines(f01) -> None:
     result = judge(f01, "should_find", DEFECT, reviewed([("f1", "warning")], [citation("f1", "before", (3, 4))]))
 
     assert not result.passed
-    assert result.actual == {"found": [], "missed": [f"{PARSER} after 3-4"]}
+    assert result.actual == {"found": [], "missed": [NOT_ANCHORED]}
 
 
 def test_should_find_ignores_supporting_citations_and_anchors_outside_the_lines(f01) -> None:
@@ -135,7 +140,53 @@ def test_should_find_ignores_supporting_citations_and_anchors_outside_the_lines(
     result = judge(f01, "should_find", [DEFECT], reviewed([("f1", "warning"), ("f2", "warning")], citations))
 
     assert not result.passed
-    assert result.actual == {"found": [], "missed": [f"{PARSER} after 3-4"]}
+    assert result.actual == {"found": [], "missed": [NOT_ANCHORED]}
+
+
+OTHER_DEFECT = {"path": LABEL, "side": "after", "lines": [7, 8], "severity": "warning"}
+
+
+def test_should_find_list_needs_every_defect_and_any_of_needs_one(f01) -> None:
+    final_poll = reviewed([("f1", "warning")], [citation("f1", "after", (7, 8), path=LABEL)])
+
+    every = judge(f01, "should_find", [DEFECT, OTHER_DEFECT], final_poll)
+    one = judge(f01, "should_find", {"any": [DEFECT, OTHER_DEFECT]}, final_poll)
+    none = judge(f01, "should_find", {"any": [DEFECT]}, final_poll)
+
+    assert not every.passed
+    assert one.passed
+    assert one.actual == {"found": [{"defect": f"{LABEL} after 7-8", "findings": ["f1"]}], "missed": [NOT_ANCHORED]}
+    assert not none.passed
+
+
+def reviewer_request(*nodes: tuple[str, str, int, int]) -> str:
+    """A recorded reviewer request whose binder carries (path, side, start, end) evidence nodes."""
+    evidence_nodes = [
+        {"nodeId": f"n{index}", "path": path, "side": side, "startLine": start, "endLine": end}
+        for index, (path, side, start, end) in enumerate(nodes)
+    ]
+    payload = {"comparison": {}, "evidence": evidence_nodes}
+    return json.dumps({"messages": [{"role": "user", "content": json.dumps(payload)}]})
+
+
+def test_should_find_names_why_a_defect_was_missed(f01) -> None:
+    hidden = exchange(reviewer_request((PARSER, "After", 5, 9), (PARSER, "Before", 3, 4)), role="reviewer")
+    shown = exchange(reviewer_request((PARSER, "After", 1, 3)), role="reviewer")
+    mild = reviewed([("f1", "info")], [citation("f1", "after", (4, 4))])
+
+    not_disclosed = evaluate_judge(
+        "should_find", DEFECT, evidence(f01, final_poll=reviewed([], []), exchanges=(hidden,))
+    )
+    not_anchored = evaluate_judge("should_find", DEFECT, evidence(f01, final_poll=reviewed([], []), exchanges=(shown,)))
+    below = evaluate_judge("should_find", DEFECT, evidence(f01, final_poll=mild, exchanges=(hidden,)))
+
+    assert not_disclosed.actual["missed"] == [
+        {"defect": f"{PARSER} after 3-4", "reason": "not in the reviewer's evidence"}
+    ]
+    assert not_anchored.actual["missed"] == [NOT_ANCHORED]
+    assert below.actual["missed"] == [
+        {"defect": f"{PARSER} after 3-4", "reason": "anchored below warning", "findings": ["f1"]}
+    ]
 
 
 def test_findings_soft_checks_fail_when_the_review_did_not_run(f01) -> None:
@@ -170,6 +221,9 @@ def test_findings_soft_check_validation_rejects_malformed_defects() -> None:
     assert validate_judge("should_find", {**DEFECT, "lines": [0, 3]}) is not None
     assert validate_judge("should_find", {**DEFECT, "severity": "question"}) is not None
     assert validate_judge("should_find", []) is not None
+    assert validate_judge("should_find", {"any": [DEFECT, {**DEFECT, "path": LABEL}]}) is None
+    assert validate_judge("should_find", {"any": []}) is not None
+    assert validate_judge("should_find", {"any": [DEFECT], "all": [DEFECT]}) is not None
     assert validate_judge("should_not_warn", False) is not None
 
 

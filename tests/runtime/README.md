@@ -54,7 +54,7 @@ cases/f01-lifecycle/
   engine.log        engine stderr
 ```
 
-After a run, `review show` prints a case's published explanation next to its diff, `review verdict` records your judgement of it, and `review compare` lines two runs up case by case. A tuning loop runs a plan live, changes a prompt or setting, runs it again, and compares the two runs; `replay` reruns engine-side changes against the earlier recorded answers without calling the model.
+After a run, `review show` prints a case's published explanation next to its diff and one line per provider call, `review calls` tabulates every provider call of a run (the upstream that served it, its finish reason, reasoning and reply tokens and characters, time, and cost) with totals per role, `review verdict` records your judgement of it, and `review compare` lines two runs up case by case. A tuning loop runs a plan live, changes a prompt or setting, runs it again, and compares the two runs; `replay` reruns engine-side changes against the earlier recorded answers without calling the model.
 
 ## Providers
 
@@ -112,7 +112,7 @@ A live explanation changes from run to run, so exact expectations cannot judge i
 
 - Status comes only from `expect`. Soft checks are scored and never change it.
 - A path is flagged when the reading model's thesis or an area references an evidence node at that path. Two paths are linked when one area references evidence at both, through its summary, steps, or participants. `should_link` takes one `{from, to}` pair or a list of them.
-- Two soft checks score findings, and both need a review that ran. `should_find: { path: src/range.ts, side: after, lines: [12, 14], severity: warning }` (or a list of them) passes when a finding at that severity or above has its anchor on the same path and side, with a focus range overlapping those inclusive lines; the result names each finding that matched. The side is required, and only the anchor counts: a supporting citation or the same lines on the other side do not. `should_not_warn: true` passes when the run published no Critical or Warning and lists any it did.
+- Two soft checks score findings, and both need a review that ran. `should_find: { path: src/range.ts, side: after, lines: [12, 14], severity: warning }` passes when a finding at that severity or above has its anchor on the same path and side, with a focus range overlapping those inclusive lines; the result names each finding that matched. The side is required, and only the anchor counts: a supporting citation or the same lines on the other side do not. A list of defects passes only when every one is found; `should_find: { any: [<defect>, <defect>] }` passes when at least one is. Each missed defect names its reason: its lines were not in the recorded reviewer request's evidence, a finding anchored there below the severity, or no finding anchored there. `should_not_warn: true` passes when the run published no Critical or Warning and lists any it did.
 - `repeat` runs the case that many times (default 1). Each repeat gets its own repository copy, proxy, engine state, and recorded exchanges under `cases/<case-id>/repeats/<n>/`. A repeated case is `fail` when any repeat failed, else `error` when any repeat errored, else `pass`.
 - `result.json` keeps each repeat's expectations and soft-check results in `repeats`, and `judge_tally` counts, per soft check, how many runs passed it out of the runs that scored it. A repeated case's `metrics` total its repeats and count the change once.
 - A replay can serve one repeat of a stored case: `{ mode: replay, from: <run id>, case: <case id>, repeat: <n> }`.
@@ -156,6 +156,7 @@ uv run --project tests/runtime review check <plan>        # validate a plan
 uv run --project tests/runtime review run <plan> [--keep]  # run it; --keep retains heavy output
 uv run --project tests/runtime review compare <run-a> <run-b>  # compare two stored runs case by case
 uv run --project tests/runtime review show <run> <case> [--repeat N]  # explanation next to the diff
+uv run --project tests/runtime review calls <run> [<case>]  # every provider call: upstream, finish reason, tokens, time, cost
 uv run --project tests/runtime review verdict <run> <case> <verdict> [--note TEXT]  # record your verdict
 uv run --project tests/runtime review finding-verdict <run> <case> <finding> <verdict> [--repeat N]  # judge one finding
 uv run --project tests/runtime review serve [<run> [<case>]] [--repeat N] [--no-open]  # browse and judge runs in the browser

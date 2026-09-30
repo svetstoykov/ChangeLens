@@ -110,6 +110,20 @@ public sealed class ReviewerServiceTests
     }
 
     [Fact]
+    public async Task ConfiguredReviewerModelIsSentWithTheRequest()
+    {
+        var fake = new FakeModelCompletionClient(Result.Success(Completion("{\"findings\":[]}")));
+        var service = new ReviewerService(
+            fake,
+            new ReviewerOptions { MaximumOutputCharacters = 10_000, MaximumOutputTokens = 1_000, Model = "vendor/reviewer-model" },
+            NullLogger<ReviewerService>.Instance);
+
+        await service.ReviewAsync(DraftValidationFixtureBinderBuilder.Create(["n1"]), CancellationToken.None);
+
+        Assert.Equal("vendor/reviewer-model", fake.LastRequest!.Model);
+    }
+
+    [Fact]
     public async Task ElevenStructurallyValidFindingsParseAndAreCappedByValidation()
     {
         var ids = Enumerable.Range(0, 11).Select(index => $"f{index}").ToArray();

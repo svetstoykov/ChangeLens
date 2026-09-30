@@ -43,7 +43,8 @@ public sealed class ReviewerService : IReviewerService
 
         var systemMessage = ReviewerSystemMessage.Render(binder.Contract);
         var userMessage = EvidenceBinderJson.SerializePayload(binder);
-        var request = new ModelCompletionRequest(systemMessage, userMessage, this._options.MaximumOutputTokens, this._options.ReasoningEffort);
+        var request = new ModelCompletionRequest(
+            systemMessage, userMessage, this._options.MaximumOutputTokens, this._options.ReasoningEffort, this._options.Model);
         var completionResult = await this._completionClient.CompleteJsonAsync(request, cancellationToken);
         if (completionResult.IsFailure)
         {

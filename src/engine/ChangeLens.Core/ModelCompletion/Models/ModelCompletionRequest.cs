@@ -7,8 +7,10 @@ namespace ChangeLens.Core.ModelCompletion.Models;
 /// <param name="UserMessage">The user payload for the completion.</param>
 /// <param name="MaximumOutputTokens">The maximum output-token count sent to the provider.</param>
 /// <param name="ReasoningEffort">The optional provider reasoning effort.</param>
+/// <param name="Model">The provider model slug for this call, or <see langword="null" /> for the configured model.</param>
 public sealed record ModelCompletionRequest(
     string SystemMessage,
     string UserMessage,
     int MaximumOutputTokens,
-    ModelReasoningEffort? ReasoningEffort = null);
+    ModelReasoningEffort? ReasoningEffort = null,
+    string? Model = null);

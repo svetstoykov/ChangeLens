@@ -105,6 +105,25 @@ public sealed class OpenAiCompatibleModelCompletionClientTests
     }
 
     /// <summary>
+    ///     Asynchronously sends a request's own model instead of the configured one.
+    /// </summary>
+    /// <returns>A task that represents the asynchronous operation.</returns>
+    [Fact]
+    public async Task CompleteJsonAsync_RequestModelOverridesTheConfiguredModel()
+    {
+        await using var server = await LoopbackHttpServer.StartAsync(static (_, _) => Task.FromResult(SuccessResponse("{}")));
+        using var httpClient = new HttpClient();
+        var client = CreateClient(httpClient, CreateOptions(server));
+
+        var result = await client.CompleteJsonAsync(
+            new ModelCompletionRequest(SystemMessage, UserMessage, 128, null, "vendor/reviewer-model"), CancellationToken.None);
+
+        Assert.True(result.IsSuccess);
+        using var body = JsonDocument.Parse(Assert.Single(server.Requests).Body);
+        Assert.Equal("vendor/reviewer-model", body.RootElement.GetProperty("model").GetString());
+    }
+
+    /// <summary>
     ///     Asynchronously sends temperature 0 and omits reasoning effort when the call is not a reasoning request.
     /// </summary>
     /// <returns>A task that represents the asynchronous operation.</returns>

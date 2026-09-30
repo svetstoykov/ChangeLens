@@ -70,7 +70,7 @@ public sealed class OpenAiCompatibleModelCompletionClient : IModelCompletionClie
         cancellationToken.ThrowIfCancellationRequested();
 
         var startedAt = Stopwatch.GetTimestamp();
-        var model = this._options.Model?.Trim();
+        var model = (request.Model ?? this._options.Model)?.Trim();
         this._logger.LogInformation(
             "Starting model completion attempt for model {Model} with maximum output tokens {MaximumOutputTokens}.",
             model,

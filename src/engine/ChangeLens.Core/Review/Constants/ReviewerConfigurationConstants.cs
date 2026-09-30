@@ -31,6 +31,11 @@ public static class ReviewerConfigurationConstants
     public const string ReasoningEffortKey = SectionKey + ":ReasoningEffort";
 
     /// <summary>
+    ///     The configuration key for the reviewer's provider model slug, which defaults to the curator's model.
+    /// </summary>
+    public const string ModelKey = SectionKey + ":Model";
+
+    /// <summary>
     ///     Gets the default completion size limit in characters.
     /// </summary>
     public const int DefaultMaximumOutputCharacters = 176_000;

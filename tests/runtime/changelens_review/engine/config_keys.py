@@ -6,7 +6,7 @@ _SECTIONS: dict[str, tuple[str, ...]] = {
     "Analysis.ChangeAnatomy": ("MinimumKeyLength", "MaximumKeysPerFile", "MaximumOccurrencesPerKey"),
     "Analysis.ContextPolicy": ("MaximumDisclosedCharactersPerNode",),
     "Analysis.Curator": ("MaximumOutputCharacters", "MaximumOutputTokens", "ReasoningEffort"),
-    "Analysis.Review": ("Enabled", "MaximumOutputCharacters", "MaximumOutputTokens", "ReasoningEffort"),
+    "Analysis.Review": ("Enabled", "MaximumOutputCharacters", "MaximumOutputTokens", "ReasoningEffort", "Model"),
     "Snapshots.FrozenGitTree": (
         "MaximumBlobBytes",
         "MaximumTreeFiles",

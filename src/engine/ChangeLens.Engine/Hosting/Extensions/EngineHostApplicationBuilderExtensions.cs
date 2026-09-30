@@ -361,6 +361,9 @@ internal static class EngineHostApplicationBuilderExtensions
                 configuration[ReviewerConfigurationConstants.ReasoningEffortKey], true, out var reasoningEffort)
                 ? reasoningEffort
                 : defaults.ReasoningEffort,
+            Model = string.IsNullOrWhiteSpace(configuration[ReviewerConfigurationConstants.ModelKey])
+                ? defaults.Model
+                : configuration[ReviewerConfigurationConstants.ModelKey]!.Trim(),
         };
     }
 

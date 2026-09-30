@@ -27,4 +27,9 @@ public sealed class ReviewerOptions
     ///     Gets or sets the optional provider reasoning effort.
     /// </summary>
     public ModelReasoningEffort? ReasoningEffort { get; set; }
+
+    /// <summary>
+    ///     Gets or sets the provider model slug for the reviewer call, or <see langword="null" /> to use the curator's configured model.
+    /// </summary>
+    public string? Model { get; set; }
 }

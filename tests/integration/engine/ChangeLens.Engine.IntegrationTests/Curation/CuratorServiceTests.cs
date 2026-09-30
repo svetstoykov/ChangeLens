@@ -233,7 +233,7 @@ public sealed class CuratorServiceTests
         NullLogger<CuratorService>.Instance);
 
     private static ModelCompletionModel Completion(string text) =>
-        new("fixture-model", text, 12.5, 20, 8, null, 1);
+        new("fixture-model", text, 12.5, 20, 8, null, 1, false);
 
     private static string ValidJson() =>
         "{\"thesis\":{\"text\":\"The caller uses the service.\",\"evidenceNodeIds\":[\"n1\"]},\"tracks\":[{\"id\":\"t1\",\"title\":\"Shared service\",\"summary\":{\"text\":\"The caller delegates.\",\"evidenceNodeIds\":[\"n1\"]},\"shape\":\"ParticipantMap\",\"participants\":[{\"id\":\"caller\",\"name\":\"Caller\",\"role\":\"Invokes service\",\"changed\":true,\"evidenceNodeIds\":[\"n1\"]}],\"relationships\":[],\"orderedSteps\":[],\"purposes\":[]}],\"droppedNodeIds\":[]}";

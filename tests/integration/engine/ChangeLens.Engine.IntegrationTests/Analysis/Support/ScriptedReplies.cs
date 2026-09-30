@@ -16,7 +16,7 @@ internal static class ScriptedReplies
     /// <param name="text">The reply text.</param>
     /// <returns>The successful completion result.</returns>
     internal static Result<ModelCompletionModel> Success(string text) =>
-        Result.Success(new ModelCompletionModel("scripted-model", text, 1.0, 1, 1, null, null));
+        Result.Success(new ModelCompletionModel("scripted-model", text, 1.0, 1, 1, null, null, false));
 
     /// <summary>
     ///     Builds a valid curator draft that cites the binder's marker node.

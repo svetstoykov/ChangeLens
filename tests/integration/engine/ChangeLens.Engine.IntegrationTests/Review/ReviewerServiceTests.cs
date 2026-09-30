@@ -97,6 +97,19 @@ public sealed class ReviewerServiceTests
     }
 
     [Fact]
+    public async Task ReplyCutOffAtTheOutputTokenLimitNamesThatCauseInItsParseFailure()
+    {
+        var fake = new FakeModelCompletionClient(Result.Success(Completion("Let me analyze the change", stoppedAtOutputLimit: true)));
+        var service = Service(fake);
+
+        var result = await service.ReviewAsync(DraftValidationFixtureBinderBuilder.Create(["n1"]), CancellationToken.None);
+
+        Assert.True(result.IsSuccess);
+        Assert.StartsWith("The provider cut the completion off at the output-token limit.", result.Data!.Diagnostics.ParseFailureReason!,
+            StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task ElevenStructurallyValidFindingsParseAndAreCappedByValidation()
     {
         var ids = Enumerable.Range(0, 11).Select(index => $"f{index}").ToArray();
@@ -176,8 +189,8 @@ public sealed class ReviewerServiceTests
         new ReviewerOptions { MaximumOutputCharacters = 10_000, MaximumOutputTokens = 1_000 },
         NullLogger<ReviewerService>.Instance);
 
-    private static ModelCompletionModel Completion(string text) =>
-        new("fixture-model", text, 12.5, 20, 8, null, 1);
+    private static ModelCompletionModel Completion(string text, bool stoppedAtOutputLimit = false) =>
+        new("fixture-model", text, 12.5, 20, 8, null, 1, stoppedAtOutputLimit);
 
     private static string ValidJson(IReadOnlyList<string> ids) => JsonSerializer.Serialize(new
     {

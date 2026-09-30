@@ -252,7 +252,7 @@ public sealed class AnalysisPipelineTests
             droppedNodeIds,
         });
 
-    private static ModelCompletionModel Completion(string text) => new("scripted-model", text, 1.0, 1, 1, null, null);
+    private static ModelCompletionModel Completion(string text) => new("scripted-model", text, 1.0, 1, 1, null, null, false);
 
     private static string Text(JsonElement evidence) => evidence.GetProperty("text").GetString() ?? string.Empty;
 

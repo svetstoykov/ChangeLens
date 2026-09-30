@@ -207,6 +207,77 @@ public sealed class OpenAiCompatibleModelCompletionClientTests
     }
 
     /// <summary>
+    ///     Asynchronously reports a reply cut off at the output-token limit and logs the envelope's finish reason and upstream.
+    /// </summary>
+    /// <returns>A task that represents the asynchronous operation.</returns>
+    [Fact]
+    public async Task CompleteJsonAsync_OutputLimitReplyIsFlaggedAndLogged()
+    {
+        const string body = "{\"id\":\"gen-17\",\"provider\":\"Together\",\"model\":\"provider-model\","
+            + "\"choices\":[{\"finish_reason\":\"length\",\"message\":{\"content\":\"Let me analyze\",\"reasoning\":\"abcd\"}}]}";
+        await using var server = await LoopbackHttpServer.StartAsync((_, _) => Task.FromResult(SuccessResponseBody(body)));
+        using var httpClient = new HttpClient();
+        var logger = new RecordingModelCompletionLogger<OpenAiCompatibleModelCompletionClient>();
+        var client = CreateClient(httpClient, CreateOptions(server), logger);
+
+        var result = await client.CompleteJsonAsync(CreateRequest(), CancellationToken.None);
+
+        Assert.True(result.IsSuccess);
+        Assert.True(result.Data!.StoppedAtOutputLimit);
+        var outcome = Assert.Single(logger.Entries, entry => entry.Message.Contains("finished with outcome", StringComparison.Ordinal));
+        Assert.Contains("finish reason length, upstream Together, generation gen-17", outcome.Message, StringComparison.Ordinal);
+        Assert.Contains("reply characters 14, reasoning characters 4", outcome.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    ///     Asynchronously logs the finish reason and token counts of a reply whose content is empty before rejecting it.
+    /// </summary>
+    /// <returns>A task that represents the asynchronous operation.</returns>
+    [Fact]
+    public async Task CompleteJsonAsync_EmptyContentLogsItsEnvelope()
+    {
+        const string body = "{\"choices\":[{\"finish_reason\":\"length\",\"message\":{\"content\":null,\"reasoning\":\"thinking\"}}],"
+            + "\"usage\":{\"completion_tokens\":48000,\"completion_tokens_details\":{\"reasoning_tokens\":48000}}}";
+        await using var server = await LoopbackHttpServer.StartAsync((_, _) => Task.FromResult(SuccessResponseBody(body)));
+        using var httpClient = new HttpClient();
+        var logger = new RecordingModelCompletionLogger<OpenAiCompatibleModelCompletionClient>();
+        var client = CreateClient(httpClient, CreateOptions(server), logger);
+
+        var result = await client.CompleteJsonAsync(CreateRequest(), CancellationToken.None);
+
+        AssertFailure(result, ErrorType.ExternalDependencyFailure, "modelCompletion.malformedResponse");
+        var outcome = Assert.Single(logger.Entries, entry => entry.Message.Contains("finished with outcome", StringComparison.Ordinal));
+        Assert.Contains("finish reason length", outcome.Message, StringComparison.Ordinal);
+        Assert.Contains("reasoning tokens 48000", outcome.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    ///     Asynchronously keeps envelope identifiers that are long or carry unexpected characters out of the log.
+    /// </summary>
+    /// <returns>A task that represents the asynchronous operation.</returns>
+    [Fact]
+    public async Task CompleteJsonAsync_UntrustedEnvelopeIdentifiersAreNotLogged()
+    {
+        var longProvider = new string('p', 65);
+        var body = $"{{\"id\":\"secret=\\\"x\\\"\",\"provider\":\"{longProvider}\","
+            + "\"choices\":[{\"finish_reason\":\"stop\",\"message\":{\"content\":\"{}\"}}]}";
+        await using var server = await LoopbackHttpServer.StartAsync((_, _) => Task.FromResult(SuccessResponseBody(body)));
+        using var httpClient = new HttpClient();
+        var logger = new RecordingModelCompletionLogger<OpenAiCompatibleModelCompletionClient>();
+        var client = CreateClient(httpClient, CreateOptions(server), logger);
+
+        var result = await client.CompleteJsonAsync(CreateRequest(), CancellationToken.None);
+
+        Assert.True(result.IsSuccess);
+        Assert.False(result.Data!.StoppedAtOutputLimit);
+        Assert.All(logger.Entries, entry =>
+        {
+            Assert.DoesNotContain(longProvider, entry.Message, StringComparison.Ordinal);
+            Assert.DoesNotContain("secret=", entry.Message, StringComparison.Ordinal);
+        });
+    }
+
+    /// <summary>
     ///     Asynchronously forwards non-empty provider content to the caller even when that content is not valid JSON.
     /// </summary>
     /// <returns>A task that represents the asynchronous operation.</returns>

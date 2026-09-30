@@ -66,6 +66,11 @@ public sealed class ReviewerService : IReviewerService
             parseFailureReason ??= "The completion could not be parsed as a reviewer draft.";
         }
 
+        if (parseFailureReason is not null && completion.StoppedAtOutputLimit)
+        {
+            parseFailureReason = $"The provider cut the completion off at the output-token limit. {parseFailureReason}";
+        }
+
         var diagnostics = new ReviewerDiagnostics(
             completion.Model, completion.LatencyMilliseconds, inputCharacters, outputCharacters, completion.InputTokens, completion.OutputTokens,
             completion.CachedInputTokens, completion.ReasoningTokens, parseFailureReason);

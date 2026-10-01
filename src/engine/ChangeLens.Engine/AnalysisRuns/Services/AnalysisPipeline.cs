@@ -33,7 +33,8 @@ namespace ChangeLens.Engine.AnalysisRuns.Services;
 ///     collect one curated, reviewed, validated, and published reading model.
 /// </summary>
 /// <remarks>
-///     The collect step runs the curator and the reviewer together over the same binder. A reviewer failure or a review
+///     The collect step runs the curator over the full binder and, together with it, the reviewer over the same binder
+///     scoped to changed-file evidence; the reviewer's findings are validated against that scoped binder. A reviewer failure or a review
 ///     that does not fit the response budget leaves the explanation published and ends the run completed with limitations.
 ///     The user cancellation token reaches every service call. The shutdown token is observed only between steps, so
 ///     engine shutdown leaves the active row for startup recovery to interrupt instead of reporting a user cancellation.
@@ -373,10 +374,11 @@ internal sealed class AnalysisPipeline(
     private async Task<AnalysisRunStepOutcome> ExecuteCollectAsync(Guid runId, AnalysisPipelineRun run, CancellationToken userCancellationToken)
     {
         var binder = run.Binder!;
+        var reviewerBinder = reviewerOptions.Enabled ? binderService.ScopeToChangedFiles(binder) : binder;
         using var reviewCancellation = CancellationTokenSource.CreateLinkedTokenSource(userCancellationToken);
         var curatorTask = Task.Run(() => curatorService.CurateAsync(binder, userCancellationToken), CancellationToken.None);
         var reviewerTask = reviewerOptions.Enabled
-            ? Task.Run(() => reviewerService.ReviewAsync(binder, reviewCancellation.Token), CancellationToken.None)
+            ? Task.Run(() => reviewerService.ReviewAsync(reviewerBinder, reviewCancellation.Token), CancellationToken.None)
             : null;
 
         Result<CuratorOutcome> curateResult;
@@ -403,7 +405,7 @@ internal sealed class AnalysisPipeline(
             return new AnalysisRunStepOutcome(AnalysisStepId.Collect, AnalysisRunStepState.Failed, AnalysisFailureCode.CuratorOutputUnreadable);
         }
 
-        var review = await this.CompleteReviewAsync(runId, reviewerTask, binder, userCancellationToken);
+        var review = await this.CompleteReviewAsync(runId, reviewerTask, reviewerBinder, userCancellationToken);
         var validation = validationService.Validate(curation.Draft, binder, userCancellationToken);
         ValidationRemoval[] removals = [.. validation.Removals, .. review.Removals];
         EnsureRecorded(await store.RecordValidationRemovalCountAsync(runId, removals.Length, CancellationToken.None), "validation removal");

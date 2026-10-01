@@ -227,6 +227,47 @@ public sealed class EvidenceBinderServiceTests
         Assert.Equal(EvidenceBinderErrorCode.BudgetExceeded, Assert.Single(result.Errors).Code);
     }
 
+    [Fact]
+    public void ChangedFileScopeKeepsOnlyChangedFileEvidenceAndNamesWhatItLeftOut()
+    {
+        var before = Node("before", "src/changed.cs", ChangeAnatomySide.Before, true, EvidenceNodeOrigin.ChangedHunk, "before quote");
+        var after = Node("after", "src/changed.cs", ChangeAnatomySide.After, true, EvidenceNodeOrigin.ChangedHunk, "after quote");
+        var candidate = Node("candidate", "src/consumer.cs", ChangeAnatomySide.After, false, EvidenceNodeOrigin.MatchWindow, "candidate quote");
+        var head = Node("head", "docs/guide.md", ChangeAnatomySide.After, false, EvidenceNodeOrigin.CandidateHead, "head quote");
+        var crossEdge = new DisclosedMatchEdge(
+            "edge-cross", "after", "candidate", MatchEdgeKind.SharedIdentifier, "OrderService", MatchEdgeAnchor.Quoted, MatchEdgeAnchor.Quoted, 1.2);
+        var changedEdge = new DisclosedMatchEdge(
+            "edge-changed", "before", "after", MatchEdgeKind.SharedIdentifier, "OrderService", MatchEdgeAnchor.Quoted, MatchEdgeAnchor.Quoted, 1.1);
+        var request = Request(
+            Policy(
+                [before, after, candidate, head],
+                [Decision(before), Decision(after), Decision(candidate), Decision(head)],
+                [crossEdge, changedEdge]),
+            new SnapshotManifestEntry("src/changed.cs", null, SnapshotChangeCategory.Modified, "100644", "100644", Blob('a'), Blob('b')),
+            ["src/changed.cs", "src/consumer.cs", "docs/guide.md"],
+            null);
+        var service = Service(new EvidenceBinderOptions { MaximumOmissionItems = 1 });
+        var binder = Assert.IsType<EvidenceBinderModel>(service.Assemble(request, CancellationToken.None).Data);
+
+        var scoped = service.ScopeToChangedFiles(binder);
+
+        Assert.Equal(["before", "after"], scoped.Evidence.Select(node => node.NodeId));
+        Assert.Equal([1, 2], scoped.Evidence.Select(node => node.Rank));
+        Assert.Equal("edge-changed", Assert.Single(scoped.MatchEdges).EdgeId);
+        Assert.Equal(binder.ChangedFiles, scoped.ChangedFiles);
+        var omission = Assert.Single(scoped.Omissions, omission => omission.Kind == EvidenceBinderOmissionKind.OutsideChangedFiles);
+        Assert.Equal(2, omission.Count);
+        Assert.Single(omission.Items);
+        var payload = EvidenceBinderJson.SerializePayload(scoped);
+        Assert.DoesNotContain("candidate quote", payload, StringComparison.Ordinal);
+        Assert.DoesNotContain("head quote", payload, StringComparison.Ordinal);
+        Assert.Equal(2, scoped.Diagnostics.EvidenceCount);
+        Assert.Equal(1, scoped.Diagnostics.MatchEdgeCount);
+        Assert.Equal(payload.Length, scoped.Diagnostics.BinderCharacterCount);
+        Assert.Equal(4, binder.Evidence.Count);
+        Assert.Equal(2, binder.MatchEdges.Count);
+    }
+
     private static EvidenceBinderService Service(EvidenceBinderOptions options) => new(options, NullLogger<EvidenceBinderService>.Instance);
 
     private static ContextPolicyDecision Decision(DisclosedEvidenceNode node) => new(

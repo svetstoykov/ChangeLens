@@ -1,7 +1,10 @@
 using System.Text.Json;
+using ChangeLens.Core.EvidenceBinder.Constants;
+using ChangeLens.Core.FindingValidation.Constants;
 using ChangeLens.Core.ModelCompletion.Constants;
 using ChangeLens.Core.ModelCompletion.Interfaces;
 using ChangeLens.Core.Results.Models;
+using ChangeLens.Core.Review.Services;
 using ChangeLens.Engine.IntegrationTests.Analysis.Support;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -152,6 +155,47 @@ public sealed class AnalysisPipelineReviewTests
         Assert.Equal("ran", review.GetProperty("status").GetString());
         Assert.Equal("noDefectsConfirmed", review.GetProperty("recommendation").GetString());
         Assert.Equal(1, review.GetProperty("withheldCount").GetInt32());
+    }
+
+    /// <summary>
+    ///     Asynchronously verifies the reviewer sees only changed-file evidence while the curator also sees an unchanged
+    ///     caller, and a finding citing that caller is withheld as undisclosed.
+    /// </summary>
+    /// <returns>A task that represents the asynchronous operation.</returns>
+    [Fact]
+    public async Task ReviewerSeesOnlyChangedFileEvidence()
+    {
+        var callerNodeId = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var client = new ScriptedModelCompletionClient(
+            (request, _) =>
+            {
+                callerNodeId.TrySetResult(ScriptedReplies.FindNodeId(request, "src/caller.txt"));
+                return Task.FromResult(ScriptedReplies.Curator(request));
+            },
+            async (request, cancellationToken) =>
+            {
+                var hiddenNodeId = await callerNodeId.Task.WaitAsync(Deadline, cancellationToken);
+                return ScriptedReplies.Reviewer(
+                    ScriptedReplies.ValidFinding(request, "f1"), ScriptedReplies.FindingCitingNode(request, "f2", hiddenNodeId));
+            });
+        using var repository = PipelineRepositories.CreateCommittedChangeWithCaller();
+
+        using var terminal = await ScriptedPipelineRun.RunToTerminalAsync(repository, client, null, Deadline);
+
+        var reviewerRequest = Assert.Single(
+            client.Requests, request => request.SystemMessage.StartsWith(ReviewerSystemMessage.RoleLine, StringComparison.Ordinal));
+        using var reviewerBinder = JsonDocument.Parse(reviewerRequest.UserMessage);
+        Assert.All(
+            reviewerBinder.RootElement.GetProperty("evidence").EnumerateArray(), node => Assert.True(node.GetProperty("isChangedFile").GetBoolean()));
+        Assert.Contains(
+            reviewerBinder.RootElement.GetProperty("omissions").EnumerateArray(),
+            omission => omission.GetProperty("kind").GetString() == EvidenceBinderOmissionKind.OutsideChangedFiles);
+        var result = terminal.RootElement.GetProperty("result");
+        var finding = Assert.Single(result.GetProperty("readingModel").GetProperty("findings").EnumerateArray());
+        Assert.Equal("f1", finding.GetProperty("id").GetString());
+        var removal = Assert.Single(result.GetProperty("validationRemovals").EnumerateArray());
+        Assert.Equal("f2", removal.GetProperty("id").GetString());
+        Assert.Equal(FindingValidationConstants.UndisclosedEvidenceReason, removal.GetProperty("reason").GetString());
     }
 
     /// <summary>Asynchronously verifies cancelling the run cancels both provider calls.</summary>

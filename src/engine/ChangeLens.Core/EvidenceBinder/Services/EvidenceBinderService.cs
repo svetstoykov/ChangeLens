@@ -344,6 +344,42 @@ public sealed class EvidenceBinderService : IEvidenceBinderService
         return binder with { Diagnostics = diagnostics };
     }
 
+    /// <inheritdoc />
+    public EvidenceBinderModel ScopeToChangedFiles(EvidenceBinderModel binder)
+    {
+        ArgumentNullException.ThrowIfNull(binder);
+
+        var evidence = binder.Evidence.Where(node => node.IsChangedFile).Select((node, index) => node with { Rank = index + 1 }).ToList();
+        var retainedIds = evidence.Select(node => node.NodeId).ToHashSet(StringComparer.Ordinal);
+        var droppedIds = binder.Evidence.Where(node => !node.IsChangedFile).Select(node => node.NodeId).ToList();
+        var edges = binder.MatchEdges.Where(edge => retainedIds.Contains(edge.FromNodeId) && retainedIds.Contains(edge.ToNodeId)).ToList();
+        var omissions = droppedIds.Count == 0
+            ? binder.Omissions
+            : binder.Omissions
+                .Append(new BinderOmission(
+                    EvidenceBinderOmissionKind.OutsideChangedFiles, droppedIds.Count, "quotedFromUnchangedFile",
+                    droppedIds.Take(this._options.MaximumOmissionItems).Select(this.CapItem).ToList()))
+                .OrderBy(omission => omission.Kind, StringComparer.Ordinal)
+                .ThenBy(omission => omission.Reason, StringComparer.Ordinal)
+                .ToList();
+        var scoped = binder with { Evidence = evidence, MatchEdges = edges, Omissions = omissions };
+        var characterCount = EvidenceBinderJson.SerializePayload(scoped).Length;
+        var diagnostics = binder.Diagnostics with
+        {
+            BinderCharacterCount = characterCount,
+            TokenEstimate = (int)Math.Ceiling(characterCount / CharactersPerToken),
+            EvidenceCount = evidence.Count,
+            RedactedNodeCount = evidence.Count(node => node.IsRedacted),
+            MatchEdgeCount = edges.Count,
+        };
+
+        this._logger.LogInformation(
+            "Evidence binder for run {RunId} was scoped to changed files with {EvidenceCount} evidence nodes and {BinderCharacterCount} "
+            + "characters, leaving out {OutsideChangedFilesNodeCount} unchanged-file nodes.",
+            binder.Comparison.RunId, diagnostics.EvidenceCount, characterCount, droppedIds.Count);
+        return scoped with { Diagnostics = diagnostics };
+    }
+
     private BinderHint? BuildDeveloperContext(string? context, List<(string Kind, string Reason, string Item)> omissions)
     {
         if (string.IsNullOrWhiteSpace(context))

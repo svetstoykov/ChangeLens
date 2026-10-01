@@ -40,4 +40,7 @@ internal sealed class GatedEvidenceBinderService : IEvidenceBinderService
         cancellationToken.ThrowIfCancellationRequested();
         return this._inner.Assemble(request, cancellationToken);
     }
+
+    /// <inheritdoc />
+    public EvidenceBinderModel ScopeToChangedFiles(EvidenceBinderModel binder) => this._inner.ScopeToChangedFiles(binder);
 }

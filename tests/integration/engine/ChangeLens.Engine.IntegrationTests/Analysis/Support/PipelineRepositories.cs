@@ -25,6 +25,19 @@ internal static class PipelineRepositories
     }
 
     /// <summary>
+    ///     Creates a repository whose head commit changes the marker file next to an unchanged file that calls it.
+    /// </summary>
+    /// <returns>The temporary repository the caller must dispose.</returns>
+    internal static ProtocolTemporaryGitRepository CreateCommittedChangeWithCaller()
+    {
+        var repository = new ProtocolTemporaryGitRepository();
+        repository.CommitFile("src/app.txt", "public static string Value()\n{\n    return \"original\";\n}\n");
+        repository.CommitFile("src/caller.txt", "public static string Greeting()\n{\n    return Value();\n}\n");
+        repository.CommitFileAtHead("src/app.txt", $"public static string Value()\n{{\n    return \"{CommittedMarker}\";\n}}\n");
+        return repository;
+    }
+
+    /// <summary>
     ///     Creates a repository whose head commit changes the marker file and one further file whose single hunk quotes
     ///     more than the poll response budget allows.
     /// </summary>

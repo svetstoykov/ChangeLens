@@ -1,6 +1,6 @@
 {
   "id": "reviewer-valid-f13",
-  "description": "Valid F13 curator draft, then a reviewer reply with two valid findings: a Warning anchored exactly on the swapped formatRange call (src/page-label.ts after line 10) citing formatRange's guard, and an Info anchored on pluralize. Both publish and the recommendation is issuesWorthAddressing.",
+  "description": "Valid F13 curator draft, then a reviewer reply with two valid findings: a Warning anchored exactly on the swapped formatRange call (src/page-label.ts after line 10), and an Info anchored on pluralize. Both publish and the recommendation is issuesWorthAddressing.",
   "exchanges": [
     {
       "role": "curator",
@@ -62,8 +62,7 @@
               "impact": "formatRange receives end before start and throws a RangeError for every multi-item selection.",
               "fix": "Call formatRange(low, high).",
               "evidenceNodeIds": [
-                { "$node": { "path": "src/page-label.ts", "side": "After" } },
-                { "$node": { "path": "src/range.ts", "side": "After" } }
+                { "$node": { "path": "src/page-label.ts", "side": "After" } }
               ],
               "anchor": {
                 "nodeId": { "$node": { "path": "src/page-label.ts", "side": "After" } },

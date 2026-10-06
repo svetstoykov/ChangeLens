@@ -26,6 +26,11 @@ public static class EvidenceGraphConfigurationConstants
     public const string MaximumWholeChangedFileLinesKey = SectionKey + ":MaximumWholeChangedFileLines";
 
     /// <summary>
+    ///     The configuration key for the most lines a changed-hunk window grows on each side to reach a blank line.
+    /// </summary>
+    public const string MaximumBlockExtensionLinesKey = SectionKey + ":MaximumBlockExtensionLines";
+
+    /// <summary>
     ///     The configuration key for the maximum kept match edges.
     /// </summary>
     public const string MaximumEdgesKey = SectionKey + ":MaximumEdges";

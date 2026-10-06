@@ -19,6 +19,7 @@ _SECTIONS: dict[str, tuple[str, ...]] = {
         "MaximumEdges",
         "MaximumNodesPerChangedFile",
         "MaximumWholeChangedFileLines",
+        "MaximumBlockExtensionLines",
     ),
     "Analysis.Frontier": ("MaximumEntries",),
     "Analysis.EvidenceBinder": (

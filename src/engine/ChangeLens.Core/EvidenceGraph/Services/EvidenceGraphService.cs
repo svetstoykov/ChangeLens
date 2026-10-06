@@ -262,14 +262,14 @@ public sealed class EvidenceGraphService(
                 continue;
             }
 
-            file.Windows.Add(this.CreateHunkWindow(quotePath, file.Path, side, objectId, blobLines.Count, runStart, runEnd));
+            file.Windows.Add(this.CreateHunkWindow(quotePath, file.Path, side, objectId, blobLines, runStart, runEnd));
             runStart = number;
             runEnd = number;
         }
 
         if (runStart >= 0)
         {
-            file.Windows.Add(this.CreateHunkWindow(quotePath, file.Path, side, objectId, blobLines.Count, runStart, runEnd));
+            file.Windows.Add(this.CreateHunkWindow(quotePath, file.Path, side, objectId, blobLines, runStart, runEnd));
         }
     }
 
@@ -278,15 +278,39 @@ public sealed class EvidenceGraphService(
         string changedPath,
         ChangeAnatomySide side,
         string objectId,
-        int blobLineCount,
+        IReadOnlyList<string> blobLines,
         int runStart,
         int runEnd)
     {
-        var start = Math.Max(1, runStart - this._options.HunkContextLines);
-        var end = Math.Min(blobLineCount, runEnd + this._options.HunkContextLines);
+        var start = this.ExtendToBlankLine(blobLines, Math.Max(1, runStart - this._options.HunkContextLines), -1);
+        var end = this.ExtendToBlankLine(blobLines, Math.Min(blobLines.Count, runEnd + this._options.HunkContextLines), 1);
         var salience = runEnd - runStart + 1;
         return new EvidenceGraphWindow(
             quotePath, changedPath, side, objectId, start, end, [EvidenceNodeOrigin.ChangedHunk], salience, false);
+    }
+
+    /// <summary>
+    ///     Moves a hunk window edge outwards over non-blank lines until the next line is blank or outside the file.
+    /// </summary>
+    /// <param name="blobLines">The lines of the quoted side.</param>
+    /// <param name="line">The one-based window edge after hunk context is applied.</param>
+    /// <param name="step">Minus one to move the start upwards; one to move the end downwards.</param>
+    /// <returns>The extended one-based edge, at most <see cref="EvidenceGraphOptions.MaximumBlockExtensionLines" /> lines away.</returns>
+    private int ExtendToBlankLine(IReadOnlyList<string> blobLines, int line, int step)
+    {
+        var extended = line;
+        for (var taken = 0; taken < this._options.MaximumBlockExtensionLines; taken++)
+        {
+            var next = extended + step;
+            if (next < 1 || next > blobLines.Count || string.IsNullOrWhiteSpace(blobLines[next - 1]))
+            {
+                break;
+            }
+
+            extended = next;
+        }
+
+        return extended;
     }
 
     private static (List<EvidenceNode> Nodes, Dictionary<string, EvidenceNode> ByPath) BuildManifestFacts(
@@ -1063,6 +1087,7 @@ public sealed class EvidenceGraphService(
             || options.MaximumEdgesPerNodePair <= 0
             || options.HunkContextLines < 0
             || options.MaximumWholeChangedFileLines < 0
+            || options.MaximumBlockExtensionLines < 0
             || options.MergeGapLines < 0
             || options.ChangedNodeShare < 0
             || options.ChangedNodeShare > 1)

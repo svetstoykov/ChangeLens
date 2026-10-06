@@ -247,6 +247,8 @@ internal static class EngineHostApplicationBuilderExtensions
                 configuration, EvidenceGraphConfigurationConstants.MaximumNodesPerChangedFileKey, defaults.MaximumNodesPerChangedFile),
             MaximumWholeChangedFileLines = ReadNonNegativeInt(
                 configuration, EvidenceGraphConfigurationConstants.MaximumWholeChangedFileLinesKey, defaults.MaximumWholeChangedFileLines),
+            MaximumBlockExtensionLines = ReadNonNegativeInt(
+                configuration, EvidenceGraphConfigurationConstants.MaximumBlockExtensionLinesKey, defaults.MaximumBlockExtensionLines),
         };
     }
 

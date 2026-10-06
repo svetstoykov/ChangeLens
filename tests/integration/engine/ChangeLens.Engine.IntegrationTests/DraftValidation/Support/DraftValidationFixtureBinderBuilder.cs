@@ -22,7 +22,8 @@ internal static class DraftValidationFixtureBinderBuilder
     internal static EvidenceBinderModel Create(
         IReadOnlyList<string> nodeIds,
         IReadOnlyList<(string Id, string FromNodeId, string ToNodeId)>? edges = null,
-        CuratorLimits? limits = null)
+        CuratorLimits? limits = null,
+        IReadOnlyDictionary<string, string>? quotes = null)
     {
         var evidence = nodeIds.Select((nodeId, index) => new BinderEvidence(
             nodeId,
@@ -33,7 +34,7 @@ internal static class DraftValidationFixtureBinderBuilder
             true,
             [],
             index + 1,
-            $"quote for {nodeId}",
+            quotes is not null && quotes.TryGetValue(nodeId, out var quote) ? quote : $"quote for {nodeId}",
             $"sha256:{nodeId}",
             null,
             false,

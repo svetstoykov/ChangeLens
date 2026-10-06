@@ -11,6 +11,7 @@ namespace ChangeLens.Core.Review.Models;
 /// <param name="Fix">The smallest appropriate remedy.</param>
 /// <param name="EvidenceNodeIds">The binder evidence nodes cited by the finding.</param>
 /// <param name="Anchor">The source quote and lines that focus the finding.</param>
+/// <param name="UnquotedDependencies">The code outside the quotes that the reviewer says the finding depends on.</param>
 public sealed record ReviewerFinding(
     string Id,
     string Severity,
@@ -19,4 +20,5 @@ public sealed record ReviewerFinding(
     string Impact,
     string Fix,
     IReadOnlyList<string> EvidenceNodeIds,
-    ReviewerAnchor Anchor);
+    ReviewerAnchor Anchor,
+    IReadOnlyList<string> UnquotedDependencies);

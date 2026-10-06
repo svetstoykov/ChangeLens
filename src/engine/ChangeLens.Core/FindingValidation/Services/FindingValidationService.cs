@@ -67,6 +67,12 @@ public sealed class FindingValidationService : IFindingValidationService
             }
 
             var validFinding = finding!;
+            if (validFinding.UnquotedDependencies is { Count: > 0 })
+            {
+                removals.Add(Removal(id, FindingValidationConstants.UnquotedDependencyReason));
+                continue;
+            }
+
             if (validFinding.EvidenceNodeIds.Any(nodeId => nodeId is null || !evidenceById.ContainsKey(nodeId)))
             {
                 removals.Add(Removal(id, FindingValidationConstants.UndisclosedEvidenceReason));

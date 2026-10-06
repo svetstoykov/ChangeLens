@@ -153,5 +153,5 @@ public sealed class FindingPublicationTests
         new(findings.Select((finding, index) => new ValidatedFinding(finding, focus ?? new FindingFocusRange(1, 1), index)).ToArray(), []);
 
     private static ReviewerFinding Finding(string id, string severity, params string[] nodeIds) =>
-        new(id, severity, $"Title {id}", "Trigger", "Impact", "Fix", nodeIds, new ReviewerAnchor(nodeIds[0], "quote"));
+        new(id, severity, $"Title {id}", "Trigger", "Impact", "Fix", nodeIds, new ReviewerAnchor(nodeIds[0], "quote"), []);
 }

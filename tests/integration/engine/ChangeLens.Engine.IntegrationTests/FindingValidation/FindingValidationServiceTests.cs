@@ -230,6 +230,25 @@ public sealed class FindingValidationServiceTests
         Assert.Equal(outcome.Removals.Count, outcome.WithheldCount);
     }
 
+    [Fact]
+    public void FindingThatDeclaresAnUnquotedDependencyIsWithheldWhileAnOtherwiseEqualFindingIsPublished()
+    {
+        var binder = Support.FindingValidationFixtureBinderBuilder.Create(
+            Support.FindingValidationFixtureBinderBuilder.SourceEvidence("n1", "\t\"testing\"\n\n\t\"example.com/assert\"", 14));
+        var absenceClaim = Finding(
+            "f1", "n1", "\t\"testing\"", title: "The test file never imports require",
+            unquotedDependencies: ["the rest of the import block, which the quote cuts off"]);
+        var settled = Finding("f2", "n1", "\t\"testing\"");
+
+        var outcome = Validate(binder, absenceClaim, settled);
+
+        Assert.Equal("f2", Assert.Single(outcome.Findings).Finding.Id);
+        var removal = Assert.Single(outcome.Removals);
+        Assert.Equal("f1", removal.Id);
+        Assert.Equal(FindingValidationConstants.UnquotedDependencyReason, removal.Reason);
+        Assert.Equal(1, outcome.WithheldCount);
+    }
+
     private static FindingValidationOutcome Validate(
         ChangeLens.Core.EvidenceBinder.Models.EvidenceBinder binder,
         params ReviewerFinding[] findings) =>
@@ -249,7 +268,8 @@ public sealed class FindingValidationServiceTests
         string title = "A source defect",
         string severity = "warning",
         string trigger = "A concrete input reaches this branch.",
-        string fix = "Use the intended value.") => new(
+        string fix = "Use the intended value.",
+        IReadOnlyList<string>? unquotedDependencies = null) => new(
             id,
             severity,
             title,
@@ -257,5 +277,6 @@ public sealed class FindingValidationServiceTests
             impact,
             fix,
             evidenceNodeIds ?? [nodeId],
-            new ReviewerAnchor(nodeId, lines));
+            new ReviewerAnchor(nodeId, lines),
+            unquotedDependencies ?? []);
 }

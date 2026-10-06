@@ -97,6 +97,33 @@ public sealed class ReviewerServiceTests
     }
 
     [Fact]
+    public async Task ReplyCutOffAtTheOutputTokenLimitNamesThatCauseInItsParseFailure()
+    {
+        var fake = new FakeModelCompletionClient(Result.Success(Completion("Let me analyze the change", stoppedAtOutputLimit: true)));
+        var service = Service(fake);
+
+        var result = await service.ReviewAsync(DraftValidationFixtureBinderBuilder.Create(["n1"]), CancellationToken.None);
+
+        Assert.True(result.IsSuccess);
+        Assert.StartsWith("The provider cut the completion off at the output-token limit.", result.Data!.Diagnostics.ParseFailureReason!,
+            StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task ConfiguredReviewerModelIsSentWithTheRequest()
+    {
+        var fake = new FakeModelCompletionClient(Result.Success(Completion("{\"findings\":[]}")));
+        var service = new ReviewerService(
+            fake,
+            new ReviewerOptions { MaximumOutputCharacters = 10_000, MaximumOutputTokens = 1_000, Model = "vendor/reviewer-model" },
+            NullLogger<ReviewerService>.Instance);
+
+        await service.ReviewAsync(DraftValidationFixtureBinderBuilder.Create(["n1"]), CancellationToken.None);
+
+        Assert.Equal("vendor/reviewer-model", fake.LastRequest!.Model);
+    }
+
+    [Fact]
     public async Task ElevenStructurallyValidFindingsParseAndAreCappedByValidation()
     {
         var ids = Enumerable.Range(0, 11).Select(index => $"f{index}").ToArray();
@@ -166,6 +193,10 @@ public sealed class ReviewerServiceTests
         Assert.Contains("Cite only evidence node ids", prompt, StringComparison.Ordinal);
         Assert.Contains("never a manifest fact", prompt, StringComparison.Ordinal);
         Assert.Contains("Worked example", prompt, StringComparison.Ordinal);
+        Assert.Contains("Never reconstruct unquoted project or third-party source from memory", prompt, StringComparison.Ordinal);
+        Assert.Contains("well-known behavior of the language and its standard library", prompt, StringComparison.Ordinal);
+        Assert.Contains("line numbers are independent", prompt, StringComparison.Ordinal);
+        Assert.Contains("write the JSON reply immediately", prompt, StringComparison.Ordinal);
         Assert.True(prompt.Length <= binderOptions.PromptReserveCharacters);
         Assert.True(reviewerOptions.MaximumOutputCharacters <= binderOptions.CuratorOutputCharacters);
         Assert.True(outputTokenReserve <= binderOptions.CuratorOutputCharacters);
@@ -176,8 +207,8 @@ public sealed class ReviewerServiceTests
         new ReviewerOptions { MaximumOutputCharacters = 10_000, MaximumOutputTokens = 1_000 },
         NullLogger<ReviewerService>.Instance);
 
-    private static ModelCompletionModel Completion(string text) =>
-        new("fixture-model", text, 12.5, 20, 8, null, 1);
+    private static ModelCompletionModel Completion(string text, bool stoppedAtOutputLimit = false) =>
+        new("fixture-model", text, 12.5, 20, 8, null, 1, stoppedAtOutputLimit);
 
     private static string ValidJson(IReadOnlyList<string> ids) => JsonSerializer.Serialize(new
     {

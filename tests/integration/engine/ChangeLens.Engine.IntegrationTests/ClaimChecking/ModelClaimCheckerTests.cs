@@ -321,5 +321,5 @@ public sealed class ModelClaimCheckerTests
     });
 
     private static Result<ModelCompletionModel> Completion(string text, int? outputTokens = null) =>
-        Result.Success(new ModelCompletionModel("fixture-model", text, 5, 100, outputTokens, null, null));
+        Result.Success(new ModelCompletionModel("fixture-model", text, 5, 100, outputTokens, null, null, false));
 }

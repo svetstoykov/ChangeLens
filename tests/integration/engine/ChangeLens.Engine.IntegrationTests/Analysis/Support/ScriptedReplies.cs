@@ -16,7 +16,7 @@ internal static class ScriptedReplies
     /// <param name="text">The reply text.</param>
     /// <returns>The successful completion result.</returns>
     internal static Result<ModelCompletionModel> Success(string text) =>
-        Result.Success(new ModelCompletionModel("scripted-model", text, 1.0, 1, 1, null, null));
+        Result.Success(new ModelCompletionModel("scripted-model", text, 1.0, 1, 1, null, null, false));
 
     /// <summary>
     ///     Builds a valid curator draft that cites the binder's marker node.
@@ -97,7 +97,17 @@ internal static class ScriptedReplies
     /// <param name="id">The finding id.</param>
     /// <param name="otherPath">The path of the other cited node.</param>
     /// <returns>The finding object.</returns>
-    internal static object FindingCiting(ModelCompletionRequest request, string id, string otherPath)
+    internal static object FindingCiting(ModelCompletionRequest request, string id, string otherPath) =>
+        FindingCitingNode(request, id, FindNodeId(request, otherPath));
+
+    /// <summary>
+    ///     Builds a finding that anchors on the marker line and also cites the supplied node id.
+    /// </summary>
+    /// <param name="request">The reviewer request whose binder supplies the marker node.</param>
+    /// <param name="id">The finding id.</param>
+    /// <param name="otherNodeId">The further cited node id, which need not be in the reviewer's binder.</param>
+    /// <returns>The finding object.</returns>
+    internal static object FindingCitingNode(ModelCompletionRequest request, string id, string otherNodeId)
     {
         var marker = FindMarker(request);
         return new
@@ -108,7 +118,7 @@ internal static class ScriptedReplies
             trigger = "A caller reads the value while it is the marker.",
             impact = "Callers observe the marker instead of the original value.",
             fix = "Restore the original literal.",
-            evidenceNodeIds = new[] { marker.NodeId, FindNodeId(request, otherPath) },
+            evidenceNodeIds = new[] { marker.NodeId, otherNodeId },
             anchor = new { nodeId = marker.NodeId, lines = marker.AnchorLine },
         };
     }

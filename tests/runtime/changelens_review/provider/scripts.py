@@ -122,13 +122,18 @@ def detect_role(request_body: JsonValue) -> str:
     return "unknown"
 
 
+def request_evidence(request_body: JsonValue) -> list[JsonValue]:
+    """Return the evidence nodes of the request's binder, or an empty list when it carries none."""
+    payload = _last_user_payload(request_body)
+    evidence = payload.get("evidence") if isinstance(payload, dict) else None
+    return evidence if isinstance(evidence, list) else []
+
+
 def render_content(content: JsonValue, request_body: JsonValue) -> str:
     """Resolve evidence selectors against the request's binder and serialize the completion content."""
     if isinstance(content, str):
         return content
-    payload = _last_user_payload(request_body)
-    evidence = payload.get("evidence") if isinstance(payload, dict) else None
-    resolved = _resolve(content, evidence if isinstance(evidence, list) else [])
+    resolved = _resolve(content, request_evidence(request_body))
     return json.dumps(resolved, separators=(",", ":"))
 
 

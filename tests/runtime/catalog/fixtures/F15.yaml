@@ -1,0 +1,79 @@
+id: F15
+description: >-
+  Seeded defect, missing nil check (Go): feature/review adds Greeting, which reads the optional profile's display
+  name without the nil check Name already makes, so a user without a profile panics. The branch also adds a
+  correct Email field; an unchanged file is an unrelated decoy.
+target: main
+defect: { path: users/greeting.go, side: after, lines: [6, 6] }
+commits:
+  - branch: main
+    message: "fixture: base users"
+    date: "2026-01-01T00:00:00+00:00"
+    changes:
+      - write:
+          path: go.mod
+          text: |
+            module example.com/profiles
+
+            go 1.22
+      - write:
+          path: users/user.go
+          text: |
+            package users
+
+            type Profile struct {
+            	DisplayName string
+            }
+
+            type User struct {
+            	Login   string
+            	Profile *Profile
+            }
+
+            func Name(user User) string {
+            	if user.Profile != nil && user.Profile.DisplayName != "" {
+            		return user.Profile.DisplayName
+            	}
+            	return user.Login
+            }
+      - write:
+          path: users/decoy.go
+          text: |
+            package users
+
+            const unrelated = "decoy"
+  - branch: feature/review
+    message: "fixture: greetings"
+    date: "2026-01-02T00:00:00+00:00"
+    changes:
+      - write:
+          path: users/user.go
+          text: |
+            package users
+
+            type Profile struct {
+            	DisplayName string
+            }
+
+            type User struct {
+            	Login   string
+            	Email   string
+            	Profile *Profile
+            }
+
+            func Name(user User) string {
+            	if user.Profile != nil && user.Profile.DisplayName != "" {
+            		return user.Profile.DisplayName
+            	}
+            	return user.Login
+            }
+      - write:
+          path: users/greeting.go
+          text: |
+            package users
+
+            import "fmt"
+
+            func Greeting(user User) string {
+            	return fmt.Sprintf("Hello, %s (@%s)", user.Profile.DisplayName, user.Login)
+            }

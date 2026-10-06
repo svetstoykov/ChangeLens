@@ -23,12 +23,17 @@ internal sealed class EvidenceGraphChangedWindowQueue
     /// <summary>
     ///     Gets the maximum windows the file may contribute.
     /// </summary>
-    internal int MaximumPerFile { get; }
+    internal int MaximumPerFile { get; private set; }
 
     /// <summary>
     ///     Gets the number of windows already taken from the queue.
     /// </summary>
     internal int SelectedCount { get; private set; }
+
+    /// <summary>
+    ///     Lets the file contribute every remaining window.
+    /// </summary>
+    internal void LiftCap() => this.MaximumPerFile = int.MaxValue;
 
     /// <summary>
     ///     Takes the next window when the file is under its cap and windows remain.

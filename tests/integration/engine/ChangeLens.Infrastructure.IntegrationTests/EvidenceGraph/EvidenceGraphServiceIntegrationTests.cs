@@ -38,7 +38,9 @@ public sealed class EvidenceGraphServiceIntegrationTests
         var entry = SnapshotManifestEntryFixtures.CreateEntry(
             repository, mergeBase, head, "alpha.txt", "alpha.txt", SnapshotChangeCategory.Modified);
 
-        var result = await EvidenceGraphHarness.BuildAsync(repository, mergeBase, head, [entry]);
+        var options = new EvidenceGraphOptions { MaximumWholeChangedFileLines = 0 };
+
+        var result = await EvidenceGraphHarness.BuildAsync(repository, mergeBase, head, [entry], options);
 
         Assert.True(result.IsSuccess);
         var graph = Assert.IsType<EvidenceGraphModel>(result.Data);
@@ -54,6 +56,69 @@ public sealed class EvidenceGraphServiceIntegrationTests
         Assert.Equal(1, beforeNode.StartLine);
         Assert.Equal(5, beforeNode.EndLine);
         Assert.Equal(string.Join('\n', beforeLines.Take(5)), beforeNode.QuotedText);
+    }
+
+    /// <summary>
+    ///     Asynchronously quotes both sides of a changed file whole when they fit the whole-file limit.
+    /// </summary>
+    /// <returns>A task that represents the asynchronous operation.</returns>
+    [Fact]
+    public async Task BuildAsync_SmallChangedFileIsQuotedWhole()
+    {
+        using var repository = new TemporaryGitRepository();
+        var beforeLines = Enumerable.Range(1, 12).Select(index => $"small line {index:00}").ToArray();
+        repository.CommitFile("small.txt", string.Join('\n', beforeLines) + "\n", "seed small");
+        var mergeBase = repository.Revision;
+
+        var afterLines = beforeLines.ToArray();
+        afterLines[1] = "small line 02 changed";
+        var head = EvidenceGraphHarness.CommitFiles(repository, "modify small", [("small.txt", string.Join('\n', afterLines) + "\n")]);
+        var entry = SnapshotManifestEntryFixtures.CreateEntry(
+            repository, mergeBase, head, "small.txt", "small.txt", SnapshotChangeCategory.Modified);
+
+        var result = await EvidenceGraphHarness.BuildAsync(repository, mergeBase, head, [entry]);
+
+        Assert.True(result.IsSuccess);
+        var graph = Assert.IsType<EvidenceGraphModel>(result.Data);
+        foreach (var side in new[] { ChangeAnatomySide.Before, ChangeAnatomySide.After })
+        {
+            var node = Assert.Single(graph.Nodes, candidate => candidate.Path == "small.txt" && candidate.Side == side && !candidate.IsManifestFact);
+            Assert.Equal(1, node.StartLine);
+            Assert.Equal(12, node.EndLine);
+        }
+    }
+
+    /// <summary>
+    ///     Asynchronously spends changed budget left after the per-file round on the file's remaining hunk windows.
+    /// </summary>
+    /// <returns>A task that represents the asynchronous operation.</returns>
+    [Fact]
+    public async Task BuildAsync_LeftoverChangedBudgetQuotesRemainingHunksBeyondThePerFileRound()
+    {
+        using var repository = new TemporaryGitRepository();
+        var lines = Enumerable.Range(1, 40).Select(index => $"hunk line {index:00}").ToArray();
+        repository.CommitFile("hunks.txt", string.Join('\n', lines) + "\n", "seed hunks");
+        var mergeBase = repository.Revision;
+
+        foreach (var index in new[] { 0, 10, 20, 30 })
+        {
+            lines[index] += " changed";
+        }
+
+        var head = EvidenceGraphHarness.CommitFiles(repository, "modify hunks", [("hunks.txt", string.Join('\n', lines) + "\n")]);
+        var entry = SnapshotManifestEntryFixtures.CreateEntry(
+            repository, mergeBase, head, "hunks.txt", "hunks.txt", SnapshotChangeCategory.Modified);
+        var options = new EvidenceGraphOptions
+        {
+            MaximumQuoteWindowNodes = 20, ChangedNodeShare = 1.0, MaximumNodesPerChangedFile = 1, MaximumWholeChangedFileLines = 0,
+        };
+
+        var result = await EvidenceGraphHarness.BuildAsync(repository, mergeBase, head, [entry], options);
+
+        Assert.True(result.IsSuccess);
+        var graph = Assert.IsType<EvidenceGraphModel>(result.Data);
+        Assert.Equal(4, graph.Nodes.Count(node => node.Side == ChangeAnatomySide.After && !node.IsManifestFact));
+        Assert.Equal(4, graph.Nodes.Count(node => node.Side == ChangeAnatomySide.Before && !node.IsManifestFact));
     }
 
     /// <summary>
@@ -109,7 +174,7 @@ public sealed class EvidenceGraphServiceIntegrationTests
         var head = EvidenceGraphHarness.CommitFiles(repository, "modify budget", [("budget.txt", string.Join('\n', lines) + "\n")]);
         var entry = SnapshotManifestEntryFixtures.CreateEntry(
             repository, mergeBase, head, "budget.txt", "budget.txt", SnapshotChangeCategory.Modified);
-        var options = new EvidenceGraphOptions { MaximumQuoteWindowNodes = 2, ChangedNodeShare = 1.0 };
+        var options = new EvidenceGraphOptions { MaximumQuoteWindowNodes = 2, ChangedNodeShare = 1.0, MaximumWholeChangedFileLines = 0 };
 
         var result = await EvidenceGraphHarness.BuildAsync(repository, mergeBase, head, [entry], options);
 

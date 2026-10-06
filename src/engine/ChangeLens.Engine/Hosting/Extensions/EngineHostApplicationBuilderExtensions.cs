@@ -243,6 +243,10 @@ internal static class EngineHostApplicationBuilderExtensions
             MaximumQuoteWindowNodes = ReadPositiveInt(
                 configuration, EvidenceGraphConfigurationConstants.MaximumQuoteWindowNodesKey, defaults.MaximumQuoteWindowNodes),
             MaximumEdges = ReadPositiveInt(configuration, EvidenceGraphConfigurationConstants.MaximumEdgesKey, defaults.MaximumEdges),
+            MaximumNodesPerChangedFile = ReadPositiveInt(
+                configuration, EvidenceGraphConfigurationConstants.MaximumNodesPerChangedFileKey, defaults.MaximumNodesPerChangedFile),
+            MaximumWholeChangedFileLines = ReadNonNegativeInt(
+                configuration, EvidenceGraphConfigurationConstants.MaximumWholeChangedFileLinesKey, defaults.MaximumWholeChangedFileLines),
         };
     }
 
@@ -357,6 +361,9 @@ internal static class EngineHostApplicationBuilderExtensions
                 configuration[ReviewerConfigurationConstants.ReasoningEffortKey], true, out var reasoningEffort)
                 ? reasoningEffort
                 : defaults.ReasoningEffort,
+            Model = string.IsNullOrWhiteSpace(configuration[ReviewerConfigurationConstants.ModelKey])
+                ? defaults.Model
+                : configuration[ReviewerConfigurationConstants.ModelKey]!.Trim(),
         };
     }
 
@@ -374,6 +381,8 @@ internal static class EngineHostApplicationBuilderExtensions
             ApiKey = configuration[ModelCompletionConfigurationConstants.ApiKeyKey],
             RequestTimeout = ReadPositiveTimeSpan(
                 configuration, ModelCompletionConfigurationConstants.RequestTimeoutKey, defaults.RequestTimeout),
+            OpenRouterSort = configuration[ModelCompletionConfigurationConstants.OpenRouterSortKey],
+            OpenRouterIgnore = configuration[ModelCompletionConfigurationConstants.OpenRouterIgnoreKey]?.Split(',') ?? [],
         };
     }
 
@@ -479,6 +488,8 @@ internal static class EngineHostApplicationBuilderExtensions
             options.Model = configured.Model;
             options.ApiKey = configured.ApiKey;
             options.RequestTimeout = configured.RequestTimeout;
+            options.OpenRouterSort = configured.OpenRouterSort;
+            options.OpenRouterIgnore = configured.OpenRouterIgnore;
             options.MaximumResponseBytes = ModelCompletionTransportConstants.ResponseByteBudget(
                 Math.Max(curatorOptions.MaximumOutputCharacters, reviewerOptions.MaximumOutputCharacters));
         });

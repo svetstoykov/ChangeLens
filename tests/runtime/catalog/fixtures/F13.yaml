@@ -1,0 +1,81 @@
+id: F13
+description: >-
+  Seeded defect, swapped argument (TypeScript): feature/review adds selectionLabel, which passes formatRange its
+  bounds in the wrong order, so every multi-item selection throws the RangeError formatRange raises when end
+  precedes start. The branch also adds a correct pluralize helper and renames the range notes; an unchanged
+  file is an unrelated decoy.
+target: main
+defect: { path: src/page-label.ts, side: after, lines: [10, 10] }
+commits:
+  - branch: main
+    message: "fixture: base range formatting"
+    date: "2026-01-01T00:00:00+00:00"
+    changes:
+      - write:
+          path: package.json
+          text: |
+            {
+              "name": "f13-ranges",
+              "version": "1.0.0",
+              "private": true
+            }
+      - write:
+          path: src/range.ts
+          text: |
+            export function formatRange(start: number, end: number): string {
+              if (end < start) {
+                throw new RangeError('end must not precede start');
+              }
+              return `${start}-${end}`;
+            }
+      - write:
+          path: src/page-label.ts
+          text: |
+            import { formatRange } from './range';
+
+            export function pageLabel(first: number, count: number): string {
+              return `Items ${formatRange(first, first + count - 1)}`;
+            }
+      - write:
+          path: src/strings.ts
+          text: |
+            export function capitalize(word: string): string {
+              return word.charAt(0).toUpperCase() + word.slice(1);
+            }
+      - write:
+          path: docs/range-notes.md
+          text: |
+            Ranges are inclusive and written low-high.
+      - write:
+          path: src/decoy.ts
+          text: |
+            export const unrelated = 'decoy';
+  - branch: feature/review
+    message: "fixture: selection labels"
+    date: "2026-01-02T00:00:00+00:00"
+    changes:
+      - write:
+          path: src/page-label.ts
+          text: |
+            import { formatRange } from './range';
+
+            export function pageLabel(first: number, count: number): string {
+              return `Items ${formatRange(first, first + count - 1)}`;
+            }
+
+            export function selectionLabel(anchor: number, focus: number): string {
+              const low = Math.min(anchor, focus);
+              const high = Math.max(anchor, focus);
+              return `Selected ${formatRange(high, low)}`;
+            }
+      - write:
+          path: src/strings.ts
+          text: |
+            export function capitalize(word: string): string {
+              return word.charAt(0).toUpperCase() + word.slice(1);
+            }
+
+            export function pluralize(word: string, count: number): string {
+              return count === 1 ? word : `${word}s`;
+            }
+      - rename: { from: docs/range-notes.md, to: docs/ranges.md }

@@ -6,7 +6,7 @@ _SECTIONS: dict[str, tuple[str, ...]] = {
     "Analysis.ChangeAnatomy": ("MinimumKeyLength", "MaximumKeysPerFile", "MaximumOccurrencesPerKey"),
     "Analysis.ContextPolicy": ("MaximumDisclosedCharactersPerNode",),
     "Analysis.Curator": ("MaximumOutputCharacters", "MaximumOutputTokens", "ReasoningEffort"),
-    "Analysis.Review": ("Enabled", "MaximumOutputCharacters", "MaximumOutputTokens", "ReasoningEffort"),
+    "Analysis.Review": ("Enabled", "MaximumOutputCharacters", "MaximumOutputTokens", "ReasoningEffort", "Model"),
     "Snapshots.FrozenGitTree": (
         "MaximumBlobBytes",
         "MaximumTreeFiles",
@@ -14,7 +14,12 @@ _SECTIONS: dict[str, tuple[str, ...]] = {
         "MaximumHistoryPathsPerCommit",
         "CommandTimeout",
     ),
-    "Analysis.EvidenceGraph": ("MaximumQuoteWindowNodes", "MaximumEdges"),
+    "Analysis.EvidenceGraph": (
+        "MaximumQuoteWindowNodes",
+        "MaximumEdges",
+        "MaximumNodesPerChangedFile",
+        "MaximumWholeChangedFileLines",
+    ),
     "Analysis.Frontier": ("MaximumEntries",),
     "Analysis.EvidenceBinder": (
         "ContextWindowTokens",
@@ -37,7 +42,7 @@ _SECTIONS: dict[str, tuple[str, ...]] = {
         "MaximumReasonsPerCandidate",
         "IncludeCoChange",
     ),
-    "Analysis.ModelCompletion": ("RequestTimeout",),
+    "Analysis.ModelCompletion": ("RequestTimeout", "OpenRouterSort", "OpenRouterIgnore"),
 }
 
 RESERVED_KEYS = frozenset(

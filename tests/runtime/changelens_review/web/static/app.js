@@ -187,6 +187,16 @@
       tip: "Your own judgement of the explanation: good, weak or wrong.",
       body: "good: true, and a reviewer would understand the change. weak: nothing false, but it misses something or is clumsy. wrong: at least one statement is false. The verdict is saved as cases/<case>/verdict.json, beside the result, which is never changed."
     },
+    finding: {
+      term: "Finding",
+      tip: "A defect or open question the reviewer published, with a severity and the code it anchors to.",
+      body: "Findings are grouped Critical, Warning, Info. The anchor is the exact lines the finding points at; click a finding to see every quote it cites. The review line says whether the review ran, its recommendation, and how many findings validation withheld."
+    },
+    findingVerdict: {
+      term: "Finding verdict",
+      tip: "Your judgement of one finding in this repeat: correct, weak or wrong.",
+      body: "correct: a real problem at the right severity. weak: true but low value, or the wrong severity. wrong: not a real problem. For a known-defect case, also say whether the finding describes that defect's trigger and impact. Saved per repeat as finding-verdicts.json beside the repeat's result, which is never changed."
+    },
     toJudge: {
       term: "To judge",
       tip: "No verdict has been recorded for this case yet.",
@@ -1327,8 +1337,27 @@
     },
     should_not_flag: function (e) {
       return "Leaves " + [].concat(e == null ? [] : e).join(", ") + " out";
+    },
+    should_find: function (e) {
+      var anyOf = e != null && !Array.isArray(e) && Array.isArray(e.any);
+      var defects = [].concat(anyOf ? e.any : (e == null ? [] : e));
+      return (anyOf ? "Finds any of " : "Finds ") + defects.map(function (d) {
+        var lines = (d && d.lines) || [];
+        return (d && d.path) + " " + (d && d.side) + " " + lines.join("–") + " at " + (d && d.severity) + " or above";
+      }).join(anyOf ? " or " : "; ");
+    },
+    should_not_warn: function () {
+      return "Publishes no Critical or Warning";
     }
   };
+
+  var FINDING_CHOICES = [
+    ["correct", "good", "Correct"],
+    ["weak", "weak", "Weak"],
+    ["wrong", "wrong", "Wrong"]
+  ];
+
+  var FINDING_SEVERITY_ORDER = { critical: 0, warning: 1, info: 2 };
 
   var CASE_CHOICES = [
     ["good", "Good", "True, and a reviewer would understand the change."],
@@ -1662,6 +1691,7 @@
       }
       box.appendChild(sec);
     });
+    if (model.review) box.appendChild(caseRenderFindings(attempt, model));
     var limits = model.limitations || [];
     if (limits.length) {
       var ls = el("section", { class: "limits" }, [
@@ -1698,6 +1728,124 @@
       box.appendChild(rs);
     }
     return box;
+  }
+
+  function caseFindingCitations(model, findingId) {
+    return (model.citations || []).filter(function (c) { return c && c.claimId === "finding:" + findingId; });
+  }
+
+  function caseFindingAnchor(citations) {
+    var anchor = citations.filter(function (c) { return (c.focus || []).length; })[0];
+    if (!anchor) return "";
+    var ranges = anchor.focus.map(function (f) { return f.startLine + "–" + f.endLine; }).join(", ");
+    return anchor.path + " " + (anchor.side === "before" ? "old" : "new") + " " + ranges;
+  }
+
+  function caseRenderFindings(attempt, model) {
+    var review = model.review;
+    var sec = el("section", { class: "findings" }, [
+      el("h3", { class: "panel-title" }, [withTip("Findings", "finding")])
+    ]);
+    var outcome = "Review " + review.status + (review.recommendation ? " · " + review.recommendation : "") +
+      " · " + (review.withheldCount || 0) + " withheld";
+    sec.appendChild(el("p", { class: "muted", text: outcome }));
+    var findings = (model.findings || []).slice().sort(function (a, b) {
+      return (FINDING_SEVERITY_ORDER[a.severity] || 0) - (FINDING_SEVERITY_ORDER[b.severity] || 0);
+    });
+    findings.forEach(function (f) {
+      var citations = caseFindingCitations(model, f.id);
+      var anchor = caseFindingAnchor(citations);
+      var head = el("span", null, [
+        el("span", { class: "severity severity-" + f.severity, text: f.severity }),
+        document.createTextNode(" " + (f.title || "") + " "),
+        el("code", { text: f.id }),
+        anchor ? el("span", { class: "finding-anchor", text: " " + anchor }) : null
+      ]);
+      var item = el("div", { class: "finding" }, [
+        caseClaim(head, citations.map(function (c) { return c.nodeId; }), null),
+        el("dl", { class: "finding-parts" }, [
+          el("dt", { text: "Trigger" }), el("dd", { text: f.trigger || "" }),
+          el("dt", { text: "Impact" }), el("dd", { text: f.impact || "" }),
+          el("dt", { text: "Fix" }), el("dd", { text: f.fix || "" })
+        ]),
+        caseRenderFindingVerdict(attempt, f.id)
+      ]);
+      sec.appendChild(item);
+    });
+    return sec;
+  }
+
+  function caseFindingVerdictUrl(attempt, findingId) {
+    var rep = attempt.repeat == null ? "-" : String(attempt.repeat);
+    return "/api/runs/" + enc(caseScreen.run) + "/cases/" + enc(caseScreen.caseId) + "/findings/" + rep + "/" +
+      enc(findingId) + "/verdict";
+  }
+
+  function caseRenderFindingVerdict(attempt, findingId) {
+    attempt.findingVerdicts = attempt.findingVerdicts || {};
+    var saved = attempt.findingVerdicts[findingId] || null;
+    var draft = {
+      verdict: saved ? saved.verdict : null,
+      describesDefect: saved ? saved.describesDefect : null,
+      note: saved ? (saved.note || "") : ""
+    };
+    var row = el("div", { class: "verdict-row finding-verdict" }, [withTip("Your verdict", "findingVerdict")]);
+    var buttons = {};
+    FINDING_CHOICES.forEach(function (o) {
+      var b = el("button", { class: "choice compact " + o[1], text: o[2] });
+      b.addEventListener("click", function () { draft.verdict = o[0]; refresh(); });
+      buttons[o[0]] = b;
+      row.appendChild(b);
+    });
+    var defect = el("select", { class: "describes-defect", "aria-label": "Describes the known defect" }, [
+      el("option", { value: "", text: "Known defect: not judged" }),
+      el("option", { value: "true", text: "Describes the known defect" }),
+      el("option", { value: "false", text: "Not the known defect" })
+    ]);
+    defect.value = draft.describesDefect == null ? "" : String(draft.describesDefect);
+    defect.addEventListener("change", function () {
+      draft.describesDefect = defect.value === "" ? null : defect.value === "true";
+    });
+    var note = el("input", { class: "note", type: "text", placeholder: "Why?" });
+    note.value = draft.note;
+    note.addEventListener("input", function () { draft.note = note.value; });
+    var save = el("button", { class: "btn", text: "Save" });
+    var status = el("span", { class: "save-status" });
+    var remove = el("button", { class: "linklike remove-verdict", text: "Remove" });
+    save.addEventListener("click", function () {
+      if (!draft.verdict) return;
+      status.textContent = "Saving…";
+      api(caseFindingVerdictUrl(attempt, findingId), {
+        method: "PUT",
+        body: { verdict: draft.verdict, describesDefect: draft.describesDefect, note: draft.note }
+      }).then(function (recorded) {
+        saved = recorded;
+        attempt.findingVerdicts[findingId] = recorded;
+        status.textContent = "Saved";
+        refresh();
+      }).catch(function () { status.textContent = ""; });
+    });
+    remove.addEventListener("click", function () {
+      api(caseFindingVerdictUrl(attempt, findingId), { method: "DELETE" }).then(function () {
+        saved = null;
+        delete attempt.findingVerdicts[findingId];
+        draft = { verdict: null, describesDefect: null, note: "" };
+        defect.value = "";
+        note.value = "";
+        status.textContent = "Removed";
+        refresh();
+      }).catch(function () { status.textContent = ""; });
+    });
+    function refresh() {
+      Object.keys(buttons).forEach(function (k) {
+        buttons[k].setAttribute("aria-pressed", draft.verdict === k ? "true" : "false");
+      });
+      save.disabled = !draft.verdict;
+      remove.hidden = !saved;
+    }
+    [defect, note, save, status, remove].forEach(function (node) { row.appendChild(node); });
+    refresh();
+    return row;
   }
 
   function caseRenderSidebar(runDetail, run, caseId) {
@@ -1900,6 +2048,7 @@
     var t = e.target;
     var typing = t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA");
     if (typing) {
+      if (t.closest && t.closest(".finding-verdict")) return;
       if (e.key === "Enter") { e.preventDefault(); caseSaveVerdict(); }
       else if (e.key === "Escape") { caseCloseClaim(); }
       return;
@@ -2447,6 +2596,7 @@
       "uv run --project tests/runtime review run <plan>                  # run a plan",
       "uv run --project tests/runtime review show <run> <case>           # explanation and diff as text",
       "uv run --project tests/runtime review verdict <run> <case> good   # record a verdict",
+      "uv run --project tests/runtime review finding-verdict <run> <case> <finding> correct --repeat 1  # judge a finding",
       "uv run --project tests/runtime review compare <run-a> <run-b>     # compare two runs",
       "uv run --project tests/runtime review clean [--all]               # delete heavy output, or all runs",
       "uv run --project tests/runtime review serve                       # this page"

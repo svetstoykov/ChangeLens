@@ -70,7 +70,7 @@ public sealed class OpenAiCompatibleModelCompletionClient : IModelCompletionClie
         cancellationToken.ThrowIfCancellationRequested();
 
         var startedAt = Stopwatch.GetTimestamp();
-        var model = this._options.Model?.Trim();
+        var model = (request.Model ?? this._options.Model)?.Trim();
         this._logger.LogInformation(
             "Starting model completion attempt for model {Model} with maximum output tokens {MaximumOutputTokens}.",
             model,
@@ -100,7 +100,8 @@ public sealed class OpenAiCompatibleModelCompletionClient : IModelCompletionClie
                 request.MaximumOutputTokens,
                 new OpenAiCompatibleResponseFormat("json_object"),
                 request.ReasoningEffort is null ? 0 : null,
-                request.ReasoningEffort?.ToString().ToLowerInvariant()),
+                request.ReasoningEffort?.ToString().ToLowerInvariant(),
+                this.CreateProviderPreferences()),
             RequestSerializerOptions);
 
         using var httpRequest = new HttpRequestMessage(HttpMethod.Post, endpoint)
@@ -143,7 +144,8 @@ public sealed class OpenAiCompatibleModelCompletionClient : IModelCompletionClie
                 return this.FinishFailure(providerError, startedAt, (int)response.StatusCode, ErrorOutcome(providerError));
             }
 
-            if (responseBody is null || !TryParseCompletion(responseBody, model, out var completion))
+            var completion = responseBody is null ? null : TryParseCompletion(responseBody, model);
+            if (completion is null || string.IsNullOrWhiteSpace(completion.Text))
             {
                 return this.FinishFailure(
                     OperationError.ExternalDependencyFailure(
@@ -151,7 +153,8 @@ public sealed class OpenAiCompatibleModelCompletionClient : IModelCompletionClie
                         ModelCompletionErrorCode.MalformedResponse),
                     startedAt,
                     (int)response.StatusCode,
-                    "malformedResponse");
+                    "malformedResponse",
+                    completion);
             }
 
             var result = Result.Success(new ModelCompletionModel(
@@ -161,21 +164,14 @@ public sealed class OpenAiCompatibleModelCompletionClient : IModelCompletionClie
                 completion.InputTokens,
                 completion.OutputTokens,
                 completion.CachedInputTokens,
-                completion.ReasoningTokens));
-            this.LogOutcome(
-                startedAt,
-                "success",
-                null,
-                (int)response.StatusCode,
-                result.Data!.InputTokens,
-                result.Data.OutputTokens,
-                result.Data.CachedInputTokens,
-                result.Data.ReasoningTokens);
+                completion.ReasoningTokens,
+                completion.FinishReason == CompletionEnvelopeConstants.OutputLimitFinishReason));
+            this.LogOutcome(startedAt, "success", null, (int)response.StatusCode, completion);
             return result;
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
-            this.LogOutcome(startedAt, "canceled", null, null, null, null, null, null);
+            this.LogOutcome(startedAt, "canceled", null, null, null);
             throw;
         }
         catch (OperationCanceledException) when (timeoutCancellation.IsCancellationRequested)
@@ -446,9 +442,9 @@ public sealed class OpenAiCompatibleModelCompletionClient : IModelCompletionClie
         _ => "requestFailed",
     };
 
-    private static bool TryParseCompletion(string responseBody, string configuredModel, out ParsedModelCompletion completion)
+    // Returns null when the envelope has no first choice with a message; a message without usable content still returns its metadata.
+    private static ParsedModelCompletion? TryParseCompletion(string responseBody, string configuredModel)
     {
-        completion = null!;
         try
         {
             using var document = JsonDocument.Parse(responseBody);
@@ -458,25 +454,19 @@ public sealed class OpenAiCompatibleModelCompletionClient : IModelCompletionClie
                 || choices.ValueKind != JsonValueKind.Array
                 || choices.GetArrayLength() == 0)
             {
-                return false;
+                return null;
             }
 
             var firstChoice = choices[0];
             if (firstChoice.ValueKind != JsonValueKind.Object
                 || !firstChoice.TryGetProperty("message", out var message)
-                || message.ValueKind != JsonValueKind.Object
-                || !message.TryGetProperty("content", out var content)
-                || content.ValueKind != JsonValueKind.String)
+                || message.ValueKind != JsonValueKind.Object)
             {
-                return false;
+                return null;
             }
 
-            var text = content.GetString();
-            if (string.IsNullOrWhiteSpace(text))
-            {
-                return false;
-            }
-
+            var text = ReadString(message, "content");
+            var reasoningCharacters = ReadString(message, CompletionEnvelopeConstants.Reasoning)?.Length ?? 0;
             var model = root.TryGetProperty("model", out var modelElement)
                 && modelElement.ValueKind == JsonValueKind.String
                 && !string.IsNullOrWhiteSpace(modelElement.GetString())
@@ -490,19 +480,32 @@ public sealed class OpenAiCompatibleModelCompletionClient : IModelCompletionClie
             var outputTokens = ReadNullableInt(usage, "completion_tokens");
             var cachedInputTokens = ReadNestedNullableInt(usage, "prompt_tokens_details", "cached_tokens");
             var reasoningTokens = ReadNestedNullableInt(usage, "completion_tokens_details", "reasoning_tokens");
-            completion = new ParsedModelCompletion(
+            return new ParsedModelCompletion(
                 model,
                 text,
                 inputTokens,
                 outputTokens,
                 cachedInputTokens,
-                reasoningTokens);
-            return true;
+                reasoningTokens,
+                ReadIdentifier(firstChoice, ProviderErrorConstants.FinishReason),
+                ReadIdentifier(root, CompletionEnvelopeConstants.Provider),
+                ReadIdentifier(root, CompletionEnvelopeConstants.Id),
+                reasoningCharacters);
         }
         catch (JsonException)
         {
-            return false;
+            return null;
         }
+    }
+
+    // Only short plain identifiers are kept, so a provider cannot place source text or credentials in the log through these fields.
+    private static string? ReadIdentifier(JsonElement parent, string name)
+    {
+        var value = ReadString(parent, name);
+        return value is { Length: > 0 and <= CompletionEnvelopeConstants.MaximumIdentifierLength }
+            && value.All(character => char.IsAsciiLetterOrDigit(character) || character is '-' or '_' or '.' or ' ' or '/' or ':')
+            ? value
+            : null;
     }
 
     private static int? ReadNullableInt(JsonElement? parent, string propertyName)
@@ -530,13 +533,23 @@ public sealed class OpenAiCompatibleModelCompletionClient : IModelCompletionClie
         return ReadNullableInt(child, propertyName);
     }
 
+    // Unknown orderings and blank names are dropped, so a misconfigured value leaves OpenRouter's default routing in place.
+    private OpenRouterProviderPreferences? CreateProviderPreferences()
+    {
+        var sort = this._options.OpenRouterSort?.Trim().ToLowerInvariant();
+        sort = OpenRouterRoutingConstants.Sorts.Contains(sort) ? sort : null;
+        string[] ignore = [.. this._options.OpenRouterIgnore.Select(name => name.Trim()).Where(name => name.Length > 0)];
+        return sort is null && ignore.Length == 0 ? null : new OpenRouterProviderPreferences(sort, ignore.Length == 0 ? null : ignore);
+    }
+
     private Result<ModelCompletionModel> FinishFailure(
         OperationError error,
         long startedAt,
         int? statusCode,
-        string outcome)
+        string outcome,
+        ParsedModelCompletion? envelope = null)
     {
-        this.LogOutcome(startedAt, outcome, error.Code, statusCode, null, null, null, null, error.Message);
+        this.LogOutcome(startedAt, outcome, error.Code, statusCode, envelope, error.Message);
         return Result.Fail<ModelCompletionModel>(error);
     }
 
@@ -545,25 +558,18 @@ public sealed class OpenAiCompatibleModelCompletionClient : IModelCompletionClie
         string outcome,
         string? errorCode,
         int? statusCode,
-        int? inputTokens,
-        int? outputTokens,
-        int? cachedInputTokens,
-        int? reasoningTokens,
+        ParsedModelCompletion? envelope,
         string? failureDetail = null)
     {
         this._logger.LogInformation(
             "Model completion attempt finished with outcome {Outcome}, error code {ErrorCode}, HTTP status {StatusCode}, "
-            + "elapsed {ElapsedMilliseconds:0.000} ms, input tokens {InputTokens}, output tokens {OutputTokens}, "
-            + "cached input tokens {CachedInputTokens}, reasoning tokens {ReasoningTokens}, failure detail {FailureDetail}.",
-            outcome,
-            errorCode,
-            statusCode,
-            Stopwatch.GetElapsedTime(startedAt).TotalMilliseconds,
-            inputTokens,
-            outputTokens,
-            cachedInputTokens,
-            reasoningTokens,
-            failureDetail);
+            + "elapsed {ElapsedMilliseconds:0.000} ms, finish reason {FinishReason}, upstream {Upstream}, generation {GenerationId}, "
+            + "input tokens {InputTokens}, output tokens {OutputTokens}, cached input tokens {CachedInputTokens}, "
+            + "reasoning tokens {ReasoningTokens}, reply characters {ReplyCharacters}, reasoning characters {ReasoningCharacters}, "
+            + "failure detail {FailureDetail}.",
+            outcome, errorCode, statusCode, Stopwatch.GetElapsedTime(startedAt).TotalMilliseconds, envelope?.FinishReason,
+            envelope?.Upstream, envelope?.GenerationId, envelope?.InputTokens, envelope?.OutputTokens, envelope?.CachedInputTokens,
+            envelope?.ReasoningTokens, envelope?.Text?.Length, envelope?.ReasoningCharacters, failureDetail);
     }
 
 }

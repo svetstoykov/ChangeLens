@@ -29,4 +29,14 @@ public static class ModelCompletionConfigurationConstants
     ///     The configured request timeout.
     /// </summary>
     public const string RequestTimeoutKey = SectionKey + ":RequestTimeout";
+
+    /// <summary>
+    ///     The OpenRouter upstream ordering: <c>price</c>, <c>throughput</c>, or <c>latency</c>. Set it only for OpenRouter.
+    /// </summary>
+    public const string OpenRouterSortKey = SectionKey + ":OpenRouterSort";
+
+    /// <summary>
+    ///     The comma-separated OpenRouter upstream names never to route to. Set it only for OpenRouter.
+    /// </summary>
+    public const string OpenRouterIgnoreKey = SectionKey + ":OpenRouterIgnore";
 }

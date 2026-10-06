@@ -5,7 +5,7 @@ import pytest
 from changelens_review.errors import HarnessError
 from changelens_review.fixtures.builder import build_fixture
 from changelens_review.fixtures.spec import load_catalog_fixture, parse_fixture
-from changelens_review.gitcli import git, git_text
+from changelens_review.gitcli import git, git_text, run_git
 
 
 def test_f01_builds_the_expected_history(tmp_path: Path) -> None:
@@ -61,6 +61,27 @@ def test_f12_reverts_the_committed_guard_in_the_worktree_only(tmp_path: Path) ->
     assert "reverted-fix-marker-only" in worktree
     assert "name is required" in git_text(built.path, "show", "HEAD:src/parse-name.ts")
     assert built.markers == ("reverted-fix-marker-only",)
+
+
+@pytest.mark.parametrize(
+    ("fixture_id", "defect_line"),
+    [
+        ("F13", "  return `Selected ${formatRange(high, low)}`;"),
+        ("F14", "    return items[start : start + size + 1]"),
+        ("F15", '\treturn fmt.Sprintf("Hello, %s (@%s)", user.Profile.DisplayName, user.Login)'),
+    ],
+)
+def test_a_seeded_defect_names_changed_lines_on_its_side(tmp_path: Path, fixture_id: str, defect_line: str) -> None:
+    spec = load_catalog_fixture(fixture_id)
+    defect = spec.defect
+    assert defect is not None and defect.side == "after"
+    built = build_fixture(spec, tmp_path / "repo")
+
+    after = git_text(built.path, "show", f"HEAD:{defect.path}").split("\n")
+    before = run_git(built.path, "show", f"{built.target}:{defect.path}").stdout
+
+    assert after[defect.start_line - 1 : defect.end_line] == [defect_line]
+    assert defect_line.encode() not in before
 
 
 def test_remote_and_conflicted_merge(tmp_path: Path) -> None:

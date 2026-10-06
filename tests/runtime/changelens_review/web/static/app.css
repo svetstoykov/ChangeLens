@@ -677,6 +677,37 @@ section.limits, section.removals {
 }
 
 section.limits ul, section.removals ul { margin: 6px 0 0; padding-left: 18px; }
+
+section.findings {
+  margin-top: 14px;
+  border-top: 1px solid var(--line);
+  padding-top: 10px;
+  font-size: 13px;
+}
+
+.finding { margin-top: 10px; padding-top: 8px; border-top: 1px dashed var(--line); }
+.finding:first-of-type { border-top: 0; }
+.finding-anchor { color: var(--muted); font-size: 12px; }
+.finding-parts { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 2px 10px; margin: 6px 0; }
+.finding-parts dt { color: var(--muted); }
+.finding-parts dd { margin: 0; }
+.severity { font-size: 11px; font-weight: 600; text-transform: uppercase; border-radius: 4px; padding: 1px 6px; }
+.severity-critical { color: var(--wrong); background: var(--wrong-soft); }
+.severity-warning { color: var(--weak); background: var(--weak-soft); }
+.severity-info { color: var(--accent); background: var(--accent-soft); }
+.finding-verdict { gap: 6px; }
+.choice.compact { flex-direction: row; padding: 4px 10px; font-weight: 600; }
+.choice.compact.good { color: var(--good); }
+.choice.compact.weak { color: var(--weak); }
+.choice.compact.wrong { color: var(--wrong); }
+select.describes-defect {
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 5px 7px;
+  background: var(--surface);
+  color: inherit;
+  font-size: 12.5px;
+}
 ul.assurances { margin: 6px 0 0; padding-left: 18px; color: var(--muted); }
 
 .file-index {

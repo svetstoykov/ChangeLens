@@ -25,4 +25,7 @@ public static class EvidenceBinderOmissionKind
 
     /// <summary>A changed file has no disclosed evidence node.</summary>
     public const string NoEvidenceSelected = "noEvidenceSelected";
+
+    /// <summary>Evidence from unchanged files left out of a binder scoped to the changed files.</summary>
+    public const string OutsideChangedFiles = "outsideChangedFiles";
 }

@@ -15,7 +15,7 @@ from changelens_review.provider.scripts import ROLES
 from changelens_review.results.store import repeat_folder
 
 RUN_ID_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
-UNREPLAYABLE_OUTCOMES = ("harness-error",)
+UNREPLAYABLE_OUTCOMES = ("harness-error", "deadline")
 
 
 @dataclass(frozen=True)
@@ -69,7 +69,7 @@ def load_recording(run_id: str, case_id: str, runs_root: Path | None = None, *, 
     if not exchanges:
         raise SpecError([f"{source} recorded no provider exchanges"])
     issues = [
-        f"exchange {record.get('sequence')} of {source} is a harness failure"
+        f"exchange {record.get('sequence')} of {source} cannot be replayed: its outcome is {record.get('outcome')}"
         for record in exchanges
         if record.get("outcome") in UNREPLAYABLE_OUTCOMES
     ]

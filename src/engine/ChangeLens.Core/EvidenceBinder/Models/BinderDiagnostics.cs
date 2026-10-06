@@ -3,7 +3,7 @@ namespace ChangeLens.Core.EvidenceBinder.Models;
 /// <summary>
 ///     Represents assembly sizes, coverage counters, policy diagnostics, and budget-ladder decisions.
 /// </summary>
-/// <param name="BinderCharacterCount">The curator payload size measured after the budget ladder.</param>
+/// <param name="BinderCharacterCount">The serialized payload size measured after the budget ladder or changed-file scoping.</param>
 /// <param name="TokenEstimate">The character-based token estimate at 3.25 characters per token.</param>
 /// <param name="TargetCharacters">The ordinary ladder target.</param>
 /// <param name="BudgetCharacters">The hard binder cap.</param>

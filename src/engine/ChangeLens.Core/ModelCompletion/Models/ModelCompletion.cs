@@ -10,6 +10,7 @@ namespace ChangeLens.Core.ModelCompletion.Models;
 /// <param name="OutputTokens">The reported output-token count, or <see langword="null" /> when absent.</param>
 /// <param name="CachedInputTokens">The reported cached-input-token count, or <see langword="null" /> when absent.</param>
 /// <param name="ReasoningTokens">The reported reasoning-token count, or <see langword="null" /> when absent.</param>
+/// <param name="StoppedAtOutputLimit">Whether the provider reported that it cut the reply off at the output-token limit.</param>
 public sealed record ModelCompletion(
     string Model,
     string Text,
@@ -17,4 +18,5 @@ public sealed record ModelCompletion(
     int? InputTokens,
     int? OutputTokens,
     int? CachedInputTokens,
-    int? ReasoningTokens);
+    int? ReasoningTokens,
+    bool StoppedAtOutputLimit);

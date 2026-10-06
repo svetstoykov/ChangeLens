@@ -1,6 +1,7 @@
 """Forwards completion requests to the real provider the engine is configured for."""
 
 import json
+import time
 import urllib.error
 import urllib.request
 from collections.abc import Mapping
@@ -17,6 +18,8 @@ SETTINGS_SECTION = ("ChangeLens", "Analysis", "ModelCompletion")
 SETTING_NAMES = ("BaseUrl", "Model", "ApiKey")
 ENVIRONMENT_PREFIX = "ChangeLens__Analysis__ModelCompletion__"
 REDACTED = "[redacted]"
+READ_CHUNK_BYTES = 65_536
+DEADLINE_OUTCOME = "deadline"
 
 
 @dataclass(frozen=True)
@@ -74,15 +77,37 @@ class LiveResponder:
             },
             method="POST",
         )
+        deadline = time.monotonic() + self._timeout_seconds
+        detail = f"the provider did not finish within {self._timeout_seconds:g} s; the proxy stopped waiting"
+        missed_deadline = ProxyReply(None, b"", DEADLINE_OUTCOME, detail)
         try:
             with urllib.request.urlopen(request, timeout=self._timeout_seconds) as response:
-                return ProxyReply(response.status, self._redact_bytes(response.read()), "live")
+                body = self._read_until(response, deadline)
+                return (
+                    missed_deadline if body is None else ProxyReply(response.status, self._redact_bytes(body), "live")
+                )
         except urllib.error.HTTPError as error:
             body = self._redact_bytes(error.read())
             return ProxyReply(error.code, body, "live", f"provider status {error.code}")
         except (urllib.error.URLError, OSError) as error:
+            if time.monotonic() >= deadline:
+                return missed_deadline
             detail = self._redact(f"the live provider could not be reached: {error}")
             return ProxyReply(502, error_body(detail), "harness-error", detail)
+
+    @staticmethod
+    def _read_until(response, deadline: float) -> bytes | None:
+        """Read the whole body, or return None once the deadline passes.
+
+        The socket timeout bounds each read, not the request: a provider that keeps the connection alive with
+        padding while it works would otherwise hold the proxy for as long as the model takes.
+        """
+        chunks: list[bytes] = []
+        while chunk := response.read1(READ_CHUNK_BYTES):
+            chunks.append(chunk)
+            if time.monotonic() > deadline:
+                return None
+        return b"".join(chunks)
 
     def _redact(self, text: str) -> str:
         return text.replace(self._upstream.api_key, REDACTED)

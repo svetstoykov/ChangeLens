@@ -303,49 +303,6 @@ public sealed class DraftValidationServiceTests
         Assert.Equal("thesis", removal.Id);
     }
 
-    [Fact]
-    public void StatementWhoseQuotedLiteralIsMissingFromItsCitedQuotesIsRemoved()
-    {
-        const string quote = "return filename.lower().endswith((\".html\", \".htm\"))";
-        var binder = DraftValidationFixtureBinderBuilder.Create(
-            ["n1", "n2"], quotes: new Dictionary<string, string> { ["n1"] = quote, ["n2"] = "suffix = \"html\"" });
-        var draft = Draft(
-            [Participant("caller", ["n1"])],
-            orderedSteps:
-            [
-                Statement("The predicate lowers the name and tests endswith((\"html\", \"htm\")).", ["n1"]),
-                Statement("The predicate lowers the name and tests endswith((\".html\", \".htm\")).", ["n1"]),
-                Statement("The check is now \"case-insensitive\" for extensions.", ["n1"]),
-                Statement("A name such as page.HTML is lowered before the suffix test.", ["n1"]),
-            ]);
-
-        var outcome = Validate(draft, binder);
-
-        var steps = outcome.Draft.Tracks.Single().OrderedSteps;
-        Assert.Equal(2, steps.Count);
-        Assert.Contains("\".html\"", steps[0].Text, StringComparison.Ordinal);
-        Assert.Contains("page.HTML", steps[1].Text, StringComparison.Ordinal);
-        Assert.Equal(
-            ["track:t1:step:0", "track:t1:step:2"],
-            outcome.Removals.Where(removal => removal.Reason.Contains("literal", StringComparison.Ordinal)).Select(removal => removal.Id));
-    }
-
-    [Fact]
-    public void RelationshipWhoseQuotedLiteralIsMissingFromItsCitedQuotesIsRemoved()
-    {
-        var binder = DraftValidationFixtureBinderBuilder.Create(
-            ["n1", "n2"], quotes: new Dictionary<string, string> { ["n1"] = "group.handle('QUERY', path)", ["n2"] = "handle(method, path)" });
-        var participants = new[] { Participant("caller", ["n1"]), Participant("service", ["n2"]) };
-        var kept = Relationship("r1", "caller", "service", ["n1", "n2"]) with { Explanation = "The caller passes \"QUERY\" to handle." };
-        var removed = Relationship("r2", "service", "caller", ["n1", "n2"]) with { Explanation = "The caller passes \"GET\" to handle." };
-
-        var outcome = Validate(Draft(participants, [kept, removed]), binder);
-
-        Assert.Equal("r1", Assert.Single(outcome.Draft.Tracks.Single().Relationships).Id);
-        Assert.Contains(
-            outcome.Removals, removal => removal.Scope == "relationship" && removal.Id == "r2" && removal.Reason.Contains("literal"));
-    }
-
     private static DraftValidationService Service() => new();
 
     private static DraftValidationOutcome Validate(MentalModelDraft draft, EvidenceBinderModel binder) =>

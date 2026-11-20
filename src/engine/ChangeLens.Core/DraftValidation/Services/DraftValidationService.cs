@@ -14,8 +14,6 @@ namespace ChangeLens.Core.DraftValidation.Services;
 public sealed class DraftValidationService : IDraftValidationService
 {
     private const string SupersedesKind = "supersedes";
-    private const int MaximumQuotedLiteralCharacters = 60;
-    private const string UncitedLiteralReason = "quotes a literal that no cited evidence node contains";
 
     /// <inheritdoc />
     public DraftValidationOutcome Validate(MentalModelDraft draft, EvidenceBinderModel binder, CancellationToken cancellationToken)
@@ -24,7 +22,7 @@ public sealed class DraftValidationService : IDraftValidationService
         ArgumentNullException.ThrowIfNull(binder);
         cancellationToken.ThrowIfCancellationRequested();
 
-        var quotesByNodeId = binder.Evidence.ToDictionary(node => node.NodeId, node => node.Text ?? string.Empty, StringComparer.Ordinal);
+        var nodeIds = binder.Evidence.Select(node => node.NodeId).ToHashSet(StringComparer.Ordinal);
         var edgeIds = binder.MatchEdges.Select(edge => edge.EdgeId).ToHashSet(StringComparer.Ordinal);
         var relationshipKinds = CuratorContractConstants.RelationshipKinds.ToHashSet(StringComparer.Ordinal);
         var trackShapes = CuratorContractConstants.TrackShapes.ToHashSet(StringComparer.Ordinal);
@@ -36,7 +34,7 @@ public sealed class DraftValidationService : IDraftValidationService
         var thesis = this.ValidateStatement(
             draft.Thesis,
             "thesis",
-            quotesByNodeId,
+            nodeIds,
             binder.Contract.Limits.MaximumStatementCharacters,
             removals,
             ref invalidReferenceCount);
@@ -62,7 +60,7 @@ public sealed class DraftValidationService : IDraftValidationService
             var summary = this.ValidateStatement(
                 track.Summary,
                 $"track:{track.Id}:summary",
-                quotesByNodeId,
+                nodeIds,
                 limits.MaximumStatementCharacters,
                 removals,
                 ref invalidReferenceCount);
@@ -90,7 +88,7 @@ public sealed class DraftValidationService : IDraftValidationService
 
                 var kept = this.KeepDisclosedIds(
                     participant.EvidenceNodeIds,
-                    quotesByNodeId,
+                    nodeIds,
                     "participant",
                     participant.Id,
                     removals,
@@ -120,7 +118,7 @@ public sealed class DraftValidationService : IDraftValidationService
             {
                 var keptNodes = this.KeepDisclosedIds(
                     relationship.EvidenceNodeIds,
-                    quotesByNodeId,
+                    nodeIds,
                     "relationship",
                     relationship.Id,
                     removals,
@@ -157,19 +155,13 @@ public sealed class DraftValidationService : IDraftValidationService
                     continue;
                 }
 
-                if (!QuotesOnlyCitedLiterals(candidate.Explanation, keptNodes, quotesByNodeId))
-                {
-                    removals.Add(new ValidationRemoval("relationship", relationship.Id, UncitedLiteralReason));
-                    continue;
-                }
-
                 relationships.Add(candidate);
             }
 
             var steps = this.ValidateStatements(
                 track.OrderedSteps,
                 $"track:{track.Id}:step",
-                quotesByNodeId,
+                nodeIds,
                 limits.MaximumItemsPerTrack,
                 limits.MaximumStatementCharacters,
                 removals,
@@ -177,7 +169,7 @@ public sealed class DraftValidationService : IDraftValidationService
             var purposes = this.ValidateStatements(
                 track.Purposes,
                 $"track:{track.Id}:purpose",
-                quotesByNodeId,
+                nodeIds,
                 limits.MaximumItemsPerTrack,
                 limits.MaximumStatementCharacters,
                 removals,
@@ -192,9 +184,9 @@ public sealed class DraftValidationService : IDraftValidationService
             });
         }
 
-        var dropped = this.KeepDroppedNodeIds(draft.DroppedNodeIds, quotesByNodeId, ref invalidReferenceCount);
+        var dropped = this.KeepDroppedNodeIds(draft.DroppedNodeIds, nodeIds, ref invalidReferenceCount);
         var cited = CitedNodeIds(draft);
-        var undeclaredNodeCount = quotesByNodeId.Keys.Count(nodeId => !cited.Contains(nodeId) && !dropped.Contains(nodeId));
+        var undeclaredNodeCount = nodeIds.Count(nodeId => !cited.Contains(nodeId) && !dropped.Contains(nodeId));
         var validatedDraft = new MentalModelDraft(thesis ?? new BoundStatement(string.Empty, []), tracks, dropped);
         return new DraftValidationOutcome(
             validatedDraft,
@@ -225,7 +217,7 @@ public sealed class DraftValidationService : IDraftValidationService
     private IReadOnlyList<BoundStatement> ValidateStatements(
         IReadOnlyList<BoundStatement> statements,
         string scope,
-        IReadOnlyDictionary<string, string> quotesByNodeId,
+        HashSet<string> nodeIds,
         int limit,
         int maximumStatementCharacters,
         List<ValidationRemoval> removals,
@@ -246,7 +238,7 @@ public sealed class DraftValidationService : IDraftValidationService
             var checkedStatement = this.ValidateStatement(
                 statement,
                 $"{scope}:{index}",
-                quotesByNodeId,
+                nodeIds,
                 maximumStatementCharacters,
                 removals,
                 ref invalidReferenceCount);
@@ -262,7 +254,7 @@ public sealed class DraftValidationService : IDraftValidationService
     private BoundStatement? ValidateStatement(
         BoundStatement? statement,
         string scope,
-        IReadOnlyDictionary<string, string> quotesByNodeId,
+        HashSet<string> nodeIds,
         int maximumStatementCharacters,
         List<ValidationRemoval> removals,
         ref int invalidReferenceCount)
@@ -275,36 +267,25 @@ public sealed class DraftValidationService : IDraftValidationService
 
         var kept = this.KeepDisclosedIds(
             statement!.EvidenceNodeIds,
-            quotesByNodeId,
+            nodeIds,
             "statement",
             scope,
             removals,
             ref invalidReferenceCount);
-        if (kept is null)
-        {
-            return null;
-        }
-
-        if (!QuotesOnlyCitedLiterals(statement.Text, kept, quotesByNodeId))
-        {
-            removals.Add(new ValidationRemoval("statement", scope, UncitedLiteralReason));
-            return null;
-        }
-
-        return statement with { EvidenceNodeIds = kept };
+        return kept is null ? null : statement with { EvidenceNodeIds = kept };
     }
 
     private IReadOnlyList<string>? KeepDisclosedIds(
         IReadOnlyList<string> cited,
-        IReadOnlyDictionary<string, string> quotesByNodeId,
+        HashSet<string> nodeIds,
         string scope,
         string id,
         List<ValidationRemoval> removals,
         ref int invalidReferenceCount)
     {
         var distinct = Distinct(cited);
-        var known = distinct.Where(quotesByNodeId.ContainsKey).ToArray();
-        var unknown = distinct.Where(idValue => !quotesByNodeId.ContainsKey(idValue)).ToArray();
+        var known = distinct.Where(nodeIds.Contains).ToArray();
+        var unknown = distinct.Where(idValue => !nodeIds.Contains(idValue)).ToArray();
         invalidReferenceCount += unknown.Length;
         if (unknown.Length > 0 && known.Length == 0)
         {
@@ -325,11 +306,10 @@ public sealed class DraftValidationService : IDraftValidationService
         return known;
     }
 
-    private IReadOnlyList<string> KeepDroppedNodeIds(
-        IReadOnlyList<string> droppedNodeIds, IReadOnlyDictionary<string, string> quotesByNodeId, ref int invalidReferenceCount)
+    private IReadOnlyList<string> KeepDroppedNodeIds(IReadOnlyList<string> droppedNodeIds, HashSet<string> nodeIds, ref int invalidReferenceCount)
     {
         var distinct = Distinct(droppedNodeIds);
-        var known = distinct.Where(quotesByNodeId.ContainsKey).ToArray();
+        var known = distinct.Where(nodeIds.Contains).ToArray();
         invalidReferenceCount += distinct.Count - known.Length;
         return known;
     }
@@ -520,52 +500,6 @@ public sealed class DraftValidationService : IDraftValidationService
 
         return cited;
     }
-
-    /// <summary>
-    ///     Checks that every double-quoted literal in a statement occurs, with its delimiters, in a cited quote.
-    /// </summary>
-    /// <param name="text">The curator statement or relationship explanation.</param>
-    /// <param name="citedNodeIds">The disclosed evidence node ids the text cites.</param>
-    /// <param name="quotesByNodeId">The disclosed quote text of every binder evidence node.</param>
-    /// <returns><see langword="true" /> when no quoted literal is missing from the cited quotes.</returns>
-    /// <remarks>
-    ///     A literal is the text between two double quotes on one line, up to 60 characters. It matches a quote that holds it
-    ///     between double quotes, single quotes, or backticks, compared with <see cref="StringComparison.Ordinal" />.
-    /// </remarks>
-    private static bool QuotesOnlyCitedLiterals(
-        string text, IReadOnlyList<string> citedNodeIds, IReadOnlyDictionary<string, string> quotesByNodeId)
-    {
-        var start = text.IndexOf('"', StringComparison.Ordinal);
-        while (start >= 0 && start < text.Length - 1)
-        {
-            var end = text.IndexOf('"', start + 1);
-            if (end < 0)
-            {
-                return true;
-            }
-
-            var literal = text[(start + 1)..end];
-            if (literal.Length is 0 or > MaximumQuotedLiteralCharacters || literal.Contains('\n', StringComparison.Ordinal))
-            {
-                start = end;
-                continue;
-            }
-
-            if (!citedNodeIds.Any(nodeId => ContainsLiteral(quotesByNodeId[nodeId], literal)))
-            {
-                return false;
-            }
-
-            start = text.IndexOf('"', end + 1);
-        }
-
-        return true;
-    }
-
-    private static bool ContainsLiteral(string quote, string literal) =>
-        quote.Contains($"\"{literal}\"", StringComparison.Ordinal)
-        || quote.Contains($"'{literal}'", StringComparison.Ordinal)
-        || quote.Contains($"`{literal}`", StringComparison.Ordinal);
 
     private static string? StatementTextRejection(BoundStatement? statement, int maximumStatementCharacters)
     {

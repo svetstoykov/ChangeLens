@@ -56,9 +56,9 @@ public sealed class EvidenceGraphOptions
 
     /// <summary>
     ///     Gets or sets the most lines a changed-hunk window grows on each side, past its hunk context, to reach the nearest
-    ///     blank line; zero keeps every hunk window at its hunk context. The default is 20 lines.
+    ///     blank line; zero keeps every hunk window at its hunk context. The default is 5 lines.
     /// </summary>
-    public int MaximumBlockExtensionLines { get; set; } = 20;
+    public int MaximumBlockExtensionLines { get; set; } = 5;
 
     /// <summary>
     ///     Gets or sets the maximum quote windows selected for one candidate. The default is three nodes.

@@ -6,6 +6,7 @@ import os
 import sys
 import urllib.error
 import urllib.request
+from pathlib import Path
 
 CURATOR_CALLS = "FAKE_ENGINE_CURATOR_CALLS"
 REVIEWER_CALLS = "FAKE_ENGINE_REVIEWER_CALLS"
@@ -28,10 +29,18 @@ def call_provider(role: str) -> None:
     request = urllib.request.Request(
         os.environ[settings + "BaseUrl"] + "/chat/completions",
         data=json.dumps({"model": os.environ[settings + "Model"], "messages": messages}).encode(),
-        headers={"Content-Type": "application/json", "Authorization": "Bearer " + os.environ[settings + "ApiKey"]},
+        headers={
+            "Content-Type": "application/json",
+            "Authorization": "Bearer " + _api_key(os.environ[settings + "ApiKeyFile"]),
+        },
     )
     with contextlib.suppress(urllib.error.HTTPError):
         urllib.request.urlopen(request, timeout=5).close()
+
+
+def _api_key(key_file: str) -> str:
+    """Return the token after the first `=` of the key file the harness wrote."""
+    return Path(key_file).read_text(encoding="utf-8").strip().partition("=")[2]
 
 
 def provider_calls() -> list[str]:

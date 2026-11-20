@@ -149,16 +149,24 @@ def test_upstream_settings_layer_files_then_environment(tmp_path: Path) -> None:
         tmp_path / "appsettings.json",
         {"ChangeLens": {"Analysis": {"ModelCompletion": {"BaseUrl": "https://provider/v1", "Model": "vendor/a"}}}},
     )
+    key_file = tmp_path / "secrets.env"
+    key_file.write_text(f"OTHER=1\nexport CHANGELENS_API_KEY='{REAL_KEY}'\n", encoding="utf-8")
     write_json(
         tmp_path / "appsettings.Development.json",
-        {"changelens": {"analysis": {"modelcompletion": {"apikey": REAL_KEY}}}},
+        {"changelens": {"analysis": {"modelcompletion": {"apikeyfile": str(key_file)}}}},
     )
 
     from_files = resolve_upstream({}, tmp_path)
-    from_environment = resolve_upstream({"ChangeLens__Analysis__ModelCompletion__Model": "vendor/b"}, tmp_path)
+    from_environment = resolve_upstream(
+        {
+            "ChangeLens__Analysis__ModelCompletion__Model": "vendor/b",
+            "ChangeLens__Analysis__ModelCompletion__ApiKey": "x",
+        },
+        tmp_path,
+    )
 
     assert (from_files.base_url, from_files.model, from_files.api_key) == ("https://provider/v1", "vendor/a", REAL_KEY)
-    assert from_environment.model == "vendor/b"
+    assert (from_environment.model, from_environment.api_key) == ("vendor/b", REAL_KEY)
 
 
 def test_missing_key_is_a_harness_error(tmp_path: Path) -> None:
@@ -167,5 +175,24 @@ def test_missing_key_is_a_harness_error(tmp_path: Path) -> None:
         {"ChangeLens": {"Analysis": {"ModelCompletion": {"BaseUrl": "https://provider/v1", "Model": "vendor/a"}}}},
     )
 
-    with pytest.raises(HarnessError, match="needs ApiKey"):
+    with pytest.raises(HarnessError, match="needs ApiKeyFile"):
         resolve_upstream({}, tmp_path)
+
+
+def test_key_file_without_a_key_entry_is_a_harness_error(tmp_path: Path) -> None:
+    key_file = tmp_path / "secrets.env"
+    key_file.write_text("OPENROUTER_API_KEY=sk-other\n", encoding="utf-8")
+    write_json(
+        tmp_path / "appsettings.json",
+        {
+            "ChangeLens": {
+                "Analysis": {
+                    "ModelCompletion": {"BaseUrl": "https://p/v1", "Model": "v/a", "ApiKeyFile": str(key_file)}
+                }
+            }
+        },
+    )
+
+    with pytest.raises(HarnessError, match="no CHANGELENS_API_KEY entry") as raised:
+        resolve_upstream({}, tmp_path)
+    assert "sk-other" not in str(raised.value)

@@ -79,6 +79,7 @@ using ChangeLens.Infrastructure.LocalState.Services;
 using ChangeLens.Infrastructure.AnalysisRuns.Services;
 using ChangeLens.Infrastructure.ModelCompletion.Constants;
 using ChangeLens.Infrastructure.ModelCompletion.Extensions;
+using ChangeLens.Infrastructure.ModelCompletion.Helpers;
 using ChangeLens.Infrastructure.ModelCompletion.Models;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
@@ -380,7 +381,7 @@ internal static class EngineHostApplicationBuilderExtensions
         {
             BaseUrl = configuration[ModelCompletionConfigurationConstants.BaseUrlKey],
             Model = configuration[ModelCompletionConfigurationConstants.ModelKey],
-            ApiKey = configuration[ModelCompletionConfigurationConstants.ApiKeyKey],
+            ApiKey = ModelCompletionApiKeyFileReader.Read(configuration[ModelCompletionConfigurationConstants.ApiKeyFileKey]),
             RequestTimeout = ReadPositiveTimeSpan(
                 configuration, ModelCompletionConfigurationConstants.RequestTimeoutKey, defaults.RequestTimeout),
             OpenRouterSort = configuration[ModelCompletionConfigurationConstants.OpenRouterSortKey],

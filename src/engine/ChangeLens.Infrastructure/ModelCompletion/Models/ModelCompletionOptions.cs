@@ -18,7 +18,7 @@ public sealed class ModelCompletionOptions
     public string? Model { get; set; }
 
     /// <summary>
-    ///     Gets or sets the provider API key, or <see langword="null" /> when no provider is configured.
+    ///     Gets or sets the provider API key read from the configured key file, or <see langword="null" /> when none is available.
     /// </summary>
     public string? ApiKey { get; set; }
 

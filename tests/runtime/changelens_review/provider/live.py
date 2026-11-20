@@ -8,6 +8,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from changelens_review.engine.config_keys import API_KEY_ENTRY
 from changelens_review.errors import HarnessError
 from changelens_review.jsontypes import JsonValue
 from changelens_review.paths import ENGINE_PROJECT
@@ -15,7 +16,8 @@ from changelens_review.provider.proxy import COMPLETIONS_PATH, ProxyReply, error
 
 SETTINGS_FILES = ("appsettings.json", "appsettings.Development.json")
 SETTINGS_SECTION = ("ChangeLens", "Analysis", "ModelCompletion")
-SETTING_NAMES = ("BaseUrl", "Model", "ApiKey")
+SETTING_NAMES = ("BaseUrl", "Model", "ApiKeyFile")
+EXPORT_PREFIX = "export "
 ENVIRONMENT_PREFIX = "ChangeLens__Analysis__ModelCompletion__"
 REDACTED = "[redacted]"
 READ_CHUNK_BYTES = 65_536
@@ -35,7 +37,8 @@ def resolve_upstream(inherited: Mapping[str, str], project_directory: Path = ENG
     """Resolve the provider the way the engine's Development host does.
 
     Reads `appsettings.json`, then `appsettings.Development.json`, then `ChangeLens__Analysis__ModelCompletion__*`
-    environment variables, each overriding the one before. Raises HarnessError when a setting is missing.
+    environment variables, each overriding the one before. The API key is the last `CHANGELENS_API_KEY` entry of the
+    file the `ApiKeyFile` setting names. Raises HarnessError when a setting or the key is missing.
     """
     settings: dict[str, str] = {}
     for name in SETTINGS_FILES:
@@ -51,7 +54,9 @@ def resolve_upstream(inherited: Mapping[str, str], project_directory: Path = ENG
             f"the live provider needs {', '.join(missing)}; set them in {project_directory / SETTINGS_FILES[1]} "
             f"or as {ENVIRONMENT_PREFIX}<name> environment variables"
         )
-    return UpstreamProvider(settings["BaseUrl"], settings["Model"], settings["ApiKey"])
+    return UpstreamProvider(
+        settings["BaseUrl"], settings["Model"], _file_api_key(Path(settings["ApiKeyFile"]).expanduser())
+    )
 
 
 class LiveResponder:
@@ -134,6 +139,30 @@ def _file_settings(path: Path) -> dict[str, str]:
         if setting is not None and isinstance(value, str) and value:
             settings[setting] = value
     return settings
+
+
+def _file_api_key(path: Path) -> str:
+    try:
+        lines = path.read_text(encoding="utf-8").splitlines()
+    except OSError as error:
+        raise HarnessError(f"could not read the API key file {path}: {type(error).__name__}") from None
+    values = [value for value in map(_entry_value, lines) if value]
+    if not values:
+        raise HarnessError(f"the API key file {path} has no {API_KEY_ENTRY} entry")
+    return values[-1]
+
+
+def _entry_value(line: str) -> str | None:
+    entry = line.strip()
+    if entry.startswith(EXPORT_PREFIX):
+        entry = entry[len(EXPORT_PREFIX) :].lstrip()
+    name, separator, value = entry.partition("=")
+    if not separator or name.strip() != API_KEY_ENTRY:
+        return None
+    value = value.strip()
+    if len(value) >= 2 and value[0] == value[-1] and value[0] in "\"'":
+        value = value[1:-1]
+    return value
 
 
 def _child(section: JsonValue, name: str) -> JsonValue:

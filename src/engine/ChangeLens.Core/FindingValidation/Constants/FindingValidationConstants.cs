@@ -56,11 +56,6 @@ public static class FindingValidationConstants
     public const string AnchorAmbiguousReason = "anchorAmbiguous";
 
     /// <summary>
-    ///     Gets the reason for a finding the reviewer says depends on code outside the quotes.
-    /// </summary>
-    public const string UnquotedDependencyReason = "unquotedDependency";
-
-    /// <summary>
     ///     Gets the maximum number of findings considered for publication.
     /// </summary>
     public const int MaximumFindings = 10;

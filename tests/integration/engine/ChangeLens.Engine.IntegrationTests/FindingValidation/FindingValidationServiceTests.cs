@@ -231,22 +231,21 @@ public sealed class FindingValidationServiceTests
     }
 
     [Fact]
-    public void FindingThatDeclaresAnUnquotedDependencyIsWithheldWhileAnOtherwiseEqualFindingIsPublished()
+    public void FindingThatDeclaresAnUnquotedDependencyIsPublishedWithItsSeverityAndDependencies()
     {
         var binder = Support.FindingValidationFixtureBinderBuilder.Create(
             Support.FindingValidationFixtureBinderBuilder.SourceEvidence("n1", "\t\"testing\"\n\n\t\"example.com/assert\"", 14));
-        var absenceClaim = Finding(
+        var dependent = Finding(
             "f1", "n1", "\t\"testing\"", title: "The test file never imports require",
             unquotedDependencies: ["the rest of the import block, which the quote cuts off"]);
-        var settled = Finding("f2", "n1", "\t\"testing\"");
 
-        var outcome = Validate(binder, absenceClaim, settled);
+        var outcome = Validate(binder, dependent);
 
-        Assert.Equal("f2", Assert.Single(outcome.Findings).Finding.Id);
-        var removal = Assert.Single(outcome.Removals);
-        Assert.Equal("f1", removal.Id);
-        Assert.Equal(FindingValidationConstants.UnquotedDependencyReason, removal.Reason);
-        Assert.Equal(1, outcome.WithheldCount);
+        var published = Assert.Single(outcome.Findings).Finding;
+        Assert.Equal("f1", published.Id);
+        Assert.Equal(FindingValidationConstants.WarningSeverity, published.Severity);
+        Assert.Equal(["the rest of the import block, which the quote cuts off"], published.UnquotedDependencies);
+        Assert.Empty(outcome.Removals);
     }
 
     private static FindingValidationOutcome Validate(

@@ -63,9 +63,13 @@ already judged, without looking at their verdicts, and measures agreement.
    - **Needs you:** low-confidence or disputed items only. For each one: the
      statement or finding quoted, the proof, and your proposed verdict.
    - **Proposed verdicts:** one line per case and per finding.
-   - **Gate bars, computed from the proposals:** every known defect described
-     by a Warning-or-above finding in at least 2 of 3 repeats; no Critical or
-     Warning on a presumed-clean case unless `correct`; no case `wrong`.
+   - **Gate bars, computed from the proposals:** every seeded fixture defect
+     described by a Warning-or-above finding in 3 of 3 repeats, every real
+     defect in at least 1 of 3 and in at least half of all real-defect repeats;
+     at most one Critical or Warning judged `wrong` across the presumed-clean
+     repeats, none Critical, and the review ran in at least 2 of 3 repeats per
+     case; no more repeats with a false statement than the last judged run, and
+     none with invented behavior, test results or execution.
    - Skipped cases and anything not checked.
 
 ## Calibrate mode

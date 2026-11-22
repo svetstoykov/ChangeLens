@@ -214,6 +214,34 @@ public sealed class FindingValidationServiceTests
     }
 
     [Fact]
+    public void AnchorThatDiffersOnlyInLineIndentationStillMatchesTheQuotedLines()
+    {
+        const string quote = "func walk() {\n\t\t\t\t\tfor l := len(*skippedNodes); l > 0; {\n\t\t\t\t\t\tskippedNode := (*skippedNodes)[l-1]\n"
+            + "\t\t\t\t\t\t*skippedNodes = (*skippedNodes)[:l-1]\n\t\t\t\t\t}\n}";
+        const string anchor = "\t\t\t\tfor l := len(*skippedNodes); l > 0; {\n\t\t\t\t\tskippedNode := (*skippedNodes)[l-1]\n"
+            + "\t\t\t\t\t*skippedNodes = (*skippedNodes)[:l-1]  \n";
+        var binder = Support.FindingValidationFixtureBinderBuilder.Create(
+            Support.FindingValidationFixtureBinderBuilder.SourceEvidence("n1", quote, 100));
+
+        var outcome = Validate(binder, Finding("f1", "n1", anchor));
+
+        Assert.Equal(new FindingFocusRange(101, 103), Assert.Single(outcome.Findings).FocusRange);
+        Assert.Empty(outcome.Removals);
+    }
+
+    [Fact]
+    public void AnchorThatOccursMoreThanOnceAfterIgnoringIndentationIsAmbiguous()
+    {
+        var binder = Support.FindingValidationFixtureBinderBuilder.Create(
+            Support.FindingValidationFixtureBinderBuilder.SourceEvidence("n1", "\talpha\nbeta\n        alpha"));
+
+        var outcome = Validate(binder, Finding("f1", "n1", "alpha"));
+
+        Assert.Empty(outcome.Findings);
+        Assert.Equal(FindingValidationConstants.AnchorAmbiguousReason, Assert.Single(outcome.Removals).Reason);
+    }
+
+    [Fact]
     public void OnlyFirstTenIncomingPositionsAreEligibleAndCapReasonTakesPrecedence()
     {
         var binder = SourceBinder();

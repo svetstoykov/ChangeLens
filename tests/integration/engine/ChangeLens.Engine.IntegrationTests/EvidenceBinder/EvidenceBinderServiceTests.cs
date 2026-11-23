@@ -76,6 +76,32 @@ public sealed class EvidenceBinderServiceTests
     }
 
     [Fact]
+    public void PayloadOmitsTheLocalRepositoryPath()
+    {
+        const string localPath = "/Users/someone/runs/quality-benchmark/cases/case-a/repeats/1/repo";
+        var after = Node("after", "changed.cs", ChangeAnatomySide.After, true, EvidenceNodeOrigin.ChangedHunk, "after quote");
+        var request = Request(
+            Policy([after], [Decision(after)], []),
+            new SnapshotManifestEntry("changed.cs", null, SnapshotChangeCategory.Modified, "100644", "100644", Blob('a'), Blob('b')),
+            ["changed.cs"],
+            null);
+        request = request with
+        {
+            Run = request.Run with
+            {
+                Repository = request.Run.Repository with { CanonicalPath = localPath, CanonicalRepositoryPathKey = localPath },
+            },
+        };
+
+        var result = Service(new EvidenceBinderOptions()).Assemble(request, CancellationToken.None);
+
+        Assert.True(result.IsSuccess);
+        var json = EvidenceBinderJson.SerializePayload(Assert.IsType<EvidenceBinderModel>(result.Data));
+        Assert.DoesNotContain("repositoryKey", json, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain(localPath, json, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void PolicyInvariantDropsAreDiagnosedSeparatelyFromPolicyExclusions()
     {
         var duplicate = Node("duplicate", "changed.cs", ChangeAnatomySide.After, true, EvidenceNodeOrigin.ChangedHunk, "duplicate");

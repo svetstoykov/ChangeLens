@@ -55,7 +55,6 @@ internal static class DraftValidationFixtureBinderBuilder
         return new EvidenceBinderModel(
             new BinderComparison(
                 Guid.Empty,
-                "fixture",
                 "target",
                 "target-revision",
                 "head-revision",

@@ -56,7 +56,6 @@ public sealed class EvidenceBinderService : IEvidenceBinderService
         var targetCharacters = this._options.TargetBinderCharacters;
         var comparison = new BinderComparison(
             request.Run.RunId,
-            request.Run.Repository.CanonicalRepositoryPathKey,
             request.Run.Comparison.Target,
             request.Snapshot.Manifest.TargetRevision,
             request.Snapshot.Manifest.HeadRevision,

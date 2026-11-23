@@ -173,7 +173,7 @@ public sealed class EvidenceFrontierServiceTests
     private static EvidenceBinderModel Binder(
         IReadOnlyList<BinderEvidence> evidence,
         params BinderOmission[] omissions) => new(
-        new BinderComparison(Guid.Empty, "repo", "target", "target", "head", "base", 0, new ExcludedUncommittedCounts(0, 0, 0, 0, 0)),
+        new BinderComparison(Guid.Empty, "target", "target", "head", "base", 0, new ExcludedUncommittedCounts(0, 0, 0, 0, 0)),
         null,
         [],
         evidence,

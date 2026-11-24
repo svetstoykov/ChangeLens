@@ -40,6 +40,10 @@ name = "repository_commands"
 path = "../../../tests/integration/desktop/Repositories/repository_commands.rs"
 
 [[test]]
+name = "preference_commands"
+path = "../../../tests/integration/desktop/Preferences/preference_commands.rs"
+
+[[test]]
 name = "comparison_process"
 path = "../../../tests/integration/desktop/Comparisons/comparison_process.rs"
 

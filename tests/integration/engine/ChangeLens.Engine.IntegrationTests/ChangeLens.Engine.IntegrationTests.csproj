@@ -24,7 +24,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\..\..\src\engine\ChangeLens.Engine\ChangeLens.Engine.csproj" />
-    <ProjectReference Include="..\ChangeLens.Infrastructure.IntegrationTests\Fixtures\ChangeLens.GitProcessFixture\ChangeLens.GitProcessFixture.csproj" />
+    <ProjectReference Include="../Fixtures/ChangeLens.GitProcessFixture/ChangeLens.GitProcessFixture.csproj" />
   </ItemGroup>
 
 </Project>

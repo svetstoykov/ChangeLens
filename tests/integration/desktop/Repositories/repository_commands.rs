@@ -7,16 +7,11 @@ use changelens_desktop_lib::engine_protocol::{
     ActionErrorDetail, ActionErrorKind, EngineActionError, EngineClient, OperationErrorType,
 };
 use changelens_desktop_lib::engine_status::{EngineStatusService, EngineStatusState};
-use changelens_desktop_lib::preferences::{
-    ColorTheme, ColorThemePreference, ColorThemePreferenceService, PreferenceState,
-};
 use changelens_desktop_lib::repositories::{
     RecentRepository, RepositoryDescriptor, RepositoryFolderPicker, RepositoryFolderPickerState,
     RepositoryHead, RepositoryHistory, RepositoryRestoreResult, RepositoryService, RepositoryState,
 };
-use changelens_desktop_lib::{
-    configure_desktop, configure_desktop_with_preferences, handle_desktop_run_event,
-};
+use changelens_desktop_lib::{configure_desktop, handle_desktop_run_event};
 use raw_window_handle::HasWindowHandle;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -80,26 +75,6 @@ struct FixedRepositoryService {
 
 struct LocalStateRepositoryService {
     removed_ids: Arc<Mutex<Vec<String>>>,
-}
-
-struct FixedColorThemePreferenceService {
-    set_themes: Arc<Mutex<Vec<ColorTheme>>>,
-}
-
-impl ColorThemePreferenceService for FixedColorThemePreferenceService {
-    fn get_color_theme(&self) -> Result<ColorThemePreference, EngineActionError> {
-        Ok(ColorThemePreference {
-            color_theme: Some(ColorTheme::Dark),
-        })
-    }
-
-    fn set_color_theme(&self, color_theme: ColorTheme) -> Result<(), EngineActionError> {
-        self.set_themes
-            .lock()
-            .expect("the recorded color themes should be available")
-            .push(color_theme);
-        Ok(())
-    }
 }
 
 impl RepositoryService for LocalStateRepositoryService {
@@ -423,37 +398,6 @@ fn repository_history_commands_expose_typed_arguments_and_results() {
 }
 
 #[test]
-fn preference_commands_expose_typed_arguments_and_results() {
-    let set_themes = Arc::new(Mutex::new(Vec::new()));
-    let service = Arc::new(FixedColorThemePreferenceService {
-        set_themes: Arc::clone(&set_themes),
-    });
-
-    let get_result = invoke_preference_command(
-        "preference_get_color_theme",
-        tauri::ipc::InvokeBody::default(),
-        service.clone(),
-    )
-    .expect("the color-theme read should return a typed result");
-    assert_eq!(get_result, serde_json::json!({"colorTheme": "dark"}));
-
-    let set_result = invoke_preference_command(
-        "preference_set_color_theme",
-        tauri::ipc::InvokeBody::Json(serde_json::json!({"colorTheme": "light"})),
-        service,
-    )
-    .expect("the color-theme write should return a payload-free result");
-    assert_eq!(set_result, serde_json::Value::Null);
-    assert_eq!(
-        set_themes
-            .lock()
-            .expect("the recorded color themes should be available")
-            .as_slice(),
-        [ColorTheme::Light]
-    );
-}
-
-#[test]
 fn repository_open_preserves_ordered_engine_errors() {
     let response = invoke_command(
         "repository_open",
@@ -679,45 +623,6 @@ fn invoke_command(
         .map(|body| body.deserialize().expect("the success body should be JSON"))
 }
 
-fn invoke_preference_command(
-    command: &str,
-    body: tauri::ipc::InvokeBody,
-    preference_service: Arc<dyn ColorThemePreferenceService>,
-) -> Result<serde_json::Value, serde_json::Value> {
-    let app = configure_desktop_with_preferences(
-        mock_builder(),
-        EngineStatusState::new(Arc::new(SuccessfulEngineStatusService)),
-        RepositoryState::new(repository_returning(Ok(branch_repository()))),
-        RepositoryFolderPickerState::new(picker_returning(Ok(None))),
-        ComparisonState::new(Arc::new(UnusedComparisonService)),
-        AnalysisState::new(Arc::new(EngineClient::new())),
-        PreferenceState::new(preference_service),
-    )
-    .build(mock_context(noop_assets()))
-    .expect("the test desktop application should build");
-    let webview = tauri::WebviewWindowBuilder::new(&app, "main", Default::default())
-        .build()
-        .expect("the test webview should build");
-    let request = tauri::webview::InvokeRequest {
-        cmd: command.into(),
-        callback: tauri::ipc::CallbackFn(0),
-        error: tauri::ipc::CallbackFn(1),
-        url: if cfg!(any(windows, target_os = "android")) {
-            "http://tauri.localhost"
-        } else {
-            "tauri://localhost"
-        }
-        .parse()
-        .expect("the test IPC URL should be valid"),
-        body,
-        headers: Default::default(),
-        invoke_key: INVOKE_KEY.to_string(),
-    };
-
-    get_ipc_response(&webview, request)
-        .map(|body| body.deserialize().expect("the success body should be JSON"))
-}
-
 fn picker_returning(
     result: Result<Option<PathBuf>, EngineActionError>,
 ) -> Arc<dyn RepositoryFolderPicker> {
@@ -808,7 +713,7 @@ fn fixture_dll_path() -> PathBuf {
 
 fn fixture_project_path() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join(
-        "../../../tests/integration/desktop/EngineStatus/Fixtures/ChangeLens.EngineProtocolFixture/ChangeLens.EngineProtocolFixture.csproj",
+        "../../../tests/integration/desktop/Fixtures/ChangeLens.EngineProtocolFixture/ChangeLens.EngineProtocolFixture.csproj",
     )
 }
 

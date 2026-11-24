@@ -42,8 +42,32 @@ public sealed class ReviewerServiceTests
         Assert.DoesNotContain("matchEdges", fake.LastRequest.UserMessage, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public async Task TopLevelEchoedResponseFormatPropertyIsIgnoredWhenReplyIsValid()
+    {
+        var binder = DraftValidationFixtureBinderBuilder.Create(["n1"]);
+        var withFinding = "{\"type\":\"json_object\"," + ValidJson(["f1"])[1..];
+        var withFindingResult = await Service(new FakeModelCompletionClient(Result.Success(Completion(withFinding))))
+            .ReviewAsync(binder, CancellationToken.None);
+
+        Assert.True(withFindingResult.IsSuccess);
+        Assert.Null(withFindingResult.Data!.Diagnostics.ParseFailureReason);
+        Assert.Equal("f1", Assert.Single(withFindingResult.Data.Draft.Findings).Id);
+
+        var emptyResult = await Service(new FakeModelCompletionClient(Result.Success(Completion("{\"type\":\"json_object\",\"findings\":[]}"))))
+            .ReviewAsync(binder, CancellationToken.None);
+
+        Assert.True(emptyResult.IsSuccess);
+        Assert.Null(emptyResult.Data!.Diagnostics.ParseFailureReason);
+        Assert.Empty(emptyResult.Data.Draft.Findings);
+    }
+
     [Theory]
     [InlineData("{}")]
+    [InlineData("{\"type\":\"json_object\"}")]
+    [InlineData("{\"type\":\"error\",\"findings\":[]}")]
+    [InlineData("{\"type\":123,\"findings\":[]}")]
+    [InlineData("{\"type\":\"json_object\",\"type\":\"json_object\",\"findings\":[]}")]
     [InlineData("{\"findings\":null}")]
     [InlineData("[]")]
     [InlineData("```json\n{\"findings\":[]}\n```")]
@@ -53,7 +77,9 @@ public sealed class ReviewerServiceTests
     [InlineData("{\"findings\":[null]}")]
     [InlineData("{\"findings\":[{\"id\":1}]}")]
     [InlineData("{\"findings\":[{\"id\":\"f1\",\"severity\":\"warning\",\"title\":\"t\",\"trigger\":\"t\",\"impact\":\"i\",\"fix\":\"f\",\"evidenceNodeIds\":[1],\"anchor\":{\"nodeId\":\"n1\",\"lines\":\"line\"}}]}")]
+    [InlineData("{\"findings\":[{\"type\":\"json_object\",\"id\":\"f1\",\"severity\":\"warning\",\"title\":\"t\",\"trigger\":\"t\",\"impact\":\"i\",\"fix\":\"f\",\"evidenceNodeIds\":[\"n1\"],\"anchor\":{\"nodeId\":\"n1\",\"lines\":\"line\"}}]}")]
     [InlineData("{\"findings\":[{\"id\":\"f1\",\"severity\":\"warning\",\"title\":\"t\",\"trigger\":\"t\",\"impact\":\"i\",\"fix\":\"f\",\"evidenceNodeIds\":[\"n1\"],\"anchor\":{\"nodeId\":\"n1\",\"lines\":\"line\",\"extra\":true}}]}")]
+    [InlineData("{\"findings\":[{\"id\":\"f1\",\"severity\":\"warning\",\"title\":\"t\",\"trigger\":\"t\",\"impact\":\"i\",\"fix\":\"f\",\"evidenceNodeIds\":[\"n1\"],\"anchor\":{\"nodeId\":\"n1\",\"lines\":\"line\",\"type\":\"json_object\"}}]}")]
     [InlineData("{\"findings\":[{\"id\":\"f1\",\"severity\":\"warning\",\"title\":\"t \\ud800\",\"trigger\":\"t\",\"impact\":\"i\",\"fix\":\"f\",\"evidenceNodeIds\":[\"n1\"],\"anchor\":{\"nodeId\":\"n1\",\"lines\":\"line\"}}]}")]
     [InlineData("{\"findings\":[{\"id\":\"f1\",\"severity\":\"warning\",\"title\":\"t\",\"trigger\":\"t\",\"impact\":\"i\",\"fix\":\"f\",\"evidenceNodeIds\":[\"\\ud800\"],\"anchor\":{\"nodeId\":\"n1\",\"lines\":\"line\"}}]}")]
     [InlineData("{\"findings\":[{\"id\":\"f1\",\"severity\":\"warning\",\"title\":\"t\",\"trigger\":\"t\",\"impact\":\"i\",\"fix\":\"f\",\"evidenceNodeIds\":[\"n1\"],\"anchor\":{\"nodeId\":\"n1\",\"lines\":\"line\"},\"unquotedDependencies\":\"none\"}]}")]

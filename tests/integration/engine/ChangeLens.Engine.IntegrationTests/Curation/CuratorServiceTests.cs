@@ -96,10 +96,32 @@ public sealed class CuratorServiceTests
         Assert.Null(result.Data);
     }
 
+    [Fact]
+    public async Task TopLevelEchoedResponseFormatPropertyIsIgnoredWhenDraftIsValid()
+    {
+        var binder = DraftValidationFixtureBinderBuilder.Create(["n1", "n2", "n3"]);
+        var reply = "{\"type\":\"json_object\"," + ValidJson()[1..];
+        var service = Service(new FakeModelCompletionClient(Result.Success(Completion(reply))));
+
+        var result = await service.CurateAsync(binder, CancellationToken.None);
+
+        Assert.True(result.IsSuccess);
+        Assert.NotNull(result.Data);
+        Assert.Null(result.Data.Diagnostics.ParseFailureReason);
+        Assert.Equal("The caller uses the service.", result.Data.Draft.Thesis.Text);
+        Assert.Equal("t1", Assert.Single(result.Data.Draft.Tracks).Id);
+    }
+
     [Theory]
     [InlineData("{\"thesis\":{\"text\":\"thesis\",\"evidenceNodeIds\":[\"n1\"]},\"tracks\":[{\"id\":\"t1\",\"title\":\"Track\",\"summary\":{\"text\":\"summary\",\"evidenceNodeIds\":[\"n1\"]},\"shape\":\"ParticipantMap\",\"participants\":[{\"id\":\"p1\",\"name\":\"Name\",\"changed\":\"true\",\"role\":\"Role\",\"evidenceNodeIds\":[\"n1\"]}],\"relationships\":[],\"orderedSteps\":[],\"purposes\":[]}],\"droppedNodeIds\":[]}")]
     [InlineData("{\"thesis\":{\"text\":\"thesis\",\"evidenceNodeIds\":[\"n1\"]},\"focus\":\"claim\",\"tracks\":[],\"droppedNodeIds\":[]}")]
     [InlineData("{\"thesis\":{\"text\":\"thesis\",\"evidenceNodeIds\":[\"n1\"]},\"tracks\":[null],\"droppedNodeIds\":[]}")]
+    [InlineData("{\"type\":\"json_object\"}")]
+    [InlineData("{\"type\":\"error\",\"thesis\":{\"text\":\"thesis\",\"evidenceNodeIds\":[\"n1\"]},\"tracks\":[],\"droppedNodeIds\":[]}")]
+    [InlineData("{\"type\":123,\"thesis\":{\"text\":\"thesis\",\"evidenceNodeIds\":[\"n1\"]},\"tracks\":[],\"droppedNodeIds\":[]}")]
+    [InlineData("{\"type\":\"json_object\",\"type\":\"json_object\",\"thesis\":{\"text\":\"thesis\",\"evidenceNodeIds\":[\"n1\"]},\"tracks\":[],\"droppedNodeIds\":[]}")]
+    [InlineData("{\"thesis\":{\"type\":\"json_object\",\"text\":\"thesis\",\"evidenceNodeIds\":[\"n1\"]},\"tracks\":[],\"droppedNodeIds\":[]}")]
+    [InlineData("{\"thesis\":{\"text\":\"thesis\",\"evidenceNodeIds\":[\"n1\"]},\"tracks\":[{\"type\":\"json_object\",\"id\":\"t1\",\"title\":\"Track\",\"summary\":{\"text\":\"summary\",\"evidenceNodeIds\":[\"n1\"]},\"shape\":\"ParticipantMap\",\"participants\":[],\"relationships\":[],\"orderedSteps\":[],\"purposes\":[]}],\"droppedNodeIds\":[]}")]
     public async Task InvalidRequiredShapeUnknownPropertiesAndNullElementsFailTheWholeReply(string reply)
     {
         var service = Service(new FakeModelCompletionClient(Result.Success(Completion(reply))));

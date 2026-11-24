@@ -98,7 +98,7 @@ public sealed class OpenAiCompatibleModelCompletionClient : IModelCompletionClie
                     new OpenAiCompatibleChatMessage("user", request.UserMessage),
                 ],
                 request.MaximumOutputTokens,
-                new OpenAiCompatibleResponseFormat("json_object"),
+                new OpenAiCompatibleResponseFormat(ModelCompletionResponseFormatConstants.JsonObjectType),
                 request.ReasoningEffort is null ? 0 : null,
                 request.ReasoningEffort?.ToString().ToLowerInvariant(),
                 this.CreateProviderPreferences()),

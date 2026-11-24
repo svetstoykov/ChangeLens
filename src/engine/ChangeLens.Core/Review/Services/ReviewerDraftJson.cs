@@ -1,4 +1,5 @@
 using System.Text.Json;
+using ChangeLens.Core.ModelCompletion.Constants;
 using ChangeLens.Core.Review.Models;
 
 namespace ChangeLens.Core.Review.Services;
@@ -50,7 +51,8 @@ public static class ReviewerDraftJson
         {
             using var document = JsonDocument.Parse(json);
             var root = document.RootElement;
-            if (root.ValueKind != JsonValueKind.Object || !ValidateProperties(root, DraftProperties, NoOptionalProperties))
+            if (root.ValueKind != JsonValueKind.Object
+                || !ValidateProperties(root, DraftProperties, NoOptionalProperties, allowEchoedResponseFormat: true))
             {
                 failureReason = "The completion must be a JSON object with the required reviewer properties.";
                 return false;
@@ -164,12 +166,15 @@ public static class ReviewerDraftJson
     }
 
     private static bool ValidateProperties(
-        JsonElement element, IReadOnlySet<string> requiredProperties, IReadOnlySet<string> optionalProperties)
+        JsonElement element, IReadOnlySet<string> requiredProperties, IReadOnlySet<string> optionalProperties, bool allowEchoedResponseFormat = false)
     {
         var seen = new HashSet<string>(StringComparer.Ordinal);
         foreach (var property in element.EnumerateObject())
         {
-            if ((!requiredProperties.Contains(property.Name) && !optionalProperties.Contains(property.Name)) || !seen.Add(property.Name))
+            var isAllowed = requiredProperties.Contains(property.Name)
+                || optionalProperties.Contains(property.Name)
+                || (allowEchoedResponseFormat && IsEchoedResponseFormatProperty(property));
+            if (!isAllowed || !seen.Add(property.Name))
             {
                 return false;
             }
@@ -177,4 +182,10 @@ public static class ReviewerDraftJson
 
         return seen.IsSupersetOf(requiredProperties);
     }
+
+    // Some OpenAI-compatible upstreams echo response_format's {"type":"json_object"} discriminator onto the top-level reply object.
+    private static bool IsEchoedResponseFormatProperty(JsonProperty property) =>
+        string.Equals(property.Name, ModelCompletionResponseFormatConstants.TypePropertyName, StringComparison.Ordinal)
+        && property.Value.ValueKind == JsonValueKind.String
+        && string.Equals(property.Value.GetString(), ModelCompletionResponseFormatConstants.JsonObjectType, StringComparison.Ordinal);
 }

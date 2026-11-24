@@ -113,6 +113,41 @@ public sealed class AnalysisPipelineTests
         await host.StopAsync(TestContext.Current.CancellationToken);
     }
 
+    /// <summary>Asynchronously verifies an echoed top-level response_format property still publishes a reading model with valid citations.</summary>
+    /// <returns>A task that represents the asynchronous operation.</returns>
+    [Fact]
+    public async Task CuratorReplyWithEchoedResponseFormatPublishesReadingModelWithValidCitations()
+    {
+        using var repository = CreateCommittedChangeRepository();
+        var client = new ScriptedModelCompletionClient(request =>
+        {
+            var draft = DraftForBinder(request).Data!;
+            return Result.Success(Completion("{\"type\":\"json_object\"," + draft.Text[1..]));
+        });
+        await using var host = await AnalysisPipelineTestHost.CreateAsync(
+            services => services.Replace(ServiceDescriptor.Scoped<IModelCompletionClient>(_ => client)),
+            AnalysisPipelineTestHost.ReviewDisabled);
+        await host.StartAsync(TestContext.Current.CancellationToken);
+        await host.OpenRepositoryAsync(repository.Path);
+        var freshnessToken = await host.PrepareFreshnessTokenAsync(repository.Path, repository.DefaultTarget);
+        var runId = await host.StartAsync(repository.Path, repository.DefaultTarget, freshnessToken);
+
+        using var terminal = await host.PollUntilTerminalAsync(runId, TimeSpan.FromSeconds(60));
+
+        var result = terminal.RootElement.GetProperty("result");
+        Assert.Equal("completed", result.GetProperty("state").GetString());
+        var readingModel = result.GetProperty("readingModel");
+        Assert.Equal(JsonValueKind.Object, readingModel.ValueKind);
+        Assert.NotEmpty(readingModel.GetProperty("areas").EnumerateArray().ToArray());
+        var evidenceIds = readingModel.GetProperty("evidence").EnumerateArray()
+            .Select(node => node.GetProperty("nodeId").GetString()!)
+            .ToHashSet(StringComparer.Ordinal);
+        var citations = readingModel.GetProperty("citations").EnumerateArray().ToArray();
+        Assert.NotEmpty(citations);
+        Assert.All(citations, citation => Assert.Contains(citation.GetProperty("nodeId").GetString()!, evidenceIds));
+        await host.StopAsync(TestContext.Current.CancellationToken);
+    }
+
     /// <summary>Asynchronously verifies an unreadable curator draft fails the run without a reading model.</summary>
     /// <returns>A task that represents the asynchronous operation.</returns>
     [Fact]

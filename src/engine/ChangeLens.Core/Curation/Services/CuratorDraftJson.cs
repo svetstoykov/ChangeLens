@@ -1,5 +1,6 @@
 using System.Text.Json;
 using ChangeLens.Core.Curation.Models;
+using ChangeLens.Core.ModelCompletion.Constants;
 
 namespace ChangeLens.Core.Curation.Services;
 
@@ -56,7 +57,7 @@ public static class CuratorDraftJson
                 return false;
             }
 
-            if (!ValidateProperties(document.RootElement, DraftProperties, "MentalModelDraft", out failureReason)
+            if (!ValidateProperties(document.RootElement, DraftProperties, "MentalModelDraft", out failureReason, allowEchoedResponseFormat: true)
                 || !TryGetRequiredObject(document.RootElement, "thesis", "MentalModelDraft", out var thesisElement, out failureReason)
                 || !TryParseStatement(thesisElement, "thesis", out var thesis, out failureReason)
                 || !TryGetOptionalArray(document.RootElement, "tracks", "MentalModelDraft", out var tracksElement, out failureReason)
@@ -424,15 +425,13 @@ public static class CuratorDraftJson
     }
 
     private static bool ValidateProperties(
-        JsonElement element,
-        IReadOnlySet<string> allowedProperties,
-        string path,
-        out string? failureReason)
+        JsonElement element, IReadOnlySet<string> allowedProperties, string path, out string? failureReason, bool allowEchoedResponseFormat = false)
     {
         var seen = new HashSet<string>(StringComparer.Ordinal);
         foreach (var property in element.EnumerateObject())
         {
-            if (!allowedProperties.Contains(property.Name))
+            var isEchoedResponseFormat = allowEchoedResponseFormat && IsEchoedResponseFormatProperty(property);
+            if (!allowedProperties.Contains(property.Name) && !isEchoedResponseFormat)
             {
                 failureReason = $"The object '{path}' contains unknown property '{property.Name}'.";
                 return false;
@@ -448,4 +447,10 @@ public static class CuratorDraftJson
         failureReason = null;
         return true;
     }
+
+    // Some OpenAI-compatible upstreams echo response_format's {"type":"json_object"} discriminator onto the top-level reply object.
+    private static bool IsEchoedResponseFormatProperty(JsonProperty property) =>
+        string.Equals(property.Name, ModelCompletionResponseFormatConstants.TypePropertyName, StringComparison.Ordinal)
+        && property.Value.ValueKind == JsonValueKind.String
+        && string.Equals(property.Value.GetString(), ModelCompletionResponseFormatConstants.JsonObjectType, StringComparison.Ordinal);
 }

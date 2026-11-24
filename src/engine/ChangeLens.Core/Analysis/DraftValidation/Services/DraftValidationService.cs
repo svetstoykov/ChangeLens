@@ -1,8 +1,8 @@
 using ChangeLens.Core.Analysis.Curation.Models;
 using ChangeLens.Core.Analysis.DraftValidation.Interfaces;
 using ChangeLens.Core.Analysis.DraftValidation.Models;
+using ChangeLens.Core.Analysis.EvidenceBinder.Helpers;
 using ChangeLens.Core.Analysis.Shared.Constants;
-using ChangeLens.Core.Analysis.Shared.Helpers;
 using ChangeLens.Core.Analysis.Shared.Models;
 using EvidenceBinderModel = ChangeLens.Core.Analysis.EvidenceBinder.Models.EvidenceBinder;
 

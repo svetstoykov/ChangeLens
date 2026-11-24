@@ -1,6 +1,6 @@
 using ChangeLens.Core.Analysis.Curation.Models;
+using ChangeLens.Core.Analysis.EvidenceBinder.Helpers;
 using ChangeLens.Core.Analysis.EvidenceBinder.Models;
-using ChangeLens.Core.Analysis.Shared.Helpers;
 
 namespace ChangeLens.Core.Analysis.Curation.Helpers;
 

@@ -31,5 +31,7 @@ internal static class RepositoriesHostApplicationBuilderExtensions
             });
         builder.Services.AddScoped<IRepositoryHistoryService, RepositoryHistoryService>();
         builder.Services.AddScoped<IGitRepositoryInspector, GitRepositoryInspector>();
+        builder.Services.AddScoped<IRepositoryInspector>(
+            serviceProvider => serviceProvider.GetRequiredService<IGitRepositoryInspector>());
     }
 }

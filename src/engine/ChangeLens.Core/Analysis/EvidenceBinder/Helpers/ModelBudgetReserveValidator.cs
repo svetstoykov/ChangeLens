@@ -1,7 +1,7 @@
 using ChangeLens.Core.Analysis.EvidenceBinder.Models;
 using ChangeLens.Core.Analysis.Shared.Constants;
 
-namespace ChangeLens.Core.Analysis.Shared.Helpers;
+namespace ChangeLens.Core.Analysis.EvidenceBinder.Helpers;
 
 /// <summary>
 ///     Validates model output and prompt reserves against the evidence binder's configured budget.

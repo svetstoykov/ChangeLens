@@ -1,8 +1,8 @@
 using ChangeLens.Core.Analysis.ClaimChecking.Models;
+using ChangeLens.Core.Analysis.EvidenceBinder.Helpers;
 using ChangeLens.Core.Analysis.MentalModels.Helpers;
 using ChangeLens.Core.Analysis.MentalModels.Models;
 using ChangeLens.Core.Analysis.Shared.Constants;
-using ChangeLens.Core.Analysis.Shared.Helpers;
 using ChangeLens.Core.Analysis.Shared.Models;
 using EvidenceBinderModel = ChangeLens.Core.Analysis.EvidenceBinder.Models.EvidenceBinder;
 

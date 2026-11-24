@@ -1,7 +1,7 @@
 using ChangeLens.Core.Analysis.EvidenceBinder.Models;
 using ChangeLens.Core.Analysis.Shared.Models;
 
-namespace ChangeLens.Core.Analysis.Shared.Helpers;
+namespace ChangeLens.Core.Analysis.EvidenceBinder.Helpers;
 
 /// <summary>
 ///     Provides one undirected graph of the binder's disclosed match edges for movement checks.

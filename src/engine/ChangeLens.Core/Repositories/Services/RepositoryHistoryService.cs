@@ -1,4 +1,3 @@
-using ChangeLens.Core.Git.Interfaces;
 using ChangeLens.Core.Repositories.Interfaces;
 using ChangeLens.Core.Repositories.Models;
 using ChangeLens.Core.Results.Models;
@@ -18,7 +17,7 @@ namespace ChangeLens.Core.Repositories.Services;
 /// <param name="timeProvider">The time source used for explicit-open timestamps.</param>
 /// <param name="logger">The logger for repository history outcomes.</param>
 public sealed class RepositoryHistoryService(
-    IGitRepositoryInspector repositoryInspector,
+    IRepositoryInspector repositoryInspector,
     IRepositoryHistoryStore historyStore,
     ICanonicalRepositoryPathKeyProvider pathKeyProvider,
     TimeProvider timeProvider,

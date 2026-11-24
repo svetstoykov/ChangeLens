@@ -1,3 +1,5 @@
+using ChangeLens.Engine.Analysis.ReadingModel.Models;
+
 namespace ChangeLens.Engine.AnalysisRuns.Models;
 
 /// <summary>

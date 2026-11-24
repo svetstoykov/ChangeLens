@@ -65,7 +65,7 @@ internal sealed class ComparisonCheckFreshnessHandler(
                 Result.Success<ComparisonFreshnessResult>(new StaleComparisonFreshnessResult()),
             _ => OperationError.InternalError(
                 "The comparison freshness state is not approved for the engine protocol.",
-                ComparisonErrorCode.UnmappedFreshnessState),
+                ComparisonProtocolErrorCode.UnmappedFreshnessState),
         };
         return ProtocolResponseFactory.FromResult(request.RequestId, result);
     }

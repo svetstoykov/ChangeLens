@@ -5,8 +5,9 @@ using ChangeLens.Core.Analysis.MentalModels.Models;
 using ChangeLens.Core.Analysis.Publication.Models;
 using ChangeLens.Core.Analysis.Shared.Models;
 using ChangeLens.Core.Analysis.Snapshots.Models;
+using ChangeLens.Engine.Analysis.ReadingModel.Constants;
+using ChangeLens.Engine.Analysis.ReadingModel.Helpers;
 using ChangeLens.Engine.AnalysisRuns.Constants;
-using ChangeLens.Engine.AnalysisRuns.Helpers;
 using Xunit;
 
 namespace ChangeLens.Engine.IntegrationTests.Analysis;

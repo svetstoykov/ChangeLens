@@ -1,6 +1,6 @@
 using ChangeLens.Core.AnalysisRuns.Interfaces;
 using ChangeLens.Core.AnalysisRuns.Models;
-using ChangeLens.Engine.AnalysisRuns.Interfaces;
+using ChangeLens.Engine.Analysis.Pipeline.Interfaces;
 
 namespace ChangeLens.Engine.IntegrationTests.Hosting.Support;
 

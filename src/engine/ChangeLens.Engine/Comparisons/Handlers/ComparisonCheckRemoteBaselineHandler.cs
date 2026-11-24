@@ -68,7 +68,7 @@ internal sealed class ComparisonCheckRemoteBaselineHandler(
             RemoteBaselineState.NoRemote =>
                 Result.Success<RemoteBaselineResult>(new NoRemoteRemoteBaselineResult()),
             _ => OperationError.InternalError("The remote baseline check result is not approved for the engine protocol.",
-                ComparisonErrorCode.UnmappedRemoteBaselineState),
+                ComparisonProtocolErrorCode.UnmappedRemoteBaselineState),
         };
         return ProtocolResponseFactory.FromResult(request.RequestId, result);
     }

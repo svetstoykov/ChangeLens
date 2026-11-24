@@ -1,6 +1,7 @@
 using ChangeLens.Core.Analysis.Snapshots.Models;
 using ChangeLens.Core.AnalysisRuns.Models;
 using ChangeLens.Core.Results.Models;
+using ChangeLens.Engine.Analysis.ReadingModel.Models;
 using ChangeLens.Engine.AnalysisRuns.Constants;
 
 namespace ChangeLens.Engine.AnalysisRuns.Helpers;
@@ -24,8 +25,8 @@ internal static class AnalysisRunSummaryMapper
     /// <returns>The protocol summary, or an error when a Core value has no approved protocol representation.</returns>
     internal static Result<Models.AnalysisRunSummaryResult> ToProtocol(
         AnalysisRunDetail detail,
-        Models.ReadingModelResult? readingModel,
-        IReadOnlyList<Models.ValidationRemovalResult>? validationRemovals)
+        ReadingModelResult? readingModel,
+        IReadOnlyList<ValidationRemovalResult>? validationRemovals)
     {
         var stateResult = ToStateString(detail.State);
         if (stateResult.IsFailure)

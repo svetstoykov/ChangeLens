@@ -13,7 +13,7 @@ using ChangeLens.Core.Analysis.Shared.Constants;
 using ChangeLens.Core.ModelCompletion.Constants;
 using ChangeLens.Core.ModelCompletion.Models;
 using ChangeLens.Core.Results.Models;
-using ChangeLens.Engine.Hosting.Extensions;
+using ChangeLens.Engine.Analysis.Extensions;
 using ChangeLens.Engine.Hosting.Helpers;
 using ChangeLens.Engine.IntegrationTests.Curation.Support;
 using ChangeLens.Engine.IntegrationTests.DraftValidation.Support;
@@ -198,7 +198,7 @@ public sealed class CuratorServiceTests
     {
         var builder = Host.CreateApplicationBuilder();
 
-        builder.AddAnalysisRunServices();
+        builder.AddAnalysisServices();
 
         var curatorOptions = Assert.Single(
             builder.Services, descriptor => descriptor.ServiceType == typeof(CuratorOptions));
@@ -214,7 +214,7 @@ public sealed class CuratorServiceTests
         var builder = Host.CreateApplicationBuilder();
         builder.Configuration[EvidenceBinderConfigurationConstants.PromptReserveCharactersKey] = "1";
 
-        builder.AddAnalysisRunServices();
+        builder.AddAnalysisServices();
 
         var exception = Assert.Throws<InvalidOperationException>(() => EngineStartupValidator.Validate(builder.Services));
 
@@ -228,7 +228,7 @@ public sealed class CuratorServiceTests
         builder.Configuration[EvidenceBinderConfigurationConstants.CuratorOutputCharactersKey] = "10";
         builder.Configuration[CuratorConfigurationConstants.MaximumOutputCharactersKey] = "20";
 
-        builder.AddAnalysisRunServices();
+        builder.AddAnalysisServices();
 
         var exception = Assert.Throws<InvalidOperationException>(() => EngineStartupValidator.Validate(builder.Services));
 

@@ -1,6 +1,6 @@
 using ChangeLens.Core.Repositories.Interfaces;
 
-namespace ChangeLens.Infrastructure.LocalState.Services;
+namespace ChangeLens.Infrastructure.Repositories.Services;
 
 /// <summary>
 ///     Provides platform-specific canonical repository path identity.

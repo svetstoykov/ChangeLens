@@ -1,6 +1,6 @@
 using ChangeLens.Core.Repositories.Constants;
 using ChangeLens.Core.Results.Models;
-using ChangeLens.Infrastructure.FileSystem.Services;
+using ChangeLens.Infrastructure.Repositories.Services;
 using ChangeLens.Infrastructure.IntegrationTests.Support;
 using Xunit.Sdk;
 using Xunit;

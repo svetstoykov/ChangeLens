@@ -8,7 +8,7 @@ using ChangeLens.Infrastructure.LocalState.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 
-namespace ChangeLens.Infrastructure.LocalState.Services;
+namespace ChangeLens.Infrastructure.Repositories.Services;
 
 /// <summary>
 ///     Stores repository history in the required SQLite local-state database.

@@ -3,7 +3,7 @@ using ChangeLens.Core.Comparisons.Services;
 using ChangeLens.Core.Git.Models;
 using ChangeLens.Core.Git.Services;
 using ChangeLens.Core.Results.Models;
-using ChangeLens.Infrastructure.FileSystem.Services;
+using ChangeLens.Infrastructure.Repositories.Services;
 using ChangeLens.Infrastructure.Git.Services;
 using ChangeLens.Infrastructure.IntegrationTests.Git.Support;
 using Microsoft.Extensions.Logging.Abstractions;

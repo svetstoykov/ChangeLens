@@ -3,7 +3,7 @@ using ChangeLens.Core.Analysis.Snapshots.Constants;
 using ChangeLens.Core.Analysis.Snapshots.Models;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
-namespace ChangeLens.Infrastructure.Snapshots.Persistence.Converters;
+namespace ChangeLens.Infrastructure.AnalysisRuns.Persistence.Converters;
 
 /// <summary>
 ///     Converts <see cref="SnapshotChangeCategory" /> to and from the stable literal enforced by the

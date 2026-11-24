@@ -71,21 +71,19 @@ using ChangeLens.Engine.Protocol.Interfaces;
 using ChangeLens.Engine.Protocol.Services;
 using ChangeLens.Engine.Repositories.Constants;
 using ChangeLens.Engine.Repositories.Handlers;
-using ChangeLens.Infrastructure.AnalysisRuns.Services;
-using ChangeLens.Infrastructure.EngineStatus.Services;
-using ChangeLens.Infrastructure.FileSystem.Services;
+using ChangeLens.Infrastructure.AnalysisRuns.Extensions;
+using ChangeLens.Infrastructure.EngineStatus.Extensions;
+using ChangeLens.Infrastructure.Git.Extensions;
 using ChangeLens.Infrastructure.Git.Models;
-using ChangeLens.Infrastructure.Git.Services;
 using ChangeLens.Infrastructure.LocalState.Constants;
+using ChangeLens.Infrastructure.LocalState.Extensions;
 using ChangeLens.Infrastructure.LocalState.Models;
-using ChangeLens.Infrastructure.LocalState.Persistence;
-using ChangeLens.Infrastructure.LocalState.Services;
 using ChangeLens.Infrastructure.ModelCompletion.Constants;
 using ChangeLens.Infrastructure.ModelCompletion.Extensions;
 using ChangeLens.Infrastructure.ModelCompletion.Helpers;
 using ChangeLens.Infrastructure.ModelCompletion.Models;
-using Microsoft.Data.Sqlite;
-using Microsoft.EntityFrameworkCore;
+using ChangeLens.Infrastructure.Preferences.Extensions;
+using ChangeLens.Infrastructure.Repositories.Extensions;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -113,7 +111,7 @@ internal static class EngineHostApplicationBuilderExtensions
         builder.Services.AddSingleton(TimeProvider.System);
     }
 
-    /// <summary>Registers local-state persistence and repository-history services.</summary>
+    /// <summary>Registers local-state persistence services.</summary>
     /// <param name="builder">The host application builder to configure. Cannot be <see langword="null" />.</param>
     /// <exception cref="ArgumentNullException"><paramref name="builder" /> is <see langword="null" />.</exception>
     internal static void AddLocalStateServices(this HostApplicationBuilder builder)
@@ -121,20 +119,7 @@ internal static class EngineHostApplicationBuilderExtensions
         ArgumentNullException.ThrowIfNull(builder);
 
         var paths = LocalStatePaths.Resolve(builder.Configuration[LocalStateConstants.DirectoryConfigurationKey]);
-        var connectionString = new SqliteConnectionStringBuilder
-        {
-            DataSource = paths.DatabasePath,
-            Mode = SqliteOpenMode.ReadWriteCreate,
-            Cache = SqliteCacheMode.Private,
-            DefaultTimeout = LocalStateConstants.CommandTimeoutSeconds,
-            ForeignKeys = true,
-        }.ToString();
-
-        builder.Services.AddSingleton(paths);
-        builder.Services.AddDbContext<ChangeLensLocalStateDbContext>(options => options.UseSqlite(connectionString));
-        builder.Services.AddScoped<ILocalStateInitializer, SqliteLocalStateInitializer>();
-        builder.Services.AddScoped<IRepositoryHistoryStore, SqliteRepositoryHistoryStore>();
-        builder.Services.AddScoped<IRepositoryHistoryService, RepositoryHistoryService>();
+        builder.Services.AddLocalStateInfrastructure(paths);
     }
 
     /// <summary>Registers color-theme preference services.</summary>
@@ -144,7 +129,7 @@ internal static class EngineHostApplicationBuilderExtensions
     {
         ArgumentNullException.ThrowIfNull(builder);
 
-        builder.Services.AddScoped<IColorThemePreferenceStore, SqliteColorThemePreferenceStore>();
+        builder.Services.AddPreferenceInfrastructure();
         builder.Services.AddScoped<IColorThemePreferenceService, ColorThemePreferenceService>();
     }
 
@@ -155,24 +140,23 @@ internal static class EngineHostApplicationBuilderExtensions
     {
         ArgumentNullException.ThrowIfNull(builder);
 
-        builder.Services.AddScoped<IEngineStatusService, EngineStatusService>();
+        builder.Services.AddEngineStatusInfrastructure();
     }
 
-    /// <summary>Registers repository inspection services.</summary>
+    /// <summary>Registers repository inspection and history services.</summary>
     /// <param name="builder">The host application builder to configure. Cannot be <see langword="null" />.</param>
     /// <exception cref="ArgumentNullException"><paramref name="builder" /> is <see langword="null" />.</exception>
     internal static void AddRepositoryServices(this HostApplicationBuilder builder)
     {
         ArgumentNullException.ThrowIfNull(builder);
 
-        builder.Services.AddScoped<ICanonicalRepositoryPathKeyProvider, CanonicalRepositoryPathKeyProvider>();
-        builder.Services.AddScoped<IRepositoryPathResolver, PhysicalRepositoryPathResolver>();
-        builder.Services.Configure<GitCommandRunnerOptions>(
-            options => options.ExecutablePath =
-                builder.Configuration[RepositoryInspectionConfigurationConstants.GitExecutableConfigurationKey]);
-        builder.Services.AddScoped<GitCliCommandRunner>();
-        builder.Services.AddScoped<IGitCommandRunner>(services => services.GetRequiredService<GitCliCommandRunner>());
-        builder.Services.AddScoped<IGitBinaryCommandRunner>(services => services.GetRequiredService<GitCliCommandRunner>());
+        builder.Services.AddRepositoryInfrastructure();
+        builder.Services.AddGitInfrastructure(
+            new GitCommandRunnerOptions
+            {
+                ExecutablePath = builder.Configuration[RepositoryInspectionConfigurationConstants.GitExecutableConfigurationKey],
+            });
+        builder.Services.AddScoped<IRepositoryHistoryService, RepositoryHistoryService>();
         builder.Services.AddScoped<IGitRepositoryInspector, GitRepositoryInspector>();
     }
 
@@ -464,7 +448,7 @@ internal static class EngineHostApplicationBuilderExtensions
         ArgumentNullException.ThrowIfNull(builder);
 
         builder.Services.AddSingleton<IAnalysisProcessorControl, AnalysisProcessorControl>();
-        builder.Services.AddScoped<IAnalysisRunStore, SqliteAnalysisRunStore>();
+        builder.Services.AddAnalysisRunInfrastructure();
         builder.Services.AddSingleton(CreateFrozenGitTreeReaderOptions(builder.Configuration));
         builder.Services.AddSingleton(CreateChangeAnatomyOptions(builder.Configuration));
         builder.Services.AddScoped<IFrozenGitTreeReaderFactory, FrozenGitTreeReaderFactory>();
@@ -499,7 +483,7 @@ internal static class EngineHostApplicationBuilderExtensions
             options.MaximumResponseBytes = ModelCompletionTransportConstants.ResponseByteBudget(
                 Math.Max(curatorOptions.MaximumOutputCharacters, reviewerOptions.MaximumOutputCharacters));
         });
-        builder.Services.AddModelCompletionClient();
+        builder.Services.AddModelCompletionInfrastructure();
         builder.Services.AddScoped<ICuratorService, CuratorService>();
         builder.Services.AddScoped<IReviewerService, ReviewerService>();
         builder.Services.AddScoped<IFindingValidationService, FindingValidationService>();

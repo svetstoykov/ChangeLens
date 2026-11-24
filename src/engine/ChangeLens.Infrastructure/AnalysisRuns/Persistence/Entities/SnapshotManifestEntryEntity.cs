@@ -1,7 +1,6 @@
 using ChangeLens.Core.Analysis.Snapshots.Models;
-using ChangeLens.Infrastructure.AnalysisRuns.Persistence.Entities;
 
-namespace ChangeLens.Infrastructure.Snapshots.Persistence.Entities;
+namespace ChangeLens.Infrastructure.AnalysisRuns.Persistence.Entities;
 
 /// <summary>
 ///     Represents one persisted committed path from a run's captured snapshot manifest.

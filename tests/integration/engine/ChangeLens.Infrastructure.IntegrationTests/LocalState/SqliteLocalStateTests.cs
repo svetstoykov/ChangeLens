@@ -3,6 +3,8 @@ using ChangeLens.Infrastructure.IntegrationTests.Support;
 using ChangeLens.Infrastructure.LocalState.Models;
 using ChangeLens.Infrastructure.LocalState.Persistence;
 using ChangeLens.Infrastructure.LocalState.Services;
+using ChangeLens.Infrastructure.Preferences.Services;
+using ChangeLens.Infrastructure.Repositories.Services;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;

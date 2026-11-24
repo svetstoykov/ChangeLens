@@ -2,7 +2,7 @@ using ChangeLens.Core.Git.Services;
 using ChangeLens.Core.Repositories.Constants;
 using ChangeLens.Core.Repositories.Models;
 using ChangeLens.Core.Results.Models;
-using ChangeLens.Infrastructure.FileSystem.Services;
+using ChangeLens.Infrastructure.Repositories.Services;
 using ChangeLens.Infrastructure.Git.Services;
 using ChangeLens.Infrastructure.IntegrationTests.Git.Support;
 using ChangeLens.Infrastructure.IntegrationTests.Support;

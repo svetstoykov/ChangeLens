@@ -5,8 +5,7 @@ using ChangeLens.Core.Results.Models;
 using ChangeLens.Engine.AnalysisRuns.Services;
 using ChangeLens.Engine.IntegrationTests.Analysis.Support;
 using ChangeLens.Engine.IntegrationTests.Comparisons.Handlers.Support;
-using ChangeLens.Infrastructure.FileSystem.Services;
-using ChangeLens.Infrastructure.LocalState.Services;
+using ChangeLens.Infrastructure.Repositories.Services;
 using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 

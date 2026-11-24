@@ -2,8 +2,6 @@ using ChangeLens.Core.Preferences.Models;
 using ChangeLens.Infrastructure.AnalysisRuns.Persistence.Converters;
 using ChangeLens.Infrastructure.AnalysisRuns.Persistence.Entities;
 using ChangeLens.Infrastructure.LocalState.Persistence.Entities;
-using ChangeLens.Infrastructure.Snapshots.Persistence.Converters;
-using ChangeLens.Infrastructure.Snapshots.Persistence.Entities;
 using Microsoft.EntityFrameworkCore;
 
 namespace ChangeLens.Infrastructure.LocalState.Persistence;

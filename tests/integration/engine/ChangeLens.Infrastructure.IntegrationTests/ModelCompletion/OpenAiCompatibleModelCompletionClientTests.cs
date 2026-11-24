@@ -643,7 +643,7 @@ public sealed class OpenAiCompatibleModelCompletionClientTests
             options.Model = "fixture-model";
             options.ApiKey = ApiKey;
         });
-        services.AddModelCompletionClient();
+        services.AddModelCompletionInfrastructure();
         using var serviceProvider = services.BuildServiceProvider();
         using var scope = serviceProvider.CreateScope();
         var client = scope.ServiceProvider.GetRequiredService<IModelCompletionClient>();

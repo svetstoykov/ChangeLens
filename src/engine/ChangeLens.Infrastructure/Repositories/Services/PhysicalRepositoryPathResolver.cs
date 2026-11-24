@@ -4,7 +4,7 @@ using ChangeLens.Core.Results.Models;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Logging;
 
-namespace ChangeLens.Infrastructure.FileSystem.Services;
+namespace ChangeLens.Infrastructure.Repositories.Services;
 
 /// <summary>
 ///     Resolves repository directory paths to their physical file-system locations.

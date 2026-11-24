@@ -6,7 +6,6 @@ using ChangeLens.Core.AnalysisRuns.Models;
 using ChangeLens.Core.Results.Models;
 using ChangeLens.Infrastructure.AnalysisRuns.Persistence.Entities;
 using ChangeLens.Infrastructure.LocalState.Persistence;
-using ChangeLens.Infrastructure.Snapshots.Persistence.Entities;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore.Query;
 using Microsoft.EntityFrameworkCore;

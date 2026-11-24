@@ -15,7 +15,7 @@ public static class ModelCompletionServiceCollectionExtensions
     /// <param name="services">The service collection to configure. Cannot be <see langword="null" />.</param>
     /// <returns>The supplied service collection.</returns>
     /// <exception cref="ArgumentNullException"><paramref name="services" /> is <see langword="null" />.</exception>
-    public static IServiceCollection AddModelCompletionClient(this IServiceCollection services)
+    public static IServiceCollection AddModelCompletionInfrastructure(this IServiceCollection services)
     {
         ArgumentNullException.ThrowIfNull(services);
 

@@ -4,7 +4,7 @@ using System.Text.Json;
 using ChangeLens.Core.Results.Models;
 using ChangeLens.Engine.IntegrationTests.Protocol.Support;
 using ChangeLens.Engine.IntegrationTests.Support;
-using ChangeLens.Infrastructure.FileSystem.Services;
+using ChangeLens.Infrastructure.Repositories.Services;
 using Xunit;
 
 namespace ChangeLens.Engine.IntegrationTests.Protocol;

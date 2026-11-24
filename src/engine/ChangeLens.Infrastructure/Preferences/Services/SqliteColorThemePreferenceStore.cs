@@ -6,7 +6,7 @@ using ChangeLens.Infrastructure.LocalState.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 
-namespace ChangeLens.Infrastructure.LocalState.Services;
+namespace ChangeLens.Infrastructure.Preferences.Services;
 
 /// <summary>
 ///     Stores the explicit color-theme preference in SQLite local state.

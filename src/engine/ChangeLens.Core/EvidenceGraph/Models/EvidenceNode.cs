@@ -42,6 +42,12 @@ public sealed record EvidenceNode(
     bool Truncated)
 {
     /// <summary>
+    ///     Gets the quoted lines this change added (After side) or removed (Before side), as ascending inclusive ranges.
+    /// </summary>
+    /// <remarks>Empty for manifest facts, candidate windows, and changed-file windows that quote only unchanged lines.</remarks>
+    public IReadOnlyList<EvidenceLineRange> ChangedLines { get; init; } = [];
+
+    /// <summary>
     ///     Gets a value indicating whether this node is a manifest fact rather than a quote window.
     /// </summary>
     public bool IsManifestFact => this.StartLine == 0;

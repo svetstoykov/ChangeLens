@@ -119,8 +119,7 @@ public sealed class EvidenceGraphService(
             this._options.MaximumQuoteWindowNodes);
         var candidateBudget = this._options.MaximumQuoteWindowNodes - changedBudget;
         var selection = this.SelectWindows(changedFiles.Files, mergedCandidateWindows, changedBudget, candidateBudget);
-        var (nodes, changedWindowNodesByPath, candidateNodesByIndex) =
-            BuildNodes(factNodes, selection, blobs);
+        var (nodes, changedWindowNodesByPath, candidateNodesByIndex) = BuildNodes(factNodes, selection, blobs, changedByPath);
         var pendingEdges = BuildPendingEdges(
             anatomy, ranking, changedWindowNodesByPath, factByPath, candidateNodesByIndex, candidates.ContributionsByIndex, skipReasons);
         var edgeSelection = SelectEdges(pendingEdges, this._options.MaximumEdges, this._options.MaximumEdgesPerNodePair);
@@ -237,6 +236,7 @@ public sealed class EvidenceGraphService(
         EvidenceGraphChangedFile file, string quotePath, ChangeAnatomySide side, string objectId,
         IReadOnlyList<string> blobLines, IReadOnlyList<FrozenGitDiffLine> changedLines)
     {
+        file.ChangedLineNumbers[side] = [.. changedLines.Select(line => line.LineNumber).Order()];
         if (blobLines.Count <= this._options.MaximumWholeChangedFileLines)
         {
             file.Windows.Add(new EvidenceGraphWindow(
@@ -244,7 +244,7 @@ public sealed class EvidenceGraphService(
             return;
         }
 
-        var numbers = changedLines.Select(line => line.LineNumber).OrderBy(number => number).ToArray();
+        var numbers = file.ChangedLineNumbers[side];
         var runStart = -1;
         var runEnd = -1;
         foreach (var number in numbers)
@@ -678,7 +678,9 @@ public sealed class EvidenceGraphService(
         List<EvidenceNode> Nodes,
         Dictionary<string, List<EvidenceNode>> ChangedByPath,
         Dictionary<int, List<EvidenceNode>> CandidateByIndex)
-        BuildNodes(IReadOnlyList<EvidenceNode> factNodes, EvidenceGraphWindowSelection selection, EvidenceGraphBlobCache blobs)
+        BuildNodes(
+            IReadOnlyList<EvidenceNode> factNodes, EvidenceGraphWindowSelection selection, EvidenceGraphBlobCache blobs,
+            IReadOnlyDictionary<string, EvidenceGraphChangedFile> changedFilesByPath)
     {
         var nodes = new List<EvidenceNode>(factNodes);
         var changedByPath = new Dictionary<string, List<EvidenceNode>>(StringComparer.Ordinal);
@@ -690,7 +692,11 @@ public sealed class EvidenceGraphService(
             .ThenBy(candidate => candidate.Start))
         {
             ordinal++;
-            var node = CreateWindowNode(window, ordinal, blobs, true);
+            var changedLineNumbers = changedFilesByPath[window.ChangedPath!].ChangedLineNumbers.GetValueOrDefault(window.Side, []);
+            var node = CreateWindowNode(window, ordinal, blobs, true) with
+            {
+                ChangedLines = ChangedLineRanges(changedLineNumbers, window.Start, window.End),
+            };
             nodes.Add(node);
             AppendNode(changedByPath, window.ChangedPath!, node);
         }
@@ -726,6 +732,23 @@ public sealed class EvidenceGraphService(
             origins,
             window.Salience,
             window.Truncated);
+    }
+
+    private static List<EvidenceLineRange> ChangedLineRanges(int[] changedLineNumbers, int start, int end)
+    {
+        var ranges = new List<EvidenceLineRange>();
+        foreach (var number in changedLineNumbers.Where(number => number >= start && number <= end))
+        {
+            if (ranges.Count > 0 && ranges[^1].EndLine == number - 1)
+            {
+                ranges[^1] = ranges[^1] with { EndLine = number };
+                continue;
+            }
+
+            ranges.Add(new EvidenceLineRange(number, number));
+        }
+
+        return ranges;
     }
 
     private static void AppendNode<TKey>(IDictionary<TKey, List<EvidenceNode>> nodes, TKey key, EvidenceNode node)

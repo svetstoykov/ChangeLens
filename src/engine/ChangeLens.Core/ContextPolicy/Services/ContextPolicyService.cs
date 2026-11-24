@@ -167,7 +167,7 @@ public sealed class ContextPolicyService(
     {
         disclosedNodes.Add(new DisclosedEvidenceNode(
             node.NodeId, node.Path, node.Side, node.ObjectId, node.StartLine, node.EndLine, node.IsChangedFile,
-            node.Origins, node.Salience, node.QuotedText, node.ContentHash, null, node.Truncated));
+            node.Origins, node.Salience, node.QuotedText, node.ContentHash, null, node.Truncated) { ChangedLines = node.ChangedLines });
         decisions.Add(new ContextPolicyDecision(node.NodeId, node.Path, ContextPolicyVerdict.Allow, null, []));
         disclosedTextByNodeId[node.NodeId] = node.QuotedText;
     }
@@ -193,7 +193,7 @@ public sealed class ContextPolicyService(
         var text = string.Join('\n', lines);
         disclosedNodes.Add(new DisclosedEvidenceNode(
             node.NodeId, node.Path, node.Side, node.ObjectId, node.StartLine, node.EndLine, node.IsChangedFile,
-            node.Origins, node.Salience, text, node.ContentHash, Hash(text), node.Truncated));
+            node.Origins, node.Salience, text, node.ContentHash, Hash(text), node.Truncated) { ChangedLines = node.ChangedLines });
         decisions.Add(new ContextPolicyDecision(node.NodeId, node.Path, ContextPolicyVerdict.Redact, null, redactions));
         disclosedTextByNodeId[node.NodeId] = text;
         return text;

@@ -40,6 +40,25 @@ public sealed class ContextPolicyServiceIntegrationTests
     }
 
     /// <summary>
+    ///     Carries a node's changed-line ranges into its disclosed node, whether the node is allowed or redacted.
+    /// </summary>
+    [Fact]
+    public void Apply_KeepsChangedLinesOnAllowedAndRedactedNodes()
+    {
+        var changedLines = new[] { new EvidenceLineRange(2, 3) };
+        var clean = ContextPolicyGraphFixtures.CreateNode("n001", "src/app.cs", "alpha\nbeta\ngamma\ndelta") with { ChangedLines = changedLines };
+        var secret = ContextPolicyGraphFixtures.CreateNode(
+            "n002", "src/config.cs", "one\ntwo\nvar apiKey = \"AKIAABCDEFGHIJKLMNOP\";\nfour\nfive") with { ChangedLines = changedLines };
+        var service = CreateService();
+
+        var outcome = service.Apply(ContextPolicyGraphFixtures.CreateGraph([clean, secret]), TestContext.Current.CancellationToken);
+
+        Assert.Equal(2, outcome.DisclosedNodes.Count);
+        Assert.All(outcome.DisclosedNodes, disclosed => Assert.Equal(changedLines, disclosed.ChangedLines));
+        Assert.Contains(outcome.DisclosedNodes, disclosed => disclosed.IsRedacted);
+    }
+
+    /// <summary>
     ///     Replaces one secret line, hashes the redacted text, and records the one-based blob line.
     /// </summary>
     [Fact]

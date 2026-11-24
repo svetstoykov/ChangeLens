@@ -92,6 +92,39 @@ public sealed class EvidenceGraphServiceIntegrationTests
     }
 
     /// <summary>
+    ///     Asynchronously marks the added lines of an After quote and the removed lines of a Before quote, so unchanged context
+    ///     around a one-line edit is not presented as changed.
+    /// </summary>
+    /// <returns>A task that represents the asynchronous operation.</returns>
+    [Fact]
+    public async Task BuildAsync_QuotesCarryTheirChangedLineRanges()
+    {
+        using var repository = new TemporaryGitRepository();
+        var beforeLines = Enumerable.Range(1, 12).Select(index => $"beta line {index:00}").ToArray();
+        repository.CommitFile("beta.txt", string.Join('\n', beforeLines) + "\n", "seed beta");
+        var mergeBase = repository.Revision;
+
+        var afterLines = beforeLines.ToArray();
+        afterLines[2] = "beta line 03 changed";
+        afterLines[3] = "beta line 04 changed";
+        afterLines[6] = "beta line 07 changed";
+        var head = EvidenceGraphHarness.CommitFiles(repository, "modify beta", [("beta.txt", string.Join('\n', afterLines) + "\n")]);
+        var entry = SnapshotManifestEntryFixtures.CreateEntry(repository, mergeBase, head, "beta.txt", "beta.txt", SnapshotChangeCategory.Modified);
+
+        var result = await EvidenceGraphHarness.BuildAsync(repository, mergeBase, head, [entry]);
+
+        var graph = Assert.IsType<EvidenceGraphModel>(result.Data);
+        var expected = new[] { new EvidenceLineRange(3, 4), new EvidenceLineRange(7, 7) };
+        foreach (var side in new[] { ChangeAnatomySide.Before, ChangeAnatomySide.After })
+        {
+            var node = Assert.Single(graph.Nodes, candidate => candidate.Path == "beta.txt" && candidate.Side == side && !candidate.IsManifestFact);
+            Assert.Equal(expected, node.ChangedLines);
+        }
+
+        Assert.All(graph.Nodes.Where(node => node.IsManifestFact), node => Assert.Empty(node.ChangedLines));
+    }
+
+    /// <summary>
     ///     Asynchronously quotes both sides of a changed file whole when they fit the whole-file limit.
     /// </summary>
     /// <returns>A task that represents the asynchronous operation.</returns>

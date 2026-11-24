@@ -294,6 +294,28 @@ public sealed class EvidenceBinderServiceTests
         Assert.Equal(2, binder.MatchEdges.Count);
     }
 
+    [Fact]
+    public void ChangedLinesReachTheReviewerPayload()
+    {
+        var after = Node("after", "src/changed.cs", ChangeAnatomySide.After, true, EvidenceNodeOrigin.ChangedHunk, "a\nb\nc") with
+        {
+            EndLine = 3,
+            ChangedLines = [new EvidenceLineRange(2, 2)],
+        };
+        var request = Request(
+            Policy([after], [Decision(after)], []),
+            new SnapshotManifestEntry("src/changed.cs", null, SnapshotChangeCategory.Modified, "100644", "100644", Blob('a'), Blob('b')),
+            ["src/changed.cs"],
+            null);
+        var service = Service(new EvidenceBinderOptions());
+        var binder = Assert.IsType<EvidenceBinderModel>(service.Assemble(request, CancellationToken.None).Data);
+
+        var payload = EvidenceBinderJson.SerializePayload(service.ScopeToChangedFiles(binder));
+
+        Assert.Equal([new EvidenceLineRange(2, 2)], Assert.Single(binder.Evidence).ChangedLines);
+        Assert.Contains("\"changedLines\":[{\"startLine\":2,\"endLine\":2}]", payload, StringComparison.Ordinal);
+    }
+
     private static EvidenceBinderService Service(EvidenceBinderOptions options) => new(options, NullLogger<EvidenceBinderService>.Instance);
 
     private static ContextPolicyDecision Decision(DisclosedEvidenceNode node) => new(

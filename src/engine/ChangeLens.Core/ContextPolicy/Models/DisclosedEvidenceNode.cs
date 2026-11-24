@@ -35,6 +35,11 @@ public sealed record DisclosedEvidenceNode(
     bool Truncated)
 {
     /// <summary>
+    ///     Gets the quoted lines this change added (After side) or removed (Before side), carried from the graph node.
+    /// </summary>
+    public IReadOnlyList<EvidenceLineRange> ChangedLines { get; init; } = [];
+
+    /// <summary>
     ///     Gets a value indicating whether one or more lines of <see cref="Text" /> were redacted.
     /// </summary>
     public bool IsRedacted => this.DisclosedHash is not null;

@@ -114,7 +114,7 @@ public sealed class EvidenceBinderService : IEvidenceBinderService
                 node.ContentHash,
                 node.DisclosedHash,
                 node.IsRedacted,
-                node.Truncated));
+                node.Truncated) { ChangedLines = node.ChangedLines });
         }
 
         foreach (var decision in request.Policy.Decisions.Where(decision => decision.Verdict == ContextPolicyVerdict.Exclude))

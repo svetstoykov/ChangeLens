@@ -214,6 +214,34 @@ public sealed class FindingValidationServiceTests
     }
 
     [Fact]
+    public void AnchorThatDiffersOnlyInLineIndentationStillMatchesTheQuotedLines()
+    {
+        const string quote = "func walk() {\n\t\t\t\t\tfor l := len(*skippedNodes); l > 0; {\n\t\t\t\t\t\tskippedNode := (*skippedNodes)[l-1]\n"
+            + "\t\t\t\t\t\t*skippedNodes = (*skippedNodes)[:l-1]\n\t\t\t\t\t}\n}";
+        const string anchor = "\t\t\t\tfor l := len(*skippedNodes); l > 0; {\n\t\t\t\t\tskippedNode := (*skippedNodes)[l-1]\n"
+            + "\t\t\t\t\t*skippedNodes = (*skippedNodes)[:l-1]  \n";
+        var binder = Support.FindingValidationFixtureBinderBuilder.Create(
+            Support.FindingValidationFixtureBinderBuilder.SourceEvidence("n1", quote, 100));
+
+        var outcome = Validate(binder, Finding("f1", "n1", anchor));
+
+        Assert.Equal(new FindingFocusRange(101, 103), Assert.Single(outcome.Findings).FocusRange);
+        Assert.Empty(outcome.Removals);
+    }
+
+    [Fact]
+    public void AnchorThatOccursMoreThanOnceAfterIgnoringIndentationIsAmbiguous()
+    {
+        var binder = Support.FindingValidationFixtureBinderBuilder.Create(
+            Support.FindingValidationFixtureBinderBuilder.SourceEvidence("n1", "\talpha\nbeta\n        alpha"));
+
+        var outcome = Validate(binder, Finding("f1", "n1", "alpha"));
+
+        Assert.Empty(outcome.Findings);
+        Assert.Equal(FindingValidationConstants.AnchorAmbiguousReason, Assert.Single(outcome.Removals).Reason);
+    }
+
+    [Fact]
     public void OnlyFirstTenIncomingPositionsAreEligibleAndCapReasonTakesPrecedence()
     {
         var binder = SourceBinder();
@@ -228,6 +256,24 @@ public sealed class FindingValidationServiceTests
         Assert.Equal("f10", removal.Id);
         Assert.Equal(FindingValidationConstants.OverCapReason, removal.Reason);
         Assert.Equal(outcome.Removals.Count, outcome.WithheldCount);
+    }
+
+    [Fact]
+    public void FindingThatDeclaresAnUnquotedDependencyIsPublishedWithItsSeverityAndDependencies()
+    {
+        var binder = Support.FindingValidationFixtureBinderBuilder.Create(
+            Support.FindingValidationFixtureBinderBuilder.SourceEvidence("n1", "\t\"testing\"\n\n\t\"example.com/assert\"", 14));
+        var dependent = Finding(
+            "f1", "n1", "\t\"testing\"", title: "The test file never imports require",
+            unquotedDependencies: ["the rest of the import block, which the quote cuts off"]);
+
+        var outcome = Validate(binder, dependent);
+
+        var published = Assert.Single(outcome.Findings).Finding;
+        Assert.Equal("f1", published.Id);
+        Assert.Equal(FindingValidationConstants.WarningSeverity, published.Severity);
+        Assert.Equal(["the rest of the import block, which the quote cuts off"], published.UnquotedDependencies);
+        Assert.Empty(outcome.Removals);
     }
 
     private static FindingValidationOutcome Validate(
@@ -249,7 +295,8 @@ public sealed class FindingValidationServiceTests
         string title = "A source defect",
         string severity = "warning",
         string trigger = "A concrete input reaches this branch.",
-        string fix = "Use the intended value.") => new(
+        string fix = "Use the intended value.",
+        IReadOnlyList<string>? unquotedDependencies = null) => new(
             id,
             severity,
             title,
@@ -257,5 +304,6 @@ public sealed class FindingValidationServiceTests
             impact,
             fix,
             evidenceNodeIds ?? [nodeId],
-            new ReviewerAnchor(nodeId, lines));
+            new ReviewerAnchor(nodeId, lines),
+            unquotedDependencies ?? []);
 }

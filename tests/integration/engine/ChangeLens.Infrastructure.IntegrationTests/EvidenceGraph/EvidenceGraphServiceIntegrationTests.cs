@@ -17,6 +17,39 @@ namespace ChangeLens.Infrastructure.IntegrationTests.EvidenceGraph;
 public sealed class EvidenceGraphServiceIntegrationTests
 {
     /// <summary>
+    ///     Asynchronously grows a hunk window to the blank lines around it, so a changed import block is quoted whole.
+    /// </summary>
+    /// <returns>A task that represents the asynchronous operation.</returns>
+    [Fact]
+    public async Task BuildAsync_HunkWindowGrowsToTheSurroundingBlankLinesWithinTheConfiguredLimit()
+    {
+        using var repository = new TemporaryGitRepository();
+        var beforeLines = new List<string> { "// header", "", "import (" };
+        beforeLines.AddRange(Enumerable.Range(1, 10).Select(index => $"    \"package{index}\""));
+        beforeLines.AddRange([")", "", "func body() {", "}"]);
+        repository.CommitFile("imports.go", string.Join('\n', beforeLines) + "\n", "seed imports");
+        var mergeBase = repository.Revision;
+
+        var afterLines = beforeLines.ToList();
+        afterLines.Insert(7, "    \"added\"");
+        var head = EvidenceGraphHarness.CommitFiles(repository, "add import", [("imports.go", string.Join('\n', afterLines) + "\n")]);
+        var entry = SnapshotManifestEntryFixtures.CreateEntry(
+            repository, mergeBase, head, "imports.go", "imports.go", SnapshotChangeCategory.Modified);
+
+        var whole = await EvidenceGraphHarness.BuildAsync(
+            repository, mergeBase, head, [entry], new EvidenceGraphOptions { MaximumWholeChangedFileLines = 0 });
+        var limited = await EvidenceGraphHarness.BuildAsync(
+            repository, mergeBase, head, [entry], new EvidenceGraphOptions { MaximumWholeChangedFileLines = 0, MaximumBlockExtensionLines = 1 });
+
+        var block = Assert.Single(whole.Data!.Nodes, node => node.Side == ChangeAnatomySide.After && !node.IsManifestFact);
+        Assert.Equal((3, 15), (block.StartLine, block.EndLine));
+        Assert.StartsWith("import (", block.QuotedText, StringComparison.Ordinal);
+        Assert.EndsWith(")", block.QuotedText, StringComparison.Ordinal);
+        var clipped = Assert.Single(limited.Data!.Nodes, node => node.Side == ChangeAnatomySide.After && !node.IsManifestFact);
+        Assert.Equal((4, 12), (clipped.StartLine, clipped.EndLine));
+    }
+
+    /// <summary>
     ///     Asynchronously quotes a modified file with clamped context on both sides and an exact content hash.
     /// </summary>
     /// <returns>A task that represents the asynchronous operation.</returns>
@@ -38,7 +71,7 @@ public sealed class EvidenceGraphServiceIntegrationTests
         var entry = SnapshotManifestEntryFixtures.CreateEntry(
             repository, mergeBase, head, "alpha.txt", "alpha.txt", SnapshotChangeCategory.Modified);
 
-        var options = new EvidenceGraphOptions { MaximumWholeChangedFileLines = 0 };
+        var options = new EvidenceGraphOptions { MaximumWholeChangedFileLines = 0, MaximumBlockExtensionLines = 0 };
 
         var result = await EvidenceGraphHarness.BuildAsync(repository, mergeBase, head, [entry], options);
 
@@ -56,6 +89,39 @@ public sealed class EvidenceGraphServiceIntegrationTests
         Assert.Equal(1, beforeNode.StartLine);
         Assert.Equal(5, beforeNode.EndLine);
         Assert.Equal(string.Join('\n', beforeLines.Take(5)), beforeNode.QuotedText);
+    }
+
+    /// <summary>
+    ///     Asynchronously marks the added lines of an After quote and the removed lines of a Before quote, so unchanged context
+    ///     around a one-line edit is not presented as changed.
+    /// </summary>
+    /// <returns>A task that represents the asynchronous operation.</returns>
+    [Fact]
+    public async Task BuildAsync_QuotesCarryTheirChangedLineRanges()
+    {
+        using var repository = new TemporaryGitRepository();
+        var beforeLines = Enumerable.Range(1, 12).Select(index => $"beta line {index:00}").ToArray();
+        repository.CommitFile("beta.txt", string.Join('\n', beforeLines) + "\n", "seed beta");
+        var mergeBase = repository.Revision;
+
+        var afterLines = beforeLines.ToArray();
+        afterLines[2] = "beta line 03 changed";
+        afterLines[3] = "beta line 04 changed";
+        afterLines[6] = "beta line 07 changed";
+        var head = EvidenceGraphHarness.CommitFiles(repository, "modify beta", [("beta.txt", string.Join('\n', afterLines) + "\n")]);
+        var entry = SnapshotManifestEntryFixtures.CreateEntry(repository, mergeBase, head, "beta.txt", "beta.txt", SnapshotChangeCategory.Modified);
+
+        var result = await EvidenceGraphHarness.BuildAsync(repository, mergeBase, head, [entry]);
+
+        var graph = Assert.IsType<EvidenceGraphModel>(result.Data);
+        var expected = new[] { new EvidenceLineRange(3, 4), new EvidenceLineRange(7, 7) };
+        foreach (var side in new[] { ChangeAnatomySide.Before, ChangeAnatomySide.After })
+        {
+            var node = Assert.Single(graph.Nodes, candidate => candidate.Path == "beta.txt" && candidate.Side == side && !candidate.IsManifestFact);
+            Assert.Equal(expected, node.ChangedLines);
+        }
+
+        Assert.All(graph.Nodes.Where(node => node.IsManifestFact), node => Assert.Empty(node.ChangedLines));
     }
 
     /// <summary>
@@ -111,6 +177,7 @@ public sealed class EvidenceGraphServiceIntegrationTests
         var options = new EvidenceGraphOptions
         {
             MaximumQuoteWindowNodes = 20, ChangedNodeShare = 1.0, MaximumNodesPerChangedFile = 1, MaximumWholeChangedFileLines = 0,
+            MaximumBlockExtensionLines = 0,
         };
 
         var result = await EvidenceGraphHarness.BuildAsync(repository, mergeBase, head, [entry], options);
@@ -174,7 +241,10 @@ public sealed class EvidenceGraphServiceIntegrationTests
         var head = EvidenceGraphHarness.CommitFiles(repository, "modify budget", [("budget.txt", string.Join('\n', lines) + "\n")]);
         var entry = SnapshotManifestEntryFixtures.CreateEntry(
             repository, mergeBase, head, "budget.txt", "budget.txt", SnapshotChangeCategory.Modified);
-        var options = new EvidenceGraphOptions { MaximumQuoteWindowNodes = 2, ChangedNodeShare = 1.0, MaximumWholeChangedFileLines = 0 };
+        var options = new EvidenceGraphOptions
+        {
+            MaximumQuoteWindowNodes = 2, ChangedNodeShare = 1.0, MaximumWholeChangedFileLines = 0, MaximumBlockExtensionLines = 0,
+        };
 
         var result = await EvidenceGraphHarness.BuildAsync(repository, mergeBase, head, [entry], options);
 

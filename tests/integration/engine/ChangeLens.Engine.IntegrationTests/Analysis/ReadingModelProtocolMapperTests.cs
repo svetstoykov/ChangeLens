@@ -145,7 +145,6 @@ public sealed class ReadingModelProtocolMapperTests
     private static ReadingModel CreateReadingModel() => new(
         new BinderComparison(
             Guid.Parse("0198a1b2-3c4d-4e5f-8a9b-0123456789ab"),
-            "/projects/change_lens",
             "refs/heads/feature/comparison",
             new string('a', 40),
             new string('b', 40),

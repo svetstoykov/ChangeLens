@@ -12,6 +12,7 @@ using ChangeLens.Engine.Protocol.Interfaces;
 using ChangeLens.Engine.Protocol.Models;
 using ChangeLens.Engine.Protocol.Services;
 using ChangeLens.Infrastructure.LocalState.Constants;
+using ChangeLens.Infrastructure.ModelCompletion.Constants;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
@@ -70,6 +71,7 @@ internal sealed class AnalysisPipelineTestHost : IAsyncDisposable
             });
         builder.Configuration[LocalStateConstants.DirectoryConfigurationKey] = localStateDirectory;
         builder.Configuration[EngineLoggingConstants.FileDirectoryConfigurationKey] = Path.Combine(localStateDirectory, "logs");
+        builder.Configuration[ModelCompletionConfigurationConstants.ApiKeyFileKey] = Path.Combine(localStateDirectory, "missing-secrets.env");
         foreach (var (key, value) in settings ?? new Dictionary<string, string?>())
         {
             builder.Configuration[key] = value;

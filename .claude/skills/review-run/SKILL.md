@@ -86,6 +86,17 @@ case counts, findings grouped by impact, evidence labels, and unresolved
 limitations. Keep any written report under `docs/evaluation/`, which is local
 and must never be staged or committed.
 
+When the run has live cases, end the reply with a handoff for a fresh session
+so the verdicts are judged with a clean context. Print it as a block the user
+can paste:
+
+```text
+/session-orchestrator
+/review-judge <run-id>
+Plan: <plan-id>. Compare against: <baseline run id from the plan, if any>.
+Context: <one line on what changed in the engine since the baseline>.
+```
+
 This skill is an investigation workflow. It must not edit production code,
 plan expectations, recorded case results, or the engine's source in order to
 make a review pass. If the user wants a fix, finish the evidence-backed report

@@ -11,6 +11,7 @@ from changelens_review.engine.environment import (
     SCRIPTED_MODEL,
     engine_environment,
     timeout_setting,
+    write_synthetic_key_file,
 )
 from changelens_review.engine.session import EngineSession
 from changelens_review.errors import CaseInterrupted, HarnessError, SpecError
@@ -263,6 +264,7 @@ def _execute_steps(
                 state_directory=heavy / "state",
                 log_directory=heavy / "logs",
                 provider_base_url=proxy.base_url,
+                api_key_file=write_synthetic_key_file(heavy),
                 overrides=case.config,
                 model=provider.model,
                 request_timeout=provider.request_timeout,

@@ -62,8 +62,7 @@
               "impact": "formatRange throws a RangeError for every multi-item selection.",
               "fix": "Call formatRange(low, high).",
               "evidenceNodeIds": [
-                { "$node": { "path": "src/page-label.ts", "side": "After" } },
-                { "$node": { "path": "src/range.ts", "side": "After" } }
+                { "$node": { "path": "src/page-label.ts", "side": "After" } }
               ],
               "anchor": {
                 "nodeId": { "$node": { "path": "src/page-label.ts", "side": "After" } },

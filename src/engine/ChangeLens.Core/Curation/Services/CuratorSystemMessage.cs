@@ -64,6 +64,11 @@ public static class CuratorSystemMessage
         "Omit whatever the quotes do not show. A short supported model is the goal; a complete speculative one is a failure.",
         "Call something added, new, introduced, or gained only when no Before quote shows it. When a Before quote shows the same declaration, "
         + "say what changed between the Before and After quotes and cite both. This applies to the thesis too.",
+        "Reproduce code exactly as quoted. A literal you put in double quotes must match a cited quote character for character, "
+        + "including its punctuation; shorten with prose, never by altering the literal.",
+        "A statement about all, every, each, only, none, or never must hold for every quoted item it covers, and a list of the values "
+        + "or cases a condition accepts must name each one the quotes show. When one quoted item differs, name it as the exception or "
+        + "narrow the statement.",
         "List every binder node you deliberately did not use in droppedNodeIds.",
     ];
 

@@ -1,3 +1,5 @@
+using ChangeLens.Core.ChangeAnatomy.Models;
+
 namespace ChangeLens.Core.EvidenceGraph.Models;
 
 /// <summary>
@@ -25,4 +27,9 @@ internal sealed class EvidenceGraphChangedFile
     ///     Gets the hunk windows collected for the file.
     /// </summary>
     internal List<EvidenceGraphWindow> Windows { get; } = [];
+
+    /// <summary>
+    ///     Gets the ascending line numbers the change added on the After side or removed on the Before side.
+    /// </summary>
+    internal Dictionary<ChangeAnatomySide, int[]> ChangedLineNumbers { get; } = [];
 }

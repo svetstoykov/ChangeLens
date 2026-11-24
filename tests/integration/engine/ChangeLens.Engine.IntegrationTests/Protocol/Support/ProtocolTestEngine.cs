@@ -53,6 +53,8 @@ internal sealed class ProtocolTestEngine : IAsyncDisposable
         startInfo.Environment["ChangeLens__LocalState__Directory"] = localStateDirectory.DirectoryPath;
         startInfo.Environment["ChangeLens__Logging__FileDirectory"] = logDirectory;
         startInfo.Environment["Serilog__MinimumLevel__Default"] = "Debug";
+        startInfo.Environment["ChangeLens__Analysis__ModelCompletion__ApiKeyFile"] =
+            Path.Combine(localStateDirectory.DirectoryPath, "missing-secrets.env");
 
         startInfo.ArgumentList.Add(engineDll);
         var process = Process.Start(startInfo) ?? throw new InvalidOperationException("The ChangeLens Engine process did not start.");

@@ -56,6 +56,7 @@ public sealed class ReviewerServiceTests
     [InlineData("{\"findings\":[{\"id\":\"f1\",\"severity\":\"warning\",\"title\":\"t\",\"trigger\":\"t\",\"impact\":\"i\",\"fix\":\"f\",\"evidenceNodeIds\":[\"n1\"],\"anchor\":{\"nodeId\":\"n1\",\"lines\":\"line\",\"extra\":true}}]}")]
     [InlineData("{\"findings\":[{\"id\":\"f1\",\"severity\":\"warning\",\"title\":\"t \\ud800\",\"trigger\":\"t\",\"impact\":\"i\",\"fix\":\"f\",\"evidenceNodeIds\":[\"n1\"],\"anchor\":{\"nodeId\":\"n1\",\"lines\":\"line\"}}]}")]
     [InlineData("{\"findings\":[{\"id\":\"f1\",\"severity\":\"warning\",\"title\":\"t\",\"trigger\":\"t\",\"impact\":\"i\",\"fix\":\"f\",\"evidenceNodeIds\":[\"\\ud800\"],\"anchor\":{\"nodeId\":\"n1\",\"lines\":\"line\"}}]}")]
+    [InlineData("{\"findings\":[{\"id\":\"f1\",\"severity\":\"warning\",\"title\":\"t\",\"trigger\":\"t\",\"impact\":\"i\",\"fix\":\"f\",\"evidenceNodeIds\":[\"n1\"],\"anchor\":{\"nodeId\":\"n1\",\"lines\":\"line\"},\"unquotedDependencies\":\"none\"}]}")]
     public async Task StructurallyInvalidRepliesBecomeRecordedParseFailures(string reply)
     {
         var service = Service(new FakeModelCompletionClient(Result.Success(Completion(reply))));
@@ -197,9 +198,27 @@ public sealed class ReviewerServiceTests
         Assert.Contains("well-known behavior of the language and its standard library", prompt, StringComparison.Ordinal);
         Assert.Contains("line numbers are independent", prompt, StringComparison.Ordinal);
         Assert.Contains("write the JSON reply immediately", prompt, StringComparison.Ordinal);
+        Assert.Contains("list in unquotedDependencies every piece of project or third-party code outside the quotes", prompt, StringComparison.Ordinal);
+        Assert.Contains("\"unquotedDependencies\": [", prompt, StringComparison.Ordinal);
         Assert.True(prompt.Length <= binderOptions.PromptReserveCharacters);
         Assert.True(reviewerOptions.MaximumOutputCharacters <= binderOptions.CuratorOutputCharacters);
         Assert.True(outputTokenReserve <= binderOptions.CuratorOutputCharacters);
+    }
+
+    [Fact]
+    public async Task DeclaredUnquotedDependenciesReachTheDraftAndAnAbsentListIsEmpty()
+    {
+        const string finding = "\"severity\":\"warning\",\"title\":\"t\",\"trigger\":\"t\",\"impact\":\"i\",\"fix\":\"f\","
+            + "\"evidenceNodeIds\":[\"n1\"],\"anchor\":{\"nodeId\":\"n1\",\"lines\":\"line\"}";
+        var reply = "{\"findings\":[{\"id\":\"f1\"," + finding + ",\"unquotedDependencies\":[\"the import block\"]},{\"id\":\"f2\"," + finding + "}]}";
+        var service = Service(new FakeModelCompletionClient(Result.Success(Completion(reply))));
+
+        var result = await service.ReviewAsync(DraftValidationFixtureBinderBuilder.Create(["n1"]), CancellationToken.None);
+
+        Assert.True(result.IsSuccess);
+        Assert.Null(result.Data!.Diagnostics.ParseFailureReason);
+        Assert.Equal(["the import block"], result.Data.Draft.Findings[0].UnquotedDependencies);
+        Assert.Empty(result.Data.Draft.Findings[1].UnquotedDependencies);
     }
 
     private static ReviewerService Service(FakeModelCompletionClient fake) => new(

@@ -8,6 +8,10 @@ namespace ChangeLens.Core.Review.Services;
 /// </summary>
 public static class ReviewerDraftJson
 {
+    private const string UnquotedDependenciesProperty = "unquotedDependencies";
+
+    private static readonly IReadOnlySet<string> NoOptionalProperties = new HashSet<string>(StringComparer.Ordinal);
+
     private static readonly IReadOnlySet<string> DraftProperties = new HashSet<string>(StringComparer.Ordinal)
     {
         "findings",
@@ -16,6 +20,11 @@ public static class ReviewerDraftJson
     private static readonly IReadOnlySet<string> FindingProperties = new HashSet<string>(StringComparer.Ordinal)
     {
         "id", "severity", "title", "trigger", "impact", "fix", "evidenceNodeIds", "anchor",
+    };
+
+    private static readonly IReadOnlySet<string> OptionalFindingProperties = new HashSet<string>(StringComparer.Ordinal)
+    {
+        UnquotedDependenciesProperty,
     };
 
     private static readonly IReadOnlySet<string> AnchorProperties = new HashSet<string>(StringComparer.Ordinal)
@@ -41,7 +50,7 @@ public static class ReviewerDraftJson
         {
             using var document = JsonDocument.Parse(json);
             var root = document.RootElement;
-            if (root.ValueKind != JsonValueKind.Object || !ValidateProperties(root, DraftProperties))
+            if (root.ValueKind != JsonValueKind.Object || !ValidateProperties(root, DraftProperties, NoOptionalProperties))
             {
                 failureReason = "The completion must be a JSON object with the required reviewer properties.";
                 return false;
@@ -90,7 +99,7 @@ public static class ReviewerDraftJson
     {
         finding = null!;
         if (element.ValueKind != JsonValueKind.Object
-            || !ValidateProperties(element, FindingProperties)
+            || !ValidateProperties(element, FindingProperties, OptionalFindingProperties)
             || !TryGetString(element, "id", out var id)
             || !TryGetString(element, "severity", out var severity)
             || !TryGetString(element, "title", out var title)
@@ -100,14 +109,22 @@ public static class ReviewerDraftJson
             || !TryGetStringArray(element, "evidenceNodeIds", out var evidenceNodeIds)
             || !element.TryGetProperty("anchor", out var anchorElement)
             || anchorElement.ValueKind != JsonValueKind.Object
-            || !ValidateProperties(anchorElement, AnchorProperties)
+            || !ValidateProperties(anchorElement, AnchorProperties, NoOptionalProperties)
             || !TryGetString(anchorElement, "nodeId", out var nodeId)
             || !TryGetString(anchorElement, "lines", out var lines))
         {
             return false;
         }
 
-        finding = new ReviewerFinding(id, severity, title, trigger, impact, fix, evidenceNodeIds, new ReviewerAnchor(nodeId, lines));
+        IReadOnlyList<string> unquotedDependencies = Array.Empty<string>();
+        if (element.TryGetProperty(UnquotedDependenciesProperty, out _)
+            && !TryGetStringArray(element, UnquotedDependenciesProperty, out unquotedDependencies))
+        {
+            return false;
+        }
+
+        finding = new ReviewerFinding(
+            id, severity, title, trigger, impact, fix, evidenceNodeIds, new ReviewerAnchor(nodeId, lines), unquotedDependencies);
         return true;
     }
 
@@ -146,17 +163,18 @@ public static class ReviewerDraftJson
         return true;
     }
 
-    private static bool ValidateProperties(JsonElement element, IReadOnlySet<string> allowedProperties)
+    private static bool ValidateProperties(
+        JsonElement element, IReadOnlySet<string> requiredProperties, IReadOnlySet<string> optionalProperties)
     {
         var seen = new HashSet<string>(StringComparer.Ordinal);
         foreach (var property in element.EnumerateObject())
         {
-            if (!allowedProperties.Contains(property.Name) || !seen.Add(property.Name))
+            if ((!requiredProperties.Contains(property.Name) && !optionalProperties.Contains(property.Name)) || !seen.Add(property.Name))
             {
                 return false;
             }
         }
 
-        return seen.SetEquals(allowedProperties);
+        return seen.IsSupersetOf(requiredProperties);
     }
 }

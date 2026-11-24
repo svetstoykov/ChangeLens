@@ -76,6 +76,32 @@ public sealed class EvidenceBinderServiceTests
     }
 
     [Fact]
+    public void PayloadOmitsTheLocalRepositoryPath()
+    {
+        const string localPath = "/Users/someone/runs/quality-benchmark/cases/case-a/repeats/1/repo";
+        var after = Node("after", "changed.cs", ChangeAnatomySide.After, true, EvidenceNodeOrigin.ChangedHunk, "after quote");
+        var request = Request(
+            Policy([after], [Decision(after)], []),
+            new SnapshotManifestEntry("changed.cs", null, SnapshotChangeCategory.Modified, "100644", "100644", Blob('a'), Blob('b')),
+            ["changed.cs"],
+            null);
+        request = request with
+        {
+            Run = request.Run with
+            {
+                Repository = request.Run.Repository with { CanonicalPath = localPath, CanonicalRepositoryPathKey = localPath },
+            },
+        };
+
+        var result = Service(new EvidenceBinderOptions()).Assemble(request, CancellationToken.None);
+
+        Assert.True(result.IsSuccess);
+        var json = EvidenceBinderJson.SerializePayload(Assert.IsType<EvidenceBinderModel>(result.Data));
+        Assert.DoesNotContain("repositoryKey", json, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain(localPath, json, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void PolicyInvariantDropsAreDiagnosedSeparatelyFromPolicyExclusions()
     {
         var duplicate = Node("duplicate", "changed.cs", ChangeAnatomySide.After, true, EvidenceNodeOrigin.ChangedHunk, "duplicate");
@@ -266,6 +292,28 @@ public sealed class EvidenceBinderServiceTests
         Assert.Equal(payload.Length, scoped.Diagnostics.BinderCharacterCount);
         Assert.Equal(4, binder.Evidence.Count);
         Assert.Equal(2, binder.MatchEdges.Count);
+    }
+
+    [Fact]
+    public void ChangedLinesReachTheReviewerPayload()
+    {
+        var after = Node("after", "src/changed.cs", ChangeAnatomySide.After, true, EvidenceNodeOrigin.ChangedHunk, "a\nb\nc") with
+        {
+            EndLine = 3,
+            ChangedLines = [new EvidenceLineRange(2, 2)],
+        };
+        var request = Request(
+            Policy([after], [Decision(after)], []),
+            new SnapshotManifestEntry("src/changed.cs", null, SnapshotChangeCategory.Modified, "100644", "100644", Blob('a'), Blob('b')),
+            ["src/changed.cs"],
+            null);
+        var service = Service(new EvidenceBinderOptions());
+        var binder = Assert.IsType<EvidenceBinderModel>(service.Assemble(request, CancellationToken.None).Data);
+
+        var payload = EvidenceBinderJson.SerializePayload(service.ScopeToChangedFiles(binder));
+
+        Assert.Equal([new EvidenceLineRange(2, 2)], Assert.Single(binder.Evidence).ChangedLines);
+        Assert.Contains("\"changedLines\":[{\"startLine\":2,\"endLine\":2}]", payload, StringComparison.Ordinal);
     }
 
     private static EvidenceBinderService Service(EvidenceBinderOptions options) => new(options, NullLogger<EvidenceBinderService>.Instance);

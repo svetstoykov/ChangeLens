@@ -2,6 +2,9 @@
 
 type ConfigValue = bool | int | float | str
 
+API_KEY_ENTRY = "CHANGELENS_API_KEY"
+"""The key file entry whose value the engine sends as the provider API key."""
+
 _SECTIONS: dict[str, tuple[str, ...]] = {
     "Analysis.ChangeAnatomy": ("MinimumKeyLength", "MaximumKeysPerFile", "MaximumOccurrencesPerKey"),
     "Analysis.ContextPolicy": ("MaximumDisclosedCharactersPerNode",),
@@ -19,6 +22,7 @@ _SECTIONS: dict[str, tuple[str, ...]] = {
         "MaximumEdges",
         "MaximumNodesPerChangedFile",
         "MaximumWholeChangedFileLines",
+        "MaximumBlockExtensionLines",
     ),
     "Analysis.Frontier": ("MaximumEntries",),
     "Analysis.EvidenceBinder": (
@@ -51,7 +55,7 @@ RESERVED_KEYS = frozenset(
         "Logging.FileDirectory",
         "Analysis.ModelCompletion.BaseUrl",
         "Analysis.ModelCompletion.Model",
-        "Analysis.ModelCompletion.ApiKey",
+        "Analysis.ModelCompletion.ApiKeyFile",
     }
 )
 CONFIGURABLE_KEYS = frozenset(

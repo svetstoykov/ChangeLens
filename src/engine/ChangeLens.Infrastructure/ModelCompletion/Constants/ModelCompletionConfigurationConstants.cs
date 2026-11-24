@@ -21,9 +21,14 @@ public static class ModelCompletionConfigurationConstants
     public const string ModelKey = SectionKey + ":Model";
 
     /// <summary>
-    ///     The configured provider API key.
+    ///     The configured path of the local key file that holds the provider API key.
     /// </summary>
-    public const string ApiKeyKey = SectionKey + ":ApiKey";
+    public const string ApiKeyFileKey = SectionKey + ":ApiKeyFile";
+
+    /// <summary>
+    ///     The name of the key file entry whose value is the provider API key.
+    /// </summary>
+    public const string ApiKeyEntryName = "CHANGELENS_API_KEY";
 
     /// <summary>
     ///     The configured request timeout.

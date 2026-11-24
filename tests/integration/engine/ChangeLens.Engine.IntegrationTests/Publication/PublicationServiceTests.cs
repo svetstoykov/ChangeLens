@@ -116,7 +116,7 @@ public sealed class PublicationServiceTests
             NullLogger<PublicationService>.Instance, new RecordingClaimChecker());
         var binder = PublicationTestFixtures.Binder("n1", "n2");
         var graph = PublicationTestFixtures.Graph("n1", "n2");
-        var finding = new ReviewerFinding("f1", "warning", "Title", "Trigger", "Impact", "Fix", ["n2"], new ReviewerAnchor("n2", "quote"));
+        var finding = new ReviewerFinding("f1", "warning", "Title", "Trigger", "Impact", "Fix", ["n2"], new ReviewerAnchor("n2", "quote"), []);
         var review = PublicationReview.Ran(new FindingValidationOutcome([new ValidatedFinding(finding, new FindingFocusRange(1, 1), 0)], []));
         var request = new PublicationRequest(
             PublicationTestFixtures.Validation("n1"), binder, graph, PublicationTestFixtures.Policy(), PublicationTestFixtures.Ranking(), review);

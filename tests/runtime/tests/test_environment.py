@@ -7,6 +7,7 @@ from changelens_review.engine.environment import (
     SYNTHETIC_API_KEY,
     engine_environment,
     timeout_setting,
+    write_synthetic_key_file,
 )
 from changelens_review.errors import HarnessError
 
@@ -16,19 +17,22 @@ def test_inherited_settings_are_replaced_by_isolated_ones(tmp_path: Path) -> Non
         {
             "PATH": "/bin",
             "ChangeLens__Analysis__ModelCompletion__ApiKey": "real-key",
+            "ChangeLens__Analysis__ModelCompletion__ApiKeyFile": "/home/user/secrets.env",
             "changelens__analysis__checker__enabled": "true",
             "DOTNET_ENVIRONMENT": "Development",
         },
         state_directory=tmp_path / "state",
         log_directory=tmp_path / "logs",
         provider_base_url="http://127.0.0.1:9",
+        api_key_file=tmp_path / "key.env",
         overrides={"Analysis.Checker.Enabled": False, "Analysis.ModelCompletion.RequestTimeout": "00:00:03"},
     )
 
     assert environment["PATH"] == "/bin"
     assert "changelens__analysis__checker__enabled" not in environment
+    assert "ChangeLens__Analysis__ModelCompletion__ApiKey" not in environment
+    assert environment["ChangeLens__Analysis__ModelCompletion__ApiKeyFile"] == str(tmp_path / "key.env")
     assert environment["DOTNET_ENVIRONMENT"] == "Development"
-    assert environment["ChangeLens__Analysis__ModelCompletion__ApiKey"] == SYNTHETIC_API_KEY
     assert environment["ChangeLens__Analysis__ModelCompletion__Model"] == SCRIPTED_MODEL
     assert environment["ChangeLens__Analysis__ModelCompletion__BaseUrl"] == "http://127.0.0.1:9"
     assert environment["ChangeLens__Analysis__ModelCompletion__RequestTimeout"] == "00:00:03"
@@ -44,7 +48,8 @@ def test_reserved_settings_cannot_be_overridden(tmp_path: Path) -> None:
             state_directory=tmp_path / "state",
             log_directory=tmp_path / "logs",
             provider_base_url="http://127.0.0.1:9",
-            overrides={"Analysis.ModelCompletion.ApiKey": "attacker-supplied-key"},
+            api_key_file=tmp_path / "key.env",
+            overrides={"Analysis.ModelCompletion.ApiKeyFile": "/home/user/secrets.env"},
         )
 
 
@@ -54,6 +59,7 @@ def test_model_and_request_timeout_are_passed_to_the_engine(tmp_path: Path) -> N
         state_directory=tmp_path / "state",
         log_directory=tmp_path / "logs",
         provider_base_url="http://127.0.0.1:9",
+        api_key_file=write_synthetic_key_file(tmp_path),
         overrides={},
         model="vendor/model",
         request_timeout=timeout_setting(299.5),
@@ -61,7 +67,8 @@ def test_model_and_request_timeout_are_passed_to_the_engine(tmp_path: Path) -> N
 
     assert environment["ChangeLens__Analysis__ModelCompletion__Model"] == "vendor/model"
     assert environment["ChangeLens__Analysis__ModelCompletion__RequestTimeout"] == "00:05:00"
-    assert environment["ChangeLens__Analysis__ModelCompletion__ApiKey"] == SYNTHETIC_API_KEY
+    key_file = Path(environment["ChangeLens__Analysis__ModelCompletion__ApiKeyFile"])
+    assert key_file.read_text(encoding="utf-8") == f"CHANGELENS_API_KEY={SYNTHETIC_API_KEY}\n"
 
 
 @pytest.mark.parametrize(("seconds", "setting"), [(10, "00:00:10"), (3_661, "01:01:01"), (90_000, "1.01:00:00")])

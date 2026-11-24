@@ -4,12 +4,19 @@ import math
 from collections.abc import Mapping
 from pathlib import Path
 
-from changelens_review.engine.config_keys import RESERVED_KEYS, ConfigValue, environment_name, environment_value
+from changelens_review.engine.config_keys import (
+    API_KEY_ENTRY,
+    RESERVED_KEYS,
+    ConfigValue,
+    environment_name,
+    environment_value,
+)
 from changelens_review.errors import HarnessError
 
 HOST_ENVIRONMENT = "Development"
 SCRIPTED_MODEL = "review-scripted"
 SYNTHETIC_API_KEY = "review-synthetic-token"
+SYNTHETIC_KEY_FILE = "synthetic-api-key.env"
 DEFAULT_REQUEST_TIMEOUT = "00:00:10"
 HOST_ENVIRONMENT_KEYS = ("DOTNET_ENVIRONMENT", "ASPNETCORE_ENVIRONMENT")
 SETTING_PREFIX = "changelens__"
@@ -21,14 +28,15 @@ def engine_environment(
     state_directory: Path,
     log_directory: Path,
     provider_base_url: str,
+    api_key_file: Path,
     overrides: Mapping[str, ConfigValue],
     model: str = SCRIPTED_MODEL,
     request_timeout: str = DEFAULT_REQUEST_TIMEOUT,
 ) -> dict[str, str]:
     """Return inherited variables without any ChangeLens settings, plus the harness and plan settings.
 
-    The provider base URL points at the loopback proxy and the API key is a synthetic token, so the
-    engine never holds the real API key; the proxy adds it for live providers. The request timeout is a
+    The provider base URL points at the loopback proxy and the API key file holds a synthetic token, so
+    the engine never holds the real API key; the proxy adds it for live providers. The request timeout is a
     default that a plan's config may override. A plan cannot override the harness-owned reserved settings, even
     through a raw config override; supplying one raises HarnessError.
     """
@@ -46,13 +54,20 @@ def engine_environment(
         "Logging.FileDirectory": str(log_directory),
         "Analysis.ModelCompletion.BaseUrl": provider_base_url,
         "Analysis.ModelCompletion.Model": model,
-        "Analysis.ModelCompletion.ApiKey": SYNTHETIC_API_KEY,
+        "Analysis.ModelCompletion.ApiKeyFile": str(api_key_file),
         "Analysis.ModelCompletion.RequestTimeout": request_timeout,
         **overrides,
     }
     for key, value in settings.items():
         environment[environment_name(key)] = environment_value(value)
     return environment
+
+
+def write_synthetic_key_file(directory: Path) -> Path:
+    """Write the key file that gives an engine session the synthetic token, and return its path."""
+    path = directory / SYNTHETIC_KEY_FILE
+    path.write_text(f"{API_KEY_ENTRY}={SYNTHETIC_API_KEY}\n", encoding="utf-8")
+    return path
 
 
 def timeout_setting(seconds: float) -> str:

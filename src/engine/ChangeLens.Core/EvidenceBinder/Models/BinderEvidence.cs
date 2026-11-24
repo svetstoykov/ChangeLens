@@ -32,4 +32,11 @@ public sealed record BinderEvidence(
     string ContentHash,
     string? DisclosedHash,
     bool IsRedacted,
-    bool IsTruncated);
+    bool IsTruncated)
+{
+    /// <summary>
+    ///     Gets the quoted lines this change added (After side) or removed (Before side); every other quoted line is
+    ///     unchanged context.
+    /// </summary>
+    public IReadOnlyList<EvidenceLineRange> ChangedLines { get; init; } = [];
+}

@@ -146,14 +146,15 @@ public sealed class FindingValidationService : IFindingValidationService
     private static bool HasSourceLineRange(BinderEvidence evidence) => evidence.StartLine > 0 && evidence.EndLine >= evidence.StartLine;
 
     /// <summary>
-    ///     Finds every exact whole-line occurrence of the anchor in the disclosed quote.
+    ///     Finds every whole-line occurrence of the anchor in the disclosed quote, ignoring per-line indentation.
     /// </summary>
     /// <param name="evidence">The source quote to search.</param>
     /// <param name="anchorText">The whole source lines copied by the reviewer.</param>
     /// <returns>The occurrence count, first line offset, and number of matched lines.</returns>
     /// <remarks>
-    ///     Trailing anchor line endings are removed, line endings are normalized, and trailing whitespace is ignored on each line.
-    ///     Remaining text is compared with <see cref="StringComparison.Ordinal" />. The offset is zero-based within the quote.
+    ///     Trailing anchor line endings are removed, line endings are normalized, and leading and trailing whitespace is ignored on
+    ///     each line. Remaining text is compared with <see cref="StringComparison.Ordinal" />. The offset is zero-based within the
+    ///     quote and counts the quote's own lines, so it maps directly to source line numbers.
     /// </remarks>
     private static (int MatchCount, int StartOffset, int LineCount) FindAnchor(BinderEvidence evidence, string anchorText)
     {
@@ -189,14 +190,14 @@ public sealed class FindingValidationService : IFindingValidationService
     }
 
     /// <summary>
-    ///     Splits text into lines after normalizing line endings and removing trailing whitespace.
+    ///     Splits text into lines after normalizing line endings and removing leading and trailing whitespace from each line.
     /// </summary>
     /// <param name="text">The source quote or anchor text.</param>
-    /// <returns>The normalized lines with leading characters preserved.</returns>
+    /// <returns>The normalized lines, one per source line.</returns>
     private static string[] Lines(string text) =>
         text.Replace("\r\n", "\n", StringComparison.Ordinal)
             .Replace('\r', '\n')
             .Split('\n')
-            .Select(line => line.TrimEnd())
+            .Select(line => line.Trim())
             .ToArray();
 }

@@ -25,7 +25,7 @@ internal sealed record RepositoryOpenResult(
     ///     The descriptor contains an unapproved repository HEAD subtype.
     /// </exception>
     internal static RepositoryOpenResult FromOpenedRepository(
-        Core.LocalState.Models.OpenedRepository openedRepository)
+        OpenedRepository openedRepository)
     {
         ArgumentNullException.ThrowIfNull(openedRepository);
 

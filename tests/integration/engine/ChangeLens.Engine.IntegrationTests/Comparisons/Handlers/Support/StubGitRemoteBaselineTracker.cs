@@ -1,3 +1,4 @@
+using ChangeLens.Core.Comparisons.Interfaces;
 using ChangeLens.Core.Git.Interfaces;
 using ChangeLens.Core.Git.Models;
 using ChangeLens.Core.Results.Models;

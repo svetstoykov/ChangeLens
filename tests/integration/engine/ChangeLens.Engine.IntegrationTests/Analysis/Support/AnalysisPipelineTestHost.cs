@@ -1,6 +1,6 @@
 using System.Text.Json;
+using ChangeLens.Core.Analysis.Review.Constants;
 using ChangeLens.Core.LocalState.Interfaces;
-using ChangeLens.Core.Review.Constants;
 using ChangeLens.Engine.Hosting.Extensions;
 using ChangeLens.Engine.Hosting.Helpers;
 using ChangeLens.Engine.IntegrationTests.Hosting.Support;
@@ -13,11 +13,11 @@ using ChangeLens.Engine.Protocol.Models;
 using ChangeLens.Engine.Protocol.Services;
 using ChangeLens.Infrastructure.LocalState.Constants;
 using ChangeLens.Infrastructure.ModelCompletion.Constants;
-using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
-using Xunit;
 using Xunit.Sdk;
+using Xunit;
 
 namespace ChangeLens.Engine.IntegrationTests.Analysis.Support;
 

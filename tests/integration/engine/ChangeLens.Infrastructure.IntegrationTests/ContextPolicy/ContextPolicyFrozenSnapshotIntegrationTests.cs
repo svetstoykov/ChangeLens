@@ -1,7 +1,7 @@
-using ChangeLens.Core.ContextPolicy.Models;
-using ChangeLens.Core.ContextPolicy.Services;
-using ChangeLens.Core.EvidenceGraph.Models;
-using ChangeLens.Core.Snapshots.Models;
+using ChangeLens.Core.Analysis.ContextPolicy.Models;
+using ChangeLens.Core.Analysis.ContextPolicy.Services;
+using ChangeLens.Core.Analysis.EvidenceGraph.Models;
+using ChangeLens.Core.Analysis.Snapshots.Models;
 using ChangeLens.Infrastructure.IntegrationTests.EvidenceGraph.Support;
 using ChangeLens.Infrastructure.IntegrationTests.Git.Support;
 using ChangeLens.Infrastructure.IntegrationTests.Snapshots.Support;

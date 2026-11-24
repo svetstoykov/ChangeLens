@@ -1,7 +1,7 @@
-using ChangeLens.Core.FindingValidation.Constants;
-using ChangeLens.Core.FindingValidation.Models;
-using ChangeLens.Core.FindingValidation.Services;
-using ChangeLens.Core.Review.Models;
+using ChangeLens.Core.Analysis.FindingValidation.Constants;
+using ChangeLens.Core.Analysis.FindingValidation.Models;
+using ChangeLens.Core.Analysis.FindingValidation.Services;
+using ChangeLens.Core.Analysis.Review.Models;
 using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 
@@ -277,12 +277,12 @@ public sealed class FindingValidationServiceTests
     }
 
     private static FindingValidationOutcome Validate(
-        ChangeLens.Core.EvidenceBinder.Models.EvidenceBinder binder,
+        ChangeLens.Core.Analysis.EvidenceBinder.Models.EvidenceBinder binder,
         params ReviewerFinding[] findings) =>
         new FindingValidationService(NullLogger<FindingValidationService>.Instance)
             .Validate(new ReviewerDraft(findings), binder, CancellationToken.None);
 
-    private static ChangeLens.Core.EvidenceBinder.Models.EvidenceBinder SourceBinder() =>
+    private static ChangeLens.Core.Analysis.EvidenceBinder.Models.EvidenceBinder SourceBinder() =>
         Support.FindingValidationFixtureBinderBuilder.Create(
             Support.FindingValidationFixtureBinderBuilder.SourceEvidence("n1", "alpha"));
 

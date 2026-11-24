@@ -1,5 +1,5 @@
-using ChangeLens.Core.DraftValidation.Models;
-using ChangeLens.Core.Publication.Models;
+using ChangeLens.Core.Analysis.Publication.Models;
+using ChangeLens.Core.Analysis.Shared.Models;
 
 namespace ChangeLens.Engine.AnalysisRuns.Models;
 

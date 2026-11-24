@@ -6,6 +6,7 @@ using ChangeLens.Core.Git.Interfaces;
 using ChangeLens.Core.Git.Models;
 using ChangeLens.Core.Git.Parsers;
 using ChangeLens.Core.Repositories.Constants;
+using ChangeLens.Core.Repositories.Interfaces;
 using ChangeLens.Core.Repositories.Models;
 using ChangeLens.Core.Results.Models;
 using Microsoft.Extensions.Logging;

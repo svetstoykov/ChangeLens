@@ -1,9 +1,9 @@
+using ChangeLens.Core.Analysis.ContextPolicy.Models;
+using ChangeLens.Core.Analysis.Correspondence.Models;
+using ChangeLens.Core.Analysis.Snapshots.Models;
 using ChangeLens.Core.AnalysisRuns.Models;
-using ChangeLens.Core.ContextPolicy.Models;
-using ChangeLens.Core.Correspondence.Models;
-using ChangeLens.Core.Snapshots.Models;
-using EvidenceBinderModel = ChangeLens.Core.EvidenceBinder.Models.EvidenceBinder;
-using EvidenceGraphModel = ChangeLens.Core.EvidenceGraph.Models.EvidenceGraph;
+using EvidenceBinderModel = ChangeLens.Core.Analysis.EvidenceBinder.Models.EvidenceBinder;
+using EvidenceGraphModel = ChangeLens.Core.Analysis.EvidenceGraph.Models.EvidenceGraph;
 
 namespace ChangeLens.Engine.AnalysisRuns.Models;
 

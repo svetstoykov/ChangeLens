@@ -1,7 +1,6 @@
-using ChangeLens.Core.AnalysisRuns.Models;
+using ChangeLens.Core.Analysis.Snapshots.Interfaces;
+using ChangeLens.Core.Analysis.Snapshots.Models;
 using ChangeLens.Core.Results.Models;
-using ChangeLens.Core.Snapshots.Interfaces;
-using ChangeLens.Core.Snapshots.Models;
 
 namespace ChangeLens.Engine.IntegrationTests.Analysis.Support;
 
@@ -39,9 +38,9 @@ internal sealed class CaptureThenHoldSnapshotCaptureService : ISnapshotCaptureSe
     internal void Release() => this._release.TrySetResult();
 
     /// <inheritdoc />
-    public async Task<Result<SnapshotCapture>> CaptureAsync(AnalysisRunDetail run, CancellationToken cancellationToken)
+    public async Task<Result<SnapshotCapture>> CaptureAsync(SnapshotCaptureRequest request, CancellationToken cancellationToken)
     {
-        var result = await this._inner.CaptureAsync(run, cancellationToken);
+        var result = await this._inner.CaptureAsync(request, cancellationToken);
         if (result.IsFailure)
         {
             return result;

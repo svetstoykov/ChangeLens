@@ -1,11 +1,13 @@
-using ChangeLens.Core.Curation.Models;
-using ChangeLens.Core.DraftValidation.Models;
-using ChangeLens.Core.DraftValidation.Services;
-using ChangeLens.Core.EvidenceBinder.Constants;
-using ChangeLens.Core.EvidenceBinder.Models;
+using ChangeLens.Core.Analysis.Curation.Models;
+using ChangeLens.Core.Analysis.DraftValidation.Models;
+using ChangeLens.Core.Analysis.DraftValidation.Services;
+using ChangeLens.Core.Analysis.EvidenceBinder.Constants;
+using ChangeLens.Core.Analysis.EvidenceBinder.Models;
+using ChangeLens.Core.Analysis.Shared.Constants;
+using ChangeLens.Core.Analysis.Shared.Models;
 using ChangeLens.Engine.IntegrationTests.DraftValidation.Support;
-using EvidenceBinderModel = ChangeLens.Core.EvidenceBinder.Models.EvidenceBinder;
 using Xunit;
+using EvidenceBinderModel = ChangeLens.Core.Analysis.EvidenceBinder.Models.EvidenceBinder;
 
 namespace ChangeLens.Engine.IntegrationTests.DraftValidation;
 

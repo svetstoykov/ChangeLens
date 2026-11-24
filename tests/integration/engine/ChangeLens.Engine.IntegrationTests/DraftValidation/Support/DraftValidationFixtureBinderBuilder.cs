@@ -1,9 +1,10 @@
-using ChangeLens.Core.ChangeAnatomy.Models;
-using ChangeLens.Core.EvidenceBinder.Constants;
-using ChangeLens.Core.EvidenceBinder.Models;
-using ChangeLens.Core.EvidenceGraph.Models;
-using ChangeLens.Core.Snapshots.Models;
-using EvidenceBinderModel = ChangeLens.Core.EvidenceBinder.Models.EvidenceBinder;
+using ChangeLens.Core.Analysis.ChangeAnatomy.Models;
+using ChangeLens.Core.Analysis.EvidenceBinder.Constants;
+using ChangeLens.Core.Analysis.EvidenceBinder.Models;
+using ChangeLens.Core.Analysis.EvidenceGraph.Models;
+using ChangeLens.Core.Analysis.Shared.Constants;
+using ChangeLens.Core.Analysis.Snapshots.Models;
+using EvidenceBinderModel = ChangeLens.Core.Analysis.EvidenceBinder.Models.EvidenceBinder;
 
 namespace ChangeLens.Engine.IntegrationTests.DraftValidation.Support;
 

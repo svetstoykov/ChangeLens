@@ -8,8 +8,6 @@ using ChangeLens.Core.Comparisons.Models;
 using ChangeLens.Core.Git.Constants;
 using ChangeLens.Core.Git.Interfaces;
 using ChangeLens.Core.Git.Models;
-using ChangeLens.Core.Git.Parsers;
-using ChangeLens.Core.Git.Services;
 using ChangeLens.Core.Repositories.Models;
 using ChangeLens.Core.Results.Models;
 using Microsoft.Extensions.Logging;

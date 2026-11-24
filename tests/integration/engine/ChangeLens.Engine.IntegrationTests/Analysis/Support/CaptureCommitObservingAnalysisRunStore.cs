@@ -1,7 +1,7 @@
+using ChangeLens.Core.Analysis.Snapshots.Models;
 using ChangeLens.Core.AnalysisRuns.Interfaces;
 using ChangeLens.Core.AnalysisRuns.Models;
 using ChangeLens.Core.Results.Models;
-using ChangeLens.Core.Snapshots.Models;
 
 namespace ChangeLens.Engine.IntegrationTests.Analysis.Support;
 

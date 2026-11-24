@@ -1,6 +1,6 @@
-using ChangeLens.Core.ChangeAnatomy.Models;
-using ChangeLens.Core.DraftValidation.Models;
-using ChangeLens.Core.Publication.Models;
+using ChangeLens.Core.Analysis.ChangeAnatomy.Models;
+using ChangeLens.Core.Analysis.Publication.Models;
+using ChangeLens.Core.Analysis.Shared.Models;
 using ChangeLens.Core.Results.Models;
 using ChangeLens.Engine.AnalysisRuns.Constants;
 using ChangeLens.Engine.AnalysisRuns.Models;

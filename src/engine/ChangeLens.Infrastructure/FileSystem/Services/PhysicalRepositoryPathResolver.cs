@@ -1,8 +1,8 @@
-using ChangeLens.Core.Git.Interfaces;
 using ChangeLens.Core.Repositories.Constants;
+using ChangeLens.Core.Repositories.Interfaces;
 using ChangeLens.Core.Results.Models;
-using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Logging;
 
 namespace ChangeLens.Infrastructure.FileSystem.Services;
 

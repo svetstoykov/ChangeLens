@@ -1,10 +1,10 @@
-using ChangeLens.Core.ContextPolicy.Models;
-using ChangeLens.Core.ContextPolicy.Services;
-using ChangeLens.Core.EvidenceGraph.Models;
+using ChangeLens.Core.Analysis.ContextPolicy.Models;
+using ChangeLens.Core.Analysis.ContextPolicy.Services;
+using ChangeLens.Core.Analysis.EvidenceGraph.Models;
 using ChangeLens.Infrastructure.IntegrationTests.ContextPolicy.Support;
 using ChangeLens.Infrastructure.IntegrationTests.Snapshots.Support;
-using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Logging;
 using Xunit;
 
 namespace ChangeLens.Infrastructure.IntegrationTests.ContextPolicy;

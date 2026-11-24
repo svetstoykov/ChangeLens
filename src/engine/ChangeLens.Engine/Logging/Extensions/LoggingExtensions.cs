@@ -2,9 +2,9 @@ using ChangeLens.Engine.Hosting.Constants;
 using ChangeLens.Engine.Logging.Constants;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
-using Serilog;
 using Serilog.Events;
 using Serilog.Sinks.SystemConsole.Themes;
+using Serilog;
 
 namespace ChangeLens.Engine.Logging.Extensions;
 

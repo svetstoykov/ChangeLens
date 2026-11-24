@@ -2,7 +2,7 @@ using System.Text.Json;
 using ChangeLens.Core.AnalysisRuns.Models;
 using ChangeLens.Core.AnalysisRuns.Services;
 using ChangeLens.Core.LocalState.Constants;
-using ChangeLens.Core.LocalState.Models;
+using ChangeLens.Core.Repositories.Models;
 using ChangeLens.Core.Results.Models;
 using ChangeLens.Engine.IntegrationTests.Analysis.Support;
 using ChangeLens.Engine.IntegrationTests.Hosting.Support;

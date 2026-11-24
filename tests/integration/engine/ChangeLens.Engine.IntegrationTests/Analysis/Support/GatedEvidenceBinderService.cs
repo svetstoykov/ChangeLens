@@ -1,7 +1,7 @@
-using ChangeLens.Core.EvidenceBinder.Interfaces;
-using ChangeLens.Core.EvidenceBinder.Models;
+using ChangeLens.Core.Analysis.EvidenceBinder.Interfaces;
+using ChangeLens.Core.Analysis.EvidenceBinder.Models;
 using ChangeLens.Core.Results.Models;
-using EvidenceBinderModel = ChangeLens.Core.EvidenceBinder.Models.EvidenceBinder;
+using EvidenceBinderModel = ChangeLens.Core.Analysis.EvidenceBinder.Models.EvidenceBinder;
 
 namespace ChangeLens.Engine.IntegrationTests.Analysis.Support;
 

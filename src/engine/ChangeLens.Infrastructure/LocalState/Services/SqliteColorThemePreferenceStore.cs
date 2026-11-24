@@ -1,5 +1,5 @@
-using ChangeLens.Core.LocalState.Interfaces;
-using ChangeLens.Core.LocalState.Models;
+using ChangeLens.Core.Preferences.Interfaces;
+using ChangeLens.Core.Preferences.Models;
 using ChangeLens.Core.Results.Models;
 using ChangeLens.Infrastructure.LocalState.Helpers;
 using ChangeLens.Infrastructure.LocalState.Persistence;

@@ -1,9 +1,8 @@
-using ChangeLens.Core.Correspondence.Models;
-using ChangeLens.Core.Snapshots.Models;
+using ChangeLens.Core.Analysis.Correspondence.Models;
+using ChangeLens.Core.Analysis.Snapshots.Models;
 using ChangeLens.Infrastructure.IntegrationTests.Correspondence.Support;
 using ChangeLens.Infrastructure.IntegrationTests.Git.Support;
 using ChangeLens.Infrastructure.IntegrationTests.Snapshots.Support;
-
 using Xunit;
 
 namespace ChangeLens.Infrastructure.IntegrationTests.Correspondence;

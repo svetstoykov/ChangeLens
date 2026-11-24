@@ -1,13 +1,14 @@
 using System.Text.Json;
-using ChangeLens.Core.EvidenceBinder.Constants;
-using ChangeLens.Core.FindingValidation.Constants;
+using ChangeLens.Core.Analysis.EvidenceBinder.Constants;
+using ChangeLens.Core.Analysis.FindingValidation.Constants;
+using ChangeLens.Core.Analysis.Review.Helpers;
+using ChangeLens.Core.Analysis.Review.Services;
 using ChangeLens.Core.ModelCompletion.Constants;
 using ChangeLens.Core.ModelCompletion.Interfaces;
 using ChangeLens.Core.Results.Models;
-using ChangeLens.Core.Review.Services;
 using ChangeLens.Engine.IntegrationTests.Analysis.Support;
-using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 using ModelCompletionModel = ChangeLens.Core.ModelCompletion.Models.ModelCompletion;
 

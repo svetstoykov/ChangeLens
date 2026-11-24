@@ -1,15 +1,16 @@
-using ChangeLens.Core.ChangeAnatomy.Models;
-using ChangeLens.Core.ClaimChecking.Models;
-using ChangeLens.Core.ContextPolicy.Models;
-using ChangeLens.Core.Correspondence.Models;
-using ChangeLens.Core.Curation.Models;
-using ChangeLens.Core.DraftValidation.Models;
-using ChangeLens.Core.EvidenceBinder.Constants;
-using ChangeLens.Core.EvidenceBinder.Models;
-using ChangeLens.Core.EvidenceGraph.Models;
+using ChangeLens.Core.Analysis.ChangeAnatomy.Models;
+using ChangeLens.Core.Analysis.ClaimChecking.Models;
+using ChangeLens.Core.Analysis.ContextPolicy.Models;
+using ChangeLens.Core.Analysis.Correspondence.Models;
+using ChangeLens.Core.Analysis.Curation.Models;
+using ChangeLens.Core.Analysis.DraftValidation.Models;
+using ChangeLens.Core.Analysis.EvidenceBinder.Constants;
+using ChangeLens.Core.Analysis.EvidenceBinder.Models;
+using ChangeLens.Core.Analysis.EvidenceGraph.Models;
+using ChangeLens.Core.Analysis.Shared.Constants;
 using ChangeLens.Engine.IntegrationTests.DraftValidation.Support;
-using EvidenceBinderModel = ChangeLens.Core.EvidenceBinder.Models.EvidenceBinder;
-using EvidenceGraphModel = ChangeLens.Core.EvidenceGraph.Models.EvidenceGraph;
+using EvidenceBinderModel = ChangeLens.Core.Analysis.EvidenceBinder.Models.EvidenceBinder;
+using EvidenceGraphModel = ChangeLens.Core.Analysis.EvidenceGraph.Models.EvidenceGraph;
 
 namespace ChangeLens.Engine.IntegrationTests.Publication.Support;
 

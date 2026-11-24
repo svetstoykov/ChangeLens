@@ -1,5 +1,5 @@
-using ChangeLens.Core.ClaimChecking.Interfaces;
-using ChangeLens.Core.ClaimChecking.Models;
+using ChangeLens.Core.Analysis.ClaimChecking.Interfaces;
+using ChangeLens.Core.Analysis.ClaimChecking.Models;
 using ChangeLens.Core.Results.Models;
 
 namespace ChangeLens.Engine.IntegrationTests.ClaimChecking.Support;

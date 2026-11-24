@@ -1,8 +1,8 @@
+using ChangeLens.Core.Analysis.Snapshots.Models;
+using ChangeLens.Core.Analysis.Snapshots.Services;
 using ChangeLens.Core.AnalysisRuns.Constants;
 using ChangeLens.Core.AnalysisRuns.Models;
 using ChangeLens.Core.Comparisons.Services;
-using ChangeLens.Core.Snapshots.Models;
-using ChangeLens.Core.Snapshots.Services;
 using ChangeLens.Infrastructure.Git.Services;
 using ChangeLens.Infrastructure.IntegrationTests.Git.Support;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -168,13 +168,15 @@ public sealed class GitSnapshotCaptureServiceTests
             NullLogger<GitSnapshotCaptureService>.Instance);
         var targetRevision = TemporaryGitRepository
             .RunGit(["-C", repository.RootPath, "rev-parse", "--verify", target + "^{commit}"]).StandardOutput.Trim();
-        var run = new AnalysisRunDetail(Guid.NewGuid(), AnalysisRunState.Capturing,
-            new AnalysisRepositoryIdentity(Guid.NewGuid(), "fixture", repository.RootPath, repository.RootPath,
-                acceptedHeadRevision ?? repository.Revision),
-            new AnalysisComparisonIdentity(target, targetRevision, new string('0', 64)), null, 1_000, 1_100, null, null, null, null, null,
-            null, null, null, false, null, null, null);
+        var request = new SnapshotCaptureRequest(
+            Guid.NewGuid(),
+            repository.RootPath,
+            repository.RootPath,
+            target,
+            targetRevision,
+            acceptedHeadRevision ?? repository.Revision);
 
-        var result = await service.CaptureAsync(run, TestContext.Current.CancellationToken);
+        var result = await service.CaptureAsync(request, TestContext.Current.CancellationToken);
 
         var after = RepositoryStateSnapshot.Capture(repository.RootPath);
         Assert.Equal(before.PorcelainStatus, after.PorcelainStatus);

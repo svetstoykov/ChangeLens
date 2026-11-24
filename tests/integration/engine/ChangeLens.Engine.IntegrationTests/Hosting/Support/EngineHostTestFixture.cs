@@ -1,15 +1,16 @@
 using System.Text.Json;
+using ChangeLens.Core.Analysis.Snapshots.Interfaces;
 using ChangeLens.Core.AnalysisRuns.Interfaces;
 using ChangeLens.Core.AnalysisRuns.Models;
 using ChangeLens.Core.Comparisons.Interfaces;
 using ChangeLens.Core.Git.Interfaces;
 using ChangeLens.Core.LocalState.Interfaces;
-using ChangeLens.Core.Snapshots.Interfaces;
+using ChangeLens.Core.Repositories.Interfaces;
 using ChangeLens.Engine.AnalysisRuns.Interfaces;
 using ChangeLens.Engine.Hosting.Extensions;
 using ChangeLens.Engine.Hosting.Helpers;
-using ChangeLens.Engine.IntegrationTests.Support;
 using ChangeLens.Engine.IntegrationTests.Analysis.Support;
+using ChangeLens.Engine.IntegrationTests.Support;
 using ChangeLens.Engine.Logging.Constants;
 using ChangeLens.Engine.Logging.Extensions;
 using ChangeLens.Engine.Protocol.Constants;
@@ -21,8 +22,8 @@ using ChangeLens.Infrastructure.FileSystem.Services;
 using ChangeLens.Infrastructure.LocalState.Constants;
 using ChangeLens.Infrastructure.LocalState.Persistence;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Xunit;
 

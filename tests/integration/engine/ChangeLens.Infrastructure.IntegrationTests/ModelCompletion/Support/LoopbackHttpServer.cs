@@ -1,6 +1,6 @@
 using System.Collections.Concurrent;
-using System.Net;
 using System.Net.Sockets;
+using System.Net;
 using System.Text;
 
 namespace ChangeLens.Infrastructure.IntegrationTests.ModelCompletion.Support;

@@ -1,11 +1,13 @@
-using ChangeLens.Core.ClaimChecking.Interfaces;
-using ChangeLens.Core.ClaimChecking.Models;
-using ChangeLens.Core.Curation.Models;
-using ChangeLens.Core.Curation.Services;
-using ChangeLens.Core.EvidenceBinder.Models;
-using ChangeLens.Core.EvidenceFrontier.Models;
-using ChangeLens.Core.Review.Models;
-using ChangeLens.Core.Review.Services;
+using ChangeLens.Core.Analysis.ClaimChecking.Helpers;
+using ChangeLens.Core.Analysis.ClaimChecking.Interfaces;
+using ChangeLens.Core.Analysis.ClaimChecking.Models;
+using ChangeLens.Core.Analysis.Curation.Helpers;
+using ChangeLens.Core.Analysis.Curation.Models;
+using ChangeLens.Core.Analysis.EvidenceBinder.Models;
+using ChangeLens.Core.Analysis.EvidenceFrontier.Helpers;
+using ChangeLens.Core.Analysis.EvidenceFrontier.Models;
+using ChangeLens.Core.Analysis.Review.Helpers;
+using ChangeLens.Core.Analysis.Review.Models;
 using ChangeLens.Engine.Protocol.Constants;
 using ChangeLens.Engine.Protocol.Interfaces;
 using Microsoft.Extensions.DependencyInjection;
@@ -65,7 +67,7 @@ internal static class EngineStartupValidator
             return;
         }
 
-        CuratorConfigurationValidator.Validate(binderOptions, curatorOptions);
+        CuratorOptionsValidator.Validate(binderOptions, curatorOptions);
     }
 
     /// <summary>
@@ -89,7 +91,7 @@ internal static class EngineStartupValidator
             return;
         }
 
-        ReviewerConfigurationValidator.Validate(binderOptions, reviewerOptions);
+        ReviewerOptionsValidator.Validate(binderOptions, reviewerOptions);
     }
 
     private static T? FindImplementationInstance<T>(IServiceCollection services)
@@ -111,20 +113,15 @@ internal static class EngineStartupValidator
                 "Publication configuration enables claim checking, but no IClaimChecker adapter is registered.");
         }
 
-        if (checkerOptions is { Enabled: true }
-            && (checkerOptions.MaximumClaims <= 0 || checkerOptions.MaximumPayloadCharacters <= 0 || checkerOptions.Attempts <= 0
-                || checkerOptions.MaximumOutputTokens <= 0))
+        if (checkerOptions is not null)
         {
-            throw new InvalidOperationException(
-                "Publication configuration enables claim checking, but the checker claim count, payload characters, attempts, and "
-                + "output tokens must all be positive.");
+            ClaimCheckingOptionsValidator.Validate(checkerOptions);
         }
 
         var frontierOptions = FindImplementationInstance<EvidenceFrontierOptions>(services);
-        if (frontierOptions is not null && frontierOptions.MaximumEntries <= 0)
+        if (frontierOptions is not null)
         {
-            throw new InvalidOperationException(
-                $"Publication configuration requires a positive evidence frontier maximum entry count; received {frontierOptions.MaximumEntries}.");
+            EvidenceFrontierOptionsValidator.Validate(frontierOptions);
         }
     }
 

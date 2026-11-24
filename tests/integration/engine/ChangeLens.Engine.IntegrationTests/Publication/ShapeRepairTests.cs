@@ -1,6 +1,7 @@
-using ChangeLens.Core.EvidenceBinder.Constants;
-using ChangeLens.Core.MentalModels.Models;
-using ChangeLens.Core.Publication.Helpers;
+using ChangeLens.Core.Analysis.EvidenceBinder.Constants;
+using ChangeLens.Core.Analysis.MentalModels.Models;
+using ChangeLens.Core.Analysis.Publication.Helpers;
+using ChangeLens.Core.Analysis.Shared.Constants;
 using Xunit;
 
 namespace ChangeLens.Engine.IntegrationTests.Publication;

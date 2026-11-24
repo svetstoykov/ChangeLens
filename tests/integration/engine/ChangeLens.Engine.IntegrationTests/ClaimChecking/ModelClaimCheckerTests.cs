@@ -1,20 +1,23 @@
 using System.Text.Json;
-using ChangeLens.Core.ChangeAnatomy.Models;
-using ChangeLens.Core.ClaimChecking.Constants;
-using ChangeLens.Core.ClaimChecking.Interfaces;
-using ChangeLens.Core.ClaimChecking.Models;
-using ChangeLens.Core.ClaimChecking.Services;
-using ChangeLens.Core.Curation.Models;
-using ChangeLens.Core.DraftValidation.Models;
-using ChangeLens.Core.EvidenceBinder.Constants;
-using ChangeLens.Core.EvidenceFrontier.Models;
-using ChangeLens.Core.EvidenceFrontier.Services;
-using ChangeLens.Core.MentalModels.Models;
+using ChangeLens.Core.Analysis.ChangeAnatomy.Models;
+using ChangeLens.Core.Analysis.ClaimChecking.Constants;
+using ChangeLens.Core.Analysis.ClaimChecking.Helpers;
+using ChangeLens.Core.Analysis.ClaimChecking.Interfaces;
+using ChangeLens.Core.Analysis.ClaimChecking.Models;
+using ChangeLens.Core.Analysis.ClaimChecking.Services;
+using ChangeLens.Core.Analysis.Curation.Models;
+using ChangeLens.Core.Analysis.DraftValidation.Models;
+using ChangeLens.Core.Analysis.EvidenceBinder.Constants;
+using ChangeLens.Core.Analysis.EvidenceFrontier.Models;
+using ChangeLens.Core.Analysis.EvidenceFrontier.Services;
+using ChangeLens.Core.Analysis.MentalModels.Models;
+using ChangeLens.Core.Analysis.Publication.Interfaces;
+using ChangeLens.Core.Analysis.Publication.Models;
+using ChangeLens.Core.Analysis.Publication.Services;
+using ChangeLens.Core.Analysis.Shared.Constants;
+using ChangeLens.Core.Analysis.Shared.Models;
 using ChangeLens.Core.ModelCompletion.Constants;
 using ChangeLens.Core.ModelCompletion.Models;
-using ChangeLens.Core.Publication.Interfaces;
-using ChangeLens.Core.Publication.Models;
-using ChangeLens.Core.Publication.Services;
 using ChangeLens.Core.Results.Models;
 using ChangeLens.Engine.Hosting.Extensions;
 using ChangeLens.Engine.Hosting.Helpers;
@@ -27,10 +30,10 @@ using ChangeLens.Engine.Logging.Extensions;
 using ChangeLens.Infrastructure.LocalState.Constants;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
-using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Logging;
 using Xunit;
-using EvidenceBinderModel = ChangeLens.Core.EvidenceBinder.Models.EvidenceBinder;
+using EvidenceBinderModel = ChangeLens.Core.Analysis.EvidenceBinder.Models.EvidenceBinder;
 using ModelCompletionModel = ChangeLens.Core.ModelCompletion.Models.ModelCompletion;
 
 namespace ChangeLens.Engine.IntegrationTests.ClaimChecking;
@@ -273,7 +276,7 @@ public sealed class ModelClaimCheckerTests
         var options = new ClaimCheckingOptions { Enabled = true };
         var checker = Checker(client, options);
         return new PublicationService(new ClaimCheckingService(checker), new EvidenceFrontierService(new EvidenceFrontierOptions()), options,
-            NullLogger<PublicationService>.Instance, checker);
+            NullLogger<PublicationService>.Instance);
     }
 
     private static PublicationRequest Request(DraftValidationOutcome validation, EvidenceBinderModel binder)

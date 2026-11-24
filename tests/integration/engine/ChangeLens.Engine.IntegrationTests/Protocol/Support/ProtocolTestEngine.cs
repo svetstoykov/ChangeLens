@@ -1,8 +1,8 @@
 using System.Diagnostics;
 using System.Text.Json;
 using ChangeLens.Engine.IntegrationTests.Support;
-using Xunit;
 using Xunit.Sdk;
+using Xunit;
 
 namespace ChangeLens.Engine.IntegrationTests.Protocol.Support;
 

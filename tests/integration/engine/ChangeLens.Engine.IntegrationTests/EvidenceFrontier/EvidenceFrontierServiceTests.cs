@@ -1,15 +1,15 @@
-using ChangeLens.Core.ChangeAnatomy.Models;
-using ChangeLens.Core.ContextPolicy.Models;
-using ChangeLens.Core.Correspondence.Models;
-using ChangeLens.Core.EvidenceBinder.Constants;
-using ChangeLens.Core.EvidenceBinder.Models;
-using ChangeLens.Core.EvidenceFrontier.Constants;
-using ChangeLens.Core.EvidenceFrontier.Models;
-using ChangeLens.Core.EvidenceFrontier.Services;
-using ChangeLens.Core.EvidenceGraph.Models;
-using ChangeLens.Core.Snapshots.Models;
-using EvidenceBinderModel = ChangeLens.Core.EvidenceBinder.Models.EvidenceBinder;
+using ChangeLens.Core.Analysis.ChangeAnatomy.Models;
+using ChangeLens.Core.Analysis.ContextPolicy.Models;
+using ChangeLens.Core.Analysis.Correspondence.Models;
+using ChangeLens.Core.Analysis.EvidenceBinder.Constants;
+using ChangeLens.Core.Analysis.EvidenceBinder.Models;
+using ChangeLens.Core.Analysis.EvidenceFrontier.Constants;
+using ChangeLens.Core.Analysis.EvidenceFrontier.Models;
+using ChangeLens.Core.Analysis.EvidenceFrontier.Services;
+using ChangeLens.Core.Analysis.EvidenceGraph.Models;
+using ChangeLens.Core.Analysis.Snapshots.Models;
 using Xunit;
+using EvidenceBinderModel = ChangeLens.Core.Analysis.EvidenceBinder.Models.EvidenceBinder;
 
 namespace ChangeLens.Engine.IntegrationTests.EvidenceFrontier;
 

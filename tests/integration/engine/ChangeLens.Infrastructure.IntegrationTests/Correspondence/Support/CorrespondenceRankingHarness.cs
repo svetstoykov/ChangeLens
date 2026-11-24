@@ -1,15 +1,15 @@
+using ChangeLens.Core.Analysis.ChangeAnatomy.Models;
+using ChangeLens.Core.Analysis.ChangeAnatomy.Services;
+using ChangeLens.Core.Analysis.Correspondence.Models;
+using ChangeLens.Core.Analysis.Correspondence.Services;
+using ChangeLens.Core.Analysis.Snapshots.Models;
+using ChangeLens.Core.Analysis.Snapshots.Services;
 using ChangeLens.Core.AnalysisRuns.Models;
-using ChangeLens.Core.ChangeAnatomy.Models;
-using ChangeLens.Core.ChangeAnatomy.Services;
-using ChangeLens.Core.Correspondence.Models;
-using ChangeLens.Core.Correspondence.Services;
 using ChangeLens.Core.Results.Models;
-using ChangeLens.Core.Snapshots.Models;
-using ChangeLens.Core.Snapshots.Services;
 using ChangeLens.Infrastructure.Git.Services;
 using ChangeLens.Infrastructure.IntegrationTests.Git.Support;
-using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Logging;
 using Xunit;
 
 namespace ChangeLens.Infrastructure.IntegrationTests.Correspondence.Support;
@@ -61,17 +61,16 @@ internal static class CorrespondenceRankingHarness
     {
         var key = Path.GetFullPath(repository.RootPath);
         var snapshot = new SnapshotManifest(Guid.NewGuid(), new string('a', 64), key, "fixture", head, head, mergeBase, entries);
-        var identity = new AnalysisRepositoryIdentity(Guid.NewGuid(), "fixture", key, key, head);
         var readerFactory = new FrozenGitTreeReaderFactory(
             new GitCliCommandRunner(), readerOptions ?? new FrozenGitTreeReaderOptions(), NullLoggerFactory.Instance);
         var anatomyOptions = new ChangeAnatomyOptions();
         var cancellationToken = TestContext.Current.CancellationToken;
         var anatomyService = new ChangeAnatomyService(readerFactory, anatomyOptions, NullLogger<ChangeAnatomyService>.Instance);
-        var anatomyResult = await anatomyService.AnalyzeAsync(identity, snapshot, cancellationToken);
+        var anatomyResult = await anatomyService.AnalyzeAsync(key, snapshot, cancellationToken);
         Assert.True(anatomyResult.IsSuccess);
 
         var service = new CorrespondenceRankingService(
             readerFactory, anatomyOptions, options ?? new CorrespondenceOptions(), logger ?? NullLogger<CorrespondenceRankingService>.Instance);
-        return await service.RankAsync(identity, snapshot, anatomyResult.Data!, cancellationToken);
+        return await service.RankAsync(key, snapshot, anatomyResult.Data!, cancellationToken);
     }
 }

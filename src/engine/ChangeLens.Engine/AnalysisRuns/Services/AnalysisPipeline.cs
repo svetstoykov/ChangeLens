@@ -1,30 +1,30 @@
+using ChangeLens.Core.Analysis.ChangeAnatomy.Interfaces;
+using ChangeLens.Core.Analysis.ContextPolicy.Interfaces;
+using ChangeLens.Core.Analysis.Correspondence.Interfaces;
+using ChangeLens.Core.Analysis.Curation.Interfaces;
+using ChangeLens.Core.Analysis.Curation.Models;
+using ChangeLens.Core.Analysis.DraftValidation.Interfaces;
+using ChangeLens.Core.Analysis.EvidenceBinder.Interfaces;
+using ChangeLens.Core.Analysis.EvidenceBinder.Models;
+using ChangeLens.Core.Analysis.EvidenceGraph.Interfaces;
+using ChangeLens.Core.Analysis.FindingValidation.Interfaces;
+using ChangeLens.Core.Analysis.Publication.Interfaces;
+using ChangeLens.Core.Analysis.Publication.Models;
+using ChangeLens.Core.Analysis.Review.Interfaces;
+using ChangeLens.Core.Analysis.Review.Models;
+using ChangeLens.Core.Analysis.Shared.Models;
+using ChangeLens.Core.Analysis.Snapshots.Interfaces;
+using ChangeLens.Core.Analysis.Snapshots.Models;
 using ChangeLens.Core.AnalysisRuns.Constants;
 using ChangeLens.Core.AnalysisRuns.Interfaces;
 using ChangeLens.Core.AnalysisRuns.Models;
-using ChangeLens.Core.ChangeAnatomy.Interfaces;
-using ChangeLens.Core.ContextPolicy.Interfaces;
-using ChangeLens.Core.Correspondence.Interfaces;
-using ChangeLens.Core.Curation.Interfaces;
-using ChangeLens.Core.Curation.Models;
-using ChangeLens.Core.DraftValidation.Interfaces;
-using ChangeLens.Core.DraftValidation.Models;
-using ChangeLens.Core.EvidenceBinder.Interfaces;
-using ChangeLens.Core.EvidenceBinder.Models;
-using ChangeLens.Core.EvidenceGraph.Interfaces;
-using ChangeLens.Core.FindingValidation.Interfaces;
-using ChangeLens.Core.Publication.Interfaces;
-using ChangeLens.Core.Publication.Models;
 using ChangeLens.Core.Results.Models;
-using ChangeLens.Core.Review.Interfaces;
-using ChangeLens.Core.Review.Models;
-using ChangeLens.Core.Snapshots.Interfaces;
-using ChangeLens.Core.Snapshots.Models;
 using ChangeLens.Engine.AnalysisRuns.Helpers;
 using ChangeLens.Engine.AnalysisRuns.Interfaces;
 using ChangeLens.Engine.AnalysisRuns.Models;
 using ChangeLens.Engine.Protocol.Interfaces;
 using Microsoft.Extensions.Logging;
-using EvidenceBinderModel = ChangeLens.Core.EvidenceBinder.Models.EvidenceBinder;
+using EvidenceBinderModel = ChangeLens.Core.Analysis.EvidenceBinder.Models.EvidenceBinder;
 
 namespace ChangeLens.Engine.AnalysisRuns.Services;
 
@@ -256,13 +256,23 @@ internal sealed class AnalysisPipeline(
         }
 
         run.Detail = detailResult.Data!;
-        var captureResult = await captureService.CaptureAsync(run.Detail, userCancellationToken);
+        var captureRequest = new SnapshotCaptureRequest(
+            run.Detail.RunId,
+            run.Detail.Repository.CanonicalPath,
+            run.Detail.Repository.CanonicalRepositoryPathKey,
+            run.Detail.Comparison.Target,
+            run.Detail.Comparison.TargetRevision,
+            run.Detail.Repository.HeadRevision);
+        var captureResult = await captureService.CaptureAsync(captureRequest, userCancellationToken);
         if (captureResult.IsFailure)
         {
-            return new AnalysisRunStepOutcome(
-                AnalysisStepId.Capture,
-                AnalysisRunStepState.Failed,
-                captureResult.Errors[0].Code ?? AnalysisFailureCode.CaptureFailed);
+            var failureCode = captureResult.Errors[0].Code switch
+            {
+                ChangeLens.Core.Analysis.Snapshots.Constants.SnapshotErrorCode.StaleAtCapture => AnalysisFailureCode.StaleAtCapture,
+                ChangeLens.Core.Analysis.Snapshots.Constants.SnapshotErrorCode.CaptureFailed => AnalysisFailureCode.CaptureFailed,
+                _ => captureResult.Errors[0].Code ?? AnalysisFailureCode.CaptureFailed,
+            };
+            return new AnalysisRunStepOutcome(AnalysisStepId.Capture, AnalysisRunStepState.Failed, failureCode);
         }
 
         var capture = captureResult.Data!;
@@ -314,14 +324,15 @@ internal sealed class AnalysisPipeline(
         var capture = run.Capture!;
         var manifest = capture.Manifest;
 
-        var anatomyResult = await anatomyService.AnalyzeAsync(detail.Repository, manifest, userCancellationToken);
+        var canonicalPath = detail.Repository.CanonicalPath;
+        var anatomyResult = await anatomyService.AnalyzeAsync(canonicalPath, manifest, userCancellationToken);
         if (anatomyResult.IsFailure)
         {
             return Failed(AnalysisStepId.Discover, anatomyResult.Errors);
         }
 
         var anatomy = anatomyResult.Data!;
-        var rankingResult = await rankingService.RankAsync(detail.Repository, manifest, anatomy, userCancellationToken);
+        var rankingResult = await rankingService.RankAsync(canonicalPath, manifest, anatomy, userCancellationToken);
         if (rankingResult.IsFailure)
         {
             return Failed(AnalysisStepId.Discover, rankingResult.Errors);
@@ -331,7 +342,7 @@ internal sealed class AnalysisPipeline(
         EnsureRecorded(
             await store.RecordCorrespondenceCandidateCountAsync(runId, ranking.Candidates.Count, CancellationToken.None), "correspondence candidate");
 
-        var graphResult = await graphService.BuildAsync(detail.Repository, manifest, anatomy, ranking, userCancellationToken);
+        var graphResult = await graphService.BuildAsync(canonicalPath, manifest, anatomy, ranking, userCancellationToken);
         if (graphResult.IsFailure)
         {
             return Failed(AnalysisStepId.Discover, graphResult.Errors);
@@ -342,7 +353,7 @@ internal sealed class AnalysisPipeline(
         EnsureRecorded(
             await store.RecordDisclosedEvidenceNodeCountAsync(runId, policy.DisclosedNodes.Count, CancellationToken.None), "disclosed evidence node");
 
-        var readerResult = treeReaderFactory.Open(detail.Repository, manifest);
+        var readerResult = treeReaderFactory.Open(canonicalPath, manifest);
         if (readerResult.IsFailure)
         {
             return Failed(AnalysisStepId.Discover, readerResult.Errors);
@@ -354,7 +365,8 @@ internal sealed class AnalysisPipeline(
             return Failed(AnalysisStepId.Discover, afterTreeResult.Errors);
         }
 
-        var binderRequest = new EvidenceBinderRequest(detail, capture, policy, afterTreeResult.Data!, anatomy, detail.ChangeContext);
+        var runContext = new EvidenceBinderRunContext(detail.RunId, detail.Comparison.Target, detail.CapturedAtUnixMilliseconds ?? 0);
+        var binderRequest = new EvidenceBinderRequest(runContext, capture, policy, afterTreeResult.Data!, anatomy, detail.ChangeContext);
         var binderResult = binderService.Assemble(binderRequest, userCancellationToken);
         if (binderResult.IsFailure)
         {

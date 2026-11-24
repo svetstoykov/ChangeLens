@@ -1,9 +1,10 @@
-using ChangeLens.Core.ChangeAnatomy.Models;
-using ChangeLens.Core.DraftValidation.Models;
-using ChangeLens.Core.EvidenceBinder.Models;
-using ChangeLens.Core.MentalModels.Models;
-using ChangeLens.Core.Publication.Models;
-using ChangeLens.Core.Snapshots.Models;
+using ChangeLens.Core.Analysis.ChangeAnatomy.Models;
+using ChangeLens.Core.Analysis.DraftValidation.Models;
+using ChangeLens.Core.Analysis.EvidenceBinder.Models;
+using ChangeLens.Core.Analysis.MentalModels.Models;
+using ChangeLens.Core.Analysis.Publication.Models;
+using ChangeLens.Core.Analysis.Shared.Models;
+using ChangeLens.Core.Analysis.Snapshots.Models;
 using ChangeLens.Engine.AnalysisRuns.Constants;
 using ChangeLens.Engine.AnalysisRuns.Helpers;
 using Xunit;

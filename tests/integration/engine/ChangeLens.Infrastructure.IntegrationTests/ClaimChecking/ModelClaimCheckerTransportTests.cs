@@ -1,8 +1,8 @@
 using System.Text.Json;
-using ChangeLens.Core.ChangeAnatomy.Models;
-using ChangeLens.Core.ClaimChecking.Constants;
-using ChangeLens.Core.ClaimChecking.Models;
-using ChangeLens.Core.ClaimChecking.Services;
+using ChangeLens.Core.Analysis.ChangeAnatomy.Models;
+using ChangeLens.Core.Analysis.ClaimChecking.Constants;
+using ChangeLens.Core.Analysis.ClaimChecking.Models;
+using ChangeLens.Core.Analysis.ClaimChecking.Services;
 using ChangeLens.Infrastructure.IntegrationTests.ModelCompletion.Support;
 using ChangeLens.Infrastructure.ModelCompletion.Models;
 using ChangeLens.Infrastructure.ModelCompletion.Services;

@@ -1,8 +1,8 @@
 using System.ComponentModel;
 using System.Diagnostics;
 using System.Globalization;
-using System.Text;
 using System.Text.Json;
+using System.Text;
 using ChangeLens.Core.Git.Constants;
 using ChangeLens.Core.Git.Models;
 using ChangeLens.Core.Repositories.Constants;

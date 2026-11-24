@@ -1,15 +1,15 @@
 using System.Linq.Expressions;
+using ChangeLens.Core.Analysis.Snapshots.Models;
 using ChangeLens.Core.AnalysisRuns.Constants;
 using ChangeLens.Core.AnalysisRuns.Interfaces;
 using ChangeLens.Core.AnalysisRuns.Models;
 using ChangeLens.Core.Results.Models;
-using ChangeLens.Core.Snapshots.Models;
 using ChangeLens.Infrastructure.AnalysisRuns.Persistence.Entities;
 using ChangeLens.Infrastructure.LocalState.Persistence;
 using ChangeLens.Infrastructure.Snapshots.Persistence.Entities;
 using Microsoft.Data.Sqlite;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Query;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 
 namespace ChangeLens.Infrastructure.AnalysisRuns.Services;

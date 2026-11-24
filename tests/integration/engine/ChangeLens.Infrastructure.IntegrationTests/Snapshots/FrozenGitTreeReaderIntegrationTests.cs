@@ -1,17 +1,17 @@
 using System.Globalization;
+using ChangeLens.Core.Analysis.Snapshots.Constants;
+using ChangeLens.Core.Analysis.Snapshots.Interfaces;
+using ChangeLens.Core.Analysis.Snapshots.Models;
+using ChangeLens.Core.Analysis.Snapshots.Services;
 using ChangeLens.Core.AnalysisRuns.Models;
 using ChangeLens.Core.Git.Constants;
 using ChangeLens.Core.Git.Interfaces;
 using ChangeLens.Core.Results.Models;
-using ChangeLens.Core.Snapshots.Constants;
-using ChangeLens.Core.Snapshots.Interfaces;
-using ChangeLens.Core.Snapshots.Models;
-using ChangeLens.Core.Snapshots.Services;
 using ChangeLens.Infrastructure.Git.Services;
 using ChangeLens.Infrastructure.IntegrationTests.Git.Support;
 using ChangeLens.Infrastructure.IntegrationTests.Snapshots.Support;
-using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Logging;
 using Xunit;
 
 namespace ChangeLens.Infrastructure.IntegrationTests.Snapshots;
@@ -660,8 +660,6 @@ public sealed class FrozenGitTreeReaderIntegrationTests
         IGitBinaryCommandRunner? runner = null,
         ILogger<FrozenGitTreeReader>? logger = null)
     {
-        var key = Path.GetFullPath(repository.RootPath);
-        var identity = new AnalysisRepositoryIdentity(Guid.NewGuid(), "fixture", key, key, snapshot.HeadRevision);
         var result = OpenReaderResult(repository, snapshot, options, runner, logger);
         Assert.True(result.IsSuccess);
         return Assert.IsAssignableFrom<IFrozenGitTreeReader>(result.Data);
@@ -675,10 +673,9 @@ public sealed class FrozenGitTreeReaderIntegrationTests
         ILogger<FrozenGitTreeReader>? logger = null)
     {
         var key = Path.GetFullPath(repository.RootPath);
-        var identity = new AnalysisRepositoryIdentity(Guid.NewGuid(), "fixture", key, key, snapshot.HeadRevision);
         return new FrozenGitTreeReaderFactory(
             runner ?? new GitCliCommandRunner(), options ?? new FrozenGitTreeReaderOptions(),
-            logger is null ? NullLoggerFactory.Instance : new RecordingSnapshotLoggerFactory(logger)).Open(identity, snapshot);
+            logger is null ? NullLoggerFactory.Instance : new RecordingSnapshotLoggerFactory(logger)).Open(key, snapshot);
     }
 
     private static GitCliCommandRunner CreateFixtureRunner(string mode) =>

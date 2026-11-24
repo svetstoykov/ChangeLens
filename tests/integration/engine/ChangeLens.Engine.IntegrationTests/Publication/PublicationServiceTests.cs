@@ -1,22 +1,24 @@
-using ChangeLens.Core.ClaimChecking.Models;
-using ChangeLens.Core.ClaimChecking.Services;
-using ChangeLens.Core.Curation.Models;
-using ChangeLens.Core.DraftValidation.Models;
-using ChangeLens.Core.DraftValidation.Services;
-using ChangeLens.Core.EvidenceBinder.Constants;
-using ChangeLens.Core.EvidenceFrontier.Constants;
-using ChangeLens.Core.EvidenceFrontier.Models;
-using ChangeLens.Core.EvidenceFrontier.Services;
-using ChangeLens.Core.FindingValidation.Models;
-using ChangeLens.Core.Publication.Models;
-using ChangeLens.Core.Publication.Services;
-using ChangeLens.Core.Review.Models;
+using ChangeLens.Core.Analysis.ClaimChecking.Models;
+using ChangeLens.Core.Analysis.ClaimChecking.Services;
+using ChangeLens.Core.Analysis.Curation.Models;
+using ChangeLens.Core.Analysis.DraftValidation.Models;
+using ChangeLens.Core.Analysis.DraftValidation.Services;
+using ChangeLens.Core.Analysis.EvidenceBinder.Constants;
+using ChangeLens.Core.Analysis.EvidenceFrontier.Constants;
+using ChangeLens.Core.Analysis.EvidenceFrontier.Models;
+using ChangeLens.Core.Analysis.EvidenceFrontier.Services;
+using ChangeLens.Core.Analysis.FindingValidation.Models;
+using ChangeLens.Core.Analysis.Publication.Models;
+using ChangeLens.Core.Analysis.Publication.Services;
+using ChangeLens.Core.Analysis.Review.Models;
+using ChangeLens.Core.Analysis.Shared.Constants;
+using ChangeLens.Core.Analysis.Shared.Models;
 using ChangeLens.Engine.IntegrationTests.ClaimChecking.Support;
 using ChangeLens.Engine.IntegrationTests.DraftValidation.Support;
 using ChangeLens.Engine.IntegrationTests.Publication.Support;
 using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
-using EvidenceBinderModel = ChangeLens.Core.EvidenceBinder.Models.EvidenceBinder;
+using EvidenceBinderModel = ChangeLens.Core.Analysis.EvidenceBinder.Models.EvidenceBinder;
 
 namespace ChangeLens.Engine.IntegrationTests.Publication;
 
@@ -28,7 +30,7 @@ public sealed class PublicationServiceTests
     public async Task CheckerOffPublishesValidatedDraftWithUncheckedCitations()
     {
         var checking = new RecordingClaimCheckingService(new ClaimCheckingOutcome(
-            ChangeLens.Core.MentalModels.Models.MentalModel.Empty, PublicationTestFixtures.Summary()));
+            ChangeLens.Core.Analysis.MentalModels.Models.MentalModel.Empty, PublicationTestFixtures.Summary()));
         var frontier = new RecordingFrontierService();
         var service = new PublicationService(checking, frontier, new ClaimCheckingOptions(),
             NullLogger<PublicationService>.Instance);
@@ -53,10 +55,10 @@ public sealed class PublicationServiceTests
     public async Task RemovedClaimIsAbsentAndItsQuoteReachesFrontier()
     {
         var checking = new RecordingClaimCheckingService(new ClaimCheckingOutcome(
-            ChangeLens.Core.MentalModels.Models.MentalModel.Empty, PublicationTestFixtures.Summary()));
+            ChangeLens.Core.Analysis.MentalModels.Models.MentalModel.Empty, PublicationTestFixtures.Summary()));
         var frontier = new RecordingFrontierService();
         var service = new PublicationService(checking, frontier, new ClaimCheckingOptions { Enabled = true },
-            NullLogger<PublicationService>.Instance, new RecordingClaimChecker());
+            NullLogger<PublicationService>.Instance);
         var binder = PublicationTestFixtures.Binder("n1");
         var request = new PublicationRequest(
             PublicationTestFixtures.Validation("n1"), binder, PublicationTestFixtures.Graph("n1"),
@@ -76,16 +78,16 @@ public sealed class PublicationServiceTests
     [Fact]
     public async Task ParticipantCitationsDoNotShrinkFrontier()
     {
-        var checkedModel = new ChangeLens.Core.MentalModels.Models.MentalModel(null, [
-            new ChangeLens.Core.MentalModels.Models.MentalModelTrack(
+        var checkedModel = new ChangeLens.Core.Analysis.MentalModels.Models.MentalModel(null, [
+            new ChangeLens.Core.Analysis.MentalModels.Models.MentalModelTrack(
                 "track", "Track", null, "ParticipantList",
-                [new ChangeLens.Core.Curation.Models.DraftParticipant("participant", "Participant", "role", true, ["n1"])],
+                [new ChangeLens.Core.Analysis.Shared.Models.DraftParticipant("participant", "Participant", "role", true, ["n1"])],
                 [], [], []),
         ]);
         var checking = new RecordingClaimCheckingService(new ClaimCheckingOutcome(checkedModel, PublicationTestFixtures.Summary()));
         var frontier = new RecordingFrontierService();
         var service = new PublicationService(checking, frontier, new ClaimCheckingOptions { Enabled = true },
-            NullLogger<PublicationService>.Instance, new RecordingClaimChecker());
+            NullLogger<PublicationService>.Instance);
         var binder = PublicationTestFixtures.Binder("n1");
         var request = new PublicationRequest(
             PublicationTestFixtures.Validation("n1"), binder, PublicationTestFixtures.Graph("n1"),
@@ -106,14 +108,14 @@ public sealed class PublicationServiceTests
     [Fact]
     public async Task RebuildFromThePublishedExplanationDoesNotCheckAgainAndDropsTheReview()
     {
-        var checkedModel = new ChangeLens.Core.MentalModels.Models.MentalModel(null, [
-            new ChangeLens.Core.MentalModels.Models.MentalModelTrack(
-                "track", "Track", new ChangeLens.Core.MentalModels.Models.MentalModelStatement("track:summary", "Summary", ["n1"], []),
+        var checkedModel = new ChangeLens.Core.Analysis.MentalModels.Models.MentalModel(null, [
+            new ChangeLens.Core.Analysis.MentalModels.Models.MentalModelTrack(
+                "track", "Track", new ChangeLens.Core.Analysis.MentalModels.Models.MentalModelStatement("track:summary", "Summary", ["n1"], []),
                 CuratorContractConstants.Walk, [], [], [], []),
         ]);
         var checking = new RecordingClaimCheckingService(new ClaimCheckingOutcome(checkedModel, PublicationTestFixtures.Summary()));
         var service = new PublicationService(checking, new RecordingFrontierService(), new ClaimCheckingOptions { Enabled = true },
-            NullLogger<PublicationService>.Instance, new RecordingClaimChecker());
+            NullLogger<PublicationService>.Instance);
         var binder = PublicationTestFixtures.Binder("n1", "n2");
         var graph = PublicationTestFixtures.Graph("n1", "n2");
         var finding = new ReviewerFinding("f1", "warning", "Title", "Trigger", "Impact", "Fix", ["n2"], new ReviewerAnchor("n2", "quote"), []);
@@ -143,10 +145,10 @@ public sealed class PublicationServiceTests
     [Fact]
     public async Task DuplicateClaimCitationsDoNotShrinkFrontier()
     {
-        var duplicate = new ChangeLens.Core.MentalModels.Models.MentalModelStatement("duplicate", "Duplicate", ["n1"], []);
-        var checkedModel = new ChangeLens.Core.MentalModels.Models.MentalModel(null, [
-            new ChangeLens.Core.MentalModels.Models.MentalModelTrack("one", "One", duplicate, CuratorContractConstants.Walk, [], [], [], []),
-            new ChangeLens.Core.MentalModels.Models.MentalModelTrack(
+        var duplicate = new ChangeLens.Core.Analysis.MentalModels.Models.MentalModelStatement("duplicate", "Duplicate", ["n1"], []);
+        var checkedModel = new ChangeLens.Core.Analysis.MentalModels.Models.MentalModel(null, [
+            new ChangeLens.Core.Analysis.MentalModels.Models.MentalModelTrack("one", "One", duplicate, CuratorContractConstants.Walk, [], [], [], []),
+            new ChangeLens.Core.Analysis.MentalModels.Models.MentalModelTrack(
                 "two",
                 "Two",
                 duplicate with { EvidenceNodeIds = ["n2"] },
@@ -159,7 +161,7 @@ public sealed class PublicationServiceTests
         var checking = new RecordingClaimCheckingService(new ClaimCheckingOutcome(checkedModel, PublicationTestFixtures.Summary()));
         var frontier = new RecordingFrontierService();
         var service = new PublicationService(checking, frontier, new ClaimCheckingOptions { Enabled = true },
-            NullLogger<PublicationService>.Instance, new RecordingClaimChecker());
+            NullLogger<PublicationService>.Instance);
         var binder = PublicationTestFixtures.Binder("n1", "n2");
         var request = new PublicationRequest(
             PublicationTestFixtures.Validation("n1"), binder, PublicationTestFixtures.Graph("n1", "n2"),
@@ -194,7 +196,7 @@ public sealed class PublicationServiceTests
             null,
             [])).ToArray(), null));
         var service = new PublicationService(new ClaimCheckingService(checker), new EvidenceFrontierService(new EvidenceFrontierOptions()),
-            new ClaimCheckingOptions { Enabled = true }, NullLogger<PublicationService>.Instance, checker);
+            new ClaimCheckingOptions { Enabled = true }, NullLogger<PublicationService>.Instance);
 
         var result = await service.PublishAsync(
             new PublicationRequest(validation, binder, PublicationTestFixtures.Graph("n1", "n2", "n3"), PublicationTestFixtures.Policy(),

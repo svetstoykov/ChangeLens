@@ -7,8 +7,8 @@ using ChangeLens.Infrastructure.Git.Services;
 using ChangeLens.Infrastructure.IntegrationTests.Git.Support;
 using ChangeLens.Infrastructure.IntegrationTests.Support;
 using Microsoft.Extensions.Logging.Abstractions;
-using Xunit;
 using Xunit.Sdk;
+using Xunit;
 
 namespace ChangeLens.Infrastructure.IntegrationTests.Git.Services;
 

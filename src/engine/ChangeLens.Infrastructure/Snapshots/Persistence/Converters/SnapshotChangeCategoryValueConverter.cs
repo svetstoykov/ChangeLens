@@ -1,6 +1,6 @@
 using System.Collections.Frozen;
-using ChangeLens.Core.Snapshots.Constants;
-using ChangeLens.Core.Snapshots.Models;
+using ChangeLens.Core.Analysis.Snapshots.Constants;
+using ChangeLens.Core.Analysis.Snapshots.Models;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 namespace ChangeLens.Infrastructure.Snapshots.Persistence.Converters;

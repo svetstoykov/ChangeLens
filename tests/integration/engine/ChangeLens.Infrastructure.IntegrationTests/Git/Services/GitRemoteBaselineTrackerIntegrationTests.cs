@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using ChangeLens.Core.Comparisons.Services;
 using ChangeLens.Core.Git.Models;
 using ChangeLens.Core.Git.Services;
 using ChangeLens.Core.Results.Models;

@@ -1,5 +1,5 @@
-using ChangeLens.Core.LocalState.Interfaces;
-using ChangeLens.Core.LocalState.Models;
+using ChangeLens.Core.Repositories.Interfaces;
+using ChangeLens.Core.Repositories.Models;
 using ChangeLens.Core.Results.Models;
 
 namespace ChangeLens.Engine.IntegrationTests.Analysis.Support;

@@ -1,5 +1,5 @@
-using ChangeLens.Core.ContextPolicy.Models;
-using ChangeLens.Core.ContextPolicy.Helpers;
+using ChangeLens.Core.Analysis.ContextPolicy.Helpers;
+using ChangeLens.Core.Analysis.ContextPolicy.Models;
 using Xunit;
 
 namespace ChangeLens.Infrastructure.IntegrationTests.ContextPolicy;

@@ -1,13 +1,13 @@
 using System.Text.Json;
-using ChangeLens.Core.Git.Interfaces;
+using ChangeLens.Core.AnalysisRuns.Interfaces;
+using ChangeLens.Core.Comparisons.Interfaces;
 using ChangeLens.Core.Git.Models;
 using ChangeLens.Core.Results.Models;
-using ChangeLens.Core.AnalysisRuns.Interfaces;
 using ChangeLens.Engine.Comparisons.Constants;
 using ChangeLens.Engine.Comparisons.Models;
+using ChangeLens.Engine.Protocol.Helpers;
 using ChangeLens.Engine.Protocol.Interfaces;
 using ChangeLens.Engine.Protocol.Models;
-using ChangeLens.Engine.Protocol.Helpers;
 
 namespace ChangeLens.Engine.Comparisons.Handlers;
 

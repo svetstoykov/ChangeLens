@@ -1,4 +1,4 @@
-using ChangeLens.Core.AnalysisRuns.Models;
+using ChangeLens.Core.Preferences.Models;
 using ChangeLens.Infrastructure.AnalysisRuns.Persistence.Converters;
 using ChangeLens.Infrastructure.AnalysisRuns.Persistence.Entities;
 using ChangeLens.Infrastructure.LocalState.Persistence.Entities;

@@ -10,8 +10,8 @@ using ChangeLens.Engine.AnalysisRuns.Models;
 using ChangeLens.Engine.IntegrationTests.Analysis.Support;
 using ChangeLens.Engine.IntegrationTests.Protocol.Support;
 using ChangeLens.Engine.Protocol.Services;
-using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 using ModelCompletionModel = ChangeLens.Core.ModelCompletion.Models.ModelCompletion;
 

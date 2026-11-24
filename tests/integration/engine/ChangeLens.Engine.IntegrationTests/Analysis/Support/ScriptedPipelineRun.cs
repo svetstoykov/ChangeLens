@@ -1,8 +1,8 @@
 using System.Text.Json;
 using ChangeLens.Core.ModelCompletion.Interfaces;
 using ChangeLens.Engine.IntegrationTests.Protocol.Support;
-using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
 namespace ChangeLens.Engine.IntegrationTests.Analysis.Support;

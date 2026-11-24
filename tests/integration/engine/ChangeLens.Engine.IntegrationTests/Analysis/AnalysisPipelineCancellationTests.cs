@@ -1,18 +1,18 @@
 using System.Text.Json;
+using ChangeLens.Core.Analysis.EvidenceBinder.Interfaces;
+using ChangeLens.Core.Analysis.EvidenceBinder.Services;
+using ChangeLens.Core.Analysis.Snapshots.Interfaces;
+using ChangeLens.Core.Analysis.Snapshots.Services;
 using ChangeLens.Core.AnalysisRuns.Constants;
-using ChangeLens.Core.EvidenceBinder.Interfaces;
-using ChangeLens.Core.EvidenceBinder.Services;
 using ChangeLens.Core.ModelCompletion.Interfaces;
 using ChangeLens.Core.ModelCompletion.Models;
 using ChangeLens.Core.Results.Models;
-using ChangeLens.Core.Snapshots.Interfaces;
-using ChangeLens.Core.Snapshots.Services;
 using ChangeLens.Engine.IntegrationTests.Analysis.Support;
 using ChangeLens.Engine.IntegrationTests.Protocol.Support;
 using ChangeLens.Infrastructure.LocalState.Persistence;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 using ModelCompletionModel = ChangeLens.Core.ModelCompletion.Models.ModelCompletion;
 

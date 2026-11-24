@@ -1,9 +1,10 @@
-using ChangeLens.Core.FindingValidation.Constants;
-using ChangeLens.Core.FindingValidation.Models;
-using ChangeLens.Core.MentalModels.Models;
-using ChangeLens.Core.Publication.Helpers;
-using ChangeLens.Core.Publication.Models;
-using ChangeLens.Core.Review.Models;
+using ChangeLens.Core.Analysis.FindingValidation.Constants;
+using ChangeLens.Core.Analysis.FindingValidation.Models;
+using ChangeLens.Core.Analysis.MentalModels.Models;
+using ChangeLens.Core.Analysis.Publication.Helpers;
+using ChangeLens.Core.Analysis.Publication.Models;
+using ChangeLens.Core.Analysis.Review.Models;
+using ChangeLens.Core.Analysis.Shared.Models;
 using ChangeLens.Engine.IntegrationTests.Publication.Support;
 using Xunit;
 
@@ -102,7 +103,7 @@ public sealed class FindingPublicationTests
             .ToArray();
         var validation = new FindingValidationOutcome(
             findings.Select((finding, index) => new ValidatedFinding(finding, new FindingFocusRange(1, 1), index)).ToArray(),
-            Enumerable.Range(0, withheld).Select(index => new ChangeLens.Core.DraftValidation.Models.ValidationRemoval(
+            Enumerable.Range(0, withheld).Select(index => new ChangeLens.Core.Analysis.Shared.Models.ValidationRemoval(
                 FindingValidationConstants.FindingScope, $"w{index}", FindingValidationConstants.AnchorMismatchReason)).ToArray());
 
         var reading = Build([], PublicationReview.Ran(validation), "n1");

@@ -1,4 +1,4 @@
-using ChangeLens.Core.LocalState.Models;
+using ChangeLens.Core.Preferences.Models;
 using ChangeLens.Infrastructure.IntegrationTests.Support;
 using ChangeLens.Infrastructure.LocalState.Models;
 using ChangeLens.Infrastructure.LocalState.Persistence;

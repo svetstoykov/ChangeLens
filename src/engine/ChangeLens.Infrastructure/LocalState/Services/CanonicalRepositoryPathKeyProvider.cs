@@ -1,4 +1,4 @@
-using ChangeLens.Core.LocalState.Interfaces;
+using ChangeLens.Core.Repositories.Interfaces;
 
 namespace ChangeLens.Infrastructure.LocalState.Services;
 

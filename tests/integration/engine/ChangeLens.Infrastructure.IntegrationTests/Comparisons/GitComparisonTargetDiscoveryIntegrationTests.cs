@@ -5,8 +5,8 @@ using ChangeLens.Infrastructure.FileSystem.Services;
 using ChangeLens.Infrastructure.Git.Services;
 using ChangeLens.Infrastructure.IntegrationTests.Git.Support;
 using Microsoft.Extensions.Logging.Abstractions;
-using Xunit;
 using Xunit.Sdk;
+using Xunit;
 
 namespace ChangeLens.Infrastructure.IntegrationTests.Comparisons;
 

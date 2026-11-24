@@ -1,20 +1,20 @@
+using ChangeLens.Core.Analysis.ChangeAnatomy.Models;
+using ChangeLens.Core.Analysis.ChangeAnatomy.Services;
+using ChangeLens.Core.Analysis.Correspondence.Models;
+using ChangeLens.Core.Analysis.Correspondence.Services;
+using ChangeLens.Core.Analysis.EvidenceGraph.Models;
+using ChangeLens.Core.Analysis.EvidenceGraph.Services;
+using ChangeLens.Core.Analysis.Snapshots.Models;
+using ChangeLens.Core.Analysis.Snapshots.Services;
 using ChangeLens.Core.AnalysisRuns.Models;
-using ChangeLens.Core.ChangeAnatomy.Models;
-using ChangeLens.Core.ChangeAnatomy.Services;
-using ChangeLens.Core.Correspondence.Models;
-using ChangeLens.Core.Correspondence.Services;
-using ChangeLens.Core.EvidenceGraph.Models;
-using ChangeLens.Core.EvidenceGraph.Services;
 using ChangeLens.Core.Results.Models;
-using ChangeLens.Core.Snapshots.Models;
-using ChangeLens.Core.Snapshots.Services;
 using ChangeLens.Infrastructure.Git.Services;
 using ChangeLens.Infrastructure.IntegrationTests.Correspondence.Support;
 using ChangeLens.Infrastructure.IntegrationTests.Git.Support;
-using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Logging;
 using Xunit;
-using EvidenceGraphModel = ChangeLens.Core.EvidenceGraph.Models.EvidenceGraph;
+using EvidenceGraphModel = ChangeLens.Core.Analysis.EvidenceGraph.Models.EvidenceGraph;
 
 namespace ChangeLens.Infrastructure.IntegrationTests.EvidenceGraph.Support;
 
@@ -48,24 +48,23 @@ internal static class EvidenceGraphHarness
     {
         var key = Path.GetFullPath(repository.RootPath);
         var snapshot = new SnapshotManifest(Guid.NewGuid(), new string('a', 64), key, "fixture", head, head, mergeBase, entries);
-        var identity = new AnalysisRepositoryIdentity(Guid.NewGuid(), "fixture", key, key, head);
         var readerFactory = new FrozenGitTreeReaderFactory(
             new GitCliCommandRunner(), readerOptions ?? new FrozenGitTreeReaderOptions(), NullLoggerFactory.Instance);
         var anatomyOptions = new ChangeAnatomyOptions();
         var cancellationToken = TestContext.Current.CancellationToken;
         var anatomyService = new ChangeAnatomyService(readerFactory, anatomyOptions, NullLogger<ChangeAnatomyService>.Instance);
-        var anatomyResult = await anatomyService.AnalyzeAsync(identity, snapshot, cancellationToken);
+        var anatomyResult = await anatomyService.AnalyzeAsync(key, snapshot, cancellationToken);
         Assert.True(anatomyResult.IsSuccess);
         var rankingService = new CorrespondenceRankingService(
             readerFactory,
             anatomyOptions,
             correspondenceOptions ?? new CorrespondenceOptions(),
             NullLogger<CorrespondenceRankingService>.Instance);
-        var rankingResult = await rankingService.RankAsync(identity, snapshot, anatomyResult.Data!, cancellationToken);
+        var rankingResult = await rankingService.RankAsync(key, snapshot, anatomyResult.Data!, cancellationToken);
         Assert.True(rankingResult.IsSuccess);
         var service = new EvidenceGraphService(
             readerFactory, options ?? new EvidenceGraphOptions(), logger ?? NullLogger<EvidenceGraphService>.Instance);
-        return await service.BuildAsync(identity, snapshot, anatomyResult.Data!, rankingResult.Data!, cancellationToken);
+        return await service.BuildAsync(key, snapshot, anatomyResult.Data!, rankingResult.Data!, cancellationToken);
     }
 
     /// <summary>

@@ -1,8 +1,8 @@
-using ChangeLens.Core.ClaimChecking.Interfaces;
-using ChangeLens.Core.ClaimChecking.Models;
-using ChangeLens.Core.DraftValidation.Models;
+using ChangeLens.Core.Analysis.ClaimChecking.Interfaces;
+using ChangeLens.Core.Analysis.ClaimChecking.Models;
+using ChangeLens.Core.Analysis.DraftValidation.Models;
 using ChangeLens.Core.Results.Models;
-using EvidenceBinderModel = ChangeLens.Core.EvidenceBinder.Models.EvidenceBinder;
+using EvidenceBinderModel = ChangeLens.Core.Analysis.EvidenceBinder.Models.EvidenceBinder;
 
 namespace ChangeLens.Engine.IntegrationTests.Publication.Support;
 
@@ -12,6 +12,9 @@ namespace ChangeLens.Engine.IntegrationTests.Publication.Support;
 /// <param name="outcome">The canned checking outcome returned on each call.</param>
 internal sealed class RecordingClaimCheckingService(ClaimCheckingOutcome outcome) : IClaimCheckingService
 {
+    /// <inheritdoc />
+    public bool IsAvailable => true;
+
     /// <summary>
     ///     Gets a value indicating whether <see cref="CheckAsync" /> was called.
     /// </summary>

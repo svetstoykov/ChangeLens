@@ -2,8 +2,8 @@ using ChangeLens.Core.Repositories.Constants;
 using ChangeLens.Core.Results.Models;
 using ChangeLens.Infrastructure.FileSystem.Services;
 using ChangeLens.Infrastructure.IntegrationTests.Support;
-using Xunit;
 using Xunit.Sdk;
+using Xunit;
 
 namespace ChangeLens.Infrastructure.IntegrationTests.FileSystem.Services;
 

@@ -1,12 +1,12 @@
-using ChangeLens.Core.ContextPolicy.Models;
-using ChangeLens.Core.Correspondence.Models;
-using ChangeLens.Core.EvidenceFrontier.Constants;
-using ChangeLens.Core.EvidenceFrontier.Interfaces;
-using ChangeLens.Core.EvidenceFrontier.Models;
-using ChangeLens.Core.EvidenceGraph.Models;
-using EvidenceBinderModel = ChangeLens.Core.EvidenceBinder.Models.EvidenceBinder;
-using EvidenceFrontierModel = ChangeLens.Core.EvidenceFrontier.Models.EvidenceFrontier;
-using EvidenceGraphModel = ChangeLens.Core.EvidenceGraph.Models.EvidenceGraph;
+using ChangeLens.Core.Analysis.ContextPolicy.Models;
+using ChangeLens.Core.Analysis.Correspondence.Models;
+using ChangeLens.Core.Analysis.EvidenceFrontier.Constants;
+using ChangeLens.Core.Analysis.EvidenceFrontier.Interfaces;
+using ChangeLens.Core.Analysis.EvidenceFrontier.Models;
+using ChangeLens.Core.Analysis.EvidenceGraph.Models;
+using EvidenceBinderModel = ChangeLens.Core.Analysis.EvidenceBinder.Models.EvidenceBinder;
+using EvidenceFrontierModel = ChangeLens.Core.Analysis.EvidenceFrontier.Models.EvidenceFrontier;
+using EvidenceGraphModel = ChangeLens.Core.Analysis.EvidenceGraph.Models.EvidenceGraph;
 
 namespace ChangeLens.Engine.IntegrationTests.Publication.Support;
 

@@ -1,10 +1,10 @@
-using System.Text;
 using System.Text.Json;
+using System.Text;
+using ChangeLens.Core.Analysis.ContextPolicy.Constants;
+using ChangeLens.Core.Analysis.EvidenceBinder.Constants;
+using ChangeLens.Core.Analysis.Review.Constants;
+using ChangeLens.Core.Analysis.Snapshots.Constants;
 using ChangeLens.Core.AnalysisRuns.Constants;
-using ChangeLens.Core.ContextPolicy.Constants;
-using ChangeLens.Core.EvidenceBinder.Constants;
-using ChangeLens.Core.Review.Constants;
-using ChangeLens.Core.Snapshots.Constants;
 using ChangeLens.Engine.IntegrationTests.Analysis.Support;
 using Xunit;
 

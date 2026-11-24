@@ -1,0 +1,47 @@
+namespace ChangeLens.Core.Analysis.Review.Constants;
+
+/// <summary>
+///     Defines configuration keys and default limits for reviewer completions.
+/// </summary>
+public static class ReviewerConfigurationConstants
+{
+    /// <summary>
+    ///     The configuration section containing reviewer settings.
+    /// </summary>
+    public const string SectionKey = "ChangeLens:Analysis:Review";
+
+    /// <summary>
+    ///     Whether the pipeline runs the reviewer.
+    /// </summary>
+    public const string EnabledKey = SectionKey + ":Enabled";
+
+    /// <summary>
+    ///     The maximum accepted completion size in characters.
+    /// </summary>
+    public const string MaximumOutputCharactersKey = SectionKey + ":MaximumOutputCharacters";
+
+    /// <summary>
+    ///     The maximum output-token request sent to the provider.
+    /// </summary>
+    public const string MaximumOutputTokensKey = SectionKey + ":MaximumOutputTokens";
+
+    /// <summary>
+    ///     The optional provider reasoning effort.
+    /// </summary>
+    public const string ReasoningEffortKey = SectionKey + ":ReasoningEffort";
+
+    /// <summary>
+    ///     The configuration key for the reviewer's provider model slug, which defaults to the curator's model.
+    /// </summary>
+    public const string ModelKey = SectionKey + ":Model";
+
+    /// <summary>
+    ///     Gets the default completion size limit in characters.
+    /// </summary>
+    public const int DefaultMaximumOutputCharacters = 176_000;
+
+    /// <summary>
+    ///     Gets the default completion token limit.
+    /// </summary>
+    public const int DefaultMaximumOutputTokens = 48_000;
+}

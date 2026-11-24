@@ -1,5 +1,5 @@
-using System.Net;
 using System.Net.Sockets;
+using System.Net;
 using System.Text.Json;
 using ChangeLens.Core.ModelCompletion.Interfaces;
 using ChangeLens.Core.ModelCompletion.Models;
@@ -10,8 +10,8 @@ using ChangeLens.Infrastructure.ModelCompletion.Extensions;
 using ChangeLens.Infrastructure.ModelCompletion.Models;
 using ChangeLens.Infrastructure.ModelCompletion.Services;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Xunit;
 using ModelCompletionModel = ChangeLens.Core.ModelCompletion.Models.ModelCompletion;

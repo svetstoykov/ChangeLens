@@ -1,8 +1,8 @@
 using System.Diagnostics;
 using System.Globalization;
 using System.Reflection;
-using System.Text;
 using System.Text.Json;
+using System.Text;
 
 const string fixtureModeVariable = "CHANGELENS_GIT_FIXTURE_MODE";
 var mode = Environment.GetEnvironmentVariable(fixtureModeVariable);

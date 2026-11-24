@@ -1,4 +1,4 @@
-using ChangeLens.Core.Snapshots.Models;
+using ChangeLens.Core.Analysis.Snapshots.Models;
 using ChangeLens.Infrastructure.AnalysisRuns.Persistence.Entities;
 
 namespace ChangeLens.Infrastructure.Snapshots.Persistence.Entities;

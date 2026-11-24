@@ -1,13 +1,13 @@
 using System.Security.Cryptography;
 using System.Text;
-using ChangeLens.Core.ChangeAnatomy.Models;
-using ChangeLens.Core.EvidenceGraph.Models;
-using ChangeLens.Core.Snapshots.Models;
+using ChangeLens.Core.Analysis.ChangeAnatomy.Models;
+using ChangeLens.Core.Analysis.EvidenceGraph.Models;
+using ChangeLens.Core.Analysis.Snapshots.Models;
 using ChangeLens.Infrastructure.IntegrationTests.EvidenceGraph.Support;
 using ChangeLens.Infrastructure.IntegrationTests.Git.Support;
 using ChangeLens.Infrastructure.IntegrationTests.Snapshots.Support;
 using Xunit;
-using EvidenceGraphModel = ChangeLens.Core.EvidenceGraph.Models.EvidenceGraph;
+using EvidenceGraphModel = ChangeLens.Core.Analysis.EvidenceGraph.Models.EvidenceGraph;
 
 namespace ChangeLens.Infrastructure.IntegrationTests.EvidenceGraph;
 

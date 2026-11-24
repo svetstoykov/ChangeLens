@@ -1,18 +1,20 @@
-using ChangeLens.Core.ClaimChecking.Constants;
-using ChangeLens.Core.ClaimChecking.Models;
-using ChangeLens.Core.ClaimChecking.Services;
-using ChangeLens.Core.Curation.Models;
-using ChangeLens.Core.DraftValidation.Models;
-using ChangeLens.Core.DraftValidation.Services;
-using ChangeLens.Core.EvidenceBinder.Constants;
-using ChangeLens.Core.EvidenceBinder.Models;
-using ChangeLens.Core.MentalModels.Helpers;
-using ChangeLens.Core.MentalModels.Models;
+using ChangeLens.Core.Analysis.ClaimChecking.Constants;
+using ChangeLens.Core.Analysis.ClaimChecking.Models;
+using ChangeLens.Core.Analysis.ClaimChecking.Services;
+using ChangeLens.Core.Analysis.Curation.Models;
+using ChangeLens.Core.Analysis.DraftValidation.Models;
+using ChangeLens.Core.Analysis.DraftValidation.Services;
+using ChangeLens.Core.Analysis.EvidenceBinder.Constants;
+using ChangeLens.Core.Analysis.EvidenceBinder.Models;
+using ChangeLens.Core.Analysis.MentalModels.Helpers;
+using ChangeLens.Core.Analysis.MentalModels.Models;
+using ChangeLens.Core.Analysis.Shared.Constants;
+using ChangeLens.Core.Analysis.Shared.Models;
 using ChangeLens.Core.Results.Models;
 using ChangeLens.Engine.IntegrationTests.ClaimChecking.Support;
 using ChangeLens.Engine.IntegrationTests.DraftValidation.Support;
-using EvidenceBinderModel = ChangeLens.Core.EvidenceBinder.Models.EvidenceBinder;
 using Xunit;
+using EvidenceBinderModel = ChangeLens.Core.Analysis.EvidenceBinder.Models.EvidenceBinder;
 
 namespace ChangeLens.Engine.IntegrationTests.ClaimChecking;
 
@@ -325,7 +327,7 @@ public sealed class ClaimCheckingServiceTests
 
     private static BinderEvidence BinderEvidence(string nodeId, int startLine, int endLine, string text) => new(
         nodeId,
-        ChangeLens.Core.ChangeAnatomy.Models.ChangeAnatomySide.After,
+        ChangeLens.Core.Analysis.ChangeAnatomy.Models.ChangeAnatomySide.After,
         $"src/{nodeId}.cs",
         startLine,
         endLine,

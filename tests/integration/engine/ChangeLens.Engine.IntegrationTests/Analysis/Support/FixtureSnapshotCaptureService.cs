@@ -1,7 +1,6 @@
-using ChangeLens.Core.AnalysisRuns.Models;
+using ChangeLens.Core.Analysis.Snapshots.Interfaces;
+using ChangeLens.Core.Analysis.Snapshots.Models;
 using ChangeLens.Core.Results.Models;
-using ChangeLens.Core.Snapshots.Interfaces;
-using ChangeLens.Core.Snapshots.Models;
 
 namespace ChangeLens.Engine.IntegrationTests.Analysis.Support;
 
@@ -9,12 +8,12 @@ namespace ChangeLens.Engine.IntegrationTests.Analysis.Support;
 internal sealed class FixtureSnapshotCaptureService : ISnapshotCaptureService
 {
     /// <inheritdoc />
-    public Task<Result<SnapshotCapture>> CaptureAsync(AnalysisRunDetail run, CancellationToken cancellationToken)
+    public Task<Result<SnapshotCapture>> CaptureAsync(SnapshotCaptureRequest request, CancellationToken cancellationToken)
     {
         var entry = new SnapshotManifestEntry("captured.txt", null, SnapshotChangeCategory.Modified, "100644", "100644",
             new string('a', 40), new string('b', 40));
-        var manifest = new SnapshotManifest(Guid.NewGuid(), new string('c', 64), run.Repository.CanonicalRepositoryPathKey,
-            run.Comparison.Target, run.Comparison.TargetRevision, run.Repository.HeadRevision, new string('d', 40), [entry]);
+        var manifest = new SnapshotManifest(Guid.NewGuid(), new string('c', 64), request.CanonicalRepositoryPathKey,
+            request.Target, request.TargetRevision, request.HeadRevision, new string('d', 40), [entry]);
         return Task.FromResult(Result.Success(new SnapshotCapture(manifest, new ExcludedUncommittedCounts(0, 0, 0, 0, 0))));
     }
 }

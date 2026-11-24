@@ -1,20 +1,21 @@
-using ChangeLens.Core.ChangeAnatomy.Models;
+using ChangeLens.Core.Analysis.ChangeAnatomy.Models;
+using ChangeLens.Core.Analysis.ContextPolicy.Models;
+using ChangeLens.Core.Analysis.Correspondence.Models;
+using ChangeLens.Core.Analysis.EvidenceBinder.Constants;
+using ChangeLens.Core.Analysis.EvidenceBinder.Models;
+using ChangeLens.Core.Analysis.EvidenceBinder.Services;
+using ChangeLens.Core.Analysis.EvidenceGraph.Models;
+using ChangeLens.Core.Analysis.MentalModels.Models;
+using ChangeLens.Core.Analysis.Publication.Helpers;
+using ChangeLens.Core.Analysis.Publication.Models;
+using ChangeLens.Core.Analysis.Shared.Constants;
+using ChangeLens.Core.Analysis.Snapshots.Models;
 using ChangeLens.Core.AnalysisRuns.Models;
-using ChangeLens.Core.ContextPolicy.Models;
-using ChangeLens.Core.Correspondence.Models;
-using ChangeLens.Core.EvidenceBinder.Constants;
-using ChangeLens.Core.EvidenceBinder.Models;
-using ChangeLens.Core.EvidenceBinder.Services;
-using ChangeLens.Core.EvidenceGraph.Models;
-using ChangeLens.Core.MentalModels.Models;
-using ChangeLens.Core.Publication.Helpers;
-using ChangeLens.Core.Publication.Models;
-using ChangeLens.Core.Snapshots.Models;
 using ChangeLens.Engine.IntegrationTests.DraftValidation.Support;
 using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
-using EvidenceBinderModel = ChangeLens.Core.EvidenceBinder.Models.EvidenceBinder;
-using EvidenceGraphModel = ChangeLens.Core.EvidenceGraph.Models.EvidenceGraph;
+using EvidenceBinderModel = ChangeLens.Core.Analysis.EvidenceBinder.Models.EvidenceBinder;
+using EvidenceGraphModel = ChangeLens.Core.Analysis.EvidenceGraph.Models.EvidenceGraph;
 
 namespace ChangeLens.Engine.IntegrationTests.Publication;
 
@@ -194,26 +195,7 @@ public sealed class ReadingModelBuilderTests
                 $"base-{index:000}",
                 $"head-{index:000}"))
             .ToArray();
-        var run = new AnalysisRunDetail(
-            Guid.NewGuid(),
-            AnalysisRunState.Collecting,
-            new AnalysisRepositoryIdentity(Guid.NewGuid(), "fixture", "/fixture", "fixture", new string('h', 40)),
-            new AnalysisComparisonIdentity("target", new string('t', 40), "fresh"),
-            null,
-            1,
-            null,
-            42,
-            Guid.NewGuid(),
-            "manifest",
-            entries.Length,
-            new ExcludedUncommittedCounts(0, 0, 0, 0, 0),
-            null,
-            null,
-            null,
-            false,
-            null,
-            null,
-            null);
+        var run = new EvidenceBinderRunContext(Guid.NewGuid(), "target", 42);
         var snapshot = new SnapshotCapture(
             new SnapshotManifest(
                 Guid.NewGuid(),

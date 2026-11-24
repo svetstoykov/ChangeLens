@@ -2,7 +2,6 @@ using System.Globalization;
 using System.Security.Cryptography;
 using ChangeLens.Core.Comparisons.Models;
 using ChangeLens.Core.Git.Models;
-using ChangeLens.Core.Hashing.Helpers;
 using ChangeLens.Core.Repositories.Models;
 
 namespace ChangeLens.Core.Comparisons.Helpers;

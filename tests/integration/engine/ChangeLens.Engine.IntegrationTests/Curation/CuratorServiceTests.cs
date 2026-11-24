@@ -1,12 +1,15 @@
 using System.Text;
-using ChangeLens.Core.Curation.Constants;
-using ChangeLens.Core.Curation.Interfaces;
-using ChangeLens.Core.Curation.Models;
-using ChangeLens.Core.Curation.Services;
-using ChangeLens.Core.DraftValidation.Services;
-using ChangeLens.Core.EvidenceBinder.Constants;
-using ChangeLens.Core.EvidenceBinder.Models;
-using ChangeLens.Core.EvidenceBinder.Services;
+using ChangeLens.Core.Analysis.Curation.Constants;
+using ChangeLens.Core.Analysis.Curation.Helpers;
+using ChangeLens.Core.Analysis.Curation.Interfaces;
+using ChangeLens.Core.Analysis.Curation.Models;
+using ChangeLens.Core.Analysis.Curation.Services;
+using ChangeLens.Core.Analysis.DraftValidation.Services;
+using ChangeLens.Core.Analysis.EvidenceBinder.Constants;
+using ChangeLens.Core.Analysis.EvidenceBinder.Helpers;
+using ChangeLens.Core.Analysis.EvidenceBinder.Models;
+using ChangeLens.Core.Analysis.EvidenceBinder.Services;
+using ChangeLens.Core.Analysis.Shared.Constants;
 using ChangeLens.Core.ModelCompletion.Constants;
 using ChangeLens.Core.ModelCompletion.Models;
 using ChangeLens.Core.Results.Models;
@@ -18,7 +21,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
-using EvidenceBinderModel = ChangeLens.Core.EvidenceBinder.Models.EvidenceBinder;
+using EvidenceBinderModel = ChangeLens.Core.Analysis.EvidenceBinder.Models.EvidenceBinder;
 using ModelCompletionModel = ChangeLens.Core.ModelCompletion.Models.ModelCompletion;
 
 namespace ChangeLens.Engine.IntegrationTests.Curation;
@@ -201,7 +204,7 @@ public sealed class CuratorServiceTests
             builder.Services, descriptor => descriptor.ServiceType == typeof(CuratorOptions));
         Assert.Equal(ServiceLifetime.Singleton, curatorOptions.Lifetime);
         Assert.Contains(builder.Services, descriptor => descriptor.ServiceType == typeof(ICuratorService));
-        Assert.Contains(builder.Services, descriptor => descriptor.ServiceType == typeof(ChangeLens.Core.DraftValidation.Interfaces.IDraftValidationService));
+        Assert.Contains(builder.Services, descriptor => descriptor.ServiceType == typeof(ChangeLens.Core.Analysis.DraftValidation.Interfaces.IDraftValidationService));
         Assert.Contains(builder.Services, descriptor => descriptor.ServiceType == typeof(ChangeLens.Core.ModelCompletion.Interfaces.IModelCompletionClient));
     }
 

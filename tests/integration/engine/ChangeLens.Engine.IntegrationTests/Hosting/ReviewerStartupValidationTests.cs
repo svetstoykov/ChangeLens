@@ -1,7 +1,8 @@
-using ChangeLens.Core.Curation.Models;
-using ChangeLens.Core.EvidenceBinder.Models;
-using ChangeLens.Core.Review.Models;
-using ChangeLens.Core.Review.Services;
+using ChangeLens.Core.Analysis.Curation.Models;
+using ChangeLens.Core.Analysis.EvidenceBinder.Models;
+using ChangeLens.Core.Analysis.Review.Helpers;
+using ChangeLens.Core.Analysis.Review.Models;
+using ChangeLens.Core.Analysis.Review.Services;
 using ChangeLens.Engine.Hosting.Helpers;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
@@ -15,7 +16,7 @@ public sealed class ReviewerStartupValidationTests
     [Fact]
     public void DefaultReservesHoldTheReviewer()
     {
-        var exception = Record.Exception(() => ReviewerConfigurationValidator.Validate(new EvidenceBinderOptions(), new ReviewerOptions()));
+        var exception = Record.Exception(() => ReviewerOptionsValidator.Validate(new EvidenceBinderOptions(), new ReviewerOptions()));
 
         Assert.Null(exception);
     }
@@ -51,7 +52,7 @@ public sealed class ReviewerStartupValidationTests
         var binderOptions = new EvidenceBinderOptions { PromptReserveCharacters = 100 };
 
         var exception = Assert.Throws<InvalidOperationException>(
-            () => ReviewerConfigurationValidator.Validate(binderOptions, new ReviewerOptions()));
+            () => ReviewerOptionsValidator.Validate(binderOptions, new ReviewerOptions()));
 
         Assert.Contains("prompt reserve of 100 characters", exception.Message, StringComparison.Ordinal);
         Assert.Contains("rendered reviewer prompt", exception.Message, StringComparison.Ordinal);
@@ -67,7 +68,7 @@ public sealed class ReviewerStartupValidationTests
     {
         var reviewerOptions = new ReviewerOptions { MaximumOutputCharacters = characters, MaximumOutputTokens = tokens };
 
-        Assert.Throws<InvalidOperationException>(() => ReviewerConfigurationValidator.Validate(new EvidenceBinderOptions(), reviewerOptions));
+        Assert.Throws<InvalidOperationException>(() => ReviewerOptionsValidator.Validate(new EvidenceBinderOptions(), reviewerOptions));
     }
 
     /// <summary>Verifies a disabled reviewer's limits are not checked against the reserves.</summary>
@@ -76,7 +77,7 @@ public sealed class ReviewerStartupValidationTests
     {
         var reviewerOptions = new ReviewerOptions { Enabled = false, MaximumOutputCharacters = 10_000_000 };
 
-        var exception = Record.Exception(() => ReviewerConfigurationValidator.Validate(new EvidenceBinderOptions(), reviewerOptions));
+        var exception = Record.Exception(() => ReviewerOptionsValidator.Validate(new EvidenceBinderOptions(), reviewerOptions));
 
         Assert.Null(exception);
     }

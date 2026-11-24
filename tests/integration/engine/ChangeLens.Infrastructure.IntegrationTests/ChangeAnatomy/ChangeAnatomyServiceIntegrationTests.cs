@@ -1,17 +1,16 @@
+using ChangeLens.Core.Analysis.ChangeAnatomy.Helpers;
+using ChangeLens.Core.Analysis.ChangeAnatomy.Interfaces;
+using ChangeLens.Core.Analysis.ChangeAnatomy.Models;
+using ChangeLens.Core.Analysis.ChangeAnatomy.Services;
+using ChangeLens.Core.Analysis.Snapshots.Models;
+using ChangeLens.Core.Analysis.Snapshots.Services;
 using ChangeLens.Core.AnalysisRuns.Models;
-using ChangeLens.Core.ChangeAnatomy.Helpers;
-using ChangeLens.Core.ChangeAnatomy.Interfaces;
-using ChangeLens.Core.ChangeAnatomy.Models;
-using ChangeLens.Core.ChangeAnatomy.Services;
 using ChangeLens.Core.Results.Models;
-using ChangeLens.Core.Snapshots.Models;
-using ChangeLens.Core.Snapshots.Services;
 using ChangeLens.Infrastructure.Git.Services;
 using ChangeLens.Infrastructure.IntegrationTests.Git.Support;
 using ChangeLens.Infrastructure.IntegrationTests.Snapshots.Support;
-using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
-
+using Microsoft.Extensions.Logging;
 using Xunit;
 
 namespace ChangeLens.Infrastructure.IntegrationTests.Anatomy;
@@ -295,11 +294,10 @@ public sealed class ChangeAnatomyServiceIntegrationTests
     {
         var key = Path.GetFullPath(repository.RootPath);
         var snapshot = new SnapshotManifest(Guid.NewGuid(), new string('a', 64), key, "fixture", head, head, mergeBase, entries);
-        var identity = new AnalysisRepositoryIdentity(Guid.NewGuid(), "fixture", key, key, head);
         var readerFactory = new FrozenGitTreeReaderFactory(
             new GitCliCommandRunner(), new FrozenGitTreeReaderOptions(), NullLoggerFactory.Instance);
         var service = new ChangeAnatomyService(
             readerFactory, options ?? new ChangeAnatomyOptions(), logger ?? NullLogger<ChangeAnatomyService>.Instance);
-        return await service.AnalyzeAsync(identity, snapshot, cancellationToken ?? TestContext.Current.CancellationToken);
+        return await service.AnalyzeAsync(key, snapshot, cancellationToken ?? TestContext.Current.CancellationToken);
     }
 }

@@ -1,15 +1,16 @@
 using System.Text.Json;
+using ChangeLens.Core.Analysis.ChangeAnatomy.Models;
+using ChangeLens.Core.Analysis.ContextPolicy.Models;
+using ChangeLens.Core.Analysis.EvidenceBinder.Constants;
+using ChangeLens.Core.Analysis.EvidenceBinder.Helpers;
+using ChangeLens.Core.Analysis.EvidenceBinder.Models;
+using ChangeLens.Core.Analysis.EvidenceBinder.Services;
+using ChangeLens.Core.Analysis.EvidenceGraph.Models;
+using ChangeLens.Core.Analysis.Snapshots.Models;
 using ChangeLens.Core.AnalysisRuns.Models;
-using ChangeLens.Core.ChangeAnatomy.Models;
-using ChangeLens.Core.ContextPolicy.Models;
-using ChangeLens.Core.EvidenceBinder.Constants;
-using ChangeLens.Core.EvidenceBinder.Models;
-using ChangeLens.Core.EvidenceBinder.Services;
-using ChangeLens.Core.EvidenceGraph.Models;
-using ChangeLens.Core.Snapshots.Models;
 using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
-using EvidenceBinderModel = ChangeLens.Core.EvidenceBinder.Models.EvidenceBinder;
+using EvidenceBinderModel = ChangeLens.Core.Analysis.EvidenceBinder.Models.EvidenceBinder;
 
 namespace ChangeLens.Engine.IntegrationTests.EvidenceBinder;
 
@@ -87,9 +88,9 @@ public sealed class EvidenceBinderServiceTests
             null);
         request = request with
         {
-            Run = request.Run with
+            Snapshot = request.Snapshot with
             {
-                Repository = request.Run.Repository with { CanonicalPath = localPath, CanonicalRepositoryPathKey = localPath },
+                Manifest = request.Snapshot.Manifest with { CanonicalRepositoryPathKey = localPath },
             },
         };
 
@@ -335,26 +336,7 @@ public sealed class EvidenceBinderServiceTests
         SnapshotManifestEntry entry,
         IReadOnlyList<string> treePaths,
         string? developerContext) => new(
-            new AnalysisRunDetail(
-                Guid.NewGuid(),
-                AnalysisRunState.Collecting,
-                new AnalysisRepositoryIdentity(Guid.NewGuid(), "fixture", "/fixture", "fixture", Blob('h')),
-                new AnalysisComparisonIdentity("target", Blob('t'), "fresh"),
-                null,
-                1,
-                null,
-                42,
-                Guid.NewGuid(),
-                "manifest",
-                1,
-                new ExcludedUncommittedCounts(1, 1, 0, 0, 0),
-                null,
-                null,
-                null,
-                false,
-                null,
-                null,
-                null),
+            new EvidenceBinderRunContext(Guid.NewGuid(), "target", 42),
             new SnapshotCapture(
                 new SnapshotManifest(Guid.NewGuid(), "manifest", "fixture", "target", Blob('t'), Blob('h'), Blob('m'), [entry]),
                 new ExcludedUncommittedCounts(1, 1, 0, 0, 0)),

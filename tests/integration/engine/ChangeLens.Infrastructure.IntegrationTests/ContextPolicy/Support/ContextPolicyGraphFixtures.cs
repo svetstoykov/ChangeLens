@@ -1,8 +1,8 @@
 using System.Security.Cryptography;
 using System.Text;
-using ChangeLens.Core.ChangeAnatomy.Models;
-using ChangeLens.Core.EvidenceGraph.Models;
-using EvidenceGraphModel = ChangeLens.Core.EvidenceGraph.Models.EvidenceGraph;
+using ChangeLens.Core.Analysis.ChangeAnatomy.Models;
+using ChangeLens.Core.Analysis.EvidenceGraph.Models;
+using EvidenceGraphModel = ChangeLens.Core.Analysis.EvidenceGraph.Models.EvidenceGraph;
 
 namespace ChangeLens.Infrastructure.IntegrationTests.ContextPolicy.Support;
 

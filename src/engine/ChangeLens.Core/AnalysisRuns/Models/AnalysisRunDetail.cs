@@ -1,4 +1,4 @@
-using ChangeLens.Core.Snapshots.Models;
+using ChangeLens.Core.Analysis.Snapshots.Models;
 
 namespace ChangeLens.Core.AnalysisRuns.Models;
 

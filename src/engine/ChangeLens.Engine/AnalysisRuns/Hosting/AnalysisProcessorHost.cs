@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using ChangeLens.Core.AnalysisRuns.Constants;
 using ChangeLens.Core.AnalysisRuns.Interfaces;
 using ChangeLens.Core.AnalysisRuns.Models;
@@ -39,6 +40,7 @@ internal sealed class AnalysisProcessorHost(
     /// <inheritdoc />
     public async Task StartAsync(CancellationToken cancellationToken)
     {
+        var startedAt = Stopwatch.GetTimestamp();
         await using (var recoveryScope = serviceScopeFactory.CreateAsyncScope())
         {
             var store = recoveryScope.ServiceProvider.GetRequiredService<IAnalysisRunStore>();
@@ -46,16 +48,15 @@ internal sealed class AnalysisProcessorHost(
 
             if (interruptedResult.IsFailure)
             {
-                logger.LogCritical("Analysis processor startup recovery failed with errors {ErrorCodes}.",
-                    interruptedResult.Errors.Select(error => error.Code));
-
                 throw new InvalidOperationException(
                     "Analysis processor recovery failed; the engine cannot start with ambiguous run state. Errors: " +
                     string.Join(", ", interruptedResult.Errors.Select(error => error.Code)) + ".");
             }
         }
 
-        logger.LogInformation("The analysis processor completed startup recovery.");
+        logger.LogInformation(
+            "The analysis processor completed startup recovery in {ElapsedMilliseconds:0.000} ms.",
+            Stopwatch.GetElapsedTime(startedAt).TotalMilliseconds);
         this._processorLoopTask = this.RunProcessorLoopAsync(this._shutdownSource.Token);
     }
 
@@ -150,6 +151,7 @@ internal sealed class AnalysisProcessorHost(
 
     private async Task ExecuteRunAsync(Guid runId, CancellationToken shutdownToken)
     {
+        var startedAt = Stopwatch.GetTimestamp();
         await using var scope = serviceScopeFactory.CreateAsyncScope();
         var store = scope.ServiceProvider.GetRequiredService<IAnalysisRunStore>();
         var runToken = processorControl.BeginRun(runId);
@@ -177,7 +179,9 @@ internal sealed class AnalysisProcessorHost(
         }
         catch (OperationCanceledException) when (shutdownToken.IsCancellationRequested)
         {
-            logger.LogInformation("Analysis run {RunId} stopped because the engine is shutting down.", runId);
+            logger.LogInformation(
+                "Analysis run {RunId} stopped because the engine is shutting down after {ElapsedMilliseconds:0.000} ms.",
+                runId, Stopwatch.GetElapsedTime(startedAt).TotalMilliseconds);
         }
         catch (OperationCanceledException) when (runToken.IsCancellationRequested)
         {

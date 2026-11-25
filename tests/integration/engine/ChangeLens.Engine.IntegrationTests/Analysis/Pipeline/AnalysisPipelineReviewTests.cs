@@ -254,6 +254,62 @@ public sealed class AnalysisPipelineReviewTests
         await reviewerCancelled.Task.WaitAsync(Deadline, TestContext.Current.CancellationToken);
     }
 
+    /// <summary>
+    ///     Asynchronously verifies that when the curator fails and the run reaches terminal failure while the abandoned
+    ///     reviewer call is still running, the reviewer's cancellation token stays usable until the reviewer completes.
+    /// </summary>
+    /// <returns>A task that represents the asynchronous operation.</returns>
+    [Fact]
+    public async Task CuratorFailureKeepsAbandonedReviewerCancellationTokenAliveUntilReviewerCompletes()
+    {
+        var reviewerEntered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var releaseReviewer = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var reviewerExited = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        CancellationToken capturedReviewerToken = default;
+        var client = new ScriptedModelCompletionClient(
+            async (_, cancellationToken) =>
+            {
+                await reviewerEntered.Task.WaitAsync(Deadline, cancellationToken);
+                return Result.Fail<ModelCompletionModel>(
+                    OperationError.ExternalDependencyFailure("provider unavailable", ModelCompletionErrorCode.ProviderUnavailable));
+            },
+            async (request, cancellationToken) =>
+            {
+                capturedReviewerToken = cancellationToken;
+                reviewerEntered.TrySetResult();
+                try
+                {
+                    await releaseReviewer.Task.WaitAsync(Deadline, TestContext.Current.CancellationToken);
+                    return ScriptedReplies.Reviewer(ScriptedReplies.ValidFinding(request, "f1"));
+                }
+                finally
+                {
+                    reviewerExited.TrySetResult();
+                }
+            });
+        using var repository = PipelineRepositories.CreateCommittedChange();
+        await using var host = await AnalysisPipelineTestHost.CreateAsync(
+            services => services.Replace(ServiceDescriptor.Scoped<IModelCompletionClient>(_ => client)));
+        await host.StartAsync(TestContext.Current.CancellationToken);
+        await host.OpenRepositoryAsync(repository.Path);
+        var freshnessToken = await host.PrepareFreshnessTokenAsync(repository.Path, repository.DefaultTarget);
+        var runId = await host.StartAsync(repository.Path, repository.DefaultTarget, freshnessToken);
+
+        try
+        {
+            using var terminal = await host.PollUntilTerminalAsync(runId, Deadline);
+            var result = terminal.RootElement.GetProperty("result");
+            Assert.Equal("failed", result.GetProperty("state").GetString());
+            Assert.True(capturedReviewerToken.IsCancellationRequested);
+            Assert.True(capturedReviewerToken.WaitHandle.WaitOne(0));
+        }
+        finally
+        {
+            releaseReviewer.TrySetResult();
+            await reviewerExited.Task.WaitAsync(Deadline, TestContext.Current.CancellationToken);
+        }
+    }
+
     private static async Task<Result<ModelCompletionModel>> AwaitCancellationAsync(
         TaskCompletionSource entered,
         TaskCompletionSource cancelled,

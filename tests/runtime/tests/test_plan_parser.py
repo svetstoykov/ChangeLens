@@ -42,7 +42,7 @@ cases:
       - no_marker_in: [payload]
       - response.readingModel.areas.0.shape: participantMap
 review:
-  areas: [src/engine/ChangeLens.Core/DraftValidation]
+  areas: [src/engine/ChangeLens.Core/Analysis/DraftValidation]
   focus: Are removal scopes mapped?
 """
 
@@ -113,7 +113,7 @@ def test_review_settings_are_configurable(tmp_path: Path) -> None:
         ("mode: scripted, script: curator-valid-f01", "mode: replay, from: ../up, case: a", "is not a run id"),
         ("mode: scripted, script: curator-valid-f01", "mode: scripted, from: x", "does not take from"),
         ("id: inline-dirty", "id: f01-lifecycle", "duplicate case id"),
-        ("src/engine/ChangeLens.Core/DraftValidation", "src/does-not-exist", "does not exist"),
+        ("src/engine/ChangeLens.Core/Analysis/DraftValidation", "src/does-not-exist", "does not exist"),
         ("      - prepare: { target: main }\n", "", "analyze needs an earlier prepare step"),
         ("markers: [marker-inline]", "markers: []", "neither the case nor its repository declares markers"),
         ("runId: $run_id", "runId: $unknown", "unknown variable"),

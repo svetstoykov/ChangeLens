@@ -1,10 +1,10 @@
 using System.Diagnostics;
 using System.Globalization;
-using System.Net;
 using System.Net.Http.Headers;
-using System.Text;
-using System.Text.Json;
+using System.Net;
 using System.Text.Json.Serialization;
+using System.Text.Json;
+using System.Text;
 using ChangeLens.Core.ModelCompletion.Constants;
 using ChangeLens.Core.ModelCompletion.Interfaces;
 using ChangeLens.Core.ModelCompletion.Models;

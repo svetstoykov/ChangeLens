@@ -1,13 +1,13 @@
 using System.Text.Json;
+using ChangeLens.Core.AnalysisRuns.Interfaces;
 using ChangeLens.Core.Comparisons.Interfaces;
 using ChangeLens.Core.Comparisons.Models;
 using ChangeLens.Core.Results.Models;
-using ChangeLens.Core.AnalysisRuns.Interfaces;
 using ChangeLens.Engine.Comparisons.Constants;
 using ChangeLens.Engine.Comparisons.Models;
+using ChangeLens.Engine.Protocol.Helpers;
 using ChangeLens.Engine.Protocol.Interfaces;
 using ChangeLens.Engine.Protocol.Models;
-using ChangeLens.Engine.Protocol.Helpers;
 
 namespace ChangeLens.Engine.Comparisons.Handlers;
 
@@ -65,7 +65,7 @@ internal sealed class ComparisonCheckFreshnessHandler(
                 Result.Success<ComparisonFreshnessResult>(new StaleComparisonFreshnessResult()),
             _ => OperationError.InternalError(
                 "The comparison freshness state is not approved for the engine protocol.",
-                ComparisonErrorCode.UnmappedFreshnessState),
+                ComparisonProtocolErrorCode.UnmappedFreshnessState),
         };
         return ProtocolResponseFactory.FromResult(request.RequestId, result);
     }

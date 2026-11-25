@@ -1,5 +1,5 @@
-using ChangeLens.Core.ClaimChecking.Models;
-using ChangeLens.Core.EvidenceFrontier.Models;
+using ChangeLens.Core.Analysis.ClaimChecking.Models;
+using ChangeLens.Core.Analysis.EvidenceFrontier.Models;
 using ChangeLens.Engine.Hosting.Helpers;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;

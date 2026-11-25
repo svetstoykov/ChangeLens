@@ -1,30 +1,38 @@
 using System.Diagnostics;
 using System.Globalization;
-using ChangeLens.Core.ChangeAnatomy.Interfaces;
-using ChangeLens.Core.ChangeAnatomy.Models;
-using ChangeLens.Core.ContextPolicy.Constants;
-using ChangeLens.Core.ContextPolicy.Interfaces;
-using ChangeLens.Core.ContextPolicy.Models;
-using ChangeLens.Core.Correspondence.Constants;
-using ChangeLens.Core.Correspondence.Interfaces;
-using ChangeLens.Core.Correspondence.Models;
+using ChangeLens.Core.Analysis.ChangeAnatomy.Interfaces;
+using ChangeLens.Core.Analysis.ChangeAnatomy.Models;
+using ChangeLens.Core.Analysis.ContextPolicy.Constants;
+using ChangeLens.Core.Analysis.ContextPolicy.Interfaces;
+using ChangeLens.Core.Analysis.ContextPolicy.Models;
+using ChangeLens.Core.Analysis.Correspondence.Constants;
+using ChangeLens.Core.Analysis.Correspondence.Interfaces;
+using ChangeLens.Core.Analysis.Correspondence.Models;
+using ChangeLens.Core.Analysis.EvidenceBinder.Constants;
+using ChangeLens.Core.Analysis.EvidenceBinder.Interfaces;
+using ChangeLens.Core.Analysis.EvidenceBinder.Models;
+using ChangeLens.Core.Analysis.EvidenceGraph.Constants;
+using ChangeLens.Core.Analysis.EvidenceGraph.Interfaces;
+using ChangeLens.Core.Analysis.EvidenceGraph.Models;
+using ChangeLens.Core.Analysis.Snapshots.Interfaces;
+using ChangeLens.Core.Analysis.Snapshots.Models;
 using ChangeLens.Core.EngineStatus.Interfaces;
-using ChangeLens.Core.EvidenceBinder.Interfaces;
-using ChangeLens.Core.EvidenceBinder.Models;
-using ChangeLens.Core.EvidenceBinder.Constants;
-using ChangeLens.Core.EvidenceGraph.Constants;
-using ChangeLens.Core.EvidenceGraph.Interfaces;
-using ChangeLens.Core.EvidenceGraph.Models;
 using ChangeLens.Core.LocalState.Constants;
 using ChangeLens.Core.LocalState.Interfaces;
-using ChangeLens.Core.Snapshots.Interfaces;
-using ChangeLens.Core.Snapshots.Models;
+using ChangeLens.Core.Repositories.Interfaces;
+using ChangeLens.Engine.Analysis.Extensions;
+using ChangeLens.Engine.AnalysisRuns.Extensions;
+using ChangeLens.Engine.Comparisons.Extensions;
+using ChangeLens.Engine.EngineStatus.Extensions;
 using ChangeLens.Engine.Hosting.Extensions;
 using ChangeLens.Engine.Hosting.Helpers;
 using ChangeLens.Engine.IntegrationTests.Support;
 using ChangeLens.Engine.Logging.Constants;
 using ChangeLens.Engine.Logging.Extensions;
+using ChangeLens.Engine.Preferences.Extensions;
+using ChangeLens.Engine.Protocol.Extensions;
 using ChangeLens.Engine.Protocol.Interfaces;
+using ChangeLens.Engine.Repositories.Extensions;
 using ChangeLens.Engine.Repositories.Handlers;
 using ChangeLens.Infrastructure.LocalState.Constants;
 using ChangeLens.Infrastructure.LocalState.Models;
@@ -186,7 +194,7 @@ public sealed class EngineServiceScopeTests
         Assert.DoesNotContain(builder.Services, descriptor => descriptor.ServiceType == typeof(EvidenceBinderOptions));
         Assert.DoesNotContain(builder.Services, descriptor => descriptor.ServiceType == typeof(IEvidenceBinderService));
 
-        builder.AddAnalysisRunServices();
+        builder.AddAnalysisServices();
 
         var optionsDescriptor = Assert.Single(builder.Services, descriptor => descriptor.ServiceType == typeof(FrozenGitTreeReaderOptions));
         var factoryDescriptor = Assert.Single(builder.Services, descriptor => descriptor.ServiceType == typeof(IFrozenGitTreeReaderFactory));
@@ -227,7 +235,7 @@ public sealed class EngineServiceScopeTests
         builder.Configuration[EvidenceGraphConfigurationConstants.MaximumEdgesKey] = "-4";
         builder.Configuration[ContextPolicyConfigurationConstants.MaximumDisclosedCharactersPerNodeKey] = "2000";
 
-        builder.AddAnalysisRunServices();
+        builder.AddAnalysisServices();
 
         var graphDescriptor = Assert.Single(builder.Services, descriptor => descriptor.ServiceType == typeof(EvidenceGraphOptions));
         var graphOptions = Assert.IsType<EvidenceGraphOptions>(graphDescriptor.ImplementationInstance);
@@ -255,7 +263,7 @@ public sealed class EngineServiceScopeTests
             builder.Configuration[EvidenceBinderConfigurationConstants.PromptReserveCharactersKey] = "16000";
             builder.Configuration[EvidenceBinderConfigurationConstants.TargetUtilizationKey] = "0.5";
 
-            builder.AddAnalysisRunServices();
+            builder.AddAnalysisServices();
 
             var descriptor = Assert.Single(builder.Services, service => service.ServiceType == typeof(EvidenceBinderOptions));
             var options = Assert.IsType<EvidenceBinderOptions>(descriptor.ImplementationInstance);
@@ -281,7 +289,7 @@ public sealed class EngineServiceScopeTests
         builder.Configuration[CorrespondenceConfigurationConstants.IncludeCoChangeKey] = "false";
         builder.Configuration[CorrespondenceConfigurationConstants.MaximumReasonsPerCandidateKey] = "not-a-number";
 
-        builder.AddAnalysisRunServices();
+        builder.AddAnalysisServices();
 
         var correspondenceOptionsDescriptor = Assert.Single(builder.Services, descriptor => descriptor.ServiceType == typeof(CorrespondenceOptions));
         var options =Assert.IsType<CorrespondenceOptions>(correspondenceOptionsDescriptor.ImplementationInstance);
@@ -314,6 +322,7 @@ public sealed class EngineServiceScopeTests
         builder.AddEngineStatusServices();
         builder.AddRepositoryServices();
         builder.AddComparisonServices();
+        builder.AddAnalysisServices();
         builder.AddAnalysisRunServices();
         builder.AddProtocolServices();
         builder.AddActionHandlers();

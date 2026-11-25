@@ -1,0 +1,35 @@
+using ChangeLens.Core.Analysis.Review.Constants;
+using ChangeLens.Core.ModelCompletion.Models;
+
+namespace ChangeLens.Core.Analysis.Review.Models;
+
+/// <summary>
+///     Represents call and reply limits for the reviewer.
+/// </summary>
+public sealed class ReviewerOptions
+{
+    /// <summary>
+    ///     Gets or sets a value indicating whether the pipeline runs the reviewer. The default is <see langword="true" />.
+    /// </summary>
+    public bool Enabled { get; set; } = true;
+
+    /// <summary>
+    ///     Gets or sets the maximum accepted completion size in characters. The default is 176,000 characters.
+    /// </summary>
+    public int MaximumOutputCharacters { get; set; } = ReviewerConfigurationConstants.DefaultMaximumOutputCharacters;
+
+    /// <summary>
+    ///     Gets or sets the maximum output-token request. The default is 48,000 tokens.
+    /// </summary>
+    public int MaximumOutputTokens { get; set; } = ReviewerConfigurationConstants.DefaultMaximumOutputTokens;
+
+    /// <summary>
+    ///     Gets or sets the optional provider reasoning effort.
+    /// </summary>
+    public ModelReasoningEffort? ReasoningEffort { get; set; }
+
+    /// <summary>
+    ///     Gets or sets the provider model slug for the reviewer call, or <see langword="null" /> to use the curator's configured model.
+    /// </summary>
+    public string? Model { get; set; }
+}

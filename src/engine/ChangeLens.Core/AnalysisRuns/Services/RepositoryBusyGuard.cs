@@ -1,7 +1,6 @@
 using ChangeLens.Core.AnalysisRuns.Interfaces;
-using ChangeLens.Core.Git.Interfaces;
-using ChangeLens.Core.LocalState.Interfaces;
 using ChangeLens.Core.Repositories.Constants;
+using ChangeLens.Core.Repositories.Interfaces;
 using ChangeLens.Core.Results.Models;
 
 namespace ChangeLens.Core.AnalysisRuns.Services;

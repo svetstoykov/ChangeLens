@@ -1,3 +1,5 @@
+using ChangeLens.Core.Preferences.Models;
+
 namespace ChangeLens.Engine.Preferences.Models;
 
 /// <summary>

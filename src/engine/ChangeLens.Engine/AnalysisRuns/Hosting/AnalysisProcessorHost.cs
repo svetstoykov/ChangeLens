@@ -1,6 +1,7 @@
 using ChangeLens.Core.AnalysisRuns.Constants;
 using ChangeLens.Core.AnalysisRuns.Interfaces;
 using ChangeLens.Core.AnalysisRuns.Models;
+using ChangeLens.Engine.Analysis.Pipeline.Interfaces;
 using ChangeLens.Engine.AnalysisRuns.Constants;
 using ChangeLens.Engine.AnalysisRuns.Interfaces;
 using Microsoft.Extensions.DependencyInjection;

@@ -2,16 +2,15 @@ using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Diagnostics;
 using System.Text;
-using ChangeLens.Core.Diagnostics.Helpers;
 using ChangeLens.Core.Git.Constants;
+using ChangeLens.Core.Git.Helpers;
 using ChangeLens.Core.Git.Interfaces;
 using ChangeLens.Core.Git.Models;
-using ChangeLens.Core.Repositories.Constants;
 using ChangeLens.Core.Results.Models;
 using ChangeLens.Infrastructure.Git.Constants;
 using ChangeLens.Infrastructure.Git.Models;
-using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
 namespace ChangeLens.Infrastructure.Git.Services;

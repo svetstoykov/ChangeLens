@@ -1,5 +1,5 @@
 using System.Text.Json;
-using ChangeLens.Core.LocalState.Models;
+using ChangeLens.Core.Preferences.Models;
 using ChangeLens.Core.Results.Models;
 using ChangeLens.Engine.IntegrationTests.Preferences.Handlers.Support;
 using ChangeLens.Engine.IntegrationTests.Protocol.Support;

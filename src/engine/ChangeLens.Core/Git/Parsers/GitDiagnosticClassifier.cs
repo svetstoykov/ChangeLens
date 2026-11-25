@@ -1,5 +1,4 @@
 using System.Text;
-using ChangeLens.Core.Comparisons.Constants;
 using ChangeLens.Core.Git.Constants;
 using ChangeLens.Core.Git.Models;
 using ChangeLens.Core.Repositories.Constants;
@@ -46,6 +45,26 @@ internal static class GitDiagnosticClassifier
     }
 
     /// <summary>
+    ///     Determines whether a captured stream is valid UTF-8 text within the inspection byte bound.
+    /// </summary>
+    /// <param name="value">The decoded stream text. Cannot be <see langword="null" />.</param>
+    /// <returns>
+    ///     <see langword="true" /> when the text can be safely reviewed; otherwise, <see langword="false" />.
+    /// </returns>
+    internal static bool IsReviewable(string value)
+    {
+        ArgumentNullException.ThrowIfNull(value);
+        try
+        {
+            return StrictUtf8.GetByteCount(value) <= GitInspectionConstants.MaximumStreamBytes;
+        }
+        catch (EncoderFallbackException)
+        {
+            return false;
+        }
+    }
+
+    /// <summary>
     ///     Applies the reviewed diagnostic fragments to a failed Git command.
     /// </summary>
     /// <param name="output">The captured Git output. Cannot be <see langword="null" />.</param>
@@ -83,66 +102,6 @@ internal static class GitDiagnosticClassifier
         }
 
         return InspectionFailure();
-    }
-
-    /// <summary>
-    ///     Classifies a failed remote Git command (<c>ls-remote</c> or <c>fetch</c>) without exposing Git output.
-    /// </summary>
-    /// <param name="output">The captured failed Git output. Cannot be <see langword="null" />.</param>
-    /// <returns>The stable safe operation error for the recognized failure.</returns>
-    /// <exception cref="ArgumentNullException">
-    ///     <paramref name="output" /> is <see langword="null" />.
-    /// </exception>
-    internal static OperationError ClassifyRemoteFailure(GitCommandOutput output)
-    {
-        ArgumentNullException.ThrowIfNull(output);
-
-        if (output.ExitCode == 0 ||
-            !IsReviewable(output.StandardOutput) ||
-            !IsReviewable(output.StandardError))
-        {
-            return RemoteUnreachableFailure();
-        }
-
-        var diagnostic = output.StandardError;
-        if (diagnostic.Contains("could not read username", StringComparison.OrdinalIgnoreCase) ||
-            diagnostic.Contains("could not read password", StringComparison.OrdinalIgnoreCase) ||
-            diagnostic.Contains("authentication failed", StringComparison.OrdinalIgnoreCase) ||
-            diagnostic.Contains("invalid username or password", StringComparison.OrdinalIgnoreCase) ||
-            diagnostic.Contains("permission denied (publickey", StringComparison.OrdinalIgnoreCase) ||
-            diagnostic.Contains("terminal prompts disabled", StringComparison.OrdinalIgnoreCase))
-        {
-            return OperationError.Unauthorized("The remote requires authentication. Run `git fetch <remote> <branch>` in a terminal, then try again.",
-                ComparisonErrorCode.RemoteAuthenticationRequired);
-        }
-
-        return RemoteUnreachableFailure();
-    }
-
-    /// <summary>
-    ///     Creates the stable safe failure for a remote that could not be reached.
-    /// </summary>
-    /// <returns>The stable remote-unreachable operation error.</returns>
-    private static OperationError RemoteUnreachableFailure() =>
-        OperationError.ExternalDependencyFailure("The remote could not be reached.", ComparisonErrorCode.RemoteUnreachable);
-
-    /// <summary>
-    ///     Determines whether a captured stream is valid UTF-8 text within the inspection byte bound.
-    /// </summary>
-    /// <param name="value">The decoded stream text. Cannot be <see langword="null" />.</param>
-    /// <returns>
-    ///     <see langword="true" /> when the text can be safely reviewed; otherwise, <see langword="false" />.
-    /// </returns>
-    private static bool IsReviewable(string value)
-    {
-        try
-        {
-            return StrictUtf8.GetByteCount(value) <= GitInspectionConstants.MaximumStreamBytes;
-        }
-        catch (EncoderFallbackException)
-        {
-            return false;
-        }
     }
 
     /// <summary>

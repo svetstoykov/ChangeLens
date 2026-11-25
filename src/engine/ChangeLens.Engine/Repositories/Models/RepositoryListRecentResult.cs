@@ -1,4 +1,4 @@
-using ChangeLens.Core.LocalState.Models;
+using ChangeLens.Core.Repositories.Models;
 
 namespace ChangeLens.Engine.Repositories.Models;
 

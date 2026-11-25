@@ -1,11 +1,11 @@
-using ChangeLens.Core.LocalState.Models;
-using ChangeLens.Core.LocalState.Interfaces;
+using ChangeLens.Core.Preferences.Interfaces;
+using ChangeLens.Core.Preferences.Models;
 using ChangeLens.Core.Results.Models;
 using ChangeLens.Engine.Preferences.Constants;
 using ChangeLens.Engine.Preferences.Models;
+using ChangeLens.Engine.Protocol.Helpers;
 using ChangeLens.Engine.Protocol.Interfaces;
 using ChangeLens.Engine.Protocol.Models;
-using ChangeLens.Engine.Protocol.Helpers;
 
 namespace ChangeLens.Engine.Preferences.Handlers;
 

@@ -317,7 +317,7 @@ fn engine_dll_path() -> PathBuf {
 
 fn fixture_project_path() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join(
-        "../../../tests/integration/desktop/EngineStatus/Fixtures/ChangeLens.EngineProtocolFixture/ChangeLens.EngineProtocolFixture.csproj",
+        "../../../tests/integration/desktop/Fixtures/ChangeLens.EngineProtocolFixture/ChangeLens.EngineProtocolFixture.csproj",
     )
 }
 

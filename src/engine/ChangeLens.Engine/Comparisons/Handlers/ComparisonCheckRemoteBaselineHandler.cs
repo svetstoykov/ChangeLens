@@ -1,13 +1,13 @@
 using System.Text.Json;
-using ChangeLens.Core.Git.Interfaces;
+using ChangeLens.Core.AnalysisRuns.Interfaces;
+using ChangeLens.Core.Comparisons.Interfaces;
 using ChangeLens.Core.Git.Models;
 using ChangeLens.Core.Results.Models;
-using ChangeLens.Core.AnalysisRuns.Interfaces;
 using ChangeLens.Engine.Comparisons.Constants;
 using ChangeLens.Engine.Comparisons.Models;
+using ChangeLens.Engine.Protocol.Helpers;
 using ChangeLens.Engine.Protocol.Interfaces;
 using ChangeLens.Engine.Protocol.Models;
-using ChangeLens.Engine.Protocol.Helpers;
 
 namespace ChangeLens.Engine.Comparisons.Handlers;
 
@@ -68,7 +68,7 @@ internal sealed class ComparisonCheckRemoteBaselineHandler(
             RemoteBaselineState.NoRemote =>
                 Result.Success<RemoteBaselineResult>(new NoRemoteRemoteBaselineResult()),
             _ => OperationError.InternalError("The remote baseline check result is not approved for the engine protocol.",
-                ComparisonErrorCode.UnmappedRemoteBaselineState),
+                ComparisonProtocolErrorCode.UnmappedRemoteBaselineState),
         };
         return ProtocolResponseFactory.FromResult(request.RequestId, result);
     }

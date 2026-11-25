@@ -1,5 +1,5 @@
-using System.Text.Json;
 using System.Text.Json.Nodes;
+using System.Text.Json;
 using ChangeLens.Engine.IntegrationTests.Support;
 using Json.Schema;
 using Xunit;

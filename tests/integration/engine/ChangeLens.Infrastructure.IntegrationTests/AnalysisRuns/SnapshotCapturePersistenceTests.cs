@@ -1,5 +1,5 @@
+using ChangeLens.Core.Analysis.Snapshots.Models;
 using ChangeLens.Core.AnalysisRuns.Models;
-using ChangeLens.Core.Snapshots.Models;
 using ChangeLens.Infrastructure.IntegrationTests.AnalysisRuns.Support;
 using Xunit;
 

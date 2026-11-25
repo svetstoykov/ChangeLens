@@ -4,9 +4,9 @@ using ChangeLens.Core.Results.Models;
 using ChangeLens.Engine.AnalysisRuns.Constants;
 using ChangeLens.Engine.AnalysisRuns.Interfaces;
 using ChangeLens.Engine.AnalysisRuns.Models;
+using ChangeLens.Engine.Protocol.Helpers;
 using ChangeLens.Engine.Protocol.Interfaces;
 using ChangeLens.Engine.Protocol.Models;
-using ChangeLens.Engine.Protocol.Helpers;
 
 namespace ChangeLens.Engine.AnalysisRuns.Handlers;
 

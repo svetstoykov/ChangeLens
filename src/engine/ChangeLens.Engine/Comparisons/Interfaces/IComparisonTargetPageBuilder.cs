@@ -1,5 +1,5 @@
-using ChangeLens.Core.Results.Models;
 using ChangeLens.Core.Comparisons.Models;
+using ChangeLens.Core.Results.Models;
 using ChangeLens.Engine.Comparisons.Models;
 
 namespace ChangeLens.Engine.Comparisons.Interfaces;

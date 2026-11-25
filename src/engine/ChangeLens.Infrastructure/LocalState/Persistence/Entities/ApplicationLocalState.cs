@@ -1,3 +1,5 @@
+using ChangeLens.Core.Preferences.Models;
+
 namespace ChangeLens.Infrastructure.LocalState.Persistence.Entities;
 
 /// <summary>

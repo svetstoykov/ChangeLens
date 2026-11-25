@@ -1,0 +1,578 @@
+using ChangeLens.Core.Analysis.ChangeAnatomy.Interfaces;
+using ChangeLens.Core.Analysis.ContextPolicy.Interfaces;
+using ChangeLens.Core.Analysis.Correspondence.Interfaces;
+using ChangeLens.Core.Analysis.Curation.Interfaces;
+using ChangeLens.Core.Analysis.Curation.Models;
+using ChangeLens.Core.Analysis.DraftValidation.Interfaces;
+using ChangeLens.Core.Analysis.EvidenceBinder.Interfaces;
+using ChangeLens.Core.Analysis.EvidenceBinder.Models;
+using ChangeLens.Core.Analysis.EvidenceGraph.Interfaces;
+using ChangeLens.Core.Analysis.FindingValidation.Interfaces;
+using ChangeLens.Core.Analysis.Publication.Interfaces;
+using ChangeLens.Core.Analysis.Publication.Models;
+using ChangeLens.Core.Analysis.Review.Interfaces;
+using ChangeLens.Core.Analysis.Review.Models;
+using ChangeLens.Core.Analysis.Shared.Models;
+using ChangeLens.Core.Analysis.Snapshots.Interfaces;
+using ChangeLens.Core.Analysis.Snapshots.Models;
+using ChangeLens.Core.AnalysisRuns.Constants;
+using ChangeLens.Core.AnalysisRuns.Interfaces;
+using ChangeLens.Core.AnalysisRuns.Models;
+using ChangeLens.Core.Results.Models;
+using ChangeLens.Engine.Analysis.Pipeline.Interfaces;
+using ChangeLens.Engine.Analysis.Pipeline.Models;
+using ChangeLens.Engine.Analysis.ReadingModel.Helpers;
+using ChangeLens.Engine.Protocol.Interfaces;
+using Microsoft.Extensions.Logging;
+using EvidenceBinderModel = ChangeLens.Core.Analysis.EvidenceBinder.Models.EvidenceBinder;
+using CoreReadingModel = ChangeLens.Core.Analysis.Publication.Models.ReadingModel;
+
+namespace ChangeLens.Engine.Analysis.Pipeline.Services;
+
+/// <summary>
+///     Implements the deterministic analysis pipeline: capture the frozen change, discover and bind its evidence, and
+///     collect one curated, reviewed, validated, and published reading model.
+/// </summary>
+/// <remarks>
+///     The collect step runs the curator over the full binder and, together with it, the reviewer over the same binder
+///     scoped to changed-file evidence; the reviewer's findings are validated against that scoped binder. A reviewer failure or a review
+///     that does not fit the response budget leaves the explanation published and ends the run completed with limitations.
+///     The user cancellation token reaches every service call. The shutdown token is observed only between steps, so
+///     engine shutdown leaves the active row for startup recovery to interrupt instead of reporting a user cancellation.
+/// </remarks>
+internal sealed class AnalysisPipeline(
+    IAnalysisRunStore store,
+    ISnapshotCaptureService captureService,
+    IChangeAnatomyService anatomyService,
+    ICorrespondenceRankingService rankingService,
+    IEvidenceGraphService graphService,
+    IContextPolicyService policyService,
+    IFrozenGitTreeReaderFactory treeReaderFactory,
+    IEvidenceBinderService binderService,
+    ICuratorService curatorService,
+    IReviewerService reviewerService,
+    IDraftValidationService validationService,
+    IFindingValidationService findingValidationService,
+    IPublicationService publicationService,
+    ReviewerOptions reviewerOptions,
+    IEngineProtocolSerializer protocolSerializer,
+    TimeProvider timeProvider,
+    ILogger<AnalysisPipeline> logger) : IAnalysisPipeline
+{
+    /// <inheritdoc />
+    public async Task RunAsync(Guid runId, CancellationToken userCancellationToken, CancellationToken shutdownToken)
+    {
+        var plan = BuildPlan();
+        var planResult = await store.EstablishStepPlanAsync(runId, plan, CancellationToken.None);
+        if (planResult.IsFailure)
+        {
+            logger.LogError("Analysis run {RunId} could not establish its step plan with errors {ErrorCodes}.", runId,
+                planResult.Errors.Select(error => error.Code));
+
+            throw new InvalidOperationException(
+                "The analysis pipeline could not establish the step plan. Errors: " +
+                string.Join(", ", planResult.Errors.Select(error => error.Code)) + ".");
+        }
+
+        var run = new AnalysisPipelineRun();
+        var limitationCount = 0;
+        var currentState = AnalysisRunState.Capturing;
+        foreach (var entry in plan)
+        {
+            if (shutdownToken.IsCancellationRequested)
+            {
+                return;
+            }
+
+            if (userCancellationToken.IsCancellationRequested)
+            {
+                await this.CommitCancelledAsync(runId);
+                return;
+            }
+
+            var nextState = this.StateFor(entry.Stage);
+            if (nextState != currentState)
+            {
+                var transition = await store.TransitionStageAsync(runId, currentState, nextState, this.Now(), CancellationToken.None);
+                if (transition.IsFailure)
+                {
+                    logger.LogError("Analysis run {RunId} could not transition from {CurrentState} to {NextState} with errors {ErrorCodes}.",
+                        runId, currentState, nextState, transition.Errors.Select(error => error.Code));
+
+                    throw new InvalidOperationException(
+                        "The analysis pipeline could not transition the run stage. Errors: " +
+                        string.Join(", ", transition.Errors.Select(error => error.Code)) + ".");
+                }
+
+                if (transition.Data != nextState)
+                {
+                    logger.LogWarning("Analysis run {RunId} drifted to {ObservedState} while transitioning from {CurrentState} to {NextState}.",
+                        runId, transition.Data, currentState, nextState);
+                    throw new InvalidOperationException(
+                        $"The analysis pipeline observed an unexpected run state drift to {transition.Data}.");
+                }
+
+                currentState = nextState;
+            }
+
+            var outcome = await this.RunStepAsync(runId, entry, run, userCancellationToken);
+            if (outcome.State is AnalysisRunStepState.Failed)
+            {
+                var failed = new AnalysisTerminalSummary(AnalysisTerminalKind.Failed, this.Now(), null,
+                    outcome.Code ?? AnalysisFailureCode.UnexpectedFailure);
+                await store.CommitTerminalAsync(runId, failed, null, CancellationToken.None);
+                logger.LogWarning("Analysis run {RunId} failed at step {StepId} with {FailureCode}.", runId, entry.StepId, failed.FailureCode);
+                return;
+            }
+
+            if (outcome.State is AnalysisRunStepState.Cancelled)
+            {
+                await this.CommitCancelledAsync(runId);
+                return;
+            }
+
+            if (outcome.State is AnalysisRunStepState.SucceededWithLimitations)
+            {
+                limitationCount++;
+            }
+        }
+
+        if (shutdownToken.IsCancellationRequested)
+        {
+            return;
+        }
+
+        var terminalTransition = await store.TransitionStageAsync(runId, AnalysisRunState.Collecting, AnalysisRunState.Persisting, this.Now(),
+            CancellationToken.None);
+        if (terminalTransition.IsFailure)
+        {
+            logger.LogError("Analysis run {RunId} could not transition to Persisting with errors {ErrorCodes}.", runId,
+                terminalTransition.Errors.Select(error => error.Code));
+            throw new InvalidOperationException(
+                "The analysis pipeline could not transition the run stage. Errors: " +
+                string.Join(", ", terminalTransition.Errors.Select(error => error.Code)) + ".");
+        }
+
+        if (terminalTransition.Data != AnalysisRunState.Persisting)
+        {
+            logger.LogWarning("Analysis run {RunId} drifted to {ObservedState} while transitioning from Collecting to Persisting.", runId,
+                terminalTransition.Data);
+            throw new InvalidOperationException(
+                $"The analysis pipeline observed an unexpected run state drift to {terminalTransition.Data}.");
+        }
+
+        if (userCancellationToken.IsCancellationRequested)
+        {
+            await this.CommitCancelledAsync(runId);
+            return;
+        }
+
+        var terminal = new AnalysisTerminalSummary(
+            limitationCount > 0 ? AnalysisTerminalKind.CompletedWithLimitations : AnalysisTerminalKind.Completed,
+            this.Now(),
+            limitationCount > 0 ? limitationCount : null,
+            null);
+        var commitResult = await store.CommitTerminalAsync(runId, terminal, run.Projection, CancellationToken.None);
+        if (commitResult.IsFailure)
+        {
+            logger.LogError("Analysis run {RunId} could not commit terminal {TerminalKind} with errors {ErrorCodes}.", runId, terminal.Kind,
+                commitResult.Errors.Select(error => error.Code));
+            throw new InvalidOperationException(
+                "The analysis pipeline could not commit the terminal outcome. Errors: " +
+                string.Join(", ", commitResult.Errors.Select(error => error.Code)) + ".");
+        }
+
+        if (!commitResult.Data)
+        {
+            logger.LogWarning("Analysis run {RunId} was already terminal when {TerminalKind} was observed.", runId, terminal.Kind);
+            return;
+        }
+
+        logger.LogInformation("Analysis run {RunId} reached terminal {TerminalKind} with {LimitationCount} limitation(s).", runId, terminal.Kind,
+            limitationCount);
+    }
+
+    private static IReadOnlyList<AnalysisRunStepPlanEntry> BuildPlan() =>
+    [
+        new(AnalysisStepId.Capture, "engine", "lifecycle", 0, AnalysisStage.Capturing),
+        new(AnalysisStepId.Discover, "engine", "lifecycle", 1, AnalysisStage.Discovering),
+        new(AnalysisStepId.Collect, "engine", "lifecycle", 2, AnalysisStage.Collecting),
+    ];
+
+    private static AnalysisRunStepOutcome Failed(string stepId, IReadOnlyList<OperationError> errors) =>
+        new(stepId, AnalysisRunStepState.Failed, errors.FirstOrDefault()?.Code ?? AnalysisFailureCode.UnexpectedFailure);
+
+    private static void EnsureRecorded(Result recordResult, string count)
+    {
+        if (recordResult.IsFailure)
+        {
+            throw new InvalidOperationException(
+                $"The analysis pipeline could not record the {count} count. Errors: " +
+                string.Join(", ", recordResult.Errors.Select(error => error.Code)) + ".");
+        }
+    }
+
+    private async Task<AnalysisRunStepOutcome> RunStepAsync(
+        Guid runId,
+        AnalysisRunStepPlanEntry entry,
+        AnalysisPipelineRun run,
+        CancellationToken userCancellationToken)
+    {
+        var beginResult = await store.BeginStepAsync(runId, entry.StepId, this.Now(), CancellationToken.None);
+        if (beginResult.IsFailure)
+        {
+            return new AnalysisRunStepOutcome(entry.StepId, AnalysisRunStepState.Failed, AnalysisFailureCode.UnexpectedFailure);
+        }
+
+        AnalysisRunStepOutcome outcome;
+        try
+        {
+            outcome = entry.StepId switch
+            {
+                AnalysisStepId.Capture => await this.ExecuteCaptureAsync(runId, run, userCancellationToken),
+                AnalysisStepId.Discover => await this.ExecuteDiscoverAsync(runId, run, userCancellationToken),
+                AnalysisStepId.Collect => await this.ExecuteCollectAsync(runId, run, userCancellationToken),
+                _ => throw new InvalidOperationException($"The analysis pipeline has no implementation for step {entry.StepId}."),
+            };
+        }
+        catch (OperationCanceledException) when (userCancellationToken.IsCancellationRequested)
+        {
+            outcome = new AnalysisRunStepOutcome(entry.StepId, AnalysisRunStepState.Cancelled, null);
+        }
+
+        var finishResult = await store.FinishStepAsync(runId, outcome, this.Now(), CancellationToken.None);
+        return finishResult.IsFailure
+            ? new AnalysisRunStepOutcome(entry.StepId, AnalysisRunStepState.Failed, AnalysisFailureCode.UnexpectedFailure)
+            : outcome;
+    }
+
+    private async Task<AnalysisRunStepOutcome> ExecuteCaptureAsync(Guid runId, AnalysisPipelineRun run, CancellationToken userCancellationToken)
+    {
+        var detailResult = await store.GetDetailAsync(runId, CancellationToken.None);
+        if (detailResult.IsFailure)
+        {
+            throw new InvalidOperationException(
+                "The analysis pipeline could not read the capture detail. Errors: " +
+                string.Join(", ", detailResult.Errors.Select(error => error.Code)) + ".");
+        }
+
+        run.Detail = detailResult.Data!;
+        var captureRequest = new SnapshotCaptureRequest(
+            run.Detail.RunId,
+            run.Detail.Repository.CanonicalPath,
+            run.Detail.Repository.CanonicalRepositoryPathKey,
+            run.Detail.Comparison.Target,
+            run.Detail.Comparison.TargetRevision,
+            run.Detail.Repository.HeadRevision);
+        var captureResult = await captureService.CaptureAsync(captureRequest, userCancellationToken);
+        if (captureResult.IsFailure)
+        {
+            var failureCode = captureResult.Errors[0].Code switch
+            {
+                ChangeLens.Core.Analysis.Snapshots.Constants.SnapshotErrorCode.StaleAtCapture => AnalysisFailureCode.StaleAtCapture,
+                ChangeLens.Core.Analysis.Snapshots.Constants.SnapshotErrorCode.CaptureFailed => AnalysisFailureCode.CaptureFailed,
+                _ => captureResult.Errors[0].Code ?? AnalysisFailureCode.CaptureFailed,
+            };
+            return new AnalysisRunStepOutcome(AnalysisStepId.Capture, AnalysisRunStepState.Failed, failureCode);
+        }
+
+        var capture = captureResult.Data!;
+        var commitResult = await store.CommitCaptureAsync(runId, capture, this.Now(), CancellationToken.None);
+        if (commitResult.IsFailure)
+        {
+            throw new InvalidOperationException(
+                "The analysis pipeline could not commit the capture. Errors: " +
+                string.Join(", ", commitResult.Errors.Select(error => error.Code)) + ".");
+        }
+
+        if (commitResult.Data)
+        {
+            run.Capture = capture;
+            return this.CaptureOutcome(capture);
+        }
+
+        var durableDetail = await store.GetDetailAsync(runId, CancellationToken.None);
+        if (durableDetail.IsFailure)
+        {
+            throw new InvalidOperationException(
+                "The analysis pipeline could not re-read the capture detail. Errors: " +
+                string.Join(", ", durableDetail.Errors.Select(error => error.Code)) + ".");
+        }
+
+        var detail = durableDetail.Data!;
+        if (detail.CancellationRequested && detail.Terminal is null)
+        {
+            return new AnalysisRunStepOutcome(AnalysisStepId.Capture, AnalysisRunStepState.Cancelled, null);
+        }
+
+        if (detail.SnapshotId is not null && StringComparer.Ordinal.Equals(detail.ManifestHash, capture.Manifest.ManifestHash))
+        {
+            run.Capture = capture;
+            return this.CaptureOutcome(capture);
+        }
+
+        if (detail.Terminal is not null || detail.State != AnalysisRunState.Capturing)
+        {
+            return new AnalysisRunStepOutcome(AnalysisStepId.Capture, AnalysisRunStepState.Cancelled, null);
+        }
+
+        throw new InvalidOperationException("The analysis pipeline observed unexpected durable capture state drift.");
+    }
+
+    private async Task<AnalysisRunStepOutcome> ExecuteDiscoverAsync(Guid runId, AnalysisPipelineRun run, CancellationToken userCancellationToken)
+    {
+        var detail = run.Detail!;
+        var capture = run.Capture!;
+        var manifest = capture.Manifest;
+
+        var canonicalPath = detail.Repository.CanonicalPath;
+        var anatomyResult = await anatomyService.AnalyzeAsync(canonicalPath, manifest, userCancellationToken);
+        if (anatomyResult.IsFailure)
+        {
+            return Failed(AnalysisStepId.Discover, anatomyResult.Errors);
+        }
+
+        var anatomy = anatomyResult.Data!;
+        var rankingResult = await rankingService.RankAsync(canonicalPath, manifest, anatomy, userCancellationToken);
+        if (rankingResult.IsFailure)
+        {
+            return Failed(AnalysisStepId.Discover, rankingResult.Errors);
+        }
+
+        var ranking = rankingResult.Data!;
+        EnsureRecorded(
+            await store.RecordCorrespondenceCandidateCountAsync(runId, ranking.Candidates.Count, CancellationToken.None), "correspondence candidate");
+
+        var graphResult = await graphService.BuildAsync(canonicalPath, manifest, anatomy, ranking, userCancellationToken);
+        if (graphResult.IsFailure)
+        {
+            return Failed(AnalysisStepId.Discover, graphResult.Errors);
+        }
+
+        var graph = graphResult.Data!;
+        var policy = policyService.Apply(graph, userCancellationToken);
+        EnsureRecorded(
+            await store.RecordDisclosedEvidenceNodeCountAsync(runId, policy.DisclosedNodes.Count, CancellationToken.None), "disclosed evidence node");
+
+        var readerResult = treeReaderFactory.Open(canonicalPath, manifest);
+        if (readerResult.IsFailure)
+        {
+            return Failed(AnalysisStepId.Discover, readerResult.Errors);
+        }
+
+        var afterTreeResult = await readerResult.Data!.ListTreeAsync(userCancellationToken);
+        if (afterTreeResult.IsFailure)
+        {
+            return Failed(AnalysisStepId.Discover, afterTreeResult.Errors);
+        }
+
+        var runContext = new EvidenceBinderRunContext(detail.RunId, detail.Comparison.Target, detail.CapturedAtUnixMilliseconds ?? 0);
+        var binderRequest = new EvidenceBinderRequest(runContext, capture, policy, afterTreeResult.Data!, anatomy, detail.ChangeContext);
+        var binderResult = binderService.Assemble(binderRequest, userCancellationToken);
+        if (binderResult.IsFailure)
+        {
+            return Failed(AnalysisStepId.Discover, binderResult.Errors);
+        }
+
+        run.Ranking = ranking;
+        run.Graph = graph;
+        run.Policy = policy;
+        run.Binder = binderResult.Data!;
+        logger.LogInformation(
+            "Analysis run {RunId} discovered {CandidateCount} correspondence candidate(s) and disclosed {DisclosedCount} evidence node(s).",
+            runId, ranking.Candidates.Count, policy.DisclosedNodes.Count);
+        return new AnalysisRunStepOutcome(AnalysisStepId.Discover, AnalysisRunStepState.Succeeded, null);
+    }
+
+    private async Task<AnalysisRunStepOutcome> ExecuteCollectAsync(Guid runId, AnalysisPipelineRun run, CancellationToken userCancellationToken)
+    {
+        var binder = run.Binder!;
+        var reviewerBinder = reviewerOptions.Enabled ? binderService.ScopeToChangedFiles(binder) : binder;
+        using var reviewCancellation = CancellationTokenSource.CreateLinkedTokenSource(userCancellationToken);
+        var curatorTask = Task.Run(() => curatorService.CurateAsync(binder, userCancellationToken), CancellationToken.None);
+        var reviewerTask = reviewerOptions.Enabled
+            ? Task.Run(() => reviewerService.ReviewAsync(reviewerBinder, reviewCancellation.Token), CancellationToken.None)
+            : null;
+
+        Result<CuratorOutcome> curateResult;
+        try
+        {
+            curateResult = await curatorTask;
+        }
+        catch
+        {
+            this.AbandonReview(reviewerTask, reviewCancellation);
+            throw;
+        }
+
+        if (curateResult.IsFailure)
+        {
+            this.AbandonReview(reviewerTask, reviewCancellation);
+            return Failed(AnalysisStepId.Collect, curateResult.Errors);
+        }
+
+        var curation = curateResult.Data!;
+        if (curation.Diagnostics.ParseFailureReason is not null)
+        {
+            this.AbandonReview(reviewerTask, reviewCancellation);
+            return new AnalysisRunStepOutcome(AnalysisStepId.Collect, AnalysisRunStepState.Failed, AnalysisFailureCode.CuratorOutputUnreadable);
+        }
+
+        var review = await this.CompleteReviewAsync(runId, reviewerTask, reviewerBinder, userCancellationToken);
+        var validation = validationService.Validate(curation.Draft, binder, userCancellationToken);
+        ValidationRemoval[] removals = [.. validation.Removals, .. review.Removals];
+        EnsureRecorded(await store.RecordValidationRemovalCountAsync(runId, removals.Length, CancellationToken.None), "validation removal");
+
+        var publicationRequest = new PublicationRequest(validation, binder, run.Graph!, run.Policy!, run.Ranking!, review.Review);
+        var publicationResult = await publicationService.PublishAsync(publicationRequest, userCancellationToken);
+        if (publicationResult.IsFailure)
+        {
+            return Failed(AnalysisStepId.Collect, publicationResult.Errors);
+        }
+
+        var publication = publicationResult.Data!;
+        var readingModel = publication.ReadingModel;
+        var projectionResult = this.Project(readingModel, removals);
+        if (projectionResult.IsFailure)
+        {
+            return Failed(AnalysisStepId.Collect, projectionResult.Errors);
+        }
+
+        var projection = projectionResult.Data!;
+        var reviewUnavailable = review.Review.Status == ReadingReviewStatus.Failed;
+        if (!ReadingProjectionBudget.Fits(projection))
+        {
+            if (review.Review.Status != ReadingReviewStatus.Ran)
+            {
+                return new AnalysisRunStepOutcome(AnalysisStepId.Collect, AnalysisRunStepState.Failed, AnalysisFailureCode.ReadingModelTooLarge);
+            }
+
+            readingModel = publicationService.Rebuild(publication.Explanation, binder, run.Graph!, PublicationReview.TooLarge);
+            var fallbackResult = this.Project(readingModel, validation.Removals);
+            if (fallbackResult.IsFailure)
+            {
+                return Failed(AnalysisStepId.Collect, fallbackResult.Errors);
+            }
+
+            projection = fallbackResult.Data!;
+            if (!ReadingProjectionBudget.Fits(projection))
+            {
+                return new AnalysisRunStepOutcome(AnalysisStepId.Collect, AnalysisRunStepState.Failed, AnalysisFailureCode.ReadingModelTooLarge);
+            }
+
+            logger.LogWarning(
+                "Analysis run {RunId} dropped the review's {FindingCount} finding(s) and {RemovalCount} removal record(s) because the reading "
+                + "projection exceeded the poll response budget.", runId, review.Review.Findings.Count, review.Removals.Count);
+            reviewUnavailable = true;
+        }
+
+        run.Projection = projection;
+        logger.LogInformation(
+            "Analysis run {RunId} collected a reading model with {RemovalCount} removal(s), {EvidenceCount} evidence node(s), "
+            + "{FindingCount} finding(s), and review status {ReviewStatus}.", runId, removals.Length, readingModel.Evidence.Count,
+            readingModel.Findings.Count, readingModel.Review.Status);
+        return reviewUnavailable
+            ? new AnalysisRunStepOutcome(
+                AnalysisStepId.Collect,
+                AnalysisRunStepState.SucceededWithLimitations,
+                AnalysisLimitationReason.ReviewUnavailable)
+            : new AnalysisRunStepOutcome(AnalysisStepId.Collect, AnalysisRunStepState.Succeeded, null);
+    }
+
+    private async Task<ReviewContribution> CompleteReviewAsync(
+        Guid runId,
+        Task<Result<ReviewerOutcome>>? reviewerTask,
+        EvidenceBinderModel binder,
+        CancellationToken userCancellationToken)
+    {
+        if (reviewerTask is null)
+        {
+            return ReviewContribution.NotRun;
+        }
+
+        var reviewResult = await reviewerTask;
+        if (reviewResult.IsFailure)
+        {
+            logger.LogWarning("Analysis run {RunId} continues without a review after reviewer errors {ErrorCodes}.", runId,
+                reviewResult.Errors.Select(error => error.Code));
+            return ReviewContribution.Failed;
+        }
+
+        var reviewer = reviewResult.Data!;
+        if (reviewer.Diagnostics.ParseFailureReason is not null)
+        {
+            logger.LogWarning("Analysis run {RunId} continues without a review because the reviewer reply was unreadable.", runId);
+            return ReviewContribution.Failed;
+        }
+
+        var findingValidation = findingValidationService.Validate(reviewer.Draft, binder, userCancellationToken);
+        return new ReviewContribution(PublicationReview.Ran(findingValidation), findingValidation.Removals);
+    }
+
+    private void AbandonReview(Task<Result<ReviewerOutcome>>? reviewerTask, CancellationTokenSource reviewCancellation)
+    {
+        if (reviewerTask is null)
+        {
+            return;
+        }
+
+        reviewCancellation.Cancel();
+        _ = reviewerTask.ContinueWith(
+            static task => task.Exception, CancellationToken.None,
+            TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
+    }
+
+    private Result<AnalysisReadingProjection> Project(CoreReadingModel readingModel, IReadOnlyList<ValidationRemoval> removals)
+    {
+        var modelResult = ReadingModelProtocolMapper.ToProtocol(readingModel);
+        if (modelResult.IsFailure)
+        {
+            return Result.ErrorFromResult<AnalysisReadingProjection>(modelResult);
+        }
+
+        var removalsResult = ReadingModelProtocolMapper.ToProtocol(removals);
+        if (removalsResult.IsFailure)
+        {
+            return Result.ErrorFromResult<AnalysisReadingProjection>(removalsResult);
+        }
+
+        var modelJson = protocolSerializer.SerializeDocument(modelResult.Data!);
+        if (modelJson.IsFailure)
+        {
+            return Result.ErrorFromResult<AnalysisReadingProjection>(modelJson);
+        }
+
+        var removalsJson = protocolSerializer.SerializeDocument(removalsResult.Data!);
+        if (removalsJson.IsFailure)
+        {
+            return Result.ErrorFromResult<AnalysisReadingProjection>(removalsJson);
+        }
+
+        return new AnalysisReadingProjection(modelJson.Data!, removalsJson.Data!);
+    }
+
+    private AnalysisRunStepOutcome CaptureOutcome(SnapshotCapture capture) =>
+        capture.ExcludedUncommittedCounts.Total > 0
+            ? new AnalysisRunStepOutcome(
+                AnalysisStepId.Capture,
+                AnalysisRunStepState.SucceededWithLimitations,
+                AnalysisLimitationReason.UncommittedWorkExcluded)
+            : new AnalysisRunStepOutcome(AnalysisStepId.Capture, AnalysisRunStepState.Succeeded, null);
+
+    private async Task CommitCancelledAsync(Guid runId)
+    {
+        var terminal = new AnalysisTerminalSummary(AnalysisTerminalKind.Cancelled, this.Now(), null, null);
+        await store.CommitTerminalAsync(runId, terminal, null, CancellationToken.None);
+        logger.LogInformation("Analysis run {RunId} committed Cancelled after observing durable cancellation.", runId);
+    }
+
+    private long Now() => timeProvider.GetUtcNow().ToUnixTimeMilliseconds();
+
+    private AnalysisRunState StateFor(AnalysisStage stage) => stage switch
+    {
+        AnalysisStage.Capturing => AnalysisRunState.Capturing,
+        AnalysisStage.Discovering => AnalysisRunState.Discovering,
+        AnalysisStage.Collecting => AnalysisRunState.Collecting,
+        _ => throw new ArgumentOutOfRangeException(nameof(stage)),
+    };
+}

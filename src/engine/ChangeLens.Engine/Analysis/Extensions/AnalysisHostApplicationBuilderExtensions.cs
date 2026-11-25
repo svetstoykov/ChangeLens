@@ -111,6 +111,10 @@ internal static class AnalysisHostApplicationBuilderExtensions
         builder.Services.AddScoped<IClaimChecker, ModelClaimChecker>();
         builder.Services.AddScoped<IDraftValidationService, DraftValidationService>();
         builder.Services.AddScoped<ISnapshotCaptureService, GitSnapshotCaptureService>();
+        builder.Services.AddScoped<IAnalysisCaptureStep, AnalysisCaptureStep>();
+        builder.Services.AddScoped<IAnalysisDiscoverStep, AnalysisDiscoverStep>();
+        builder.Services.AddScoped<IAnalysisCurationCoordinator, AnalysisCurationCoordinator>();
+        builder.Services.AddScoped<IAnalysisPublicationStep, AnalysisPublicationStep>();
         builder.Services.AddScoped<IAnalysisPipeline, AnalysisPipeline>();
     }
 

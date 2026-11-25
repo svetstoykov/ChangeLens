@@ -1,7 +1,7 @@
 using System.Globalization;
 using Microsoft.Extensions.Configuration;
 
-namespace ChangeLens.Engine.Hosting.Helpers;
+namespace ChangeLens.Engine.Analysis.Helpers;
 
 /// <summary>
 ///     Provides configuration-value parsing helpers with explicit fallback semantics.

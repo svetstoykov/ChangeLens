@@ -1,4 +1,4 @@
-import { useId, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import type { ComparisonTarget } from "../Models/ComparisonTarget";
 import { Icon } from "../../Visuals/Components/Icon";
 
@@ -26,21 +26,34 @@ export function TargetCombobox({
   onLoadMore,
 }: TargetComboboxProps) {
   const listId = useId();
+  const listboxRef = useRef<HTMLDivElement>(null);
   const [expanded, setExpanded] = useState(false);
   const [activeIndex, setActiveIndex] = useState(-1);
   const localTargets = targets.filter((target) => target.kind === "local");
   const remoteTargets = targets.filter(
     (target) => target.kind === "remoteTracking",
   );
+  const groupedTargets = [...localTargets, ...remoteTargets];
+  const clampedActiveIndex =
+    groupedTargets.length === 0
+      ? -1
+      : Math.min(activeIndex, groupedTargets.length - 1);
+
+  useEffect(() => {
+    if (!expanded || clampedActiveIndex < 0) return;
+    listboxRef.current
+      ?.querySelector<HTMLElement>('[data-active="true"]')
+      ?.scrollIntoView?.({ block: "nearest" });
+  }, [expanded, clampedActiveIndex]);
 
   function moveActive(next: number) {
-    if (targets.length === 0) return;
+    if (groupedTargets.length === 0) return;
     setExpanded(true);
-    setActiveIndex(Math.max(0, Math.min(next, targets.length - 1)));
+    setActiveIndex(Math.max(0, Math.min(next, groupedTargets.length - 1)));
   }
 
   function chooseActive() {
-    const target = targets[activeIndex];
+    const target = groupedTargets[clampedActiveIndex];
     if (target === undefined) return;
     onSelect(target);
     setActiveIndex(-1);
@@ -88,8 +101,8 @@ export function TargetCombobox({
             aria-controls={listId}
             aria-expanded={expanded}
             aria-activedescendant={
-              expanded && activeIndex >= 0
-                ? `${listId}-option-${activeIndex}`
+              expanded && clampedActiveIndex >= 0
+                ? `${listId}-option-${clampedActiveIndex}`
                 : undefined
             }
             autoComplete="off"
@@ -105,11 +118,11 @@ export function TargetCombobox({
               switch (event.key) {
                 case "ArrowDown":
                   event.preventDefault();
-                  moveActive(activeIndex + 1);
+                  moveActive(clampedActiveIndex + 1);
                   break;
                 case "ArrowUp":
                   event.preventDefault();
-                  moveActive(activeIndex - 1);
+                  moveActive(clampedActiveIndex - 1);
                   break;
                 case "Home":
                   event.preventDefault();
@@ -117,7 +130,7 @@ export function TargetCombobox({
                   break;
                 case "End":
                   event.preventDefault();
-                  moveActive(targets.length - 1);
+                  moveActive(groupedTargets.length - 1);
                   break;
                 case "Enter":
                   event.preventDefault();
@@ -133,38 +146,40 @@ export function TargetCombobox({
           <Icon name="chevronDown" className="combobox-chevron" />
         </div>
         {expanded ? (
-          <div
-            className="target-listbox"
-            id={listId}
-            role="listbox"
-            aria-label="Comparison targets"
-          >
-            <TargetGroup
+          <div className="target-listbox" ref={listboxRef}>
+            <div
+              className="target-listbox-options"
               id={listId}
-              label="Local branches"
-              targets={localTargets}
-              startIndex={0}
-              activeIndex={activeIndex}
-              selectedTarget={selectedTarget}
-              onSelect={(target) => {
-                onSelect(target);
-                setActiveIndex(-1);
-                setExpanded(false);
-              }}
-            />
-            <TargetGroup
-              id={listId}
-              label="Cached remote branches"
-              targets={remoteTargets}
-              startIndex={localTargets.length}
-              activeIndex={activeIndex}
-              selectedTarget={selectedTarget}
-              onSelect={(target) => {
-                onSelect(target);
-                setActiveIndex(-1);
-                setExpanded(false);
-              }}
-            />
+              role="listbox"
+              aria-label="Comparison targets"
+            >
+              <TargetGroup
+                id={listId}
+                label="Local branches"
+                targets={localTargets}
+                startIndex={0}
+                activeIndex={clampedActiveIndex}
+                selectedTarget={selectedTarget}
+                onSelect={(target) => {
+                  onSelect(target);
+                  setActiveIndex(-1);
+                  setExpanded(false);
+                }}
+              />
+              <TargetGroup
+                id={listId}
+                label="Cached remote branches"
+                targets={remoteTargets}
+                startIndex={localTargets.length}
+                activeIndex={clampedActiveIndex}
+                selectedTarget={selectedTarget}
+                onSelect={(target) => {
+                  onSelect(target);
+                  setActiveIndex(-1);
+                  setExpanded(false);
+                }}
+              />
+            </div>
             {targets.length === 0 && !isDiscovering ? (
               <div className="target-empty">
                 <Icon name="info" />
@@ -253,6 +268,7 @@ function TargetGroup({
             key={target.fullName}
             role="option"
             type="button"
+            tabIndex={-1}
             aria-selected={target.fullName === selectedTarget?.fullName}
             data-active={targetIndex === activeIndex ? "true" : undefined}
             onMouseDown={(event) => event.preventDefault()}

@@ -204,7 +204,7 @@ internal static class GitOutputParser
         var names = new List<string>(lines.Length - 1);
         for (var index = 0; index < lines.Length - 1; index++)
         {
-            if (lines[index].Length == 0)
+            if (lines[index].Length == 0 || lines[index].StartsWith('-'))
             {
                 return InspectionFailedError;
             }
@@ -288,6 +288,7 @@ internal static class GitOutputParser
         foreach (var remoteName in remoteNames)
         {
             if (remoteName.Length == 0 ||
+                remoteName.StartsWith('-') ||
                 suffix.Length <= remoteName.Length ||
                 suffix[remoteName.Length] != '/' ||
                 !suffix.StartsWith(remoteName, StringComparison.Ordinal))
@@ -307,7 +308,7 @@ internal static class GitOutputParser
         }
 
         var branch = suffix[(bestRemote.Length + 1)..];
-        return branch.Length == 0 ? null : (bestRemote, branch);
+        return branch.Length == 0 || branch.StartsWith('-') ? null : (bestRemote, branch);
     }
 
     /// <summary>

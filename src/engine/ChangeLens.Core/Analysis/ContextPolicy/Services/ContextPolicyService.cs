@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
@@ -45,6 +46,7 @@ public sealed class ContextPolicyService(
         ArgumentNullException.ThrowIfNull(graph);
         ContextPolicyOptionsValidator.Validate(this._graphOptions, this._options);
         cancellationToken.ThrowIfCancellationRequested();
+        var startedAt = Stopwatch.GetTimestamp();
         var decisions = new List<ContextPolicyDecision>(graph.Nodes.Count);
         var disclosedNodes = new List<DisclosedEvidenceNode>(graph.Nodes.Count);
         var disclosedTextByNodeId = new Dictionary<string, string>(StringComparer.Ordinal);
@@ -141,9 +143,9 @@ public sealed class ContextPolicyService(
         this._logger.LogInformation(
             "Context policy completed with {NodeCount} node(s): {AllowedNodeCount} allowed, {RedactedNodeCount} redacted, " +
             "{ExcludedNodeCount} excluded, {RedactedLineCount} line(s) redacted, {DisclosedEdgeCount} edge(s) disclosed, " +
-            "{WithheldMatchedValueCount} matched value(s) withheld.",
+            "{WithheldMatchedValueCount} matched value(s) withheld in {ElapsedMilliseconds:0.000} ms.",
             graph.Nodes.Count, allowedNodeCount, redactedNodeCount, excludedNodeCount, redactedLineCount,
-            disclosedEdges.Count, withheldMatchedValueCount);
+            disclosedEdges.Count, withheldMatchedValueCount, Stopwatch.GetElapsedTime(startedAt).TotalMilliseconds);
         foreach (var entry in excludedByReason)
         {
             this._logger.LogDebug(

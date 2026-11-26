@@ -138,13 +138,13 @@ public sealed class OpenAiCompatibleModelCompletionClient : IModelCompletionClie
             }
 
             var responseBody = await this.ReadBoundedResponseBodyAsync(response.Content, requestCancellation.Token);
-            var providerError = TryParseProviderError(responseBody, response.StatusCode);
+            var providerError = TryParseProviderError(responseBody, response.StatusCode, this._logger);
             if (providerError is not null)
             {
                 return this.FinishFailure(providerError, startedAt, (int)response.StatusCode, ErrorOutcome(providerError));
             }
 
-            var completion = responseBody is null ? null : TryParseCompletion(responseBody, model);
+            var completion = responseBody is null ? null : TryParseCompletion(responseBody, model, this._logger);
             if (completion is null || string.IsNullOrWhiteSpace(completion.Text))
             {
                 return this.FinishFailure(
@@ -186,6 +186,7 @@ public sealed class OpenAiCompatibleModelCompletionClient : IModelCompletionClie
         }
         catch (Exception exception) when (exception is HttpRequestException or IOException)
         {
+            this._logger.LogDebug(exception, "Model completion HTTP transport failed.");
             return this.FinishFailure(
                 OperationError.ExternalDependencyFailure(
                     "The model completion provider is unavailable.",
@@ -245,17 +246,21 @@ public sealed class OpenAiCompatibleModelCompletionClient : IModelCompletionClie
         try
         {
             var body = await this.ReadBoundedResponseBodyAsync(response.Content, requestCancellation, ProviderErrorConstants.MaximumBodyBytes);
-            return TryParseProviderError(body, response.StatusCode) ?? CreateHttpError(response.StatusCode);
+            return TryParseProviderError(body, response.StatusCode, this._logger) ?? CreateHttpError(response.StatusCode);
         }
         catch (Exception exception) when (exception is HttpRequestException or IOException or OperationCanceledException)
         {
             callerCancellation.ThrowIfCancellationRequested();
+            this._logger.LogDebug(exception, "Reading model completion error response body failed.");
             return CreateHttpError(response.StatusCode);
         }
     }
 
     // Only recognized fields become diagnostics. Arbitrary provider prose and metadata may echo source text or credentials.
-    private static OperationError? TryParseProviderError(string? body, HttpStatusCode httpStatus)
+    private static OperationError? TryParseProviderError(
+        string? body,
+        HttpStatusCode httpStatus,
+        ILogger<OpenAiCompatibleModelCompletionClient> logger)
     {
         if (body is null)
         {
@@ -294,8 +299,9 @@ public sealed class OpenAiCompatibleModelCompletionClient : IModelCompletionClie
                 }
             }
         }
-        catch (JsonException)
+        catch (JsonException exception)
         {
+            logger.LogDebug(exception, "Failed to parse provider error response JSON.");
         }
 
         return null;
@@ -443,7 +449,10 @@ public sealed class OpenAiCompatibleModelCompletionClient : IModelCompletionClie
     };
 
     // Returns null when the envelope has no first choice with a message; a message without usable content still returns its metadata.
-    private static ParsedModelCompletion? TryParseCompletion(string responseBody, string configuredModel)
+    private static ParsedModelCompletion? TryParseCompletion(
+        string responseBody,
+        string configuredModel,
+        ILogger<OpenAiCompatibleModelCompletionClient> logger)
     {
         try
         {
@@ -492,8 +501,9 @@ public sealed class OpenAiCompatibleModelCompletionClient : IModelCompletionClie
                 ReadIdentifier(root, CompletionEnvelopeConstants.Id),
                 reasoningCharacters);
         }
-        catch (JsonException)
+        catch (JsonException exception)
         {
+            logger.LogDebug(exception, "Failed to parse model completion response JSON.");
             return null;
         }
     }

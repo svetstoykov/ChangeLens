@@ -56,8 +56,10 @@ public sealed class PublicationService : IPublicationService
                 return Result.ErrorFromResult<PublicationOutcome>(checking);
             }
 
-            model = checking.Data!.Model;
-            checkingSummary = checking.Data.Summary;
+            var checkingOutcome = checking.Data
+                ?? throw new InvalidOperationException("Successful claim checking result did not contain an outcome.");
+            model = checkingOutcome.Model;
+            checkingSummary = checkingOutcome.Summary;
             checkerFailed = checkingSummary.ParseFailure is not null;
         }
         else

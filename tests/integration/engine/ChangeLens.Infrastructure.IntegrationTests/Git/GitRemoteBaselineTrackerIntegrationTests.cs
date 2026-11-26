@@ -184,6 +184,50 @@ public sealed class GitRemoteBaselineTrackerIntegrationTests
             $"Expected a fast, prompt-free failure but the check took {elapsed}.");
     }
 
+    /// <summary>
+    ///     Asynchronously rejects remote-tracking targets whose remote or branch segment starts with a hyphen.
+    /// </summary>
+    /// <param name="target">The unsafe target reference to reject.</param>
+    /// <returns>A task that represents the asynchronous operation.</returns>
+    [Theory]
+    [InlineData("refs/remotes/origin/-main")]
+    [InlineData("refs/remotes/--upload-pack=evil/main")]
+    public async Task CheckAndRefreshAsync_LeadingDashTargetSegment_RejectsAsTargetInvalid(string target)
+    {
+        using var repository = new TemporaryGitRepository();
+
+        var checkResult = await CreateTracker().CheckAsync(repository.RootPath, target, TestContext.Current.CancellationToken);
+        var refreshResult = await CreateTracker().RefreshAsync(repository.RootPath, target, TestContext.Current.CancellationToken);
+
+        Assert.True(checkResult.IsFailure);
+        Assert.Equal("comparison.targetInvalid", Assert.Single(checkResult.Errors).Code);
+        Assert.True(refreshResult.IsFailure);
+        Assert.Equal("comparison.targetInvalid", Assert.Single(refreshResult.Errors).Code);
+    }
+
+    /// <summary>
+    ///     Asynchronously rejects a repository whose Git configuration defines a remote name starting with a hyphen.
+    /// </summary>
+    /// <returns>A task that represents the asynchronous operation.</returns>
+    [Fact]
+    public async Task CheckAsync_ConfiguredLeadingDashRemoteName_RejectsAsInspectionFailed()
+    {
+        using var origin = TemporaryGitRepository.CreateBare();
+        using var repository = new TemporaryGitRepository();
+        repository.AddOrigin(origin);
+        File.AppendAllText(
+            Path.Combine(repository.RootPath, ".git", "config"),
+            "\n[remote \"--upload-pack=evil\"]\n\turl = https://example.invalid/repo.git\n");
+
+        var result = await CreateTracker().CheckAsync(
+            repository.RootPath,
+            "refs/remotes/origin/main",
+            TestContext.Current.CancellationToken);
+
+        Assert.True(result.IsFailure);
+        Assert.Equal("repository.inspectionFailed", Assert.Single(result.Errors).Code);
+    }
+
     private static GitRemoteBaselineTracker CreateTracker() =>
         new(
             new GitRepositoryInspector(

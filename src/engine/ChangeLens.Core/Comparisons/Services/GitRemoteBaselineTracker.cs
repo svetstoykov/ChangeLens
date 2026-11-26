@@ -137,7 +137,7 @@ public sealed class GitRemoteBaselineTracker(
                 repository.CanonicalPath,
                 startedAt,
                 GitRemoteConstants.CheckTimeout,
-                ["ls-remote", "--heads", remote, branch],
+                ["ls-remote", "--heads", "--", remote, branch],
                 actionCancellation.Token);
             if (lsRemoteResult.IsFailure)
             {
@@ -246,7 +246,7 @@ public sealed class GitRemoteBaselineTracker(
                 repository.CanonicalPath,
                 startedAt,
                 GitRemoteConstants.RefreshTimeout,
-                ["fetch", remote, $"refs/heads/{branch}:{remoteTrackingRef}"],
+                ["fetch", "--", remote, $"refs/heads/{branch}:{remoteTrackingRef}"],
                 actionCancellation.Token);
             if (fetchResult.IsFailure)
             {
@@ -429,6 +429,7 @@ public sealed class GitRemoteBaselineTracker(
                 component =>
                     component.Length == 0 ||
                     component.StartsWith('.') ||
+                    component.StartsWith('-') ||
                     component.EndsWith(".lock", StringComparison.Ordinal)))
         {
             return false;

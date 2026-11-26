@@ -78,7 +78,7 @@ public sealed class GitSnapshotCaptureService(
                 return Result.ErrorFromResult<SnapshotCapture>(targetRevisionResult);
             }
 
-            var parsedTargetRevision = ParseSingleRevision(targetRevisionResult.Data!);
+            var parsedTargetRevision = this.ParseSingleRevision(request.RunId, "target", targetRevisionResult.Data!);
             if (parsedTargetRevision.IsFailure)
             {
                 return Result.ErrorFromResult<SnapshotCapture>(parsedTargetRevision);
@@ -91,7 +91,7 @@ public sealed class GitSnapshotCaptureService(
                 return Result.ErrorFromResult<SnapshotCapture>(headRevisionResult);
             }
 
-            var parsedHeadRevision = ParseSingleRevision(headRevisionResult.Data!);
+            var parsedHeadRevision = this.ParseSingleRevision(request.RunId, "HEAD", headRevisionResult.Data!);
             if (parsedHeadRevision.IsFailure)
             {
                 return Result.ErrorFromResult<SnapshotCapture>(parsedHeadRevision);
@@ -143,6 +143,9 @@ public sealed class GitSnapshotCaptureService(
             var parsedCommittedFiles = GitComparisonOutputParser.ParseCommittedFiles(committedFilesResult.Data!);
             if (parsedCommittedFiles.IsFailure)
             {
+                this._logger.LogWarning(
+                    "Snapshot capture for run {RunId} could not parse committed diff output with errors {ErrorCodes}.",
+                    request.RunId, parsedCommittedFiles.Errors.Select(error => error.Code));
                 return CaptureFailedError;
             }
 
@@ -161,6 +164,9 @@ public sealed class GitSnapshotCaptureService(
             var parsedWorkingTree = GitComparisonOutputParser.ParseWorkingTree(statusResult.Data!);
             if (parsedWorkingTree.IsFailure)
             {
+                this._logger.LogWarning(
+                    "Snapshot capture for run {RunId} could not parse working-tree status output with errors {ErrorCodes}.",
+                    request.RunId, parsedWorkingTree.Errors.Select(error => error.Code));
                 return CaptureFailedError;
             }
 
@@ -168,6 +174,9 @@ public sealed class GitSnapshotCaptureService(
                 ComparisonFileRecordComposer.Compose(parsedCommittedFiles.Data!, parsedWorkingTree.Data!));
             if (summaryResult.IsFailure)
             {
+                this._logger.LogWarning(
+                    "Snapshot capture for run {RunId} could not compose excluded working-tree counts with errors {ErrorCodes}.",
+                    request.RunId, summaryResult.Errors.Select(error => error.Code));
                 return CaptureFailedError;
             }
 
@@ -235,14 +244,23 @@ public sealed class GitSnapshotCaptureService(
     /// <summary>
     ///     Requires exactly one full revision from a successful quiet Git command.
     /// </summary>
+    /// <param name="runId">The analysis run identifier for structured diagnostics.</param>
+    /// <param name="revisionRole">The logical role of the revision being resolved (for example, <c>target</c> or <c>HEAD</c>).</param>
     /// <param name="output">The captured Git output. Cannot be <see langword="null" />.</param>
     /// <returns>The parsed revision or the stable capture-failed error.</returns>
-    private static Result<string> ParseSingleRevision(GitCommandOutput output)
+    private Result<string> ParseSingleRevision(Guid runId, string revisionRole, GitCommandOutput output)
     {
         var parsed = GitComparisonOutputParser.ParseMergeBases(output);
-        return parsed.IsSuccess && parsed.Data!.Count == 1
-            ? Result.Success<string>(parsed.Data[0])
-            : CaptureFailedError;
+        if (parsed.IsSuccess && parsed.Data!.Count == 1)
+        {
+            return Result.Success<string>(parsed.Data[0]);
+        }
+
+        this._logger.LogWarning(
+            "Snapshot capture for run {RunId} could not resolve a single {RevisionRole} revision (exit code {ExitCode}, " +
+            "errors {ErrorCodes}).",
+            runId, revisionRole, output.ExitCode, parsed.Errors.Select(error => error.Code));
+        return CaptureFailedError;
     }
 
     /// <summary>

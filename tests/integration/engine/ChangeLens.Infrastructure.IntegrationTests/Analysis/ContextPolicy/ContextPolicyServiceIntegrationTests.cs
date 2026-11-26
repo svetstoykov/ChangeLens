@@ -220,6 +220,25 @@ public sealed class ContextPolicyServiceIntegrationTests
                 Assert.DoesNotContain(Secret, entry.Message, StringComparison.Ordinal);
                 Assert.DoesNotContain("apiKey", entry.Message, StringComparison.Ordinal);
             });
+        Assert.Contains(logger.Entries, entry => entry.Level == LogLevel.Information && entry.Message.Contains(" ms.", StringComparison.Ordinal));
+    }
+
+    /// <summary>
+    ///     Rejects non-finite <see cref="ContextPolicyOptions.MaximumRedactedLineShare" /> values so secret exclusion
+    ///     cannot be bypassed.
+    /// </summary>
+    /// <param name="share">The non-finite share value.</param>
+    [Theory]
+    [InlineData(double.NaN)]
+    [InlineData(double.PositiveInfinity)]
+    [InlineData(double.NegativeInfinity)]
+    public void Apply_NonFiniteMaximumRedactedLineShare_Throws(double share)
+    {
+        var node = ContextPolicyGraphFixtures.CreateNode("n001", "src/config.cs", "var apiKey = \"AKIAABCDEFGHIJKLMNOP\";");
+        var service = CreateService(options: new ContextPolicyOptions { MaximumRedactedLineShare = share });
+
+        Assert.Throws<InvalidOperationException>(() =>
+            service.Apply(ContextPolicyGraphFixtures.CreateGraph([node]), TestContext.Current.CancellationToken));
     }
 
     private static ContextPolicyService CreateService(

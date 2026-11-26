@@ -216,8 +216,11 @@ public sealed class GitComparisonTargetDiscovery(
         var suggestion = query is null && after is null
             ? discovered.SuggestedTarget
             : null;
-        this._logger.LogDebug("Discovered {TargetCount} comparison targets ({UnsupportedTargetCount} unsupported) for " +
-            "{CanonicalPath}.", discovered.Targets.Count, discovered.UnsupportedTargetCount, repository.CanonicalPath);
+        this._logger.LogInformation(
+            "Discovered {TargetCount} comparison targets ({ReturnedTargetCount} returned, {UnsupportedTargetCount} unsupported) " +
+            "for repository {RepositoryName} in {ElapsedMilliseconds:0.000} ms.",
+            discovered.Targets.Count, page.Count, discovered.UnsupportedTargetCount, repository.Name,
+            Stopwatch.GetElapsedTime(startedAt).TotalMilliseconds);
         return Result.Success(
             new ComparisonTargetSet(
                 page,

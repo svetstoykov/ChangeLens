@@ -9,6 +9,7 @@ using ChangeLens.Core.Repositories.Constants;
 using ChangeLens.Core.Results.Models;
 using ChangeLens.Infrastructure.Git.Services;
 using ChangeLens.Infrastructure.IntegrationTests.Support;
+using Microsoft.Extensions.Logging;
 using Xunit;
 
 namespace ChangeLens.Infrastructure.IntegrationTests.Git;
@@ -541,6 +542,52 @@ public sealed class GitCliCommandRunnerTests
         {
             await TerminateRecordedProcessAsync(childProcessIdPath);
         }
+    }
+
+    /// <summary>
+    ///     Verifies that text and binary Git executions log subcommand, exit code, and elapsed time at
+    ///     <c>Information</c> while keeping full command arguments at <c>Debug</c>.
+    /// </summary>
+    [Fact]
+    public async Task RunAsync_AndRunBinaryAsync_LogInformationOutcomeWithElapsedTimeAndDebugArguments()
+    {
+        var sensitivePath = "/Users/private/secret-git-workdir";
+        var logger = new RecordingInfrastructureLogger<GitCliCommandRunner>();
+
+        var textResult = await RunInFixtureEnvironmentAsync(
+            "success",
+            environment =>
+            {
+                var runner = new GitCliCommandRunner(DotnetExecutablePath, [FixtureAssemblyPath], environment, logger);
+                return runner.RunAsync(CreateCommand(["-C", sensitivePath, "status", "--porcelain"]), CancellationToken.None);
+            });
+        var binaryResult = await RunInFixtureEnvironmentAsync(
+            "success",
+            environment =>
+            {
+                var runner = new GitCliCommandRunner(DotnetExecutablePath, [FixtureAssemblyPath], environment, logger);
+                return runner.RunBinaryAsync(CreateCommand(["-C", sensitivePath, "cat-file", "-p", "HEAD"]), CancellationToken.None);
+            });
+
+        Assert.True(textResult.IsSuccess);
+        Assert.True(binaryResult.IsSuccess);
+        Assert.Contains(
+            logger.Entries,
+            entry => entry.Level == LogLevel.Information
+                && entry.Message.Contains("status", StringComparison.Ordinal)
+                && entry.Message.Contains(" ms.", StringComparison.Ordinal));
+        Assert.Contains(
+            logger.Entries,
+            entry => entry.Level == LogLevel.Information
+                && entry.Message.Contains("cat-file", StringComparison.Ordinal)
+                && entry.Message.Contains(" ms.", StringComparison.Ordinal));
+        Assert.Contains(
+            logger.Entries,
+            entry => entry.Level == LogLevel.Debug
+                && entry.Message.Contains("--porcelain", StringComparison.Ordinal));
+        Assert.All(
+            logger.Entries.Where(entry => entry.Level >= LogLevel.Information),
+            entry => Assert.DoesNotContain(sensitivePath, entry.Message, StringComparison.Ordinal));
     }
 
     private static string DotnetExecutablePath =>

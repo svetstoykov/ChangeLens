@@ -390,7 +390,7 @@ public sealed class EvidenceGraphService(
             }
 
             var blob = blobResult.Data!;
-            if (!blob.HasText)
+            if (!blob.HasText || blob.Lines.Count == 0)
             {
                 byIndex[index] = [];
                 continue;
@@ -885,14 +885,15 @@ public sealed class EvidenceGraphService(
         var anatomyFile = anatomy.Files.FirstOrDefault(file => string.Equals(file.Path, shared.ChangedPath, StringComparison.Ordinal));
         if (anatomyFile is not null)
         {
-            var key = anatomyFile.Keys.FirstOrDefault(
-                candidateKey => string.Equals(candidateKey.Normalized, shared.MatchedValue, StringComparison.Ordinal));
-            if (key is not null)
+            var matchingKeys = anatomyFile.Keys
+                .Where(candidateKey => string.Equals(candidateKey.Normalized, shared.MatchedValue, StringComparison.Ordinal))
+                .OrderByDescending(candidateKey => candidateKey.Kind == shared.ChangedKeyKind);
+            var lineOccurrence = false;
+            foreach (var key in matchingKeys)
             {
                 var occurrences = key.Occurrences
                     .Where(occurrence => occurrence.Side == ChangeAnatomySide.After)
                     .Concat(key.Occurrences.Where(occurrence => occurrence.Side == ChangeAnatomySide.Before));
-                var lineOccurrence = false;
                 foreach (var occurrence in occurrences)
                 {
                     if (occurrence.LineNumber is not int lineNumber)
@@ -912,10 +913,15 @@ public sealed class EvidenceGraphService(
                     }
                 }
 
-                if (fromAnchor != MatchEdgeAnchor.Quoted && lineOccurrence)
+                if (fromAnchor == MatchEdgeAnchor.Quoted)
                 {
-                    fromAnchor = MatchEdgeAnchor.FileOnly;
+                    break;
                 }
+            }
+
+            if (fromAnchor != MatchEdgeAnchor.Quoted && lineOccurrence)
+            {
+                fromAnchor = MatchEdgeAnchor.FileOnly;
             }
         }
 

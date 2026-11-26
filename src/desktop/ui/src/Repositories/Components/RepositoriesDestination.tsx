@@ -23,6 +23,7 @@ export function RepositoriesDestination({
   onChooseAnother,
 }: RepositoriesDestinationProps) {
   const presentation = error ? presentActionError(error) : null;
+  const isBusy = busyRepositoryId !== null;
 
   return (
     <section
@@ -41,6 +42,7 @@ export function RepositoriesDestination({
         <button
           className="primary-button"
           type="button"
+          disabled={isBusy}
           onClick={onChooseAnother}
         >
           <Icon name="folder" />
@@ -72,7 +74,6 @@ export function RepositoriesDestination({
         <ul className="repository-history-list">
           {repositories.map((repository) => {
             const isCurrent = repository.repositoryId === currentRepositoryId;
-            const isBusy = busyRepositoryId === repository.repositoryId;
             return (
               <li key={repository.repositoryId}>
                 <div>
@@ -97,6 +98,7 @@ export function RepositoriesDestination({
                   <button
                     className="secondary-button"
                     type="button"
+                    aria-label={`Open ${repository.name}`}
                     disabled={isBusy}
                     onClick={() => onOpen(repository)}
                   >
@@ -105,6 +107,7 @@ export function RepositoriesDestination({
                   <button
                     className="secondary-button"
                     type="button"
+                    aria-label={`Remove ${repository.name} from history`}
                     disabled={isBusy}
                     onClick={() => onRemove(repository)}
                   >

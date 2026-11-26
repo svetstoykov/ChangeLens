@@ -133,6 +133,7 @@ class ProviderProxy:
         self._records: list[ExchangeRecord] = []
         self._sequence = 0
         self._lock = threading.Lock()
+        self._stop_event = threading.Event()
         self._server: _ProxyServer | None = None
         self._thread: threading.Thread | None = None
 
@@ -150,13 +151,16 @@ class ProviderProxy:
 
     def start(self) -> None:
         """Bind to 127.0.0.1 on an ephemeral port and serve on a background thread."""
+        self._stop_event.clear()
         self._server = _ProxyServer(("127.0.0.1", 0), _CompletionHandler)
         self._server.proxy = self
+        self._server.stop_event = self._stop_event
         self._thread = threading.Thread(target=self._server.serve_forever, daemon=True)
         self._thread.start()
 
     def stop(self) -> None:
         """Stop serving, wait for in-flight handlers to record their exchanges, and release the port."""
+        self._stop_event.set()
         if self._server is not None:
             self._server.shutdown()
             self._server.server_close()
@@ -181,6 +185,7 @@ class _ProxyServer(ThreadingHTTPServer):
     daemon_threads = False
     block_on_close = True
     proxy: ProviderProxy
+    stop_event: threading.Event
 
 
 class _CompletionHandler(BaseHTTPRequestHandler):
@@ -204,7 +209,7 @@ class _CompletionHandler(BaseHTTPRequestHandler):
             role = "unknown"
             reply = ProxyReply(404, error_body(f"unknown path {self.path}"), "unexpected", f"path {self.path}")
         if reply.delay_seconds:
-            time.sleep(reply.delay_seconds)
+            self.server.stop_event.wait(timeout=reply.delay_seconds)
         detail = reply.detail
         try:
             if reply.status is None:

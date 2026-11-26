@@ -20,6 +20,7 @@ public static class ContextPolicyOptionsValidator
 
         if (options.MaximumDisclosedCharactersPerNode <= 0
             || options.MinimumSecretValueLength <= 0
+            || !double.IsFinite(options.MaximumRedactedLineShare)
             || options.MaximumRedactedLineShare <= 0
             || options.MaximumRedactedLineShare > 1)
         {

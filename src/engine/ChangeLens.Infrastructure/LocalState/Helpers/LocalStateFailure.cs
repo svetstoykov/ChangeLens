@@ -21,17 +21,21 @@ internal static class LocalStateFailure
     /// <summary>
     ///     Maps an expected SQLite or filesystem access failure to the stable local-state result.
     /// </summary>
-    /// <param name="exception">The expected access exception, or <see langword="null" />.</param>
     /// <returns>The stable unavailable result.</returns>
-    internal static Result Unavailable(Exception? exception = null) => Result.Fail(UnavailableError);
+    internal static Result Unavailable() => Result.Fail(UnavailableError);
 
     /// <summary>
     ///     Maps an expected SQLite or filesystem access failure to a typed local-state result.
     /// </summary>
     /// <typeparam name="T">The discarded success payload type.</typeparam>
-    /// <param name="exception">The expected access exception, or <see langword="null" />.</param>
     /// <returns>The stable unavailable result.</returns>
-    internal static Result<T> Unavailable<T>(Exception? exception = null) => UnavailableError;
+    internal static Result<T> Unavailable<T>() => UnavailableError;
+
+    /// <summary>
+    ///     Maps malformed stored metadata to the stable invalid local-state result.
+    /// </summary>
+    /// <returns>The stable invalid local-state result.</returns>
+    internal static Result Invalid() => Result.Fail(InvalidError);
 
     /// <summary>
     ///     Maps malformed stored metadata to the stable invalid local-state result.

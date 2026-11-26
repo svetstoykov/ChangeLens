@@ -1,3 +1,4 @@
+using ChangeLens.Core.Analysis.ClaimChecking.Helpers;
 using ChangeLens.Core.Analysis.ClaimChecking.Models;
 using ChangeLens.Core.Analysis.ClaimChecking.Services;
 using ChangeLens.Core.Analysis.Curation.Models;
@@ -8,6 +9,7 @@ using ChangeLens.Core.Analysis.EvidenceFrontier.Constants;
 using ChangeLens.Core.Analysis.EvidenceFrontier.Models;
 using ChangeLens.Core.Analysis.EvidenceFrontier.Services;
 using ChangeLens.Core.Analysis.FindingValidation.Models;
+using ChangeLens.Core.Analysis.Publication.Helpers;
 using ChangeLens.Core.Analysis.Publication.Models;
 using ChangeLens.Core.Analysis.Publication.Services;
 using ChangeLens.Core.Analysis.Review.Models;
@@ -195,7 +197,9 @@ public sealed class PublicationServiceTests
             claim.ClaimId.EndsWith(":step:1", StringComparison.Ordinal) ? ClaimVerdictKind.Unsupported : ClaimVerdictKind.Supported,
             null,
             [])).ToArray(), null));
-        var service = new PublicationService(new ClaimCheckingService(checker), new EvidenceFrontierService(new EvidenceFrontierOptions()),
+        var service = new PublicationService(
+            new ClaimCheckingService(NullLogger<ClaimCheckingService>.Instance, checker),
+            new EvidenceFrontierService(new EvidenceFrontierOptions(), NullLogger<EvidenceFrontierService>.Instance),
             new ClaimCheckingOptions { Enabled = true }, NullLogger<PublicationService>.Instance);
 
         var result = await service.PublishAsync(
@@ -219,8 +223,19 @@ public sealed class PublicationServiceTests
         Assert.Equal(1, result.Data.EvidenceFrontier.Diagnostics.UsedNodeCount);
     }
 
+    /// <summary>Verifies <see cref="CitationBuilder.Build" /> rejects null checker facts explicitly.</summary>
+    [Fact]
+    public void CitationBuilderThrowsArgumentNullWhenFactsAreNull()
+    {
+        var binder = DraftValidationFixtureBinderBuilder.Create(["n1"]);
+        var model = MentalModelFactory.FromDraft(Draft([Track("t1", "Summary", ["n1"], [Participant("p1", ["n1"])], [])]));
+        var graph = PublicationTestFixtures.Graph("n1");
+
+        Assert.Throws<ArgumentNullException>(() => CitationBuilder.Build(model, binder, graph, null!));
+    }
+
     private static DraftValidationOutcome Validate(MentalModelDraft draft, EvidenceBinderModel binder) =>
-        new DraftValidationService().Validate(draft, binder, TestContext.Current.CancellationToken);
+        new DraftValidationService(NullLogger<DraftValidationService>.Instance).Validate(draft, binder, TestContext.Current.CancellationToken);
 
     private static MentalModelDraft Draft(IReadOnlyList<DraftTrack> tracks) => new(new BoundStatement("Thesis", ["n1"]), tracks, []);
 

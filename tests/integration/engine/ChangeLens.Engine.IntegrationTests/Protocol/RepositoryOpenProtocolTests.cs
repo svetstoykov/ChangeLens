@@ -588,6 +588,49 @@ public sealed class RepositoryOpenProtocolTests
         }
     }
 
+    /// <summary>
+    ///     Verifies an <see cref="IOException" /> during path resolution is traced at <c>Debug</c> without leaking
+    ///     the path above <c>Debug</c>.
+    /// </summary>
+    /// <returns>A task that represents the asynchronous operation.</returns>
+    [Fact]
+    public async Task EngineLogsIoPathResolutionFailureWithoutPathAboveDebug()
+    {
+        var temporaryRoot = CreateTemporaryRoot();
+        var logDirectory = Path.Combine(temporaryRoot, "logs");
+        const string sensitiveSegment = "sensitive-io-segment";
+
+        try
+        {
+            var parentDirectory = Directory.CreateDirectory(Path.Combine(temporaryRoot, sensitiveSegment));
+            var overlongPath = Path.Combine(parentDirectory.FullName, new string('a', 300));
+            using var engine = StartEngine(logDirectory, redirectStandardError: true);
+            var request = CreateOpenRequest("repository-io-path-request", overlongPath);
+
+            await engine.StandardInput.WriteLineAsync(request);
+            engine.StandardInput.Close();
+
+            using var response = await ReadResponseAsync(engine);
+            await WaitForExitAsync(engine);
+            var standardError = await engine.StandardError.ReadToEndAsync(
+                TestContext.Current.CancellationToken);
+            var logFile = Assert.Single(Directory.GetFiles(logDirectory, "changelens-engine-*.log"));
+            var fileLog = await File.ReadAllTextAsync(
+                logFile,
+                TestContext.Current.CancellationToken);
+
+            Assert.Equal("repository.inspectionFailed", FirstErrorCode(response));
+            Assert.Contains(sensitiveSegment, standardError, StringComparison.Ordinal);
+            Assert.Contains(sensitiveSegment, fileLog, StringComparison.Ordinal);
+            Assert.DoesNotContain(sensitiveSegment, EngineLogEntries.InformationAndAbove(standardError), StringComparison.Ordinal);
+            Assert.DoesNotContain(sensitiveSegment, EngineLogEntries.InformationAndAbove(fileLog), StringComparison.Ordinal);
+        }
+        finally
+        {
+            DeleteTemporaryRoot(temporaryRoot);
+        }
+    }
+
     private static string GitFixtureExecutablePath =>
         Path.Combine(
             AppContext.BaseDirectory,

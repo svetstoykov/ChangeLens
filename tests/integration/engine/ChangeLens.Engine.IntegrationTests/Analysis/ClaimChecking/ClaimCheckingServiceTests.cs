@@ -13,6 +13,9 @@ using ChangeLens.Core.Analysis.Shared.Models;
 using ChangeLens.Core.Results.Models;
 using ChangeLens.Engine.IntegrationTests.Analysis.ClaimChecking.Support;
 using ChangeLens.Engine.IntegrationTests.Analysis.DraftValidation.Support;
+using ChangeLens.Engine.IntegrationTests.Protocol.Support;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 using EvidenceBinderModel = ChangeLens.Core.Analysis.EvidenceBinder.Models.EvidenceBinder;
 
@@ -268,7 +271,52 @@ public sealed class ClaimCheckingServiceTests
         Assert.Empty(thesis.Focus);
     }
 
-    private static ClaimCheckingService Service(RecordingClaimChecker checker) => new(checker);
+    [Fact]
+    public async Task UnavailableCheckerReturnsStableErrorCode()
+    {
+        var binder = Binder(["n1"]);
+        var validation = Validate(Draft(), binder);
+        var service = new ClaimCheckingService(NullLogger<ClaimCheckingService>.Instance);
+
+        var result = await service.CheckAsync(validation, binder, CancellationToken.None);
+
+        Assert.True(result.IsFailure);
+        Assert.Equal(ClaimCheckingErrorCode.Unavailable, Assert.Single(result.Errors).Code);
+    }
+
+    [Fact]
+    public async Task CheckingLogsAnInformationSummaryWithElapsedTime()
+    {
+        var binder = Binder(["n1", "n2"]);
+        var validation = Validate(
+            Draft(relationships: [Relationship("r1", "p1", "p2", ["n1", "n2"], CuratorContractConstants.Invokes, "The explanation.")]),
+            binder);
+        var logger = new RecordingLogger<ClaimCheckingService>();
+        var service = new ClaimCheckingService(logger, new RecordingClaimChecker(claims => new ClaimCheckerReply(Supported(claims), null)));
+
+        var result = await service.CheckAsync(validation, binder, CancellationToken.None);
+
+        Assert.True(result.IsSuccess);
+        Assert.Contains(logger.Entries, entry => entry.Level == LogLevel.Information
+            && entry.Message.StartsWith("Claim checking completed", StringComparison.Ordinal)
+            && entry.Message.EndsWith(" ms.", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task UnavailableCheckerLogsAWarningWithTheStableErrorCode()
+    {
+        var binder = Binder(["n1"]);
+        var validation = Validate(Draft(), binder);
+        var logger = new RecordingLogger<ClaimCheckingService>();
+
+        await new ClaimCheckingService(logger).CheckAsync(validation, binder, CancellationToken.None);
+
+        Assert.Contains(logger.Entries, entry => entry.Level == LogLevel.Warning
+            && entry.Message.Contains(ClaimCheckingErrorCode.Unavailable, StringComparison.Ordinal));
+    }
+
+    private static ClaimCheckingService Service(RecordingClaimChecker checker) =>
+        new(NullLogger<ClaimCheckingService>.Instance, checker);
 
     private static IReadOnlyList<ClaimVerdict> Supported(IReadOnlyList<CheckerClaim> claims) =>
         claims.Select(claim => new ClaimVerdict(claim.ClaimId, ClaimVerdictKind.Supported, null, [])).ToArray();
@@ -279,7 +327,7 @@ public sealed class ClaimCheckingServiceTests
             : new ClaimVerdict(claim.ClaimId, ClaimVerdictKind.Supported, null, [])).ToArray(), null));
 
     private static DraftValidationOutcome Validate(MentalModelDraft draft, EvidenceBinderModel binder) =>
-        new DraftValidationService().Validate(draft, binder, CancellationToken.None);
+        new DraftValidationService(NullLogger<DraftValidationService>.Instance).Validate(draft, binder, CancellationToken.None);
 
     private static EvidenceBinderModel Binder(
         IReadOnlyList<string> nodeIds,

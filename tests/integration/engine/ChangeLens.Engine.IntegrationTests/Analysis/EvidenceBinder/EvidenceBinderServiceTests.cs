@@ -8,6 +8,9 @@ using ChangeLens.Core.Analysis.EvidenceBinder.Services;
 using ChangeLens.Core.Analysis.EvidenceGraph.Models;
 using ChangeLens.Core.Analysis.Snapshots.Models;
 using ChangeLens.Core.AnalysisRuns.Models;
+using ChangeLens.Engine.IntegrationTests.Analysis.EvidenceBinder.Support;
+using ChangeLens.Engine.IntegrationTests.Protocol.Support;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 using EvidenceBinderModel = ChangeLens.Core.Analysis.EvidenceBinder.Models.EvidenceBinder;
@@ -103,6 +106,29 @@ public sealed class EvidenceBinderServiceTests
     }
 
     [Fact]
+    public void AssemblyAndChangedFileScopingLogElapsedTime()
+    {
+        var after = Node("after", "changed.cs", ChangeAnatomySide.After, true, EvidenceNodeOrigin.ChangedHunk, "after quote");
+        var request = Request(
+            Policy([after], [Decision(after)], []),
+            new SnapshotManifestEntry("changed.cs", null, SnapshotChangeCategory.Modified, "100644", "100644", Blob('a'), Blob('b')),
+            ["changed.cs"],
+            null);
+        var logger = new RecordingLogger<EvidenceBinderService>();
+        var service = new EvidenceBinderService(new EvidenceBinderOptions(), logger);
+
+        var binder = Assert.IsType<EvidenceBinderModel>(service.Assemble(request, CancellationToken.None).Data);
+        service.ScopeToChangedFiles(binder);
+
+        Assert.Contains(logger.Entries, entry => entry.Level == LogLevel.Information
+            && entry.Message.StartsWith("Evidence binder assembled", StringComparison.Ordinal)
+            && entry.Message.EndsWith(" ms.", StringComparison.Ordinal));
+        Assert.Contains(logger.Entries, entry => entry.Level == LogLevel.Information
+            && entry.Message.Contains("was scoped to changed files", StringComparison.Ordinal)
+            && entry.Message.EndsWith(" ms.", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public void PolicyInvariantDropsAreDiagnosedSeparatelyFromPolicyExclusions()
     {
         var duplicate = Node("duplicate", "changed.cs", ChangeAnatomySide.After, true, EvidenceNodeOrigin.ChangedHunk, "duplicate");
@@ -194,6 +220,31 @@ public sealed class EvidenceBinderServiceTests
         Assert.DoesNotContain(binder.Evidence, node => node.NodeId is "head" or "candidate");
         var changedFile = Assert.Single(binder.ChangedFiles);
         Assert.All(changedFile.EvidenceNodeIds, nodeId => Assert.Contains(binder.Evidence, node => node.NodeId == nodeId));
+    }
+
+    [Fact]
+    public void CancellationDuringTheBudgetLadderStopsBeforeAnotherMeasurement()
+    {
+        var head = Node("head", "candidate.cs", ChangeAnatomySide.After, false, EvidenceNodeOrigin.CandidateHead, new string('h', 5_000), 0.01);
+        var candidate = Node(
+            "candidate", "candidate.cs", ChangeAnatomySide.After, false, EvidenceNodeOrigin.MatchWindow, new string('q', 5_000), 0.02);
+        var entry = new SnapshotManifestEntry("changed.cs", null, SnapshotChangeCategory.Modified, "100644", "100644", Blob('a'), Blob('b'));
+        var request = Request(
+            Policy([head, candidate], [Decision(head), Decision(candidate)], []),
+            entry,
+            ["changed.cs", "candidate.cs"],
+            null);
+        using var cancellation = new CancellationTokenSource();
+        var anatomyFiles = new EnumerationCountingList<ChangedFileAnatomy>(
+            [new ChangedFileAnatomy(entry.Path, entry.OriginalPath, entry.Category, [], false, null)],
+            cancellation.Cancel);
+        request = request with { Anatomy = request.Anatomy with { Files = anatomyFiles } };
+
+        Assert.Throws<OperationCanceledException>(() =>
+            Service(new EvidenceBinderOptions { MaximumBinderCharacters = 6_000, TargetUtilization = 1 }).Assemble(
+                request, cancellation.Token));
+
+        Assert.Equal(1, anatomyFiles.EnumerationCount);
     }
 
     [Fact]
@@ -315,6 +366,48 @@ public sealed class EvidenceBinderServiceTests
 
         Assert.Equal([new EvidenceLineRange(2, 2)], Assert.Single(binder.Evidence).ChangedLines);
         Assert.Contains("\"changedLines\":[{\"startLine\":2,\"endLine\":2}]", payload, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void DerivedBudgetExhaustedByReservesFailsAsInvalidOptions()
+    {
+        var node = Node("changed", "changed.cs", ChangeAnatomySide.After, true, EvidenceNodeOrigin.ChangedHunk, "quote");
+        var request = Request(
+            Policy([node], [Decision(node)], []),
+            new SnapshotManifestEntry("changed.cs", null, SnapshotChangeCategory.Modified, "100644", "100644", Blob('a'), Blob('b')),
+            ["changed.cs"],
+            null);
+        var options = new EvidenceBinderOptions
+        {
+            ContextWindowTokens = 1_000,
+            CuratorOutputCharacters = 3_000,
+            PromptReserveCharacters = 500,
+            MaximumBinderCharacters = null,
+        };
+
+        var result = Service(options).Assemble(request, CancellationToken.None);
+
+        Assert.True(result.IsFailure);
+        Assert.Equal(EvidenceBinderErrorCode.InvalidOptions, Assert.Single(result.Errors).Code);
+    }
+
+    [Theory]
+    [InlineData(double.NaN)]
+    [InlineData(double.PositiveInfinity)]
+    [InlineData(double.NegativeInfinity)]
+    public void NonFiniteTargetUtilizationFailsAsInvalidOptions(double targetUtilization)
+    {
+        var node = Node("changed", "changed.cs", ChangeAnatomySide.After, true, EvidenceNodeOrigin.ChangedHunk, "quote");
+        var request = Request(
+            Policy([node], [Decision(node)], []),
+            new SnapshotManifestEntry("changed.cs", null, SnapshotChangeCategory.Modified, "100644", "100644", Blob('a'), Blob('b')),
+            ["changed.cs"],
+            null);
+
+        var result = Service(new EvidenceBinderOptions { TargetUtilization = targetUtilization }).Assemble(request, CancellationToken.None);
+
+        Assert.True(result.IsFailure);
+        Assert.Equal(EvidenceBinderErrorCode.InvalidOptions, Assert.Single(result.Errors).Code);
     }
 
     private static EvidenceBinderService Service(EvidenceBinderOptions options) => new(options, NullLogger<EvidenceBinderService>.Instance);

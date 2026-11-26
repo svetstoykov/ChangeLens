@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using ChangeLens.Core.Analysis.ChangeAnatomy.Models;
 using ChangeLens.Core.Analysis.ContextPolicy.Models;
 using ChangeLens.Core.Analysis.Correspondence.Models;
@@ -7,6 +8,7 @@ using ChangeLens.Core.Analysis.EvidenceFrontier.Constants;
 using ChangeLens.Core.Analysis.EvidenceFrontier.Interfaces;
 using ChangeLens.Core.Analysis.EvidenceFrontier.Models;
 using ChangeLens.Core.Analysis.EvidenceGraph.Models;
+using Microsoft.Extensions.Logging;
 using EvidenceBinderModel = ChangeLens.Core.Analysis.EvidenceBinder.Models.EvidenceBinder;
 using EvidenceFrontierModel = ChangeLens.Core.Analysis.EvidenceFrontier.Models.EvidenceFrontier;
 using EvidenceGraphModel = ChangeLens.Core.Analysis.EvidenceGraph.Models.EvidenceGraph;
@@ -21,9 +23,16 @@ namespace ChangeLens.Core.Analysis.EvidenceFrontier.Services;
 ///     It does not read repository content and does not need to be thread-safe.
 /// </remarks>
 /// <param name="options">The frontier bounds. Cannot be <see langword="null" />.</param>
-public sealed class EvidenceFrontierService(EvidenceFrontierOptions options) : IEvidenceFrontierService
+/// <param name="logger">The logger for frontier assembly outcomes. Cannot be <see langword="null" />.</param>
+/// <exception cref="ArgumentNullException">
+///     <paramref name="options" /> or <paramref name="logger" /> is <see langword="null" />.
+/// </exception>
+public sealed class EvidenceFrontierService(
+    EvidenceFrontierOptions options,
+    ILogger<EvidenceFrontierService> logger) : IEvidenceFrontierService
 {
     private readonly EvidenceFrontierOptions _options = options ?? throw new ArgumentNullException(nameof(options));
+    private readonly ILogger<EvidenceFrontierService> _logger = logger ?? throw new ArgumentNullException(nameof(logger));
 
     /// <inheritdoc />
     public EvidenceFrontierModel Build(
@@ -40,6 +49,7 @@ public sealed class EvidenceFrontierService(EvidenceFrontierOptions options) : I
         ArgumentNullException.ThrowIfNull(binder);
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(this._options.MaximumEntries);
         cancellationToken.ThrowIfCancellationRequested();
+        var startedAt = Stopwatch.GetTimestamp();
 
         var candidatesByPath = ranking.Candidates
             .GroupBy(candidate => candidate.Path, StringComparer.Ordinal)
@@ -138,7 +148,13 @@ public sealed class EvidenceFrontierService(EvidenceFrontierOptions options) : I
             byKind[FrontierOmissionKind.BoundNotUsed],
             postCheck,
             byKind);
-        return new EvidenceFrontierModel(ordered, diagnostics);
+        var frontier = new EvidenceFrontierModel(ordered, diagnostics);
+        this._logger.LogInformation(
+            "Evidence frontier built for run {RunId} with {ReturnedEntries}/{TotalEntries} entries ({TruncatedEntries} truncated, " +
+            "post-check {PostCheck}) in {ElapsedMilliseconds:0.000} ms.",
+            binder.Comparison.RunId, diagnostics.EntryCount, diagnostics.TotalEntryCount, diagnostics.TruncatedEntryCount,
+            diagnostics.PostCheck, Stopwatch.GetElapsedTime(startedAt).TotalMilliseconds);
+        return frontier;
     }
 
     private static FrontierEntry CreateCandidateEntry(CorrespondenceCandidate candidate) => new(

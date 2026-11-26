@@ -108,7 +108,12 @@ class EngineSession:
                 continue
             if message is None:
                 self._messages.put(None)
-                raise EngineExited(f"the engine exited with code {process.wait()} while awaiting {action}")
+                try:
+                    exit_code: int | str = process.wait(timeout=STOP_GRACE_SECONDS)
+                except subprocess.TimeoutExpired:
+                    _kill_and_wait(process)
+                    exit_code = process.returncode if process.returncode is not None else "unknown"
+                raise EngineExited(f"the engine exited with code {exit_code} while awaiting {action}")
             if message.get("requestId") in (request_id, None):
                 return ProtocolResponse(message)
 
@@ -127,8 +132,7 @@ class EngineSession:
             try:
                 process.wait(timeout=STOP_GRACE_SECONDS)
             except subprocess.TimeoutExpired:
-                process.kill()
-                process.wait()
+                _kill_and_wait(process)
         if self._reader is not None:
             self._reader.join(timeout=STOP_GRACE_SECONDS)
         self._transcribe({"direction": "lifecycle", "event": "stopped", "exitCode": process.returncode})
@@ -165,3 +169,9 @@ class EngineSession:
         line = json.dumps({"at": utc_now_iso(), **entry}, ensure_ascii=False)
         with self._transcript_lock, self._transcript_path.open("a", encoding="utf-8") as handle:
             handle.write(line + "\n")
+
+
+def _kill_and_wait(process: subprocess.Popen[bytes]) -> None:
+    process.kill()
+    with contextlib.suppress(subprocess.TimeoutExpired):
+        process.wait(timeout=STOP_GRACE_SECONDS)

@@ -120,6 +120,21 @@ def test_provider_padding_past_the_deadline_ends_the_wait(upstream: _Upstream) -
     assert proxy.exchanges[0].outcome == "deadline"
 
 
+def test_provider_error_padding_past_the_deadline_ends_the_wait(upstream: _Upstream) -> None:
+    upstream.status = 429
+    upstream.padding_seconds = 3.0
+    proxy = _live_proxy(f"http://127.0.0.1:{upstream.server_address[1]}", timeout_seconds=0.5)
+    started = time.monotonic()
+    try:
+        with pytest.raises(OSError):
+            post(proxy.base_url, completion_request(BINDER))
+    finally:
+        proxy.stop()
+
+    assert time.monotonic() - started < 2.5
+    assert proxy.exchanges[0].outcome == "deadline"
+
+
 def test_provider_silent_past_the_deadline_is_a_deadline_not_a_harness_error(upstream: _Upstream) -> None:
     upstream.padding_seconds = -1.0
     proxy = _live_proxy(f"http://127.0.0.1:{upstream.server_address[1]}", timeout_seconds=0.5)

@@ -92,13 +92,24 @@ class LiveResponder:
                     missed_deadline if body is None else ProxyReply(response.status, self._redact_bytes(body), "live")
                 )
         except urllib.error.HTTPError as error:
-            body = self._redact_bytes(error.read())
-            return ProxyReply(error.code, body, "live", f"provider status {error.code}")
+            try:
+                with error:
+                    body = self._read_until(error, deadline)
+            except OSError as read_error:
+                return self._transport_failure(read_error, deadline, missed_deadline)
+            return (
+                missed_deadline
+                if body is None
+                else ProxyReply(error.code, self._redact_bytes(body), "live", f"provider status {error.code}")
+            )
         except (urllib.error.URLError, OSError) as error:
-            if time.monotonic() >= deadline:
-                return missed_deadline
-            detail = self._redact(f"the live provider could not be reached: {error}")
-            return ProxyReply(502, error_body(detail), "harness-error", detail)
+            return self._transport_failure(error, deadline, missed_deadline)
+
+    def _transport_failure(self, error: OSError, deadline: float, missed_deadline: ProxyReply) -> ProxyReply:
+        if time.monotonic() >= deadline:
+            return missed_deadline
+        detail = self._redact(f"the live provider could not be reached: {error}")
+        return ProxyReply(502, error_body(detail), "harness-error", detail)
 
     @staticmethod
     def _read_until(response, deadline: float) -> bytes | None:

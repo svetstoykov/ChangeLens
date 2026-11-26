@@ -1,11 +1,14 @@
 import json
+import threading
+import time
 import urllib.error
 import urllib.request
 from collections.abc import Iterator
 
 import pytest
 
-from changelens_review.provider.proxy import ProviderProxy, ScriptedResponder
+from changelens_review.jsontypes import JsonValue
+from changelens_review.provider.proxy import ProviderProxy, ProxyReply, ScriptedResponder
 from changelens_review.provider.scripts import ProviderScript, load_script, parse_script
 
 BINDER = {
@@ -196,3 +199,32 @@ def test_an_extra_call_of_a_role_is_rejected_without_using_the_other_roles_repli
     extra = next(record for record in proxy.exchanges if record.outcome == "unexpected")
     assert extra.role == "reviewer"
     assert "no exchange left for a reviewer call" in (extra.detail or "")
+
+
+def test_stop_interrupts_delayed_reply_promptly() -> None:
+    entered = threading.Event()
+
+    class _DelayedResponder:
+        def respond(self, sequence: int, role: str, request_body: JsonValue) -> ProxyReply:
+            entered.set()
+            return ProxyReply(200, b"{}", "scripted", delay_seconds=10.0)
+
+    proxy = ProviderProxy(_DelayedResponder())
+    proxy.start()
+    client_thread = threading.Thread(
+        target=lambda: post(proxy.base_url, completion_request(BINDER)),
+        daemon=True,
+    )
+    try:
+        client_thread.start()
+        assert entered.wait(timeout=2.0)
+        started = time.monotonic()
+        proxy.stop()
+        elapsed = time.monotonic() - started
+        client_thread.join(timeout=2.0)
+    finally:
+        proxy.stop()
+
+    assert not client_thread.is_alive()
+    assert elapsed < 1.0
+    assert len(proxy.exchanges) == 1

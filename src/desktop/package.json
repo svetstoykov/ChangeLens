@@ -9,6 +9,7 @@
     "build": "npm run build --workspace @changelens/ui",
     "desktop:dev": "tauri dev",
     "dev": "npm run dev --workspace @changelens/ui",
+    "dev:fake": "npm run dev:fake --workspace @changelens/ui",
     "format": "npm run format --workspace @changelens/ui",
     "format:check": "npm run format:check --workspace @changelens/ui",
     "lint": "node scripts/lint.mjs",

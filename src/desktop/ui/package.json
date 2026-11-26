@@ -6,6 +6,7 @@
   "scripts": {
     "build": "tsc -b && vite build",
     "dev": "vite",
+    "dev:fake": "vite --mode fake",
     "format": "prettier --write . ../README.md ../package.json ../scripts ../../../eslint.config.mjs --config ../../../.prettierrc.json --ignore-path ../../../.prettierignore",
     "format:check": "prettier --check . ../README.md ../package.json ../scripts ../../../eslint.config.mjs --config ../../../.prettierrc.json --ignore-path ../../../.prettierignore",
     "lint": "node ../scripts/lint.mjs",

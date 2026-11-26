@@ -31,16 +31,25 @@ const comparisonClient = new TauriComparisonClient();
 const analysisClient = new TauriAnalysisClient();
 const colorThemePreferenceClient = new TauriColorThemePreferenceClient();
 
-createRoot(rootElement).render(
-  <StrictMode>
-    <App
-      engineStatusClient={engineStatusClient}
-      repositoryClient={repositoryClient}
-      repositoryHistoryClient={repositoryHistoryClient}
-      repositoryFolderPicker={repositoryFolderPicker}
-      comparisonClient={comparisonClient}
-      analysisClient={analysisClient}
-      colorThemePreferenceClient={colorThemePreferenceClient}
-    />
-  </StrictMode>,
-);
+const fakeEngineReady =
+  import.meta.env.MODE === "fake"
+    ? import("./FakeEngine/Services/installFakeEngine").then((module) =>
+        module.installFakeEngine(),
+      )
+    : Promise.resolve();
+
+void fakeEngineReady.then(() => {
+  createRoot(rootElement).render(
+    <StrictMode>
+      <App
+        engineStatusClient={engineStatusClient}
+        repositoryClient={repositoryClient}
+        repositoryHistoryClient={repositoryHistoryClient}
+        repositoryFolderPicker={repositoryFolderPicker}
+        comparisonClient={comparisonClient}
+        analysisClient={analysisClient}
+        colorThemePreferenceClient={colorThemePreferenceClient}
+      />
+    </StrictMode>,
+  );
+});

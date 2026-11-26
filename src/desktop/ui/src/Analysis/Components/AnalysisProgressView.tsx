@@ -130,7 +130,7 @@ export function AnalysisProgressView({
               const stageStatus = describeStageStatus(
                 index,
                 currentStageIndex,
-                isTerminalOrInterrupted,
+                summary,
               );
               const copy = describeStage(stage);
               return (
@@ -144,7 +144,7 @@ export function AnalysisProgressView({
                   </span>
                   <span className="analysis-stage-copy">
                     <strong>{copy.label}</strong>
-                    <code>{copy.description}</code>
+                    <span>{copy.description}</span>
                   </span>
                 </li>
               );
@@ -210,7 +210,7 @@ export function AnalysisProgressView({
                   <dt>{describeFactKind(fact)}</dt>
                   <dd>{fact.count}</dd>
                   {fact.detail === null ? null : (
-                    <p className="fact-note">{fact.detail}</p>
+                    <dd className="fact-note">{fact.detail}</dd>
                   )}
                 </div>
               ))}
@@ -261,9 +261,21 @@ function AnalysisActionAlert({
 function describeStageStatus(
   index: number,
   currentStageIndex: number,
-  isTerminalOrInterrupted: boolean,
+  summary: AnalysisRunSummary,
 ): StageStatus {
-  if (isTerminalOrInterrupted) return "complete";
+  if (
+    summary.state === "completed" ||
+    summary.state === "completedWithLimitations"
+  ) {
+    return "complete";
+  }
+  if (
+    summary.state === "cancelled" ||
+    summary.state === "failed" ||
+    summary.state === "interrupted"
+  ) {
+    return index === 0 && summary.capturedAt !== null ? "complete" : "pending";
+  }
   if (index < currentStageIndex) return "complete";
   return index === currentStageIndex ? "active" : "pending";
 }

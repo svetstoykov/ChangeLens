@@ -283,13 +283,20 @@ export function useComparisonController({
   );
 
   useEffect(() => {
-    discoveryEpochRef.current += 1;
-    preparationEpochRef.current += 1;
+    let isCurrent = true;
+    let expectedDiscoveryEpoch = ++discoveryEpochRef.current;
+    const expectedPreparationEpoch = ++preparationEpochRef.current;
     freshnessEpochRef.current += 1;
     refreshEpochRef.current += 1;
     remoteBaselineEpochRef.current += 1;
     stateRef.current = initialState;
     setState(initialState);
+
+    const isRestorationCurrent = () =>
+      isCurrent &&
+      discoveryEpochRef.current === expectedDiscoveryEpoch &&
+      preparationEpochRef.current === expectedPreparationEpoch;
+
     if (preferredTarget === null) {
       void discover("");
     } else {
@@ -306,6 +313,7 @@ export function useComparisonController({
               ...(after === undefined ? {} : { after }),
               ...(targetSetToken === undefined ? {} : { targetSetToken }),
             });
+            if (!isRestorationCurrent()) return;
             exactTarget = page.targets.find(
               (target) => target.fullName === preferredTarget,
             );
@@ -313,8 +321,12 @@ export function useComparisonController({
             targetSetToken = page.targetSetToken;
           } while (exactTarget === undefined && after !== undefined);
 
+          if (!isRestorationCurrent()) return;
+          expectedDiscoveryEpoch += 1;
+          await discover("");
+          if (!isRestorationCurrent()) return;
+
           if (exactTarget) {
-            await discover("");
             updateState((current) => ({
               ...current,
               targets: mergeTargets(current.targets, [exactTarget]),
@@ -324,7 +336,6 @@ export function useComparisonController({
             void checkRemoteBaseline(exactTarget);
             await prepare(exactTarget);
           } else {
-            await discover("");
             updateState((current) => ({
               ...current,
               error: new ActionError("operation", [
@@ -340,6 +351,7 @@ export function useComparisonController({
             }));
           }
         } catch (reason: unknown) {
+          if (!isRestorationCurrent()) return;
           updateState((current) => ({
             ...current,
             error: normalizeActionError(reason),
@@ -351,6 +363,7 @@ export function useComparisonController({
     }
 
     return () => {
+      isCurrent = false;
       discoveryEpochRef.current += 1;
       preparationEpochRef.current += 1;
       freshnessEpochRef.current += 1;
@@ -504,7 +517,7 @@ export function useComparisonController({
           ...(after === undefined ? {} : { after }),
           ...(targetSetToken === undefined ? {} : { targetSetToken }),
         });
-        if (refreshEpoch !== refreshEpochRef.current) return true;
+        if (refreshEpoch !== refreshEpochRef.current) return false;
         exactTarget = page.targets.find(
           (item) => item.fullName === target.fullName,
         );
@@ -517,6 +530,10 @@ export function useComparisonController({
           ...current,
           selectedTarget: null,
           freshness: current.preparedComparison ? "stale" : "unknown",
+          remoteBaseline:
+            current.remoteBaseline === "refreshing"
+              ? "idle"
+              : current.remoteBaseline,
           isRefreshing: false,
         }));
         return false;
@@ -583,8 +600,9 @@ export function useComparisonController({
       if (refreshEpoch !== refreshEpochRef.current) return;
 
       const remoteBaselineEpoch = ++remoteBaselineEpochRef.current;
-      await findExactTargetAndPrepare(target, refreshEpoch);
+      const prepared = await findExactTargetAndPrepare(target, refreshEpoch);
       if (
+        prepared &&
         refreshEpoch === refreshEpochRef.current &&
         remoteBaselineEpoch === remoteBaselineEpochRef.current
       ) {
@@ -610,9 +628,11 @@ export function useComparisonController({
 
   const cancelRemoteBaselineRefresh = useCallback(() => {
     refreshEpochRef.current += 1;
+    preparationEpochRef.current += 1;
     updateState((current) => ({
       ...current,
       remoteBaseline: "moved",
+      isPreparing: false,
       isRefreshing: false,
     }));
   }, [updateState]);

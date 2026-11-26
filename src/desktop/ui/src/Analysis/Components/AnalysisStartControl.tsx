@@ -57,8 +57,8 @@ export function AnalysisStartControl({
       />
       <p className="field-help">
         <Icon name="shield" />
-        Context is stored with the run on this device and is not sent anywhere
-        in this phase.
+        Context is stored locally with this run. Only filtered change evidence
+        and this context are sent to your configured AI provider.
       </p>
       <div className="analysis-start-actions">
         <button

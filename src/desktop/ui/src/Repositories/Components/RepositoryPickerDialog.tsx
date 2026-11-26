@@ -46,11 +46,15 @@ export function RepositoryPickerDialog({
       document.activeElement instanceof HTMLElement
         ? document.activeElement
         : null;
-    dialog?.showModal();
+    if (dialog && !dialog.open) {
+      dialog.showModal();
+    }
     chooseButtonRef.current?.focus();
     return () => {
       invalidateInteraction();
-      dialog?.close();
+      if (dialog?.open) {
+        dialog.close();
+      }
       if (previouslyFocusedElementRef.current?.isConnected) {
         previouslyFocusedElementRef.current.focus();
       }
@@ -203,7 +207,12 @@ export function RepositoryPickerDialog({
       aria-describedby="repository-picker-description"
       aria-modal="true"
       data-dismissible
-      onCancel={dismiss}
+      onCancel={(event) => {
+        event.preventDefault();
+        if (!isBusy) {
+          dismiss();
+        }
+      }}
     >
       {content}
     </dialog>

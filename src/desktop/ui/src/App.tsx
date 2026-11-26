@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { ActionError } from "./Actions/Models/ActionError";
 import { normalizeActionError } from "./Actions/Services/normalizeActionError";
 import { presentActionError } from "./Actions/Services/presentActionError";
@@ -12,6 +12,7 @@ import { AppShell } from "./AppShell";
 import { RepositoryWorkspace } from "./Comparisons/Components/RepositoryWorkspace";
 import type { ComparisonClient } from "./Comparisons/Interfaces/ComparisonClient";
 import type { EngineStatusClient } from "./EngineStatus/Interfaces/EngineStatusClient";
+import { RemoveRepositoryDialog } from "./Repositories/Components/RemoveRepositoryDialog";
 import { RepositoriesDestination } from "./Repositories/Components/RepositoriesDestination";
 import { RepositoryPickerDialog } from "./Repositories/Components/RepositoryPickerDialog";
 import { repositoryErrorTitles } from "./Repositories/Constants/repositoryErrorTitles";
@@ -39,7 +40,7 @@ interface AppProps {
   readonly repositoryFolderPicker: RepositoryFolderPicker;
   readonly colorThemePreferenceClient: ColorThemePreferenceClient;
   readonly analysisClient: AnalysisClient;
-  readonly comparisonClient?: ComparisonClient;
+  readonly comparisonClient: ComparisonClient;
 }
 
 type Workspace = OpenedRepository & { readonly generation: number };
@@ -60,10 +61,15 @@ export type ApplicationState =
       readonly recoveryError?: ActionError;
     }
   | { readonly status: "repositoryOpen"; readonly workspace: Workspace }
-  | { readonly status: "replacingRepository"; readonly workspace: Workspace }
+  | {
+      readonly status: "replacingRepository";
+      readonly workspace: Workspace;
+      readonly activeRun: RetainedAnalysisRun | null;
+    }
   | {
       readonly status: "repositoryHistory";
       readonly workspace: Workspace | null;
+      readonly activeRun: RetainedAnalysisRun | null;
     }
   | {
       readonly status: "analysisRun";
@@ -90,22 +96,36 @@ export function App({
   });
   const [historyError, setHistoryError] = useState<ActionError | null>(null);
   const [busyRepositoryId, setBusyRepositoryId] = useState<string | null>(null);
+  const [pendingRemoval, setPendingRemoval] = useState<RecentRepository | null>(
+    null,
+  );
   const [retryGeneration, setRetryGeneration] = useState(0);
   const [explicitTheme, setExplicitTheme] = useState<ColorTheme | null>(null);
   const [colorTheme, setColorTheme] = useState<ColorTheme>(getSystemColorTheme);
+  const [themeError, setThemeError] = useState<ActionError | null>(null);
   const [retainedAnalysisRuns, setRetainedAnalysisRuns] = useState<
     ReadonlyMap<string, RetainedAnalysisRun>
   >(new Map());
   const [analysisError, setAnalysisError] = useState<ActionError | null>(null);
 
-  const currentWorkspace = "workspace" in state ? state.workspace : null;
-  const retainedRun =
-    currentWorkspace === null
-      ? null
-      : (retainedAnalysisRuns.get(currentWorkspace.repositoryId) ?? null);
-  const watchedRunId =
-    state.status === "analysisRun" ? state.runId : (retainedRun?.runId ?? null);
-  const analysisRun = useAnalysisRun(analysisClient, watchedRunId);
+  const displayedRun: RetainedAnalysisRun | null =
+    state.status === "analysisRun"
+      ? { runId: state.runId, attached: state.attached }
+      : state.status === "replacingRepository" ||
+          state.status === "repositoryHistory"
+        ? state.activeRun
+        : null;
+  const displayedRunId = displayedRun?.runId ?? null;
+  const displayedRunAttached = displayedRun?.attached ?? false;
+
+  const activeDisplayedRunIdRef = useRef<string | null>(null);
+  const openEpochRef = useRef(0);
+
+  useEffect(() => {
+    activeDisplayedRunIdRef.current = displayedRunId;
+  }, [displayedRunId]);
+
+  const analysisRun = useAnalysisRun(analysisClient, displayedRunId);
 
   useEffect(() => {
     if (explicitTheme !== null) return;
@@ -121,6 +141,7 @@ export function App({
 
   useEffect(() => {
     let isCurrent = true;
+    openEpochRef.current += 1;
 
     async function start(): Promise<void> {
       try {
@@ -213,18 +234,17 @@ export function App({
     const nextTheme = colorTheme === "light" ? "dark" : "light";
     try {
       await colorThemePreferenceClient.setColorTheme(nextTheme);
+      setThemeError(null);
       setExplicitTheme(nextTheme);
       setColorTheme(nextTheme);
       applyColorTheme(nextTheme);
     } catch (reason: unknown) {
-      setState({
-        status: "localStateError",
-        error: normalizeActionError(reason),
-      });
+      setThemeError(normalizeActionError(reason));
     }
   }
 
   function commitRepository(opened: OpenedRepository) {
+    setAnalysisError(null);
     setState((current) => ({
       status: "repositoryOpen",
       workspace: nextWorkspace(current, opened),
@@ -251,7 +271,12 @@ export function App({
 
   async function openOrAttachToRepository(
     opened: OpenedRepository,
+    openEpoch: number,
   ): Promise<void> {
+    if (openEpoch !== openEpochRef.current) {
+      return;
+    }
+
     const retainedForRepository = retainedAnalysisRuns.get(opened.repositoryId);
     if (retainedForRepository !== undefined) {
       attachToAnalysisRun(opened, retainedForRepository);
@@ -262,6 +287,10 @@ export function App({
       analysisClient,
       opened.repository.canonicalPath,
     );
+    if (openEpoch !== openEpochRef.current) {
+      return;
+    }
+
     if (activeRunId !== null) {
       attachToAnalysisRun(opened, { runId: activeRunId, attached: true });
       return;
@@ -270,12 +299,43 @@ export function App({
     commitRepository(opened);
   }
 
+  async function openRepositoryFromPicker(
+    opened: OpenedRepository,
+    source: "selecting" | "replacing",
+  ): Promise<void> {
+    const openEpoch = ++openEpochRef.current;
+    try {
+      await openOrAttachToRepository(opened, openEpoch);
+    } catch (reason: unknown) {
+      if (openEpoch !== openEpochRef.current) {
+        return;
+      }
+      const error = normalizeActionError(reason);
+      if (isLocalStateError(error)) {
+        setState({ status: "localStateError", error });
+      } else if (source === "selecting") {
+        setState({ status: "selectingRepository", recoveryError: error });
+      } else {
+        commitRepository(opened);
+        setAnalysisError(error);
+      }
+    }
+  }
+
   const handleRepositoryRefreshed = useCallback(
     (repository: RepositoryDescriptor) => {
       setState((current) => {
         if (
           current.status !== "repositoryOpen" &&
-          current.status !== "replacingRepository"
+          current.status !== "replacingRepository" &&
+          current.status !== "repositoryHistory"
+        ) {
+          return current;
+        }
+        if (
+          current.workspace === null ||
+          current.workspace.repository.canonicalPath !==
+            repository.canonicalPath
         ) {
           return current;
         }
@@ -300,12 +360,15 @@ export function App({
   }
 
   async function openRecent(repository: RecentRepository): Promise<void> {
+    if (busyRepositoryId !== null) return;
+    const openEpoch = ++openEpochRef.current;
     setBusyRepositoryId(repository.repositoryId);
     setHistoryError(null);
     try {
-      await openOrAttachToRepository(
-        await repositoryClient.openRepository(repository.canonicalPath),
+      const opened = await repositoryClient.openRepository(
+        repository.canonicalPath,
       );
+      await openOrAttachToRepository(opened, openEpoch);
     } catch (reason: unknown) {
       const error = normalizeActionError(reason);
       if (isLocalStateError(error)) {
@@ -318,18 +381,19 @@ export function App({
     }
   }
 
-  async function removeRecent(repository: RecentRepository): Promise<void> {
-    const confirmed = window.confirm(
-      `Remove ${repository.name} from ChangeLens history? Repository files will not be changed.`,
-    );
-    if (!confirmed) return;
+  async function confirmRemoveRecent(): Promise<void> {
+    if (pendingRemoval === null || busyRepositoryId !== null) return;
+    const repository = pendingRemoval;
     setBusyRepositoryId(repository.repositoryId);
+    setHistoryError(null);
     try {
       await repositoryHistoryClient.removeRecentRepository(
         repository.repositoryId,
       );
+      setPendingRemoval(null);
       await refreshHistory();
     } catch (reason: unknown) {
+      setPendingRemoval(null);
       const error = normalizeActionError(reason);
       if (isLocalStateError(error)) {
         setState({ status: "localStateError", error });
@@ -419,11 +483,20 @@ export function App({
   function cancelAnalysisRun(runId: string): void {
     setAnalysisError(null);
     analysisClient.cancel(runId).catch((reason: unknown) => {
-      setAnalysisError(normalizeActionError(reason));
+      if (activeDisplayedRunIdRef.current !== runId) {
+        return;
+      }
+      const error = normalizeActionError(reason);
+      if (isLocalStateError(error)) {
+        setState({ status: "localStateError", error });
+      } else {
+        setAnalysisError(error);
+      }
     });
   }
 
   async function returnToSetup(workspace: Workspace): Promise<void> {
+    openEpochRef.current += 1;
     setAnalysisError(null);
     setRetainedAnalysisRuns((current) => {
       const next = new Map(current);
@@ -452,6 +525,8 @@ export function App({
   const shellThemeProps = {
     colorTheme,
     onToggleColorTheme: () => void toggleColorTheme(),
+    themeError,
+    onDismissThemeError: () => setThemeError(null),
   };
 
   if (
@@ -527,9 +602,16 @@ export function App({
       <AppShell
         {...shellThemeProps}
         showRepositoryNavigation
-        onShowRepositories={() =>
-          setState({ status: "repositoryHistory", workspace: null })
-        }
+        currentDestination="change"
+        onShowRepositories={() => {
+          openEpochRef.current += 1;
+          setState({
+            status: "repositoryHistory",
+            workspace: null,
+            activeRun: null,
+          });
+          void refreshHistory();
+        }}
       >
         {recovery ? (
           <section className="startup-recovery" role="alert">
@@ -542,7 +624,9 @@ export function App({
           onDismiss={() => undefined}
           selectFolder={() => repositoryFolderPicker.selectFolder()}
           onOpenRepository={(path) => repositoryClient.openRepository(path)}
-          onRepositoryOpened={(opened) => void openOrAttachToRepository(opened)}
+          onRepositoryOpened={(opened) =>
+            void openRepositoryFromPicker(opened, "selecting")
+          }
         />
       </AppShell>
     );
@@ -551,11 +635,6 @@ export function App({
   const workspace = state.workspace;
   const replacing = state.status === "replacingRepository";
   const showingHistory = state.status === "repositoryHistory";
-  const displayedRunId = watchedRunId;
-  const displayedRunAttached =
-    state.status === "analysisRun"
-      ? state.attached
-      : (retainedRun?.attached ?? false);
   return (
     <AppShell
       {...shellThemeProps}
@@ -563,34 +642,72 @@ export function App({
       showRepositoryNavigation
       currentDestination={showingHistory ? "repositories" : "change"}
       onShowRepositories={() => {
-        setState({ status: "repositoryHistory", workspace });
+        openEpochRef.current += 1;
+        setState({
+          status: "repositoryHistory",
+          workspace,
+          activeRun: displayedRun,
+        });
         void refreshHistory();
       }}
       onShowCurrentChange={() => {
+        openEpochRef.current += 1;
         if (!workspace) return;
-        const run = retainedAnalysisRuns.get(workspace.repositoryId);
         setState(
-          run === undefined
+          displayedRun === null
             ? { status: "repositoryOpen", workspace }
             : {
                 status: "analysisRun",
                 workspace,
-                runId: run.runId,
-                attached: run.attached,
+                runId: displayedRun.runId,
+                attached: displayedRun.attached,
               },
         );
       }}
       onOpenAnotherRepository={() => {
-        if (workspace) setState({ status: "replacingRepository", workspace });
+        openEpochRef.current += 1;
+        if (workspace) {
+          setState({
+            status: "replacingRepository",
+            workspace,
+            activeRun: displayedRun,
+          });
+        }
       }}
     >
       {replacing && workspace ? (
         <RepositoryPickerDialog
           dismissible
-          onDismiss={() => setState({ status: "repositoryOpen", workspace })}
+          onDismiss={() => {
+            openEpochRef.current += 1;
+            setState(
+              displayedRun === null
+                ? { status: "repositoryOpen", workspace }
+                : {
+                    status: "analysisRun",
+                    workspace,
+                    runId: displayedRun.runId,
+                    attached: displayedRun.attached,
+                  },
+            );
+          }}
           selectFolder={() => repositoryFolderPicker.selectFolder()}
           onOpenRepository={(path) => repositoryClient.openRepository(path)}
-          onRepositoryOpened={(opened) => void openOrAttachToRepository(opened)}
+          onRepositoryOpened={(opened) =>
+            void openRepositoryFromPicker(opened, "replacing")
+          }
+        />
+      ) : null}
+      {pendingRemoval !== null ? (
+        <RemoveRepositoryDialog
+          repository={pendingRemoval}
+          busy={busyRepositoryId === pendingRemoval.repositoryId}
+          onConfirm={() => void confirmRemoveRecent()}
+          onCancel={() => {
+            if (busyRepositoryId === null) {
+              setPendingRemoval(null);
+            }
+          }}
         />
       ) : null}
       {showingHistory ? (
@@ -600,11 +717,18 @@ export function App({
           error={historyError}
           busyRepositoryId={busyRepositoryId}
           onOpen={(repository) => void openRecent(repository)}
-          onRemove={(repository) => void removeRecent(repository)}
+          onRemove={(repository) => setPendingRemoval(repository)}
           onChooseAnother={() => {
-            if (workspace)
-              setState({ status: "replacingRepository", workspace });
-            else setState({ status: "selectingRepository" });
+            openEpochRef.current += 1;
+            if (workspace) {
+              setState({
+                status: "replacingRepository",
+                workspace,
+                activeRun: displayedRun,
+              });
+            } else {
+              setState({ status: "selectingRepository" });
+            }
           }}
         />
       ) : null}
@@ -622,7 +746,7 @@ export function App({
           />
         </div>
       ) : null}
-      {workspace && comparisonClient && displayedRunId === null ? (
+      {workspace && displayedRunId === null ? (
         <div hidden={showingHistory}>
           <RepositoryWorkspace
             key={workspace.generation}
@@ -649,8 +773,7 @@ function nextWorkspace(
   current: ApplicationState,
   opened: OpenedRepository,
 ): Workspace {
-  const previousWorkspace =
-    current.status === "replacingRepository" ? current.workspace : null;
+  const previousWorkspace = "workspace" in current ? current.workspace : null;
   return { ...opened, generation: (previousWorkspace?.generation ?? 0) + 1 };
 }
 
@@ -669,12 +792,8 @@ async function readActiveRunId(
   analysisClient: AnalysisClient,
   canonicalPath: string,
 ): Promise<string | null> {
-  try {
-    const result = await analysisClient.getActive(canonicalPath);
-    return result.state === "active" ? result.run.runId : null;
-  } catch {
-    return null;
-  }
+  const result = await analysisClient.getActive(canonicalPath);
+  return result.state === "active" ? result.run.runId : null;
 }
 
 async function readRunSummary(

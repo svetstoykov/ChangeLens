@@ -1,4 +1,6 @@
 import type { ReactNode } from "react";
+import type { ActionError } from "./Actions/Models/ActionError";
+import { presentActionError } from "./Actions/Services/presentActionError";
 import { Icon } from "./Visuals/Components/Icon";
 import type { ColorTheme } from "./Visuals/Models/ColorTheme";
 
@@ -11,6 +13,8 @@ interface AppShellProps {
   readonly showRepositoryNavigation?: boolean;
   readonly colorTheme: ColorTheme;
   readonly onToggleColorTheme: () => void;
+  readonly themeError?: ActionError | null;
+  readonly onDismissThemeError?: () => void;
   readonly children?: ReactNode;
 }
 
@@ -23,9 +27,13 @@ export function AppShell({
   showRepositoryNavigation = hasRepository,
   colorTheme,
   onToggleColorTheme,
+  themeError = null,
+  onDismissThemeError,
   children,
 }: AppShellProps) {
   const nextTheme = colorTheme === "light" ? "dark" : "light";
+  const themeErrorPresentation =
+    themeError !== null ? presentActionError(themeError) : null;
 
   return (
     <div className="app-shell" data-has-repository={hasRepository}>
@@ -40,42 +48,12 @@ export function AppShell({
           </div>
         </div>
         {showRepositoryNavigation ? (
-          <nav aria-label="ChangeLens workspace">
-            {hasRepository ? (
-              <button
-                className="current-navigation-item"
-                aria-current={
-                  currentDestination === "change" ? "page" : undefined
-                }
-                type="button"
-                onClick={onShowCurrentChange}
-              >
-                <span className="navigation-icon">
-                  <Icon name="currentChange" />
-                </span>
-                <span>
-                  <strong>Current change</strong>
-                  <small>Prepare comparison</small>
-                </span>
-              </button>
-            ) : null}
-            <button
-              className="current-navigation-item"
-              aria-current={
-                currentDestination === "repositories" ? "page" : undefined
-              }
-              type="button"
-              onClick={onShowRepositories}
-            >
-              <span className="navigation-icon">
-                <Icon name="folder" />
-              </span>
-              <span>
-                <strong>Repositories</strong>
-                <small>Recent local worktrees</small>
-              </span>
-            </button>
-          </nav>
+          <WorkspaceNavigation
+            hasRepository={hasRepository}
+            currentDestination={currentDestination}
+            onShowCurrentChange={onShowCurrentChange}
+            onShowRepositories={onShowRepositories}
+          />
         ) : (
           <p className="sidebar-introduction">
             Understand a repository change with local, evidence-backed analysis.
@@ -86,7 +64,7 @@ export function AppShell({
             <Icon name="shield" />
             <span>
               <strong>Local by design</strong>
-              <small>No repository data leaves this device</small>
+              <small>Local-first; only filtered context is sent to AI</small>
             </span>
           </p>
           {onOpenAnotherRepository ? (
@@ -102,15 +80,29 @@ export function AppShell({
         </footer>
       </aside>
       <header className="technical-bar">
-        <div className="mobile-brand" aria-label="ChangeLens">
-          <span className="mobile-brand-mark">
+        <div className="mobile-brand">
+          <span className="mobile-brand-mark" aria-hidden="true">
             <Icon name="logo" />
           </span>
-          <strong>ChangeLens</strong>
+          <h1>ChangeLens</h1>
         </div>
         <div className="workspace-location">
-          <Icon name={hasRepository ? "currentChange" : "shield"} />
-          <span>{hasRepository ? "Current change" : "Local workspace"}</span>
+          <Icon
+            name={
+              currentDestination === "repositories"
+                ? "folder"
+                : hasRepository
+                  ? "currentChange"
+                  : "shield"
+            }
+          />
+          <span>
+            {currentDestination === "repositories"
+              ? "Repositories"
+              : hasRepository
+                ? "Current change"
+                : "Local workspace"}
+          </span>
         </div>
         <div className="technical-actions">
           <button
@@ -125,7 +117,7 @@ export function AppShell({
           </button>
           <span className="privacy-indicator">
             <span aria-hidden="true" />
-            Local only
+            Local-first
           </span>
           {onOpenAnotherRepository ? (
             <button
@@ -139,7 +131,93 @@ export function AppShell({
           ) : null}
         </div>
       </header>
-      <main className="app-main">{children}</main>
+      {showRepositoryNavigation ? (
+        <WorkspaceNavigation
+          className="mobile-navigation"
+          hasRepository={hasRepository}
+          currentDestination={currentDestination}
+          onShowCurrentChange={onShowCurrentChange}
+          onShowRepositories={onShowRepositories}
+        />
+      ) : null}
+      <main className="app-main">
+        {themeErrorPresentation !== null ? (
+          <section className="action-alert theme-alert" role="alert">
+            <Icon name="warning" />
+            <div>
+              <strong>{themeErrorPresentation.title}</strong>
+              <ul>
+                {themeErrorPresentation.messages.map((message, index) => (
+                  <li
+                    key={`${themeError?.errors[index]?.code ?? "theme"}-${index}`}
+                  >
+                    {message}
+                  </li>
+                ))}
+              </ul>
+              {onDismissThemeError ? (
+                <div className="alert-actions">
+                  <button type="button" onClick={onDismissThemeError}>
+                    Dismiss
+                  </button>
+                </div>
+              ) : null}
+            </div>
+          </section>
+        ) : null}
+        {children}
+      </main>
     </div>
+  );
+}
+
+function WorkspaceNavigation({
+  className,
+  hasRepository,
+  currentDestination,
+  onShowCurrentChange,
+  onShowRepositories,
+}: {
+  readonly className?: string;
+  readonly hasRepository: boolean;
+  readonly currentDestination: "change" | "repositories";
+  readonly onShowCurrentChange?: () => void;
+  readonly onShowRepositories?: () => void;
+}) {
+  return (
+    <nav className={className} aria-label="ChangeLens workspace">
+      {hasRepository ? (
+        <button
+          className="current-navigation-item"
+          aria-current={currentDestination === "change" ? "page" : undefined}
+          type="button"
+          onClick={onShowCurrentChange}
+        >
+          <span className="navigation-icon">
+            <Icon name="currentChange" />
+          </span>
+          <span>
+            <strong>Current change</strong>
+            <small>Prepare comparison</small>
+          </span>
+        </button>
+      ) : null}
+      <button
+        className="current-navigation-item"
+        aria-current={
+          currentDestination === "repositories" ? "page" : undefined
+        }
+        type="button"
+        onClick={onShowRepositories}
+      >
+        <span className="navigation-icon">
+          <Icon name="folder" />
+        </span>
+        <span>
+          <strong>Repositories</strong>
+          <small>Recent local worktrees</small>
+        </span>
+      </button>
+    </nav>
   );
 }

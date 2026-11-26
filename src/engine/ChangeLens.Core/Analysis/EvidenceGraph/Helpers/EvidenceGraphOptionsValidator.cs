@@ -29,6 +29,7 @@ public static class EvidenceGraphOptionsValidator
             || options.MaximumWholeChangedFileLines < 0
             || options.MaximumBlockExtensionLines < 0
             || options.MergeGapLines < 0
+            || !double.IsFinite(options.ChangedNodeShare)
             || options.ChangedNodeShare < 0
             || options.ChangedNodeShare > 1)
         {

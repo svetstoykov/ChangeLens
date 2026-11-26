@@ -10,7 +10,8 @@ namespace ChangeLens.Engine.IntegrationTests.AnalysisRuns.Support;
 /// </summary>
 internal sealed class StubAnalysisRunStore(
     Func<AnalysisRunAcceptance, CancellationToken, Task<Result<AnalysisStartOutcome>>>? create = null,
-    Func<Guid, long, CancellationToken, Task<Result<AnalysisRunDetail>>>? requestCancellation = null) : IAnalysisRunStore
+    Func<Guid, long, CancellationToken, Task<Result<AnalysisRunDetail>>>? requestCancellation = null,
+    Func<string, Result<AnalysisRunDetail?>>? getActive = null) : IAnalysisRunStore
 {
     public Task<Result<AnalysisStartOutcome>> CreateOrReturnActiveAsync(AnalysisRunAcceptance acceptance, CancellationToken cancellationToken) =>
         create?.Invoke(acceptance, cancellationToken)
@@ -20,7 +21,9 @@ internal sealed class StubAnalysisRunStore(
         throw new NotSupportedException("The detail operation was not configured.");
 
     public Task<Result<AnalysisRunDetail?>> GetActiveByRepositoryAsync(string canonicalRepositoryPathKey, CancellationToken cancellationToken) =>
-        throw new NotSupportedException("The active-run operation was not configured.");
+        getActive is null
+            ? throw new NotSupportedException("The active-run operation was not configured.")
+            : Task.FromResult(getActive(canonicalRepositoryPathKey));
 
     public Task<Result<Guid?>> TakeNextPendingAsync(CancellationToken cancellationToken) =>
         throw new NotSupportedException("The take operation was not configured.");

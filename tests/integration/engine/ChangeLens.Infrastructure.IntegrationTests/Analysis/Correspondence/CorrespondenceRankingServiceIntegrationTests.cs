@@ -1,3 +1,4 @@
+using ChangeLens.Core.Analysis.Correspondence.Helpers;
 using ChangeLens.Core.Analysis.Correspondence.Models;
 using ChangeLens.Core.Analysis.Correspondence.Services;
 using ChangeLens.Core.Analysis.Snapshots.Models;
@@ -183,5 +184,27 @@ public sealed class CorrespondenceRankingServiceIntegrationTests
                 Assert.DoesNotContain("consumer.txt", entry.Message, StringComparison.Ordinal);
                 Assert.DoesNotContain("zorblaxquant", entry.Message, StringComparison.Ordinal);
             });
+    }
+
+    /// <summary>
+    ///     Rejects non-finite floating-point weights and shares in correspondence ranking options.
+    /// </summary>
+    /// <param name="value">The non-finite floating-point value.</param>
+    [Theory]
+    [InlineData(double.NaN)]
+    [InlineData(double.PositiveInfinity)]
+    [InlineData(double.NegativeInfinity)]
+    public void ValidateOptions_NonFiniteDoubleOptions_Throws(double value)
+    {
+        Assert.Throws<InvalidOperationException>(() =>
+            CorrespondenceOptionsValidator.Validate(new CorrespondenceOptions { IdentifierWeight = value }));
+        Assert.Throws<InvalidOperationException>(() =>
+            CorrespondenceOptionsValidator.Validate(new CorrespondenceOptions { CoChangeWeight = value }));
+        Assert.Throws<InvalidOperationException>(() =>
+            CorrespondenceOptionsValidator.Validate(new CorrespondenceOptions { MaximumCoChangeContributionPerPair = value }));
+        Assert.Throws<InvalidOperationException>(() =>
+            CorrespondenceOptionsValidator.Validate(new CorrespondenceOptions { CommonKeyFileRatio = value }));
+        Assert.Throws<InvalidOperationException>(() =>
+            CorrespondenceOptionsValidator.Validate(new CorrespondenceOptions { MaximumDominantSignalShare = value }));
     }
 }

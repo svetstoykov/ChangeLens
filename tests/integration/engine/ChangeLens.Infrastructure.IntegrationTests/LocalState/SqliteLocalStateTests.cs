@@ -1,3 +1,4 @@
+using ChangeLens.Core.LocalState.Constants;
 using ChangeLens.Core.Preferences.Models;
 using ChangeLens.Infrastructure.IntegrationTests.Support;
 using ChangeLens.Infrastructure.LocalState.Models;
@@ -8,6 +9,7 @@ using ChangeLens.Infrastructure.Repositories.Services;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Logging;
 using Xunit;
 
 namespace ChangeLens.Infrastructure.IntegrationTests.LocalState;
@@ -199,6 +201,136 @@ public sealed class SqliteLocalStateTests
 
         Assert.True(result.IsFailure);
         Assert.Equal("localState.invalid", Assert.Single(result.Errors).Code);
+    }
+
+    /// <summary>
+    ///     Verifies that concurrent <see cref="SqliteRepositoryHistoryStore.RecordOpenAsync" /> calls under WAL
+    ///     serialize cleanly without <c>SQLITE_BUSY</c> failures.
+    /// </summary>
+    [Fact]
+    public async Task ConcurrentRecordOpenUnderWalSerializesCleanly()
+    {
+        using var temporaryDirectory = new TemporaryDirectory();
+        var paths = LocalStatePaths.Resolve(temporaryDirectory.DirectoryPath);
+        await using (var setupContext = CreateContext(paths))
+        {
+            var setupResult = await CreateInitializer(setupContext, paths).InitializeAsync(TestContext.Current.CancellationToken);
+            Assert.True(setupResult.IsSuccess);
+        }
+
+        using var barrier = new Barrier(8);
+        var tasks = Enumerable.Range(0, 8)
+            .Select(index => Task.Run(async () =>
+            {
+                await using var context = CreateContext(paths);
+                var store = new SqliteRepositoryHistoryStore(context, NullLogger<SqliteRepositoryHistoryStore>.Instance);
+                barrier.SignalAndWait(TestContext.Current.CancellationToken);
+                return await store.RecordOpenAsync(
+                    $"/projects/concurrent-{index}",
+                    $"/projects/concurrent-{index}",
+                    $"concurrent-{index}",
+                    1_000 + index,
+                    TestContext.Current.CancellationToken);
+            }, TestContext.Current.CancellationToken))
+            .ToArray();
+
+        var results = await Task.WhenAll(tasks);
+
+        Assert.All(results, result => Assert.True(result.IsSuccess));
+    }
+
+    /// <summary>
+    ///     Verifies missing singleton application state returns <c>localState.invalid</c> across stores instead of
+    ///     throwing <see cref="InvalidOperationException" />.
+    /// </summary>
+    [Fact]
+    public async Task MissingSingletonApplicationStateReturnsInvalidLocalState()
+    {
+        using var temporaryDirectory = new TemporaryDirectory();
+        var paths = LocalStatePaths.Resolve(temporaryDirectory.DirectoryPath);
+        await using var context = CreateContext(paths);
+        var cancellationToken = TestContext.Current.CancellationToken;
+        Assert.True((await CreateInitializer(context, paths).InitializeAsync(cancellationToken)).IsSuccess);
+
+        await context.Database.ExecuteSqlRawAsync("DELETE FROM application_state WHERE singleton_id = 1;", cancellationToken);
+
+        var historyStore = new SqliteRepositoryHistoryStore(context, NullLogger<SqliteRepositoryHistoryStore>.Instance);
+        var themeStore = new SqliteColorThemePreferenceStore(context, NullLogger<SqliteColorThemePreferenceStore>.Instance);
+
+        var themeGet = await themeStore.GetAsync(cancellationToken);
+        var themeSet = await themeStore.SetAsync(ColorTheme.Dark, cancellationToken);
+        var historyOpen = await historyStore.RecordOpenAsync("/projects/repo", "/projects/repo", "repo", 100, cancellationToken);
+        var historyLast = await historyStore.GetLastAsync(cancellationToken);
+        var historyList = await historyStore.ListRecentAsync(cancellationToken);
+
+        Assert.Equal(LocalStateErrorCode.Invalid, Assert.Single(themeGet.Errors).Code);
+        Assert.Equal(LocalStateErrorCode.Invalid, Assert.Single(themeSet.Errors).Code);
+        Assert.Equal(LocalStateErrorCode.Invalid, Assert.Single(historyOpen.Errors).Code);
+        Assert.Equal(LocalStateErrorCode.Invalid, Assert.Single(historyLast.Errors).Code);
+        Assert.Equal(LocalStateErrorCode.Invalid, Assert.Single(historyList.Errors).Code);
+    }
+
+    /// <summary>
+    ///     Verifies malformed repository metadata returns <c>localState.invalid</c> in
+    ///     <see cref="SqliteRepositoryHistoryStore.SetPreferredTargetAsync" />.
+    /// </summary>
+    [Fact]
+    public async Task MalformedRepositoryMetadataReturnsInvalidOnSetPreferredTarget()
+    {
+        using var temporaryDirectory = new TemporaryDirectory();
+        var paths = LocalStatePaths.Resolve(temporaryDirectory.DirectoryPath);
+        await using var context = CreateContext(paths);
+        var cancellationToken = TestContext.Current.CancellationToken;
+        Assert.True((await CreateInitializer(context, paths).InitializeAsync(cancellationToken)).IsSuccess);
+
+        await context.Database.ExecuteSqlRawAsync(
+            """
+            INSERT INTO repositories (
+                repository_id,
+                canonical_path,
+                canonical_path_key,
+                display_name,
+                last_opened_at_unix_ms,
+                preferred_target_full_name)
+            VALUES ('not-a-guid', '/projects/invalid-target', '/projects/invalid-target', 'invalid-target', 1, NULL);
+            """,
+            cancellationToken);
+
+        var historyStore = new SqliteRepositoryHistoryStore(context, NullLogger<SqliteRepositoryHistoryStore>.Instance);
+
+        var setTargetResult = await historyStore.SetPreferredTargetAsync("/projects/invalid-target", "refs/heads/main", cancellationToken);
+
+        Assert.True(setTargetResult.IsFailure);
+        Assert.Equal(LocalStateErrorCode.Invalid, Assert.Single(setTargetResult.Errors).Code);
+    }
+
+    /// <summary>
+    ///     Verifies that an expected access failure during initialization logs the caught exception at <c>Debug</c>
+    ///     while logging the unavailable outcome and elapsed time at <c>Information</c>.
+    /// </summary>
+    [Fact]
+    public async Task InitializerLogsCaughtAccessExceptionAtDebug()
+    {
+        using var temporaryDirectory = new TemporaryDirectory();
+        var blockingFile = Path.Combine(temporaryDirectory.DirectoryPath, "not-a-directory");
+        await File.WriteAllTextAsync(blockingFile, "occupied", TestContext.Current.CancellationToken);
+        var paths = LocalStatePaths.Resolve(blockingFile);
+        await using var context = CreateContext(paths);
+        var logger = new RecordingInfrastructureLogger<SqliteLocalStateInitializer>();
+        var initializer = new SqliteLocalStateInitializer(context, paths, logger);
+
+        var result = await initializer.InitializeAsync(TestContext.Current.CancellationToken);
+
+        Assert.True(result.IsFailure);
+        Assert.Equal(LocalStateErrorCode.Unavailable, Assert.Single(result.Errors).Code);
+        Assert.Contains(
+            logger.Entries,
+            entry => entry.Level == LogLevel.Debug && entry.Exception is not null);
+        Assert.Contains(
+            logger.Entries,
+            entry => entry.Level == LogLevel.Information
+                && entry.Message.Contains(LocalStateErrorCode.Unavailable, StringComparison.Ordinal)
+                && entry.Message.Contains(" ms.", StringComparison.Ordinal));
     }
 
     private static ChangeLensLocalStateDbContext CreateContext(LocalStatePaths paths)

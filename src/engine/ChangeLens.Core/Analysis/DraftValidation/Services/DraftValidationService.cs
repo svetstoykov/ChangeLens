@@ -1,9 +1,11 @@
+using System.Diagnostics;
 using ChangeLens.Core.Analysis.Curation.Models;
 using ChangeLens.Core.Analysis.DraftValidation.Interfaces;
 using ChangeLens.Core.Analysis.DraftValidation.Models;
 using ChangeLens.Core.Analysis.EvidenceBinder.Helpers;
 using ChangeLens.Core.Analysis.Shared.Constants;
 using ChangeLens.Core.Analysis.Shared.Models;
+using Microsoft.Extensions.Logging;
 using EvidenceBinderModel = ChangeLens.Core.Analysis.EvidenceBinder.Models.EvidenceBinder;
 
 namespace ChangeLens.Core.Analysis.DraftValidation.Services;
@@ -11,9 +13,25 @@ namespace ChangeLens.Core.Analysis.DraftValidation.Services;
 /// <summary>
 ///     Validates curator output against the evidence and contract disclosed by one binder.
 /// </summary>
+/// <remarks>
+///     The Engine registers this service as scoped. It serves one analysis request and does not need to be thread-safe.
+/// </remarks>
 public sealed class DraftValidationService : IDraftValidationService
 {
     private const string SupersedesKind = "supersedes";
+
+    private readonly ILogger<DraftValidationService> _logger;
+
+    /// <summary>
+    ///     Initializes a new instance of the <see cref="DraftValidationService" /> class.
+    /// </summary>
+    /// <param name="logger">The logger for validation outcomes. Cannot be <see langword="null" />.</param>
+    /// <exception cref="ArgumentNullException"><paramref name="logger" /> is <see langword="null" />.</exception>
+    public DraftValidationService(ILogger<DraftValidationService> logger)
+    {
+        ArgumentNullException.ThrowIfNull(logger);
+        this._logger = logger;
+    }
 
     /// <inheritdoc />
     public DraftValidationOutcome Validate(MentalModelDraft draft, EvidenceBinderModel binder, CancellationToken cancellationToken)
@@ -21,6 +39,7 @@ public sealed class DraftValidationService : IDraftValidationService
         ArgumentNullException.ThrowIfNull(draft);
         ArgumentNullException.ThrowIfNull(binder);
         cancellationToken.ThrowIfCancellationRequested();
+        var startedAt = Stopwatch.GetTimestamp();
 
         var nodeIds = binder.Evidence.Select(node => node.NodeId).ToHashSet(StringComparer.Ordinal);
         var edgeIds = binder.MatchEdges.Select(edge => edge.EdgeId).ToHashSet(StringComparer.Ordinal);
@@ -188,13 +207,20 @@ public sealed class DraftValidationService : IDraftValidationService
         var cited = CitedNodeIds(draft);
         var undeclaredNodeCount = nodeIds.Count(nodeId => !cited.Contains(nodeId) && !dropped.Contains(nodeId));
         var validatedDraft = new MentalModelDraft(thesis ?? new BoundStatement(string.Empty, []), tracks, dropped);
-        return new DraftValidationOutcome(
+        var outcome = new DraftValidationOutcome(
             validatedDraft,
             removals,
             invalidReferenceCount,
             invalidKindCount,
             undeclaredNodeCount,
             uncitedEndpointCount);
+        this._logger.LogInformation(
+            "Draft validation completed for run {RunId} with {TrackCount} tracks, {RemovalCount} removals, " +
+            "{InvalidReferenceCount} invalid references, {InvalidKindCount} invalid kinds, {UndeclaredNodeCount} undeclared nodes, " +
+            "and {UncitedEndpointCount} uncited endpoints in {ElapsedMilliseconds:0.000} ms.",
+            binder.Comparison.RunId, tracks.Count, removals.Count, invalidReferenceCount, invalidKindCount,
+            undeclaredNodeCount, uncitedEndpointCount, Stopwatch.GetElapsedTime(startedAt).TotalMilliseconds);
+        return outcome;
     }
 
     private static IEnumerable<T> Capped<T>(

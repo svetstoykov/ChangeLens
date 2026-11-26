@@ -257,7 +257,10 @@ public sealed class GitCliCommandRunner : IGitCommandRunner, IGitBinaryCommandRu
         {
             if (!process.Start())
             {
-                this._logger.LogWarning("Git executable {ExecutablePath} did not start.", PathSanitizer.RedactHomeDirectory(this._executablePath));
+                this._logger.LogWarning(
+                    "Git executable {ExecutablePath} did not start after {ElapsedMilliseconds:0.000} ms.",
+                    PathSanitizer.RedactHomeDirectory(this._executablePath),
+                    Stopwatch.GetElapsedTime(startedAt).TotalMilliseconds);
                 return UnavailableError;
             }
         }
@@ -270,8 +273,9 @@ public sealed class GitCliCommandRunner : IGitCommandRunner, IGitBinaryCommandRu
         {
             this._logger.LogWarning(
                 exception,
-                "Git executable {ExecutablePath} is unavailable.",
-                PathSanitizer.RedactHomeDirectory(this._executablePath));
+                "Git executable {ExecutablePath} is unavailable after {ElapsedMilliseconds:0.000} ms.",
+                PathSanitizer.RedactHomeDirectory(this._executablePath),
+                Stopwatch.GetElapsedTime(startedAt).TotalMilliseconds);
             return UnavailableError;
         }
 
@@ -330,23 +334,24 @@ public sealed class GitCliCommandRunner : IGitCommandRunner, IGitBinaryCommandRu
 
             try
             {
+                var elapsedMilliseconds = Stopwatch.GetElapsedTime(startedAt).TotalMilliseconds;
                 if (binaryOutput)
                 {
                     this._logger.LogDebug(
-                        "Ran Git binary command 'git {Arguments}', exit code {ExitCode}, in " +
-                        "{ElapsedMilliseconds:0.000} ms.",
-                        string.Join(' ', command.Arguments),
-                        process.ExitCode,
-                        Stopwatch.GetElapsedTime(startedAt).TotalMilliseconds);
+                        "Ran Git binary command 'git {Arguments}', exit code {ExitCode}, in {ElapsedMilliseconds:0.000} ms.",
+                        string.Join(' ', command.Arguments), process.ExitCode, elapsedMilliseconds);
+                    this._logger.LogInformation(
+                        "Git binary {Subcommand} command finished with exit code {ExitCode} in {ElapsedMilliseconds:0.000} ms.",
+                        Subcommand(command), process.ExitCode, elapsedMilliseconds);
                 }
                 else
                 {
                     this._logger.LogDebug(
-                        "Ran Git command 'git {Arguments}', exit code {ExitCode}, in " +
-                        "{ElapsedMilliseconds:0.000} ms.",
-                        string.Join(' ', command.Arguments),
-                        process.ExitCode,
-                        Stopwatch.GetElapsedTime(startedAt).TotalMilliseconds);
+                        "Ran Git command 'git {Arguments}', exit code {ExitCode}, in {ElapsedMilliseconds:0.000} ms.",
+                        string.Join(' ', command.Arguments), process.ExitCode, elapsedMilliseconds);
+                    this._logger.LogInformation(
+                        "Git {Subcommand} command finished with exit code {ExitCode} in {ElapsedMilliseconds:0.000} ms.",
+                        Subcommand(command), process.ExitCode, elapsedMilliseconds);
                 }
 
                 return Result.Success(
@@ -360,9 +365,9 @@ public sealed class GitCliCommandRunner : IGitCommandRunner, IGitBinaryCommandRu
                 this._logger.LogWarning(
                     exception,
                     binaryOutput
-                        ? "Git {Subcommand} command produced diagnostics that could not be decoded as UTF-8."
-                        : "Git {Subcommand} command produced output that could not be decoded as UTF-8.",
-                    Subcommand(command));
+                        ? "Git {Subcommand} command produced diagnostics that could not be decoded as UTF-8 after {ElapsedMilliseconds:0.000} ms."
+                        : "Git {Subcommand} command produced output that could not be decoded as UTF-8 after {ElapsedMilliseconds:0.000} ms.",
+                    Subcommand(command), Stopwatch.GetElapsedTime(startedAt).TotalMilliseconds);
                 return command.ErrorPolicy.InspectionFailed;
             }
         }

@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 using System.Text;
 using ChangeLens.Core.Analysis.ChangeAnatomy.Models;
+using ChangeLens.Core.Analysis.EvidenceGraph.Helpers;
 using ChangeLens.Core.Analysis.EvidenceGraph.Models;
 using ChangeLens.Core.Analysis.Snapshots.Models;
 using ChangeLens.Infrastructure.IntegrationTests.Analysis.EvidenceGraph.Support;
@@ -307,5 +308,75 @@ public sealed class EvidenceGraphServiceIntegrationTests
         var graph = Assert.IsType<EvidenceGraphModel>(result.Data);
         Assert.True(graph.Diagnostics.SkipReasons.TryGetValue("binary content", out var count));
         Assert.True(count >= 1);
+    }
+
+    /// <summary>
+    ///     Asynchronously anchors a shared-identifier edge on the quoted identifier line even when a same-named
+    ///     path stem appears more frequently in the changed file's anatomy keys.
+    /// </summary>
+    /// <returns>A task that represents the asynchronous operation.</returns>
+    [Fact]
+    public async Task BuildAsync_SharedIdentifierAnchorsQuotedWhenPathStemHasMoreOccurrences()
+    {
+        using var repository = new TemporaryGitRepository();
+        repository.CommitFile("consumer.cs", "var value = zorblaxtoken;\n", "seed consumer");
+        repository.CommitFile("zorblaxtoken.cs", "var initial = 1;\n", "seed provider");
+        var mergeBase = repository.Revision;
+
+        var head = EvidenceGraphHarness.CommitFiles(
+            repository,
+            "use identifier matching file stem",
+            [("zorblaxtoken.cs", "var initial = 1;\nvar zorblaxtoken = 2;\n")]);
+        var entry = SnapshotManifestEntryFixtures.CreateEntry(
+            repository, mergeBase, head, "zorblaxtoken.cs", "zorblaxtoken.cs", SnapshotChangeCategory.Modified);
+
+        var result = await EvidenceGraphHarness.BuildAsync(repository, mergeBase, head, [entry]);
+
+        Assert.True(result.IsSuccess);
+        var graph = Assert.IsType<EvidenceGraphModel>(result.Data);
+        var edge = Assert.Single(graph.Edges, candidate => candidate.MatchedValue == "zorblaxtoken");
+        Assert.Equal(MatchEdgeKind.SharedIdentifier, edge.Kind);
+        Assert.Equal(MatchEdgeAnchor.Quoted, edge.FromAnchor);
+        Assert.Equal(MatchEdgeAnchor.Quoted, edge.ToAnchor);
+    }
+
+    /// <summary>
+    ///     Asynchronously skips creating a candidate head window for a zero-byte candidate file.
+    /// </summary>
+    /// <returns>A task that represents the asynchronous operation.</returns>
+    [Fact]
+    public async Task BuildAsync_EmptyCandidateFileProducesNoCandidateHeadWindow()
+    {
+        using var repository = new TemporaryGitRepository();
+        repository.CommitFile("zorblaxempty.txt", string.Empty, "seed empty candidate");
+        repository.CommitFile("provider.txt", "initial\n", "seed provider");
+        var mergeBase = repository.Revision;
+
+        var head = EvidenceGraphHarness.CommitFiles(
+            repository,
+            "reference empty file stem",
+            [("provider.txt", "initial\nzorblaxempty\n")]);
+        var entry = SnapshotManifestEntryFixtures.CreateEntry(
+            repository, mergeBase, head, "provider.txt", "provider.txt", SnapshotChangeCategory.Modified);
+
+        var result = await EvidenceGraphHarness.BuildAsync(repository, mergeBase, head, [entry]);
+
+        Assert.True(result.IsSuccess);
+        var graph = Assert.IsType<EvidenceGraphModel>(result.Data);
+        Assert.DoesNotContain(graph.Nodes, node => node.Path == "zorblaxempty.txt");
+    }
+
+    /// <summary>
+    ///     Rejects non-finite <see cref="EvidenceGraphOptions.ChangedNodeShare" /> values during option validation.
+    /// </summary>
+    /// <param name="changedNodeShare">The non-finite share value.</param>
+    [Theory]
+    [InlineData(double.NaN)]
+    [InlineData(double.PositiveInfinity)]
+    [InlineData(double.NegativeInfinity)]
+    public void ValidateOptions_NonFiniteChangedNodeShare_Throws(double changedNodeShare)
+    {
+        Assert.Throws<InvalidOperationException>(() =>
+            EvidenceGraphOptionsValidator.Validate(new EvidenceGraphOptions { ChangedNodeShare = changedNodeShare }));
     }
 }

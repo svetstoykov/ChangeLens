@@ -10,6 +10,7 @@ using ChangeLens.Infrastructure.LocalState.Services;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Logging;
 
 namespace ChangeLens.Infrastructure.IntegrationTests.AnalysisRuns.Support;
 
@@ -22,10 +23,15 @@ internal sealed class AnalysisRunStoreTestFixture : IAsyncDisposable
     internal const string DefaultCanonicalPath = "/repository";
 
     private readonly TemporaryDirectory _temporaryDirectory;
+    private readonly LocalStatePaths _paths;
 
-    private AnalysisRunStoreTestFixture(TemporaryDirectory temporaryDirectory, ChangeLensLocalStateDbContext context)
+    private AnalysisRunStoreTestFixture(
+        TemporaryDirectory temporaryDirectory,
+        LocalStatePaths paths,
+        ChangeLensLocalStateDbContext context)
     {
         this._temporaryDirectory = temporaryDirectory;
+        this._paths = paths;
         this.Context = context;
         this.Store = new SqliteAnalysisRunStore(context, TimeProvider.System, NullLogger<SqliteAnalysisRunStore>.Instance);
     }
@@ -53,9 +59,22 @@ internal sealed class AnalysisRunStoreTestFixture : IAsyncDisposable
             throw new InvalidOperationException("Failed to initialize the local-state database for a test fixture.");
         }
 
-        var fixture = new AnalysisRunStoreTestFixture(temporaryDirectory, context);
+        var fixture = new AnalysisRunStoreTestFixture(temporaryDirectory, paths, context);
         await fixture.SeedRepositoryAsync(DefaultCanonicalPath);
         return fixture;
+    }
+
+    /// <summary>
+    ///     Creates an independent local-state context and store bound to the same SQLite database file.
+    /// </summary>
+    /// <param name="logger">An optional logger for the store instance.</param>
+    /// <returns>The independent context and store pair.</returns>
+    public (ChangeLensLocalStateDbContext Context, SqliteAnalysisRunStore Store) CreateIndependentStore(
+        ILogger<SqliteAnalysisRunStore>? logger = null)
+    {
+        var context = CreateContext(this._paths);
+        var store = new SqliteAnalysisRunStore(context, TimeProvider.System, logger ?? NullLogger<SqliteAnalysisRunStore>.Instance);
+        return (context, store);
     }
 
     /// <summary>

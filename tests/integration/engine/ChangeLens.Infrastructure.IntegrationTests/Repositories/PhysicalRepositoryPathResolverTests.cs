@@ -2,6 +2,7 @@ using ChangeLens.Core.Repositories.Constants;
 using ChangeLens.Core.Results.Models;
 using ChangeLens.Infrastructure.Repositories.Services;
 using ChangeLens.Infrastructure.IntegrationTests.Support;
+using Microsoft.Extensions.Logging;
 using Xunit.Sdk;
 using Xunit;
 
@@ -229,6 +230,82 @@ public sealed class PhysicalRepositoryPathResolverTests
 
         await Assert.ThrowsAsync<OperationCanceledException>(
             () => resolver.ResolveAsync(temporaryDirectory.DirectoryPath, cancellationTokenSource.Token));
+    }
+
+    /// <summary>
+    ///     Asynchronously verifies that a <see langword="null" /> path throws <see cref="ArgumentNullException" />.
+    /// </summary>
+    /// <returns>A task that represents the asynchronous operation.</returns>
+    [Fact]
+    public async Task ResolveAsync_NullPath_ThrowsArgumentNullException()
+    {
+        var resolver = new PhysicalRepositoryPathResolver();
+
+        await Assert.ThrowsAsync<ArgumentNullException>(() => resolver.ResolveAsync(null!, CancellationToken.None));
+    }
+
+    /// <summary>
+    ///     Asynchronously verifies that an <see cref="IOException" /> path-resolution failure logs outcome and elapsed
+    ///     time at <c>Information</c> without leaking the raw path into <c>Information</c> or above.
+    /// </summary>
+    /// <returns>A task that represents the asynchronous operation.</returns>
+    [Fact]
+    public async Task ResolveAsync_UnexpectedIoFailure_DoesNotLeakPathIntoInformationAndAboveLogs()
+    {
+        using var temporaryDirectory = new TemporaryDirectory();
+        const string sensitiveSegment = "sensitive-io-path";
+        var parentDirectory = Directory.CreateDirectory(Path.Combine(temporaryDirectory.DirectoryPath, sensitiveSegment));
+        var overlongPath = Path.Combine(parentDirectory.FullName, new string('a', 300));
+        var logger = new RecordingInfrastructureLogger<PhysicalRepositoryPathResolver>();
+        var resolver = new PhysicalRepositoryPathResolver(logger);
+
+        var result = await resolver.ResolveAsync(overlongPath, CancellationToken.None);
+
+        AssertFailure(result, ErrorType.ExternalDependencyFailure, RepositoryErrorCode.InspectionFailed);
+        Assert.Contains(
+            logger.Entries,
+            entry => entry.Level == LogLevel.Debug
+                && entry.Exception is not null
+                && entry.Exception.Message.Contains(sensitiveSegment, StringComparison.Ordinal));
+        Assert.Contains(
+            logger.Entries,
+            entry => entry.Level == LogLevel.Information
+                && entry.Message.Contains(RepositoryErrorCode.InspectionFailed, StringComparison.Ordinal)
+                && entry.Message.Contains(" ms.", StringComparison.Ordinal));
+        Assert.All(
+            logger.Entries.Where(entry => entry.Level >= LogLevel.Information),
+            entry =>
+            {
+                Assert.DoesNotContain(sensitiveSegment, entry.Message, StringComparison.Ordinal);
+                Assert.Null(entry.Exception);
+            });
+    }
+
+    /// <summary>
+    ///     Asynchronously verifies that successful resolution logs outcome and elapsed time at <c>Information</c>
+    ///     without including the raw path.
+    /// </summary>
+    /// <returns>A task that represents the asynchronous operation.</returns>
+    [Fact]
+    public async Task ResolveAsync_Success_LogsInformationOutcomeAndElapsedWithoutRawPath()
+    {
+        using var temporaryDirectory = new TemporaryDirectory();
+        const string sensitiveSegment = "sensitive-valid-repo";
+        var repositoryDirectory = Directory.CreateDirectory(Path.Combine(temporaryDirectory.DirectoryPath, sensitiveSegment));
+        var logger = new RecordingInfrastructureLogger<PhysicalRepositoryPathResolver>();
+        var resolver = new PhysicalRepositoryPathResolver(logger);
+
+        var result = await resolver.ResolveAsync(repositoryDirectory.FullName, CancellationToken.None);
+
+        Assert.True(result.IsSuccess);
+        Assert.Contains(
+            logger.Entries,
+            entry => entry.Level == LogLevel.Information
+                && entry.Message.Contains("success", StringComparison.Ordinal)
+                && entry.Message.Contains(" ms.", StringComparison.Ordinal));
+        Assert.All(
+            logger.Entries.Where(entry => entry.Level >= LogLevel.Information),
+            entry => Assert.DoesNotContain(sensitiveSegment, entry.Message, StringComparison.Ordinal));
     }
 
     private static void AssertFailure(

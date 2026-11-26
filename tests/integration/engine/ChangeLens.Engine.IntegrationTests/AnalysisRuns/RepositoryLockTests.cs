@@ -2,11 +2,16 @@ using System.Text.Json;
 using ChangeLens.Core.AnalysisRuns.Models;
 using ChangeLens.Core.AnalysisRuns.Services;
 using ChangeLens.Core.LocalState.Constants;
+using ChangeLens.Core.Repositories.Constants;
 using ChangeLens.Core.Repositories.Models;
 using ChangeLens.Core.Results.Models;
 using ChangeLens.Engine.IntegrationTests.AnalysisRuns.Support;
 using ChangeLens.Engine.IntegrationTests.Hosting.Support;
+using ChangeLens.Engine.IntegrationTests.Protocol.Support;
 using ChangeLens.Engine.Protocol.Models;
+using ChangeLens.Infrastructure.Repositories.Services;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 
 namespace ChangeLens.Engine.IntegrationTests.AnalysisRuns;
@@ -100,15 +105,48 @@ public sealed class RepositoryLockTests
             "The controlled repository history is unavailable.",
             LocalStateErrorCode.Unavailable);
         var guard = new RepositoryBusyGuard(
-            null!,
+            new StubAnalysisRunStore(),
             new StubRepositoryHistoryStore(Result.Fail<RepositoryHistorySnapshot>(expectedError)),
-            null!,
-            null!);
+            new PhysicalRepositoryPathResolver(),
+            new CanonicalRepositoryPathKeyProvider(),
+            NullLogger<RepositoryBusyGuard>.Instance);
 
         var result = await guard.CheckRepositoryIdAsync(Guid.NewGuid().ToString("D"), TestContext.Current.CancellationToken);
 
         Assert.True(result.IsFailure);
         Assert.Same(expectedError, Assert.Single(result.Errors));
+    }
+
+    /// <summary>
+    ///     Asynchronously verifies a reservation conflict is logged with the blocking run and stable error code.
+    /// </summary>
+    /// <returns>A task that represents the asynchronous operation.</returns>
+    [Fact]
+    public async Task ReservationConflictIsLoggedWithTheActiveRun()
+    {
+        var repositoryId = Guid.NewGuid();
+        var activeRunId = Guid.NewGuid();
+        var activeRun = new AnalysisRunDetail(
+            activeRunId, AnalysisRunState.Capturing,
+            new AnalysisRepositoryIdentity(repositoryId, "fixture", "/fixture/repo", "/fixture/repo", "head"),
+            new AnalysisComparisonIdentity("main", "target", "token"),
+            null, 1, null, null, null, null, null, null, null, null, null, false, null, null, null);
+        var logger = new RecordingLogger<RepositoryBusyGuard>();
+        var guard = new RepositoryBusyGuard(
+            new StubAnalysisRunStore(getActive: _ => Result.Success<AnalysisRunDetail?>(activeRun)),
+            new StubRepositoryHistoryStore(Result.Success(new RepositoryHistorySnapshot(
+                repositoryId, [new RepositoryHistoryEntry(repositoryId, "/fixture/repo", "fixture", 1, null)]))),
+            new PhysicalRepositoryPathResolver(),
+            new CanonicalRepositoryPathKeyProvider(),
+            logger);
+
+        var result = await guard.CheckRepositoryIdAsync(repositoryId.ToString("D"), TestContext.Current.CancellationToken);
+
+        Assert.Equal(RepositoryErrorCode.Busy, Assert.Single(result.Errors).Code);
+        Assert.Contains(logger.Entries, entry => entry.Level >= LogLevel.Information
+            && entry.Message.Contains(activeRunId.ToString(), StringComparison.Ordinal)
+            && entry.Message.Contains(RepositoryErrorCode.Busy, StringComparison.Ordinal)
+            && entry.Message.EndsWith(" ms.", StringComparison.Ordinal));
     }
 
     /// <summary>

@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Security.Cryptography;
 using System.Text;
 using ChangeLens.Core.Analysis.ChangeAnatomy.Helpers;
@@ -43,6 +44,7 @@ public sealed class EvidenceBinderService : IEvidenceBinderService
     {
         ArgumentNullException.ThrowIfNull(request);
         cancellationToken.ThrowIfCancellationRequested();
+        var startedAt = Stopwatch.GetTimestamp();
 
         if (!EvidenceBinderOptionsValidator.TryValidate(this._options, out var optionsError))
         {
@@ -236,6 +238,7 @@ public sealed class EvidenceBinderService : IEvidenceBinderService
                          .Select(node => node.NodeId)
                          .ToList())
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 if (MeetsTarget())
                 {
                     break;
@@ -316,9 +319,10 @@ public sealed class EvidenceBinderService : IEvidenceBinderService
 
         this._logger.LogInformation(
             "Evidence binder assembled for run {RunId} with {EvidenceCount} evidence nodes, {MatchEdgeCount} match edges, and "
-            + "{BinderCharacterCount} characters against a {TargetCharacters}-character target, budget binding {BudgetBinding}.",
+            + "{BinderCharacterCount} characters against a {TargetCharacters}-character target, budget binding {BudgetBinding}, in "
+            + "{ElapsedMilliseconds:0.000} ms.",
             request.Run.RunId, diagnostics.EvidenceCount, diagnostics.MatchEdgeCount, characterCount, targetCharacters,
-            diagnostics.BudgetBinding);
+            diagnostics.BudgetBinding, Stopwatch.GetElapsedTime(startedAt).TotalMilliseconds);
         if (ladderSteps.Count > 0)
         {
             var droppedNodeCount = omissions.Count(entry =>
@@ -338,6 +342,7 @@ public sealed class EvidenceBinderService : IEvidenceBinderService
     public EvidenceBinderModel ScopeToChangedFiles(EvidenceBinderModel binder)
     {
         ArgumentNullException.ThrowIfNull(binder);
+        var startedAt = Stopwatch.GetTimestamp();
 
         var evidence = binder.Evidence.Where(node => node.IsChangedFile).Select((node, index) => node with { Rank = index + 1 }).ToList();
         var retainedIds = evidence.Select(node => node.NodeId).ToHashSet(StringComparer.Ordinal);
@@ -365,8 +370,9 @@ public sealed class EvidenceBinderService : IEvidenceBinderService
 
         this._logger.LogInformation(
             "Evidence binder for run {RunId} was scoped to changed files with {EvidenceCount} evidence nodes and {BinderCharacterCount} "
-            + "characters, leaving out {OutsideChangedFilesNodeCount} unchanged-file nodes.",
-            binder.Comparison.RunId, diagnostics.EvidenceCount, characterCount, droppedIds.Count);
+            + "characters, leaving out {OutsideChangedFilesNodeCount} unchanged-file nodes, in {ElapsedMilliseconds:0.000} ms.",
+            binder.Comparison.RunId, diagnostics.EvidenceCount, characterCount, droppedIds.Count,
+            Stopwatch.GetElapsedTime(startedAt).TotalMilliseconds);
         return scoped with { Diagnostics = diagnostics };
     }
 

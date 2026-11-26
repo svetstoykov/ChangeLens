@@ -13,13 +13,18 @@ public static class CitationBuilder
     /// <param name="model">The published mental model.</param>
     /// <param name="binder">The evidence binder.</param>
     /// <param name="graph">The evidence graph.</param>
-    /// <param name="facts">The checker facts.</param>
+    /// <param name="facts">The checker facts. Cannot be <see langword="null" />.</param>
     /// <returns>The citations in published claim order and binder evidence order.</returns>
+    /// <exception cref="ArgumentNullException">
+    ///     <paramref name="model" />, <paramref name="binder" />, <paramref name="graph" />, or <paramref name="facts" />
+    ///     is <see langword="null" />.
+    /// </exception>
     public static IReadOnlyList<Citation> Build(MentalModel model, EvidenceBinderModel binder, EvidenceGraphModel graph, CheckerFacts facts)
     {
         ArgumentNullException.ThrowIfNull(model);
         ArgumentNullException.ThrowIfNull(binder);
         ArgumentNullException.ThrowIfNull(graph);
+        ArgumentNullException.ThrowIfNull(facts);
         var graphById = graph.Nodes.ToDictionary(node => node.NodeId, StringComparer.Ordinal);
         var evidenceById = binder.Evidence.ToDictionary(evidence => evidence.NodeId, StringComparer.Ordinal);
         var citations = new List<Citation>();

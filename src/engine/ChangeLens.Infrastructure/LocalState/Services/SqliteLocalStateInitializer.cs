@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using ChangeLens.Core.LocalState.Constants;
 using ChangeLens.Core.LocalState.Interfaces;
 using ChangeLens.Core.Results.Models;
@@ -28,6 +29,9 @@ public sealed class SqliteLocalStateInitializer(
     /// <inheritdoc />
     public async Task<Result> InitializeAsync(CancellationToken cancellationToken)
     {
+        var startedAt = Stopwatch.GetTimestamp();
+        logger.LogDebug("Initializing SQLite local-state database and enabling WAL journal mode.");
+
         try
         {
             Directory.CreateDirectory(paths.DirectoryPath);
@@ -41,17 +45,25 @@ public sealed class SqliteLocalStateInitializer(
 
             if (!string.Equals(journalMode, "wal", StringComparison.OrdinalIgnoreCase))
             {
-                logger.LogCritical("Local-state failed to enable write-ahead logging; reported mode was {JournalMode}.", journalMode);
+                logger.LogCritical(
+                    "Local-state failed to enable write-ahead logging; reported mode was {JournalMode} after {ElapsedMilliseconds:0.000} ms.",
+                    journalMode, Stopwatch.GetElapsedTime(startedAt).TotalMilliseconds);
                 return LocalStateFailure.Unavailable();
             }
 
-            logger.LogInformation("Local state is ready at schema version {SchemaVersion}.", LocalStateConstants.CurrentSchemaVersion);
+            logger.LogInformation(
+                "Local state is ready at schema version {SchemaVersion} in {ElapsedMilliseconds:0.000} ms.",
+                LocalStateConstants.CurrentSchemaVersion, Stopwatch.GetElapsedTime(startedAt).TotalMilliseconds);
             return Result.Success();
         }
         catch (Exception exception) when (LocalStateFailure.IsExpectedAccessFailure(exception))
         {
-            logger.LogInformation("Local-state readiness failed with error {ErrorCode}.", LocalStateErrorCode.Unavailable);
-            return LocalStateFailure.Unavailable(exception);
+            cancellationToken.ThrowIfCancellationRequested();
+            logger.LogDebug(exception, "Local-state initialization failed with an expected access failure.");
+            logger.LogInformation(
+                "Local-state readiness failed with error {ErrorCode} in {ElapsedMilliseconds:0.000} ms.",
+                LocalStateErrorCode.Unavailable, Stopwatch.GetElapsedTime(startedAt).TotalMilliseconds);
+            return LocalStateFailure.Unavailable();
         }
     }
 }

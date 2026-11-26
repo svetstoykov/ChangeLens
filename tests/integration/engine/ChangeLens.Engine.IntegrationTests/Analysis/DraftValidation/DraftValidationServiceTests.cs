@@ -6,6 +6,9 @@ using ChangeLens.Core.Analysis.EvidenceBinder.Models;
 using ChangeLens.Core.Analysis.Shared.Constants;
 using ChangeLens.Core.Analysis.Shared.Models;
 using ChangeLens.Engine.IntegrationTests.Analysis.DraftValidation.Support;
+using ChangeLens.Engine.IntegrationTests.Protocol.Support;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 using EvidenceBinderModel = ChangeLens.Core.Analysis.EvidenceBinder.Models.EvidenceBinder;
 
@@ -31,6 +34,21 @@ public sealed class DraftValidationServiceTests
             outcome.Draft.Tracks.Single().Participants.Single(participant => participant.Id == "caller").EvidenceNodeIds.SequenceEqual(["n1"]));
         Assert.Equal(1, outcome.InvalidReferenceCount);
         Assert.Contains(outcome.Removals, removal => removal.Scope == "participant" && removal.Id == "caller" && removal.Reason.Contains("stripped"));
+    }
+
+    [Fact]
+    public void ValidationLogsAnInformationSummaryWithElapsedTime()
+    {
+        var binder = DraftValidationFixtureBinderBuilder.Create(["n1"]);
+        var draft = Draft([Participant("caller", ["n1", "unknown"])], summaryNodes: ["n1"], thesisNodes: ["n1"]);
+        var logger = new RecordingLogger<DraftValidationService>();
+
+        new DraftValidationService(logger).Validate(draft, binder, CancellationToken.None);
+
+        Assert.Contains(logger.Entries, entry => entry.Level == LogLevel.Information
+            && entry.Message.StartsWith("Draft validation completed", StringComparison.Ordinal)
+            && entry.Message.Contains("1 invalid references", StringComparison.Ordinal)
+            && entry.Message.EndsWith(" ms.", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -305,7 +323,7 @@ public sealed class DraftValidationServiceTests
         Assert.Equal("thesis", removal.Id);
     }
 
-    private static DraftValidationService Service() => new();
+    private static DraftValidationService Service() => new(NullLogger<DraftValidationService>.Instance);
 
     private static DraftValidationOutcome Validate(MentalModelDraft draft, EvidenceBinderModel binder) =>
         Service().Validate(draft, binder, CancellationToken.None);

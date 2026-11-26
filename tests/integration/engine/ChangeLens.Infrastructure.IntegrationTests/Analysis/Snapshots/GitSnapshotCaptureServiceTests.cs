@@ -1,10 +1,16 @@
+using ChangeLens.Core.Analysis.Snapshots.Constants;
 using ChangeLens.Core.Analysis.Snapshots.Models;
 using ChangeLens.Core.Analysis.Snapshots.Services;
 using ChangeLens.Core.AnalysisRuns.Constants;
 using ChangeLens.Core.AnalysisRuns.Models;
+using ChangeLens.Core.Comparisons.Interfaces;
 using ChangeLens.Core.Comparisons.Services;
+using ChangeLens.Core.Git.Interfaces;
+using ChangeLens.Core.Git.Models;
 using ChangeLens.Infrastructure.Git.Services;
+using ChangeLens.Infrastructure.IntegrationTests.Analysis.Snapshots.Support;
 using ChangeLens.Infrastructure.IntegrationTests.Git.Support;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 
@@ -157,15 +163,77 @@ public sealed class GitSnapshotCaptureServiceTests
         Assert.All(result.Data!.Manifest.Entries, entry => Assert.Equal(64, entry.HeadObjectId.Length));
     }
 
+    /// <summary>
+    ///     Asynchronously verifies each unparseable Git output path logs a warning naming what could not be read.
+    /// </summary>
+    /// <param name="command">The Git command whose output is replaced.</param>
+    /// <param name="expectedWarning">The warning text expected for that command.</param>
+    /// <returns>A task that represents the asynchronous operation.</returns>
+    [Theory]
+    [InlineData("target", "could not resolve a single target revision")]
+    [InlineData("HEAD", "could not resolve a single HEAD revision")]
+    [InlineData("diff", "could not parse committed diff output")]
+    [InlineData("status", "could not parse working-tree status output")]
+    public async Task CaptureAsyncLogsAWarningWhenGitOutputCannotBeParsed(string command, string expectedWarning)
+    {
+        using var repository = new TemporaryGitRepository();
+        repository.CreateLocalBranch("topic");
+        repository.CommitFile("committed.txt", "committed\n", "committed work");
+        var runner = new OutputRewritingGitCommandRunner(
+            new GitCliCommandRunner(), gitCommand => Selects(gitCommand, command), "unparseable output\n");
+        var logger = new RecordingSnapshotLogger<GitSnapshotCaptureService>();
+
+        var result = await CaptureAsync(repository, "refs/heads/topic", runner: runner, logger: logger);
+
+        Assert.Equal(SnapshotErrorCode.CaptureFailed, Assert.Single(result.Errors).Code);
+        Assert.Contains(logger.Entries, entry => entry.Level == LogLevel.Warning
+            && entry.Message.Contains(expectedWarning, StringComparison.Ordinal));
+    }
+
+    /// <summary>
+    ///     Asynchronously verifies a file-summary composition failure logs a warning with its error code.
+    /// </summary>
+    /// <returns>A task that represents the asynchronous operation.</returns>
+    [Fact]
+    public async Task CaptureAsyncLogsAWarningWhenExcludedCountsCannotBeComposed()
+    {
+        using var repository = new TemporaryGitRepository();
+        repository.CreateLocalBranch("topic");
+        repository.CommitFile("committed.txt", "committed\n", "committed work");
+        var logger = new RecordingSnapshotLogger<GitSnapshotCaptureService>();
+
+        var result = await CaptureAsync(
+            repository, "refs/heads/topic", composer: new FailingComparisonFileSummaryComposer(), logger: logger);
+
+        Assert.Equal(SnapshotErrorCode.CaptureFailed, Assert.Single(result.Errors).Code);
+        Assert.Contains(logger.Entries, entry => entry.Level == LogLevel.Warning
+            && entry.Message.Contains("could not compose excluded working-tree counts", StringComparison.Ordinal)
+            && entry.Message.Contains(FailingComparisonFileSummaryComposer.ErrorCode, StringComparison.Ordinal));
+    }
+
+    private static bool Selects(GitCommand gitCommand, string command) => command switch
+    {
+        "target" => gitCommand.Arguments.Contains("rev-parse")
+            && !gitCommand.Arguments.Contains("HEAD^{commit}"),
+        "HEAD" => gitCommand.Arguments.Contains("HEAD^{commit}"),
+        "diff" => gitCommand.Arguments.Contains("--raw"),
+        "status" => gitCommand.Arguments.Contains("status"),
+        _ => throw new ArgumentOutOfRangeException(nameof(command), command, "Unknown fixture command."),
+    };
+
     private static async Task<ChangeLens.Core.Results.Models.Result<SnapshotCapture>> CaptureAsync(
         TemporaryGitRepository repository,
         string target,
-        string? acceptedHeadRevision = null)
+        string? acceptedHeadRevision = null,
+        IGitCommandRunner? runner = null,
+        IComparisonFileSummaryComposer? composer = null,
+        ILogger<GitSnapshotCaptureService>? logger = null)
     {
         var before = RepositoryStateSnapshot.Capture(repository.RootPath);
-        var runner = new GitCliCommandRunner();
-        var service = new GitSnapshotCaptureService(runner, new ComparisonFileSummaryComposer(),
-            NullLogger<GitSnapshotCaptureService>.Instance);
+        var service = new GitSnapshotCaptureService(
+            runner ?? new GitCliCommandRunner(),
+            composer ?? new ComparisonFileSummaryComposer(),
+            logger ?? NullLogger<GitSnapshotCaptureService>.Instance);
         var targetRevision = TemporaryGitRepository
             .RunGit(["-C", repository.RootPath, "rev-parse", "--verify", target + "^{commit}"]).StandardOutput.Trim();
         var request = new SnapshotCaptureRequest(

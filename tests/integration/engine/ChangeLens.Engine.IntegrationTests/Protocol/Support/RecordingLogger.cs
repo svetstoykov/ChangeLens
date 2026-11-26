@@ -10,6 +10,7 @@ internal sealed class RecordingLogger<T> : ILogger<T>
 {
     private readonly List<LogLevel> _levels = [];
     private readonly List<Exception?> _exceptions = [];
+    private readonly List<(LogLevel Level, string Message)> _entries = [];
 
     /// <summary>
     ///     Gets the emitted log levels in call order.
@@ -20,6 +21,11 @@ internal sealed class RecordingLogger<T> : ILogger<T>
     ///     Gets the exceptions emitted in call order.
     /// </summary>
     internal IReadOnlyList<Exception?> Exceptions => this._exceptions;
+
+    /// <summary>
+    ///     Gets the emitted levels with their formatted messages in call order.
+    /// </summary>
+    internal IReadOnlyList<(LogLevel Level, string Message)> Entries => this._entries;
 
     /// <inheritdoc />
     public IDisposable? BeginScope<TState>(TState state)
@@ -39,5 +45,6 @@ internal sealed class RecordingLogger<T> : ILogger<T>
     {
         this._levels.Add(logLevel);
         this._exceptions.Add(exception);
+        this._entries.Add((logLevel, formatter(state, exception)));
     }
 }

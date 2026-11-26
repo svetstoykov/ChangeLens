@@ -1,4 +1,5 @@
 using ChangeLens.Core.Analysis.EvidenceBinder.Models;
+using ChangeLens.Core.Analysis.Shared.Constants;
 
 namespace ChangeLens.Core.Analysis.EvidenceBinder.Helpers;
 
@@ -32,11 +33,18 @@ public static class EvidenceBinderOptionsValidator
     {
         ArgumentNullException.ThrowIfNull(options);
 
+        var derivedMaximumBinderCharacters =
+            Math.Floor(options.ContextWindowTokens * ModelBudgetConstants.CharactersPerToken)
+            - options.CuratorOutputCharacters
+            - options.PromptReserveCharacters;
+
         if (options.ContextWindowTokens <= 0
             || options.CuratorOutputCharacters < 0
             || options.PromptReserveCharacters < 0
             || options.MaximumBinderCharacters is <= 0
+            || (options.MaximumBinderCharacters is null && derivedMaximumBinderCharacters <= 0)
             || options.EffectiveMaximumBinderCharacters <= 0
+            || !double.IsFinite(options.TargetUtilization)
             || options.TargetUtilization is <= 0 or > 1
             || options.MaximumOrientationPathsPerDirectory <= 0
             || options.MaximumOrientationPaths <= 0

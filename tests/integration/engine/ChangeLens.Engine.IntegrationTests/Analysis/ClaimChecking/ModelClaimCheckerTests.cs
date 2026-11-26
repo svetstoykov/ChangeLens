@@ -215,13 +215,16 @@ public sealed class ModelClaimCheckerTests
         new(client, options ?? new ClaimCheckingOptions(), NullLogger<ModelClaimChecker>.Instance);
 
     private static ClaimCheckingService Checking(ScriptedModelCompletionClient client, ClaimCheckingOptions? options = null) =>
-        new(Checker(client, options));
+        new(NullLogger<ClaimCheckingService>.Instance, Checker(client, options));
 
     private static PublicationService Publication(ScriptedModelCompletionClient client)
     {
         var options = new ClaimCheckingOptions { Enabled = true };
         var checker = Checker(client, options);
-        return new PublicationService(new ClaimCheckingService(checker), new EvidenceFrontierService(new EvidenceFrontierOptions()), options,
+        return new PublicationService(
+            new ClaimCheckingService(NullLogger<ClaimCheckingService>.Instance, checker),
+            new EvidenceFrontierService(new EvidenceFrontierOptions(), NullLogger<EvidenceFrontierService>.Instance),
+            options,
             NullLogger<PublicationService>.Instance);
     }
 

@@ -4,6 +4,8 @@ using ChangeLens.Core.Git.Services;
 using ChangeLens.Infrastructure.Repositories.Services;
 using ChangeLens.Infrastructure.Git.Services;
 using ChangeLens.Infrastructure.IntegrationTests.Git.Support;
+using ChangeLens.Infrastructure.IntegrationTests.Support;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Xunit.Sdk;
 using Xunit;
@@ -125,8 +127,24 @@ public sealed class GitComparisonTargetDiscoveryIntegrationTests
         Assert.Null(result.Data.SuggestedTarget);
     }
 
+    [Fact]
+    public async Task ListAsync_LogsCompletionWithElapsedTimeAndNoRepositoryPath()
+    {
+        using var repository = new TemporaryGitRepository();
+        repository.CreateLocalBranch("topic");
+        var logger = new RecordingInfrastructureLogger<GitComparisonTargetDiscovery>();
+
+        var result = await ListWithoutMutationAsync(repository, logger);
+
+        Assert.True(result.IsSuccess);
+        Assert.Contains(logger.Entries, entry => entry.Level == LogLevel.Information
+            && entry.Message.StartsWith("Discovered", StringComparison.Ordinal)
+            && entry.Message.EndsWith(" ms.", StringComparison.Ordinal));
+        Assert.DoesNotContain(logger.Entries, entry => entry.Message.Contains(repository.RootPath, StringComparison.Ordinal));
+    }
+
     private static async Task<ChangeLens.Core.Results.Models.Result<ComparisonTargetSet>>
-        ListWithoutMutationAsync(TemporaryGitRepository repository)
+        ListWithoutMutationAsync(TemporaryGitRepository repository, ILogger<GitComparisonTargetDiscovery>? logger = null)
     {
         var before = RepositoryStateSnapshot.Capture(repository.RootPath);
         var runner = new GitCliCommandRunner();
@@ -136,7 +154,7 @@ public sealed class GitComparisonTargetDiscoveryIntegrationTests
                 new PhysicalRepositoryPathResolver(),
                 NullLogger<GitRepositoryInspector>.Instance),
             runner,
-            NullLogger<GitComparisonTargetDiscovery>.Instance);
+            logger ?? NullLogger<GitComparisonTargetDiscovery>.Instance);
 
         var result = await discovery.ListAsync(
             repository.RootPath,

@@ -1,10 +1,12 @@
 using System.Net.Sockets;
 using System.Net;
 using System.Text.Json;
+using ChangeLens.Core.ModelCompletion.Constants;
 using ChangeLens.Core.ModelCompletion.Interfaces;
 using ChangeLens.Core.ModelCompletion.Models;
 using ChangeLens.Core.Results.Models;
 using ChangeLens.Infrastructure.IntegrationTests.ModelCompletion.Support;
+using ChangeLens.Infrastructure.IntegrationTests.Support;
 using ChangeLens.Infrastructure.ModelCompletion.Constants;
 using ChangeLens.Infrastructure.ModelCompletion.Extensions;
 using ChangeLens.Infrastructure.ModelCompletion.Models;
@@ -751,6 +753,40 @@ public sealed class OpenAiCompatibleModelCompletionClientTests
         var result = await CreateClient(httpClient, CreateOptions(server)).CompleteJsonAsync(CreateRequest(), CancellationToken.None);
 
         Assert.True(result.IsSuccess);
+    }
+
+    /// <summary>
+    ///     Verifies transport and JSON parsing exceptions are logged at <c>Debug</c> with exception details.
+    /// </summary>
+    [Fact]
+    public async Task CompleteJsonAsync_TransportAndJsonExceptionsLogAtDebug()
+    {
+        var transportLogger = new RecordingInfrastructureLogger<OpenAiCompatibleModelCompletionClient>();
+        using var transportClient = new HttpClient(new ThrowingHttpMessageHandler(new HttpRequestException("loopback unreachable")));
+        var transportResult = await new OpenAiCompatibleModelCompletionClient(
+                transportClient,
+                Options.Create(new ModelCompletionOptions { BaseUrl = "http://127.0.0.1:1/v1", Model = "fixture-model", ApiKey = ApiKey }),
+                transportLogger)
+            .CompleteJsonAsync(CreateRequest(), CancellationToken.None);
+
+        AssertFailure(transportResult, ErrorType.ExternalDependencyFailure, ModelCompletionErrorCode.ProviderUnavailable);
+        Assert.Contains(
+            transportLogger.Entries,
+            entry => entry.Level == LogLevel.Debug && entry.Exception is HttpRequestException);
+
+        await using var server = await LoopbackHttpServer.StartAsync((_, _) => Task.FromResult(SuccessResponseBody("{not-json")));
+        using var jsonHttpClient = new HttpClient();
+        var jsonLogger = new RecordingInfrastructureLogger<OpenAiCompatibleModelCompletionClient>();
+        var jsonResult = await new OpenAiCompatibleModelCompletionClient(
+                jsonHttpClient,
+                Options.Create(CreateOptions(server)),
+                jsonLogger)
+            .CompleteJsonAsync(CreateRequest(), CancellationToken.None);
+
+        AssertFailure(jsonResult, ErrorType.ExternalDependencyFailure, ModelCompletionErrorCode.MalformedResponse);
+        Assert.Contains(
+            jsonLogger.Entries,
+            entry => entry.Level == LogLevel.Debug && entry.Exception is JsonException);
     }
 
     private static TaskCompletionSource CreateRequestReceivedSignal() =>

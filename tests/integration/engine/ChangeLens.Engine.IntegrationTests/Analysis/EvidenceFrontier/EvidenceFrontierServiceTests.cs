@@ -8,6 +8,9 @@ using ChangeLens.Core.Analysis.EvidenceFrontier.Models;
 using ChangeLens.Core.Analysis.EvidenceFrontier.Services;
 using ChangeLens.Core.Analysis.EvidenceGraph.Models;
 using ChangeLens.Core.Analysis.Snapshots.Models;
+using ChangeLens.Engine.IntegrationTests.Protocol.Support;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 using EvidenceBinderModel = ChangeLens.Core.Analysis.EvidenceBinder.Models.EvidenceBinder;
 
@@ -36,7 +39,7 @@ public sealed class EvidenceFrontierServiceTests
             new BinderOmission(EvidenceBinderOmissionKind.BudgetDropped, 1, EvidenceBinderLadderStep.ChangedFileNodeSalience, [graphNode.NodeId]),
             new BinderOmission(EvidenceBinderOmissionKind.BudgetDropped, 1, EvidenceBinderLadderStep.Orientation, ["src"]));
 
-        var frontier = new EvidenceFrontierService(new EvidenceFrontierOptions()).Build(
+        var frontier = new EvidenceFrontierService(new EvidenceFrontierOptions(), NullLogger<EvidenceFrontierService>.Instance).Build(
             ranking, graph, policy, binder, null, CancellationToken.None);
 
         Assert.Equal(5, frontier.Diagnostics.TotalEntryCount);
@@ -73,7 +76,7 @@ public sealed class EvidenceFrontierServiceTests
             new BinderOmission(EvidenceBinderOmissionKind.PolicyExcluded, 5, "excluded", graphNodes.Select(node => node.NodeId).ToArray()));
         var options = new EvidenceFrontierOptions { MaximumEntries = 2 };
 
-        var frontier = new EvidenceFrontierService(options).Build(
+        var frontier = new EvidenceFrontierService(options, NullLogger<EvidenceFrontierService>.Instance).Build(
             Ranking(), graph, policy, binder, null, CancellationToken.None);
 
         Assert.Equal(5, frontier.Diagnostics.TotalEntryCount);
@@ -88,7 +91,7 @@ public sealed class EvidenceFrontierServiceTests
     {
         var node = Node("n001", "src/bound.cs", 4);
         var binder = Binder([Evidence(node)]);
-        var service = new EvidenceFrontierService(new EvidenceFrontierOptions());
+        var service = new EvidenceFrontierService(new EvidenceFrontierOptions(), NullLogger<EvidenceFrontierService>.Instance);
 
         var checkingOff = service.Build(
             Ranking(), Graph(node), Policy(Decision(node, ContextPolicyVerdict.Allow, null), node), binder, null, CancellationToken.None);
@@ -105,13 +108,30 @@ public sealed class EvidenceFrontierServiceTests
     }
 
     [Fact]
+    public void BuildLogsAnInformationSummaryWithElapsedTime()
+    {
+        var node = Node("n001", "src/bound.cs", 4);
+        var logger = new RecordingLogger<EvidenceFrontierService>();
+
+        new EvidenceFrontierService(new EvidenceFrontierOptions(), logger).Build(
+            Ranking(), Graph(node), Policy(Decision(node, ContextPolicyVerdict.Allow, null), node), Binder([Evidence(node)]),
+            new HashSet<string>(StringComparer.Ordinal), CancellationToken.None);
+
+        Assert.Contains(logger.Entries, entry => entry.Level == LogLevel.Information
+            && entry.Message.StartsWith("Evidence frontier built", StringComparison.Ordinal)
+            && entry.Message.Contains("1/1 entries", StringComparison.Ordinal)
+            && entry.Message.EndsWith(" ms.", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public void CancellationIsObservedBeforeBuilding()
     {
         using var cancellation = new CancellationTokenSource();
         cancellation.Cancel();
 
-        Assert.Throws<OperationCanceledException>(() => new EvidenceFrontierService(new EvidenceFrontierOptions()).Build(
-            Ranking(), Graph(), Policy(), Binder([]), null, cancellation.Token));
+        Assert.Throws<OperationCanceledException>(() =>
+            new EvidenceFrontierService(new EvidenceFrontierOptions(), NullLogger<EvidenceFrontierService>.Instance).Build(
+                Ranking(), Graph(), Policy(), Binder([]), null, cancellation.Token));
     }
 
     private static CorrespondenceCandidate Candidate(string path, int rank, double score, CorrespondenceSignal signal) => new(

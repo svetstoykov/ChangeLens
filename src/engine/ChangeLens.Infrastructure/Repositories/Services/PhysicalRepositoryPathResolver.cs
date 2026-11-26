@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using ChangeLens.Core.Repositories.Constants;
 using ChangeLens.Core.Repositories.Interfaces;
 using ChangeLens.Core.Results.Models;
@@ -40,7 +41,7 @@ public sealed class PhysicalRepositoryPathResolver : IRepositoryPathResolver
     ///     Initializes a new instance of the <see cref="PhysicalRepositoryPathResolver" /> class.
     /// </summary>
     /// <param name="logger">
-    ///     The logger for path-resolution failures, or <see langword="null" /> to log nowhere.
+    ///     The logger for path-resolution diagnostics, or <see langword="null" /> to log nowhere.
     /// </param>
     public PhysicalRepositoryPathResolver(ILogger<PhysicalRepositoryPathResolver>? logger = null)
     {
@@ -48,9 +49,12 @@ public sealed class PhysicalRepositoryPathResolver : IRepositoryPathResolver
     }
 
     /// <inheritdoc />
-    public async Task<Result<string>> ResolveAsync(string path, CancellationToken cancellationToken)
+    public Task<Result<string>> ResolveAsync(string path, CancellationToken cancellationToken)
     {
+        ArgumentNullException.ThrowIfNull(path);
         cancellationToken.ThrowIfCancellationRequested();
+
+        var startedAt = Stopwatch.GetTimestamp();
 
         try
         {
@@ -68,25 +72,33 @@ public sealed class PhysicalRepositoryPathResolver : IRepositoryPathResolver
                 physicalPath = ResolveDirectory(Path.Combine(physicalPath, segment));
             }
 
-            return Result.Success<string>(physicalPath);
+            this._logger.LogDebug("Resolved repository path across {SegmentCount} segment(s).", segments.Length);
+            this._logger.LogInformation(
+                "Repository path resolution finished with outcome {Outcome} in {ElapsedMilliseconds:0.000} ms.",
+                "success", Stopwatch.GetElapsedTime(startedAt).TotalMilliseconds);
+            return Task.FromResult(Result.Success<string>(physicalPath));
         }
         catch (UnauthorizedAccessException exception)
         {
-            this._logger.LogDebug(exception, "Path resolution failed: access denied.");
-            return AccessDeniedError;
+            return Task.FromResult(this.Fail(exception, AccessDeniedError, "Path resolution failed: access denied.", startedAt));
         }
-        catch (Exception exception) when (
-            exception is DirectoryNotFoundException or FileNotFoundException)
+        catch (Exception exception) when (exception is DirectoryNotFoundException or FileNotFoundException)
         {
-            this._logger.LogDebug(exception, "Path resolution failed: the directory does not exist.");
-            return PathNotFoundError;
+            return Task.FromResult(this.Fail(exception, PathNotFoundError, "Path resolution failed: the directory does not exist.", startedAt));
         }
-        catch (Exception exception) when (
-            exception is IOException or NotSupportedException or ArgumentException)
+        catch (Exception exception) when (exception is IOException or NotSupportedException or ArgumentException)
         {
-            this._logger.LogWarning(exception, "Path resolution failed unexpectedly.");
-            return ResolutionFailedError;
+            return Task.FromResult(this.Fail(exception, ResolutionFailedError, "Path resolution failed unexpectedly.", startedAt));
         }
+    }
+
+    private Result<string> Fail(Exception exception, OperationError error, string debugMessage, long startedAt)
+    {
+        this._logger.LogDebug(exception, debugMessage);
+        this._logger.LogInformation(
+            "Repository path resolution finished with outcome {Outcome} and error {ErrorCode} in {ElapsedMilliseconds:0.000} ms.",
+            "failure", error.Code, Stopwatch.GetElapsedTime(startedAt).TotalMilliseconds);
+        return error;
     }
 
     private static string ResolveDirectory(string path)
@@ -99,7 +111,8 @@ public sealed class PhysicalRepositoryPathResolver : IRepositoryPathResolver
         }
 
         var directory = new DirectoryInfo(path);
-        _ = directory.GetFileSystemInfos();
+        using var entries = directory.EnumerateFileSystemInfos().GetEnumerator();
+        _ = entries.MoveNext();
         var target = directory.ResolveLinkTarget(returnFinalTarget: true);
 
         if (target is null)

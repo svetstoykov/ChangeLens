@@ -1,10 +1,11 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, type RefObject } from "react";
 import type { RecentRepository } from "../Models/RecentRepository";
 import { Icon } from "../../Visuals/Components/Icon";
 
 interface RemoveRepositoryDialogProps {
   readonly repository: RecentRepository;
   readonly busy: boolean;
+  readonly fallbackFocusRef: RefObject<HTMLElement | null>;
   readonly onConfirm: () => void;
   readonly onCancel: () => void;
 }
@@ -12,6 +13,7 @@ interface RemoveRepositoryDialogProps {
 export function RemoveRepositoryDialog({
   repository,
   busy,
+  fallbackFocusRef,
   onConfirm,
   onCancel,
 }: RemoveRepositoryDialogProps) {
@@ -33,11 +35,17 @@ export function RemoveRepositoryDialog({
       if (dialog?.open) {
         dialog.close();
       }
-      if (previouslyFocusedElementRef.current?.isConnected) {
-        previouslyFocusedElementRef.current.focus();
+      const previous = previouslyFocusedElementRef.current;
+      if (
+        previous?.isConnected &&
+        !(previous instanceof HTMLButtonElement && previous.disabled)
+      ) {
+        previous.focus();
+      } else {
+        fallbackFocusRef.current?.focus();
       }
     };
-  }, []);
+  }, [fallbackFocusRef]);
 
   return (
     <dialog

@@ -120,6 +120,7 @@ export function App({
 
   const activeDisplayedRunIdRef = useRef<string | null>(null);
   const openEpochRef = useRef(0);
+  const repositoriesHeadingRef = useRef<HTMLHeadingElement>(null);
 
   useEffect(() => {
     activeDisplayedRunIdRef.current = displayedRunId;
@@ -581,6 +582,7 @@ export function App({
           <button
             className="primary-button"
             type="button"
+            autoFocus={retryGeneration > 0}
             onClick={() => {
               setState({ status: "checkingEngine" });
               setRetryGeneration((generation) => generation + 1);
@@ -702,6 +704,7 @@ export function App({
         <RemoveRepositoryDialog
           repository={pendingRemoval}
           busy={busyRepositoryId === pendingRemoval.repositoryId}
+          fallbackFocusRef={repositoriesHeadingRef}
           onConfirm={() => void confirmRemoveRecent()}
           onCancel={() => {
             if (busyRepositoryId === null) {
@@ -713,6 +716,7 @@ export function App({
       {showingHistory ? (
         <RepositoriesDestination
           repositories={history.repositories}
+          headingRef={repositoriesHeadingRef}
           currentRepositoryId={workspace?.repositoryId ?? null}
           error={historyError}
           busyRepositoryId={busyRepositoryId}

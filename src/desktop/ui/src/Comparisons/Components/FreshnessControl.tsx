@@ -24,6 +24,7 @@ export function FreshnessControl({
           ? "Stale"
           : "Unknown";
   const statusIcon = freshness === "current" ? "check" : "warning";
+  const isUnavailable = freshness === "checking" || isBusy;
   return (
     <section
       className="freshness-control"
@@ -43,8 +44,10 @@ export function FreshnessControl({
         className="icon-button"
         type="button"
         aria-label="Refresh comparison"
-        onClick={onRefresh}
-        disabled={freshness === "checking" || isBusy}
+        onClick={() => {
+          if (!isUnavailable) onRefresh();
+        }}
+        aria-disabled={isUnavailable}
       >
         <Icon name="refresh" />
       </button>

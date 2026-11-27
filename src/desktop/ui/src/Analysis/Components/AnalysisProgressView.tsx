@@ -9,6 +9,7 @@ import { ANALYSIS_ACTIVE_STAGE_ORDER } from "../Models/AnalysisRunState";
 import type { AnalysisTerminalSummary } from "../Models/AnalysisTerminalSummary";
 import { ReadingModelPanel } from "./ReadingModelPanel";
 import { ValidationRemovalList } from "./ValidationRemovalList";
+import { shortenTargetRef } from "./shortenTargetRef";
 
 type StageStatus = "complete" | "active" | "pending";
 
@@ -104,7 +105,7 @@ export function AnalysisProgressView({
           </span>
           <span className="workspace-head" title={summary.comparison.target}>
             <Icon name="compare" />
-            <code>{summary.comparison.target}</code>
+            <code>{shortenTargetRef(summary.comparison.target)}</code>
           </span>
         </section>
       </header>
@@ -118,7 +119,6 @@ export function AnalysisProgressView({
       {actionError !== null ? (
         <AnalysisActionAlert error={actionError}>
           <button type="button" onClick={onDismissActionError}>
-            <Icon name="check" />
             Dismiss
           </button>
         </AnalysisActionAlert>

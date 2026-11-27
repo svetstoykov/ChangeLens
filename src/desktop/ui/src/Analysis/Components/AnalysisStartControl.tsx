@@ -20,6 +20,7 @@ export function AnalysisStartControl({
   const isBlocked = blockedReason !== null || starting;
 
   const handleStart = (): void => {
+    if (starting) return;
     onStart(trimmedChangeContext.length > 0 ? trimmedChangeContext : null);
   };
 
@@ -65,7 +66,8 @@ export function AnalysisStartControl({
           className="primary-button"
           type="button"
           data-starting={starting}
-          disabled={isBlocked}
+          disabled={blockedReason !== null}
+          aria-disabled={starting}
           onClick={handleStart}
         >
           <Icon name={starting ? "refresh" : "compare"} />
@@ -87,6 +89,8 @@ function describeStartHint(
       return "Prepare a current comparison before starting an analysis.";
     case "noCommittedChanges":
       return "There are no committed branch changes available for analysis.";
+    case "conflicts":
+      return "Resolve the conflicts outside ChangeLens, then refresh the comparison.";
     default:
       return "ChangeLens records an immutable snapshot of the committed branch changes and collects repository facts.";
   }

@@ -47,6 +47,11 @@ export function RepositoryWorkspace({
   const canRetryError =
     errorCode === "comparison.timedOut" ||
     errorCode === "comparison.inspectionFailed";
+  const discoveryFailed =
+    state.errorSource === "discovery" &&
+    errorCode !== "comparison.invalidTargetQuery";
+  const isTargetError =
+    state.errorSource === "discovery" || state.errorSource === "preparation";
   const headName =
     repository.head.kind === "branch" ? repository.head.name : "Detached HEAD";
   const analysisErrorPresentation =
@@ -54,14 +59,61 @@ export function RepositoryWorkspace({
   const preparedComparison = state.preparedComparison;
   const startBlockedReason: AnalysisStartBlockedReason | null =
     preparedComparison === null ||
-    preparedComparison.readiness.state !== "ready" ||
     state.freshness !== "current" ||
     state.isPreparing ||
     state.isRefreshing
       ? "comparisonNotReady"
-      : preparedComparison.currentWorkCommitCount === 0
-        ? "noCommittedChanges"
-        : null;
+      : preparedComparison.readiness.state === "conflicts"
+        ? "conflicts"
+        : preparedComparison.readiness.state === "empty" ||
+            preparedComparison.currentWorkCommitCount === 0
+          ? "noCommittedChanges"
+          : null;
+
+  const comparisonAlert = error ? (
+    <section className="action-alert" role="alert">
+      <Icon name="warning" />
+      <div>
+        <strong>{error.title}</strong>
+        <ul>
+          {error.messages.map((message, index) => (
+            <li
+              key={`${state.error?.errors[index]?.code ?? "comparison"}-${index}`}
+            >
+              {message}
+            </li>
+          ))}
+        </ul>
+        <div className="alert-actions">
+          {errorCode === "comparison.invalidTargetQuery" ? (
+            <button type="button" onClick={controller.resetSearch}>
+              Reset search
+            </button>
+          ) : null}
+          {discoveryFailed ? (
+            <button type="button" onClick={controller.retryDiscovery}>
+              Retry loading targets
+            </button>
+          ) : null}
+          {canRetryError && state.errorSource === "preparation" ? (
+            <button type="button" onClick={controller.retryPreparation}>
+              Retry preparation
+            </button>
+          ) : null}
+          {canRetryError && state.errorSource === "refresh" ? (
+            <button type="button" onClick={controller.refresh}>
+              Retry refresh
+            </button>
+          ) : null}
+          {canRetryError && state.errorSource === "remoteBaseline" ? (
+            <button type="button" onClick={controller.refreshRemoteBaseline}>
+              Retry refresh
+            </button>
+          ) : null}
+        </div>
+      </div>
+    </section>
+  ) : null;
 
   async function startAnalysis(changeContext: string | null): Promise<void> {
     if (preparedComparison === null) return;
@@ -113,57 +165,13 @@ export function RepositoryWorkspace({
             nextCursor={state.nextCursor}
             unsupportedTargetCount={state.unsupportedTargetCount}
             isDiscovering={state.isDiscovering}
+            discoveryFailed={discoveryFailed}
+            alert={isTargetError ? comparisonAlert : null}
             onQueryChange={controller.setQuery}
             onSelect={controller.selectTarget}
             onLoadMore={controller.loadMore}
           />
-          {error ? (
-            <section className="action-alert" role="alert">
-              <Icon name="warning" />
-              <div>
-                <strong>{error.title}</strong>
-                <ul>
-                  {error.messages.map((message, index) => (
-                    <li
-                      key={`${state.error?.errors[index]?.code ?? "comparison"}-${index}`}
-                    >
-                      {message}
-                    </li>
-                  ))}
-                </ul>
-                <div className="alert-actions">
-                  {errorCode === "comparison.invalidTargetQuery" ? (
-                    <button type="button" onClick={controller.resetSearch}>
-                      Reset search
-                    </button>
-                  ) : null}
-                  {canRetryError && state.errorSource === "discovery" ? (
-                    <button type="button" onClick={controller.retryDiscovery}>
-                      Retry loading targets
-                    </button>
-                  ) : null}
-                  {canRetryError && state.errorSource === "preparation" ? (
-                    <button type="button" onClick={controller.retryPreparation}>
-                      Retry preparation
-                    </button>
-                  ) : null}
-                  {canRetryError && state.errorSource === "refresh" ? (
-                    <button type="button" onClick={controller.refresh}>
-                      Retry refresh
-                    </button>
-                  ) : null}
-                  {canRetryError && state.errorSource === "remoteBaseline" ? (
-                    <button
-                      type="button"
-                      onClick={controller.refreshRemoteBaseline}
-                    >
-                      Retry refresh
-                    </button>
-                  ) : null}
-                </div>
-              </div>
-            </section>
-          ) : null}
+          {isTargetError ? null : comparisonAlert}
           {analysisErrorPresentation ? (
             <section className="action-alert" role="alert">
               <Icon name="warning" />
@@ -213,6 +221,11 @@ export function RepositoryWorkspace({
           <ComparisonSummary
             preparedComparison={state.preparedComparison}
             freshness={state.freshness}
+            preparationFailedTarget={
+              state.errorSource === "preparation"
+                ? (state.selectedTarget?.name ?? null)
+                : null
+            }
             remoteBaseline={state.remoteBaseline}
             onRefreshRemoteBaseline={controller.refreshRemoteBaseline}
             onCancelRemoteBaselineRefresh={

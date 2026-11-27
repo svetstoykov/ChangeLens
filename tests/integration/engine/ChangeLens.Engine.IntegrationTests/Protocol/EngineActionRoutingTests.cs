@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Text.Json;
+using ChangeLens.Engine.IntegrationTests.Protocol.Support;
 using ChangeLens.Engine.IntegrationTests.Support;
 using Xunit;
 
@@ -12,6 +13,7 @@ namespace ChangeLens.Engine.IntegrationTests.Protocol;
 ///     The action names are written literally so this test is an independent catalog of the approved protocol action
 ///     set rather than a restatement of the production registrations it is meant to check.
 /// </remarks>
+[Collection(typeof(EngineProcessCollection))]
 public sealed class EngineActionRoutingTests
 {
     /// <summary>

@@ -8,6 +8,7 @@ namespace ChangeLens.Engine.IntegrationTests.Protocol;
 /// <summary>
 ///     Verifies analysis orchestration through the real newline-delimited Engine process boundary.
 /// </summary>
+[Collection(typeof(EngineProcessCollection))]
 public sealed class AnalysisProtocolTests
 {
     /// <summary>Asynchronously verifies an accepted run ends failed without a configured model provider.</summary>

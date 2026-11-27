@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Text.Json;
 using System.Text;
+using ChangeLens.Engine.IntegrationTests.Protocol.Support;
 using ChangeLens.Engine.IntegrationTests.Support;
 using Xunit;
 
@@ -9,6 +10,7 @@ namespace ChangeLens.Engine.IntegrationTests.Protocol;
 /// <summary>
 ///     Verifies measured comparison target pages remain bounded across a high-cardinality repository.
 /// </summary>
+[Collection(typeof(EngineProcessCollection))]
 public sealed class ComparisonCapacityProtocolTests
 {
     private const int TargetPageBudgetBytes = 48 * 1024;

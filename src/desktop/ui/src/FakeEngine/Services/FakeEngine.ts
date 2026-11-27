@@ -7,12 +7,13 @@ import {
 import type { AnalysisRunSummary } from "../../Analysis/Models/AnalysisRunSummary";
 import type { AnalysisStartResult } from "../../Analysis/Models/AnalysisStartResult";
 import type { ComparisonTargetPage } from "../../Comparisons/Models/ComparisonTargetPage";
-import type { PreparedComparison } from "../../Comparisons/Models/PreparedComparison";
 import type { RemoteBaselineState } from "../../Comparisons/Models/RemoteBaselineState";
 import type { OpenedRepository } from "../../Repositories/Models/OpenedRepository";
 import type { RepositoryHistory } from "../../Repositories/Models/RepositoryHistory";
 import type { RepositoryRestoreResult } from "../../Repositories/Models/RepositoryRestoreResult";
 import type { ColorTheme } from "../../Visuals/Models/ColorTheme";
+import type { FakeEngineSnapshot } from "../Models/FakeEngineSnapshot";
+import type { FakeRun } from "../Models/FakeRun";
 import {
   fakeReadingModel,
   fakeRepository,
@@ -22,19 +23,14 @@ import {
 } from "./fakeSampleData";
 
 const stageDurationMs = 1500;
-
-interface FakeRun {
-  readonly runId: string;
-  readonly path: string;
-  readonly prepared: PreparedComparison;
-  readonly requestedAt: number;
-  cancelledAt: number | null;
-}
+const snapshotStorageKey = "changelens.fakeEngine";
 
 /**
- * In-memory stand-in for the Tauri commands the UI invokes, used when the UI
- * runs in a plain browser. Every command named in `failingCommands` rejects
- * with an operation error shaped like the one the Rust shell sends.
+ * Stand-in for the Tauri commands the UI invokes, used when the UI runs in a
+ * plain browser. Its state survives page reloads through `sessionStorage`, so
+ * it lasts as long as the browser tab. Every command named in
+ * `failingCommands` rejects with an operation error shaped like the one the
+ * Rust shell sends.
  */
 export class FakeEngine {
   private readonly failingCommands: ReadonlySet<string>;
@@ -46,9 +42,38 @@ export class FakeEngine {
 
   constructor(failingCommands: ReadonlySet<string>) {
     this.failingCommands = failingCommands;
+    this.load();
   }
 
   handle(command: string, args: InvokeArgs | undefined): unknown {
+    const result = this.dispatch(command, args);
+    this.save();
+    return result;
+  }
+
+  private load(): void {
+    const saved = window.sessionStorage.getItem(snapshotStorageKey);
+    if (saved === null) return;
+    const snapshot = JSON.parse(saved) as FakeEngineSnapshot;
+    this.colorTheme = snapshot.colorTheme;
+    this.isInHistory = snapshot.isInHistory;
+    this.lastOpenedAt = snapshot.lastOpenedAt;
+    this.nextRunNumber = snapshot.nextRunNumber;
+    for (const run of snapshot.runs) this.runs.set(run.runId, run);
+  }
+
+  private save(): void {
+    const snapshot: FakeEngineSnapshot = {
+      colorTheme: this.colorTheme,
+      isInHistory: this.isInHistory,
+      lastOpenedAt: this.lastOpenedAt,
+      nextRunNumber: this.nextRunNumber,
+      runs: [...this.runs.values()],
+    };
+    window.sessionStorage.setItem(snapshotStorageKey, JSON.stringify(snapshot));
+  }
+
+  private dispatch(command: string, args: InvokeArgs | undefined): unknown {
     if (this.failingCommands.has(command)) {
       throw {
         kind: "operation",
@@ -240,8 +265,9 @@ export class FakeEngine {
   private summarize(run: FakeRun): AnalysisRunSummary {
     const state = this.stateOf(run);
     const captureStartedAt = run.requestedAt;
+    const captureEndsAt = run.requestedAt + stageDurationMs;
     const capturedAt =
-      state === "capturing" ? null : run.requestedAt + stageDurationMs;
+      (run.cancelledAt ?? Date.now()) < captureEndsAt ? null : captureEndsAt;
     const terminalAt =
       run.cancelledAt ??
       run.requestedAt + stageDurationMs * ANALYSIS_ACTIVE_STAGE_ORDER.length;

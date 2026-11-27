@@ -80,7 +80,12 @@ export function useComparisonController({
       updateState((current) => ({
         ...current,
         selectedTarget: target,
-        freshness: current.preparedComparison ? "stale" : "unknown",
+        freshness:
+          refreshEpoch !== undefined
+            ? current.freshness
+            : current.preparedComparison
+              ? "stale"
+              : "unknown",
         error: null,
         errorSource: null,
         isPreparing: true,
@@ -554,7 +559,7 @@ export function useComparisonController({
     freshnessEpochRef.current += 1;
     updateState((current) => ({
       ...current,
-      freshness: current.preparedComparison ? "stale" : "unknown",
+      freshness: current.preparedComparison ? "checking" : "unknown",
       error: null,
       errorSource: null,
       isPreparing: false,
@@ -584,7 +589,7 @@ export function useComparisonController({
     freshnessEpochRef.current += 1;
     updateState((current) => ({
       ...current,
-      freshness: current.preparedComparison ? "stale" : "unknown",
+      freshness: current.preparedComparison ? "checking" : "unknown",
       remoteBaseline: "refreshing",
       error: null,
       errorSource: null,
@@ -631,6 +636,7 @@ export function useComparisonController({
     preparationEpochRef.current += 1;
     updateState((current) => ({
       ...current,
+      freshness: current.preparedComparison ? "stale" : "unknown",
       remoteBaseline: "moved",
       isPreparing: false,
       isRefreshing: false,

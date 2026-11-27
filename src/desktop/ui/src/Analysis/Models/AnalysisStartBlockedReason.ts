@@ -1,2 +1,2 @@
 export type AnalysisStartBlockedReason =
-  "comparisonNotReady" | "noCommittedChanges";
+  "comparisonNotReady" | "noCommittedChanges" | "conflicts";

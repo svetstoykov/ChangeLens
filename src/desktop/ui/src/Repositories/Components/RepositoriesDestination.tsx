@@ -1,3 +1,4 @@
+import type { RefObject } from "react";
 import type { ActionError } from "../../Actions/Models/ActionError";
 import { presentActionError } from "../../Actions/Services/presentActionError";
 import { Icon } from "../../Visuals/Components/Icon";
@@ -5,6 +6,7 @@ import type { RecentRepository } from "../Models/RecentRepository";
 
 interface RepositoriesDestinationProps {
   readonly repositories: readonly RecentRepository[];
+  readonly headingRef: RefObject<HTMLHeadingElement | null>;
   readonly currentRepositoryId: string | null;
   readonly error: ActionError | null;
   readonly busyRepositoryId: string | null;
@@ -15,6 +17,7 @@ interface RepositoriesDestinationProps {
 
 export function RepositoriesDestination({
   repositories,
+  headingRef,
   currentRepositoryId,
   error,
   busyRepositoryId,
@@ -33,7 +36,9 @@ export function RepositoriesDestination({
       <header className="workspace-hero">
         <div className="workspace-heading">
           <p className="eyebrow">Local repository history</p>
-          <h2 id="repositories-heading">Repositories</h2>
+          <h2 id="repositories-heading" ref={headingRef} tabIndex={-1}>
+            Repositories
+          </h2>
           <p className="workspace-description">
             Reopen recent worktrees or remove ChangeLens metadata. Repository
             files are never changed.
@@ -79,7 +84,7 @@ export function RepositoriesDestination({
                 <div>
                   <strong>{repository.name}</strong>
                   {isCurrent ? (
-                    <span className="verified-badge">Open this session</span>
+                    <span className="verified-badge">Currently open</span>
                   ) : null}
                   <code title={repository.canonicalPath}>
                     {repository.canonicalPath}

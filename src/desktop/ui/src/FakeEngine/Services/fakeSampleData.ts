@@ -53,7 +53,7 @@ export function prepareFakeComparison(
     target,
     mergeBaseRevision: "d4e5f60718293a4b5c6d7e8f9012345678901234",
     currentWorkCommitCount: isSameAsHead ? 0 : 3,
-    targetOnlyCommitCount: hasConflicts ? 5 : 1,
+    targetOnlyCommitCount: isSameAsHead ? 0 : hasConflicts ? 5 : 1,
     changedFileTotal: isSameAsHead ? 0 : 6,
     uncommittedFileTotal: 2,
     stagedFileCount: 1,

@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import type { ComparisonTarget } from "../Models/ComparisonTarget";
 import { Icon } from "../../Visuals/Components/Icon";
 
@@ -9,6 +9,8 @@ interface TargetComboboxProps {
   readonly nextCursor: string | null;
   readonly unsupportedTargetCount: number;
   readonly isDiscovering: boolean;
+  readonly discoveryFailed: boolean;
+  readonly alert: ReactNode;
   readonly onQueryChange: (query: string) => void;
   readonly onSelect: (target: ComparisonTarget) => void;
   readonly onLoadMore: () => void;
@@ -21,6 +23,8 @@ export function TargetCombobox({
   nextCursor,
   unsupportedTargetCount,
   isDiscovering,
+  discoveryFailed,
+  alert,
   onQueryChange,
   onSelect,
   onLoadMore,
@@ -52,12 +56,17 @@ export function TargetCombobox({
     setActiveIndex(Math.max(0, Math.min(next, groupedTargets.length - 1)));
   }
 
+  function choose(target: ComparisonTarget) {
+    onSelect(target);
+    if (query !== "") onQueryChange("");
+    setActiveIndex(-1);
+    setExpanded(false);
+  }
+
   function chooseActive() {
     const target = groupedTargets[clampedActiveIndex];
     if (target === undefined) return;
-    onSelect(target);
-    setActiveIndex(-1);
-    setExpanded(false);
+    choose(target);
   }
 
   return (
@@ -137,6 +146,7 @@ export function TargetCombobox({
                   chooseActive();
                   break;
                 case "Escape":
+                  if (query !== "") onQueryChange("");
                   setExpanded(false);
                   setActiveIndex(-1);
                   break;
@@ -160,11 +170,7 @@ export function TargetCombobox({
                 startIndex={0}
                 activeIndex={clampedActiveIndex}
                 selectedTarget={selectedTarget}
-                onSelect={(target) => {
-                  onSelect(target);
-                  setActiveIndex(-1);
-                  setExpanded(false);
-                }}
+                onSelect={choose}
               />
               <TargetGroup
                 id={listId}
@@ -173,17 +179,17 @@ export function TargetCombobox({
                 startIndex={localTargets.length}
                 activeIndex={clampedActiveIndex}
                 selectedTarget={selectedTarget}
-                onSelect={(target) => {
-                  onSelect(target);
-                  setActiveIndex(-1);
-                  setExpanded(false);
-                }}
+                onSelect={choose}
               />
             </div>
             {targets.length === 0 && !isDiscovering ? (
               <div className="target-empty">
                 <Icon name="info" />
-                <p>No supported targets match this search.</p>
+                <p>
+                  {discoveryFailed
+                    ? "The branch list could not be loaded."
+                    : "No supported targets match this search."}
+                </p>
               </div>
             ) : null}
             {nextCursor !== null ? (
@@ -199,6 +205,7 @@ export function TargetCombobox({
           </div>
         ) : null}
       </div>
+      {alert}
       <div
         className="selected-target"
         data-selected={selectedTarget !== null}

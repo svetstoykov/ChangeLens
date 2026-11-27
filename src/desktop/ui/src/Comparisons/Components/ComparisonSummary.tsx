@@ -10,6 +10,7 @@ import type { PreparedComparison } from "../Models/PreparedComparison";
 interface ComparisonSummaryProps {
   readonly preparedComparison: PreparedComparison | null;
   readonly freshness: ComparisonFreshnessState;
+  readonly preparationFailedTarget: string | null;
   readonly remoteBaseline: RemoteBaselineStatus;
   readonly onRefreshRemoteBaseline: () => void;
   readonly onCancelRemoteBaselineRefresh: () => void;
@@ -18,6 +19,7 @@ interface ComparisonSummaryProps {
 export function ComparisonSummary({
   preparedComparison,
   freshness,
+  preparationFailedTarget,
   remoteBaseline,
   onRefreshRemoteBaseline,
   onCancelRemoteBaselineRefresh,
@@ -31,13 +33,28 @@ export function ComparisonSummary({
         <SummaryHeading />
         <div className="empty-comparison">
           <span>
-            <Icon name="compare" />
+            <Icon
+              name={preparationFailedTarget === null ? "compare" : "warning"}
+            />
           </span>
-          <strong>No comparison prepared yet</strong>
-          <p>
-            Select a baseline branch to see change counts, readiness, and
-            freshness here.
-          </p>
+          {preparationFailedTarget === null ? (
+            <>
+              <strong>No comparison prepared yet</strong>
+              <p>
+                Select a baseline branch to see change counts, readiness, and
+                freshness here.
+              </p>
+            </>
+          ) : (
+            <>
+              <strong>Comparison could not be prepared</strong>
+              <p>
+                ChangeLens could not compare the current work with{" "}
+                <code>{preparationFailedTarget}</code>. Use Refresh comparison
+                to try again, or choose another baseline.
+              </p>
+            </>
+          )}
         </div>
       </section>
     );

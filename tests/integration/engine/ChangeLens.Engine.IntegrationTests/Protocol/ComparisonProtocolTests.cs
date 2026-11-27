@@ -10,6 +10,7 @@ namespace ChangeLens.Engine.IntegrationTests.Protocol;
 /// <summary>
 ///     Verifies comparison actions through the real newline-delimited Engine process boundary.
 /// </summary>
+[Collection(typeof(EngineProcessCollection))]
 public sealed class ComparisonProtocolTests
 {
     /// <summary>

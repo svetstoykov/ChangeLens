@@ -12,6 +12,7 @@ namespace ChangeLens.Engine.IntegrationTests.Protocol;
 /// <summary>
 ///     Verifies repository and local-state behavior through the real Engine process protocol.
 /// </summary>
+[Collection(typeof(EngineProcessCollection))]
 public sealed class RepositoryOpenProtocolTests
 {
     /// <summary>

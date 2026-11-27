@@ -15,6 +15,7 @@ namespace ChangeLens.Engine.IntegrationTests.Protocol;
 /// <summary>
 ///     Verifies analysis poll responses and Engine resource use remain bounded at maximum accepted context size.
 /// </summary>
+[Collection(typeof(EngineProcessCollection))]
 public sealed class AnalysisCapacityProtocolTests
 {
     private const int PollSummaryBudgetBytes = 48 * 1024;

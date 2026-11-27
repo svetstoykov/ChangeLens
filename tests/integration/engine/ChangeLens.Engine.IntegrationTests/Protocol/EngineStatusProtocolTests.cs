@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Text.Json;
+using ChangeLens.Engine.IntegrationTests.Protocol.Support;
 using ChangeLens.Engine.IntegrationTests.Support;
 using Xunit;
 
@@ -8,6 +9,7 @@ namespace ChangeLens.Engine.IntegrationTests.Protocol;
 /// <summary>
 ///     Verifies engine-status behavior through the real process protocol boundary.
 /// </summary>
+[Collection(typeof(EngineProcessCollection))]
 public sealed class EngineStatusProtocolTests
 {
     /// <summary>
